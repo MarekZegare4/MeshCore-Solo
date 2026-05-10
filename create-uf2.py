@@ -21,6 +21,8 @@ def create_uf2_action(source, target, env):
     )
     env.Execute(uf2_cmd)
 
+env.AddPostAction(firmware_hex, create_uf2_action)
+
 env.AddCustomTarget(
     name="create_uf2",
     dependencies=firmware_hex,

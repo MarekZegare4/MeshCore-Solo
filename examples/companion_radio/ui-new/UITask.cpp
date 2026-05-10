@@ -1,5 +1,6 @@
 #include "UITask.h"
 #include <helpers/TxtDataHelpers.h>
+#include <time.h>
 #include "../MyMesh.h"
 #include "target.h"
 #ifdef WIFI_SSID
@@ -75,9 +76,264 @@ public:
   }
 };
 
+class SettingsScreen : public UIScreen {
+  UITask* _task;
+
+  enum SettingItem {
+    BRIGHTNESS,
+    BUZZER,
+    TX_POWER,
+    AUTO_OFF,
+#if ENV_INCLUDE_GPS == 1
+    GPS_INTERVAL,
+#endif
+    TIMEZONE,
+    LOW_BAT,
+    BATT_DISPLAY,
+    Count
+  };
+
+  static const int VISIBLE_ITEMS = 4;
+  static const int ITEM_H = 11;
+  static const int START_Y = 12;
+  static const int VAL_X = 80;
+
+  int _selected;
+  int _scroll;
+
+  static const uint16_t AUTO_OFF_OPTS[5];
+  static const char* AUTO_OFF_LABELS[5];
+  static const int AUTO_OFF_COUNT = 5;
+#if ENV_INCLUDE_GPS == 1
+  static const uint32_t GPS_INTERVAL_OPTS[6];
+  static const char* GPS_INTERVAL_LABELS[6];
+  static const int GPS_INTERVAL_COUNT = 6;
+#endif
+  static const uint16_t LOW_BAT_OPTS[7];
+  static const char* LOW_BAT_LABELS[7];
+  static const int LOW_BAT_COUNT = 7;
+  static const char* BATT_DISPLAY_LABELS[3];
+  static const int BATT_DISPLAY_COUNT = 3;
+
+  int lowBatIndex() {
+    uint16_t v = _task->getNodePrefs()->low_batt_mv;
+    for (int i = 0; i < LOW_BAT_COUNT; i++)
+      if (LOW_BAT_OPTS[i] == v) return i;
+    return 0; // default: off
+  }
+
+  void renderBar(DisplayDriver& display, int x, int y, int value, int max_val) {
+    const int box_w = 7, box_h = 7, gap = 2;
+    for (int i = 0; i < max_val; i++) {
+      int bx = x + i * (box_w + gap);
+      if (i < value) display.fillRect(bx, y, box_w, box_h);
+      else           display.drawRect(bx, y, box_w, box_h);
+    }
+  }
+
+  int autoOffIndex() {
+    uint16_t v = _task->getNodePrefs()->auto_off_secs;
+    for (int i = 0; i < AUTO_OFF_COUNT; i++)
+      if (AUTO_OFF_OPTS[i] == v) return i;
+    return 1; // default: 15s
+  }
+
+#if ENV_INCLUDE_GPS == 1
+  int gpsIntervalIndex() {
+    uint32_t v = _task->getNodePrefs()->gps_interval;
+    for (int i = 0; i < GPS_INTERVAL_COUNT; i++)
+      if (GPS_INTERVAL_OPTS[i] == v) return i;
+    return 0;
+  }
+#endif
+
+  void renderItem(DisplayDriver& display, int item, int y) {
+    NodePrefs* p = _task->getNodePrefs();
+    bool sel = (item == _selected);
+
+    display.setColor(sel ? DisplayDriver::YELLOW : DisplayDriver::LIGHT);
+    display.setCursor(0, y);
+    display.print(sel ? ">" : " ");
+    display.setCursor(8, y);
+
+    if (item == BRIGHTNESS) {
+      display.print("Bright");
+      display.setColor(DisplayDriver::GREEN);
+      renderBar(display, VAL_X, y, (p ? p->display_brightness : 2) + 1, 5);
+    } else if (item == BUZZER) {
+      display.print("Buzzer");
+#ifdef PIN_BUZZER
+      bool quiet = _task->isBuzzerQuiet();
+      display.setColor(quiet ? DisplayDriver::RED : DisplayDriver::GREEN);
+      display.setCursor(VAL_X, y);
+      display.print(quiet ? "OFF" : "ON");
+#else
+      display.setColor(DisplayDriver::LIGHT);
+      display.setCursor(VAL_X, y); display.print("N/A");
+#endif
+    } else if (item == TX_POWER) {
+      display.print("TX Pwr");
+      display.setColor(DisplayDriver::GREEN);
+      char buf[8];
+      sprintf(buf, "%ddBm", p ? p->tx_power_dbm : 0);
+      display.setCursor(VAL_X, y);
+      display.print(buf);
+    } else if (item == AUTO_OFF) {
+      display.print("AutoOff");
+      display.setColor(DisplayDriver::GREEN);
+      display.setCursor(VAL_X, y);
+      display.print(AUTO_OFF_LABELS[autoOffIndex()]);
+#if ENV_INCLUDE_GPS == 1
+    } else if (item == GPS_INTERVAL) {
+      display.print("GPS upd");
+      display.setColor(DisplayDriver::GREEN);
+      display.setCursor(VAL_X, y);
+      display.print(GPS_INTERVAL_LABELS[gpsIntervalIndex()]);
+#endif
+    } else if (item == TIMEZONE) {
+      display.print("TimeZone");
+      display.setColor(DisplayDriver::GREEN);
+      char buf[8];
+      int8_t tz = p ? p->tz_offset_hours : 0;
+      if (tz >= 0) sprintf(buf, "UTC+%d", (int)tz);
+      else         sprintf(buf, "UTC%d",  (int)tz);
+      display.setCursor(VAL_X, y);
+      display.print(buf);
+    } else if (item == LOW_BAT) {
+      display.print("LowBat");
+      display.setColor(DisplayDriver::GREEN);
+      display.setCursor(VAL_X, y);
+      display.print(LOW_BAT_LABELS[lowBatIndex()]);
+    } else if (item == BATT_DISPLAY) {
+      display.print("BattDisp");
+      display.setColor(DisplayDriver::GREEN);
+      display.setCursor(VAL_X, y);
+      uint8_t mode = p ? p->batt_display_mode : 0;
+      display.print(BATT_DISPLAY_LABELS[mode < BATT_DISPLAY_COUNT ? mode : 0]);
+    }
+  }
+
+public:
+  SettingsScreen(UITask* task) : _task(task), _selected(0), _scroll(0) { }
+
+  int render(DisplayDriver& display) override {
+    display.setTextSize(1);
+    display.setColor(DisplayDriver::GREEN);
+    display.drawTextCentered(display.width() / 2, 0, "SETTINGS");
+    display.fillRect(0, 10, display.width(), 1);
+
+    for (int i = 0; i < VISIBLE_ITEMS && (_scroll + i) < SettingItem::Count; i++) {
+      renderItem(display, _scroll + i, START_Y + i * ITEM_H);
+    }
+
+    // scroll indicators
+    if (_scroll > 0) {
+      display.setColor(DisplayDriver::LIGHT);
+      display.setCursor(display.width() - 6, START_Y);
+      display.print("^");
+    }
+    if (_scroll + VISIBLE_ITEMS < SettingItem::Count) {
+      display.setColor(DisplayDriver::LIGHT);
+      display.setCursor(display.width() - 6, START_Y + (VISIBLE_ITEMS - 1) * ITEM_H);
+      display.print("v");
+    }
+
+    return 300;
+  }
+
+  bool handleInput(char c) override {
+    NodePrefs* p = _task->getNodePrefs();
+
+    if (c == KEY_UP) {
+      if (_selected > 0) {
+        _selected--;
+        if (_selected < _scroll) _scroll = _selected;
+      }
+      return true;
+    }
+    if (c == KEY_DOWN) {
+      if (_selected < SettingItem::Count - 1) {
+        _selected++;
+        if (_selected >= _scroll + VISIBLE_ITEMS) _scroll = _selected - VISIBLE_ITEMS + 1;
+      }
+      return true;
+    }
+    if (c == KEY_CANCEL) {
+      the_mesh.savePrefs();
+      _task->gotoHomeScreen();
+      return true;
+    }
+
+    bool right = (c == KEY_RIGHT || c == KEY_NEXT);
+    bool left  = (c == KEY_LEFT  || c == KEY_PREV);
+    bool enter = (c == KEY_ENTER);
+
+    if (_selected == BRIGHTNESS) {
+      uint8_t lvl = _task->getBrightnessLevel();
+      if (right && lvl < 4) _task->setBrightnessLevel(lvl + 1);
+      if (left  && lvl > 0) _task->setBrightnessLevel(lvl - 1);
+      return right || left;
+    }
+    if (_selected == BUZZER && (left || right || enter)) {
+      _task->toggleBuzzer();
+      return true;
+    }
+    if (_selected == TX_POWER && p) {
+      if (right && p->tx_power_dbm < 22) { p->tx_power_dbm++; _task->applyTxPower(); return true; }
+      if (left  && p->tx_power_dbm > 2)  { p->tx_power_dbm--; _task->applyTxPower(); return true; }
+    }
+    if (_selected == AUTO_OFF && p) {
+      int idx = autoOffIndex();
+      if (right) idx = (idx + 1) % AUTO_OFF_COUNT;
+      if (left)  idx = (idx + AUTO_OFF_COUNT - 1) % AUTO_OFF_COUNT;
+      if (left || right) { p->auto_off_secs = AUTO_OFF_OPTS[idx]; return true; }
+    }
+#if ENV_INCLUDE_GPS == 1
+    if (_selected == GPS_INTERVAL && p) {
+      int idx = gpsIntervalIndex();
+      if (right) idx = (idx + 1) % GPS_INTERVAL_COUNT;
+      if (left)  idx = (idx + GPS_INTERVAL_COUNT - 1) % GPS_INTERVAL_COUNT;
+      if (left || right) {
+        p->gps_interval = GPS_INTERVAL_OPTS[idx];
+        _task->applyGPSInterval();
+        return true;
+      }
+    }
+#endif
+    if (_selected == TIMEZONE && p) {
+      if (right && p->tz_offset_hours < 14) { p->tz_offset_hours++; return true; }
+      if (left  && p->tz_offset_hours > -12) { p->tz_offset_hours--; return true; }
+    }
+    if (_selected == LOW_BAT && p) {
+      int idx = lowBatIndex();
+      if (right) idx = (idx + 1) % LOW_BAT_COUNT;
+      if (left)  idx = (idx + LOW_BAT_COUNT - 1) % LOW_BAT_COUNT;
+      if (left || right) { p->low_batt_mv = LOW_BAT_OPTS[idx]; return true; }
+    }
+    if (_selected == BATT_DISPLAY && p) {
+      int idx = p->batt_display_mode < BATT_DISPLAY_COUNT ? p->batt_display_mode : 0;
+      if (right) idx = (idx + 1) % BATT_DISPLAY_COUNT;
+      if (left)  idx = (idx + BATT_DISPLAY_COUNT - 1) % BATT_DISPLAY_COUNT;
+      if (left || right) { p->batt_display_mode = idx; return true; }
+    }
+    return false;
+  }
+};
+
+const uint16_t SettingsScreen::AUTO_OFF_OPTS[5]   = { 5, 15, 30, 60, 0 };
+const char*    SettingsScreen::AUTO_OFF_LABELS[5]  = { "5s", "15s", "30s", "60s", "never" };
+#if ENV_INCLUDE_GPS == 1
+const uint32_t SettingsScreen::GPS_INTERVAL_OPTS[6]  = { 0, 30, 60, 300, 900, 1800 };
+const char*    SettingsScreen::GPS_INTERVAL_LABELS[6] = { "off", "30s", "1min", "5min", "15min", "30min" };
+#endif
+const uint16_t SettingsScreen::LOW_BAT_OPTS[7]   = { 0, 3000, 3100, 3200, 3300, 3400, 3500 };
+const char*    SettingsScreen::LOW_BAT_LABELS[7]  = { "off", "3.0V", "3.1V", "3.2V", "3.3V", "3.4V", "3.5V" };
+const char*    SettingsScreen::BATT_DISPLAY_LABELS[3] = { "icon", "%", "V" };
+
 class HomeScreen : public UIScreen {
   enum HomePage {
     FIRST,
+    CLOCK,
     RECENT,
     RADIO,
     BLUETOOTH,
@@ -88,6 +344,7 @@ class HomeScreen : public UIScreen {
 #if UI_SENSORS_PAGE == 1
     SENSORS,
 #endif
+    SETTINGS,
     SHUTDOWN,
     Count    // keep as last
   };
@@ -102,41 +359,51 @@ class HomeScreen : public UIScreen {
 
 
   void renderBatteryIndicator(DisplayDriver& display, uint16_t batteryMilliVolts) {
-    // Convert millivolts to percentage
 #ifndef BATT_MIN_MILLIVOLTS
-  #define BATT_MIN_MILLIVOLTS 3000
+  #define BATT_MIN_MILLIVOLTS 3200
 #endif
 #ifndef BATT_MAX_MILLIVOLTS
   #define BATT_MAX_MILLIVOLTS 4200
 #endif
-    const int minMilliVolts = BATT_MIN_MILLIVOLTS;
-    const int maxMilliVolts = BATT_MAX_MILLIVOLTS;
-    int batteryPercentage = ((batteryMilliVolts - minMilliVolts) * 100) / (maxMilliVolts - minMilliVolts);
-    if (batteryPercentage < 0) batteryPercentage = 0; // Clamp to 0%
-    if (batteryPercentage > 100) batteryPercentage = 100; // Clamp to 100%
+    // 0% anchor: low_batt_mv if set, otherwise BATT_MIN_MILLIVOLTS
+    int minMv = (_node_prefs && _node_prefs->low_batt_mv > 0)
+                  ? (int)_node_prefs->low_batt_mv : BATT_MIN_MILLIVOLTS;
+    int pct = ((int)batteryMilliVolts - minMv) * 100 / (BATT_MAX_MILLIVOLTS - minMv);
+    if (pct < 0)   pct = 0;
+    if (pct > 100) pct = 100;
 
-    // battery icon
-    int iconWidth = 24;
-    int iconHeight = 10;
-    int iconX = display.width() - iconWidth - 5; // Position the icon near the top-right corner
-    int iconY = 0;
+    uint8_t mode = (_node_prefs && _node_prefs->batt_display_mode < 3)
+                     ? _node_prefs->batt_display_mode : 0;
+
+    display.setTextSize(1);
     display.setColor(DisplayDriver::GREEN);
 
-    // battery outline
-    display.drawRect(iconX, iconY, iconWidth, iconHeight);
+    int battLeftX;
+    if (mode == 1) {  // percent
+      char buf[6];
+      sprintf(buf, "%d%%", pct);
+      battLeftX = display.width() - display.getTextWidth(buf) - 1;
+      display.setCursor(battLeftX, 0);
+      display.print(buf);
+    } else if (mode == 2) {  // voltage
+      char buf[8];
+      sprintf(buf, "%u.%02uV", batteryMilliVolts / 1000, (batteryMilliVolts % 1000) / 10);
+      battLeftX = display.width() - display.getTextWidth(buf) - 1;
+      display.setCursor(battLeftX, 0);
+      display.print(buf);
+    } else {  // icon
+      const int iconWidth = 24, iconHeight = 10;
+      battLeftX = display.width() - iconWidth - 5;
+      display.drawRect(battLeftX, 0, iconWidth, iconHeight);
+      display.fillRect(battLeftX + iconWidth, iconHeight / 4, 3, iconHeight / 2);
+      int fillWidth = (pct * (iconWidth - 4)) / 100;
+      display.fillRect(battLeftX + 2, 2, fillWidth, iconHeight - 4);
+    }
 
-    // battery "cap"
-    display.fillRect(iconX + iconWidth, iconY + (iconHeight / 4), 3, iconHeight / 2);
-
-    // fill the battery based on the percentage
-    int fillWidth = (batteryPercentage * (iconWidth - 4)) / 100;
-    display.fillRect(iconX + 2, iconY + 2, fillWidth, iconHeight - 4);
-
-    // show muted icon if buzzer is muted
 #ifdef PIN_BUZZER
     if (_task->isBuzzerQuiet()) {
       display.setColor(DisplayDriver::RED);
-      display.drawXbm(iconX - 9, iconY + 1, muted_icon, 8, 8);
+      display.drawXbm(battLeftX - 9, 1, muted_icon, 8, 8);
     }
 #endif
   }
@@ -203,7 +470,40 @@ public:
       }
     }
 
-    if (_page == HomePage::FIRST) {
+    if (_page == HomePage::CLOCK) {
+      uint32_t unix_ts = _rtc->getCurrentTime();
+      if (unix_ts < 1000000000UL) {
+        display.setColor(DisplayDriver::YELLOW);
+        display.setTextSize(1);
+        display.drawTextCentered(display.width() / 2, 25, "No time sync");
+        display.setColor(DisplayDriver::LIGHT);
+        display.drawTextCentered(display.width() / 2, 40, "Enable GPS or");
+        display.drawTextCentered(display.width() / 2, 51, "connect app");
+      } else {
+        int8_t tz = _node_prefs ? _node_prefs->tz_offset_hours : 0;
+        unix_ts += (int32_t)tz * 3600;
+        time_t t = (time_t)unix_ts;
+        struct tm* ti = gmtime(&t);
+
+        char buf[24];
+        display.setColor(DisplayDriver::YELLOW);
+        display.setTextSize(2);
+        sprintf(buf, "%02d:%02d:%02d", ti->tm_hour, ti->tm_min, ti->tm_sec);
+        display.drawTextCentered(display.width() / 2, 18, buf);
+
+        display.setTextSize(1);
+        display.setColor(DisplayDriver::GREEN);
+        const char* wd[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
+        const char* mo[] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
+        sprintf(buf, "%s %d %s %d", wd[ti->tm_wday], ti->tm_mday, mo[ti->tm_mon], 1900 + ti->tm_year);
+        display.drawTextCentered(display.width() / 2, 40, buf);
+
+        display.setColor(DisplayDriver::LIGHT);
+        if (tz >= 0) sprintf(buf, "UTC+%d", (int)tz);
+        else         sprintf(buf, "UTC%d",  (int)tz);
+        display.drawTextCentered(display.width() / 2, 54, buf);
+      }
+    } else if (_page == HomePage::FIRST) {
       display.setColor(DisplayDriver::YELLOW);
       display.setTextSize(2);
       sprintf(tmp, "MSG: %d", _task->getMsgCount());
@@ -392,6 +692,13 @@ public:
       if (sensors_scroll) sensors_scroll_offset = (sensors_scroll_offset+1)%sensors_nb;
       else sensors_scroll_offset = 0;
 #endif
+    } else if (_page == HomePage::SETTINGS) {
+      display.setColor(DisplayDriver::GREEN);
+      display.setTextSize(1);
+      display.drawTextCentered(display.width() / 2, 22, "Settings");
+      display.setColor(DisplayDriver::LIGHT);
+      display.drawTextCentered(display.width() / 2, 38, "brightness, buzzer");
+      display.drawTextCentered(display.width() / 2, 52, PRESS_LABEL " to open");
     } else if (_page == HomePage::SHUTDOWN) {
       display.setColor(DisplayDriver::GREEN);
       display.setTextSize(1);
@@ -402,7 +709,7 @@ public:
         display.drawTextCentered(display.width() / 2, 64 - 11, "hibernate:" PRESS_LABEL);
       }
     }
-    return 5000;   // next render after 5000 ms
+    return (_page == HomePage::CLOCK) ? 1000 : 5000;
   }
 
   bool handleInput(char c) override {
@@ -447,6 +754,10 @@ public:
       return true;
     }
 #endif
+    if (c == KEY_ENTER && _page == HomePage::SETTINGS) {
+      _task->gotoSettingsScreen();
+      return true;
+    }
     if (c == KEY_ENTER && _page == HomePage::SHUTDOWN) {
       _shutdown_init = true;  // need to wait for button to be released
       return true;
@@ -549,7 +860,9 @@ public:
 void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* node_prefs) {
   _display = display;
   _sensors = sensors;
-  _auto_off = millis() + AUTO_OFF_MILLIS;
+  _node_prefs = node_prefs;
+  uint32_t aoff = autoOffMillis();
+  _auto_off = millis() + (aoff > 0 ? aoff : AUTO_OFF_MILLIS);
 
 #if defined(PIN_USER_BTN)
   user_btn.begin();
@@ -558,15 +871,13 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
   analog_btn.begin();
 #endif
 
-  _node_prefs = node_prefs;
-
   if (_display != NULL) {
     _display->turnOn();
   }
 
 #ifdef PIN_BUZZER
-  buzzer.begin();
   buzzer.quiet(_node_prefs->buzzer_quiet);
+  buzzer.begin();
 #endif
 
 #ifdef PIN_VIBRATION
@@ -575,11 +886,15 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
 
   ui_started_at = millis();
   _alert_expiry = 0;
+  _batt_mv = AbstractUITask::getBattMilliVolts();  // seed EMA with first reading
 
   splash = new SplashScreen(this);
   home = new HomeScreen(this, &rtc_clock, sensors, node_prefs);
   msg_preview = new MsgPreviewScreen(this, &rtc_clock);
+  settings = new SettingsScreen(this);
   setCurrScreen(splash);
+
+  applyBrightness();
 }
 
 void UITask::showAlert(const char* text, int duration_millis) {
@@ -635,7 +950,7 @@ void UITask::newMsg(uint8_t path_len, const char* from_name, const char* text, i
       _display->turnOn();
     }
     if (_display->isOn()) {
-    _auto_off = millis() + AUTO_OFF_MILLIS;  // extend the auto-off timer
+    { uint32_t aoff = autoOffMillis(); if (aoff > 0) _auto_off = millis() + aoff; }  // extend the auto-off timer
     _next_refresh = 100;  // trigger refresh
     }
   }
@@ -711,6 +1026,16 @@ void UITask::loop() {
   } else if (ev == BUTTON_EVENT_LONG_PRESS) {
     c = handleLongPress(KEY_ENTER);  // REVISIT: could be mapped to different key code
   }
+#if UI_HAS_JOYSTICK_UPDOWN
+  ev = joystick_up.check();
+  if (ev == BUTTON_EVENT_CLICK) {
+    c = checkDisplayOn(KEY_UP);
+  }
+  ev = joystick_down.check();
+  if (ev == BUTTON_EVENT_CLICK) {
+    c = checkDisplayOn(KEY_DOWN);
+  }
+#endif
   ev = joystick_left.check();
   if (ev == BUTTON_EVENT_CLICK) {
     c = checkDisplayOn(KEY_LEFT);
@@ -724,7 +1049,9 @@ void UITask::loop() {
     c = handleLongPress(KEY_RIGHT);
   }
   ev = back_btn.check();
-  if (ev == BUTTON_EVENT_TRIPLE_CLICK) {
+  if (ev == BUTTON_EVENT_CLICK) {
+    c = checkDisplayOn(KEY_CANCEL);
+  } else if (ev == BUTTON_EVENT_TRIPLE_CLICK) {
     c = handleTripleClick(KEY_SELECT);
   }
 #elif defined(PIN_USER_BTN)
@@ -768,7 +1095,7 @@ void UITask::loop() {
 
   if (c != 0 && curr) {
     curr->handleInput(c);
-    _auto_off = millis() + AUTO_OFF_MILLIS;   // extend auto-off timer
+    { uint32_t aoff = autoOffMillis(); if (aoff > 0) _auto_off = millis() + aoff; }  // extend auto-off timer
     _next_refresh = 100;  // trigger refresh
   }
 
@@ -800,7 +1127,7 @@ void UITask::loop() {
       _display->endFrame();
     }
 #if AUTO_OFF_MILLIS > 0
-    if (millis() > _auto_off) {
+    if (autoOffMillis() > 0 && millis() > _auto_off) {
       _display->turnOff();
     }
 #endif
@@ -810,30 +1137,27 @@ void UITask::loop() {
   vibration.loop();
 #endif
 
-#ifdef AUTO_SHUTDOWN_MILLIVOLTS
   if (millis() > next_batt_chck) {
-    uint16_t milliVolts = getBattMilliVolts();
-    if (milliVolts > 0 && milliVolts < AUTO_SHUTDOWN_MILLIVOLTS) {
-
-      // show low battery shutdown alert
-      // we should only do this for eink displays, which will persist after power loss
-      #if defined(THINKNODE_M1) || defined(LILYGO_TECHO)
+    uint16_t raw = AbstractUITask::getBattMilliVolts();
+    if (raw > 0) {
+      // EMA filter: alpha=0.2 (80% old, 20% new) — smooths ADC noise from uneven load
+      _batt_mv = (_batt_mv == 0) ? raw : (uint16_t)((_batt_mv * 4u + raw) / 5u);
+    }
+    uint16_t low_mv = _node_prefs ? _node_prefs->low_batt_mv : 0;
+    if (low_mv > 0 && _batt_mv > 0 && _batt_mv < low_mv) {
       if (_display != NULL) {
         _display->startFrame();
         _display->setTextSize(2);
-        _display->setColor(DisplayDriver::RED);
-        _display->drawTextCentered(_display->width() / 2, 20, "Low Battery.");
-        _display->drawTextCentered(_display->width() / 2, 40, "Shutting Down!");
+        _display->setColor(DisplayDriver::LIGHT);
+        _display->drawTextCentered(_display->width() / 2, 16, "Low Battery");
+        _display->drawTextCentered(_display->width() / 2, 36, "Shutting down");
         _display->endFrame();
+        delay(2000);
       }
-      #endif
-
       shutdown();
-
     }
     next_batt_chck = millis() + 8000;
   }
-#endif
 }
 
 char UITask::checkDisplayOn(char c) {
@@ -842,7 +1166,7 @@ char UITask::checkDisplayOn(char c) {
       _display->turnOn();   // turn display on and consume event
       c = 0;
     }
-    _auto_off = millis() + AUTO_OFF_MILLIS;   // extend auto-off timer
+    { uint32_t aoff = autoOffMillis(); if (aoff > 0) _auto_off = millis() + aoff; }  // extend auto-off timer
     _next_refresh = 0;  // trigger refresh
   }
   return c;
@@ -904,6 +1228,32 @@ void UITask::toggleGPS() {
       }
     }
   }
+}
+
+void UITask::applyTxPower() {
+  if (_node_prefs == NULL) return;
+  radio_set_tx_power(_node_prefs->tx_power_dbm);
+}
+
+void UITask::applyGPSInterval() {
+  if (_node_prefs == NULL) return;
+  char buf[12];
+  sprintf(buf, "%u", _node_prefs->gps_interval);
+  sensors.setSettingValue("gps_interval", buf);
+}
+
+void UITask::applyBrightness() {
+  if (_display != NULL && _node_prefs != NULL) {
+    _display->setBrightness(_node_prefs->display_brightness);
+  }
+}
+
+void UITask::setBrightnessLevel(uint8_t level) {
+  if (_node_prefs == NULL) return;
+  if (level > 4) level = 4;
+  _node_prefs->display_brightness = level;
+  applyBrightness();
+  _next_refresh = 0;
 }
 
 void UITask::toggleBuzzer() {

@@ -34,4 +34,9 @@ struct NodePrefs {  // persisted to file
   uint8_t autoadd_max_hops;  // 0 = no limit, 1 = direct (0 hops), N = up to N-1 hops (max 64)
   char default_scope_name[31];
   uint8_t default_scope_key[16];
+  uint8_t display_brightness;   // 0=min..4=max, default 2 (medium)
+  uint16_t auto_off_secs;       // display auto-off: 0=never, else seconds (default 15)
+  int8_t tz_offset_hours;       // timezone offset from UTC, -12..+14 (default 0)
+  uint16_t low_batt_mv;         // auto-shutdown threshold: 0=disabled, 3000-3500 mV
+  uint8_t batt_display_mode;   // 0=icon, 1=percent, 2=voltage
 };

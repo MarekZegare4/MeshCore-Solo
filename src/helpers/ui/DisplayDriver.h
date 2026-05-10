@@ -96,5 +96,6 @@ public:
     print(temp_str);
   }
   
+  virtual void setBrightness(uint8_t level) { }  // level 0-4 (min to max), no-op default
   virtual void endFrame() = 0;
 };

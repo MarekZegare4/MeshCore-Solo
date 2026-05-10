@@ -868,6 +868,11 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   _prefs.tx_power_dbm = LORA_TX_POWER;
   _prefs.gps_enabled = 0;       // GPS disabled by default
   _prefs.gps_interval = 0;      // No automatic GPS updates by default
+  _prefs.display_brightness = 2; // medium brightness by default
+  _prefs.auto_off_secs = 15;    // 15 seconds auto-off by default
+  _prefs.tz_offset_hours = 0;  // UTC by default
+  _prefs.low_batt_mv = 3400;  // auto-shutdown at 3.4V by default
+  _prefs.batt_display_mode = 0; // icon by default
   //_prefs.rx_delay_base = 10.0f;  enable once new algo fixed
 #if defined(USE_SX1262) || defined(USE_SX1268)
 #ifdef SX126X_RX_BOOSTED_GAIN

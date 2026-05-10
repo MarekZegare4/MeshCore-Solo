@@ -233,6 +233,11 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
     file.read((uint8_t *)&_prefs.rx_boosted_gain, sizeof(_prefs.rx_boosted_gain));         // 89
     file.read((uint8_t *)_prefs.default_scope_name, sizeof(_prefs.default_scope_name));    // 90
     file.read((uint8_t *)_prefs.default_scope_key, sizeof(_prefs.default_scope_key));     // 121
+    file.read((uint8_t *)&_prefs.display_brightness, sizeof(_prefs.display_brightness)); // 137
+    file.read((uint8_t *)&_prefs.auto_off_secs, sizeof(_prefs.auto_off_secs));           // 138
+    file.read((uint8_t *)&_prefs.tz_offset_hours, sizeof(_prefs.tz_offset_hours));      // 140
+    file.read((uint8_t *)&_prefs.low_batt_mv, sizeof(_prefs.low_batt_mv));             // 141
+    file.read((uint8_t *)&_prefs.batt_display_mode, sizeof(_prefs.batt_display_mode)); // 143
 
     file.close();
   }
@@ -273,6 +278,11 @@ void DataStore::savePrefs(const NodePrefs& _prefs, double node_lat, double node_
     file.write((uint8_t *)&_prefs.rx_boosted_gain, sizeof(_prefs.rx_boosted_gain));         // 89
     file.write((uint8_t *)_prefs.default_scope_name, sizeof(_prefs.default_scope_name));    // 90
     file.write((uint8_t *)_prefs.default_scope_key, sizeof(_prefs.default_scope_key));     // 121
+    file.write((uint8_t *)&_prefs.display_brightness, sizeof(_prefs.display_brightness)); // 137
+    file.write((uint8_t *)&_prefs.auto_off_secs, sizeof(_prefs.auto_off_secs));           // 138
+    file.write((uint8_t *)&_prefs.tz_offset_hours, sizeof(_prefs.tz_offset_hours));      // 140
+    file.write((uint8_t *)&_prefs.low_batt_mv, sizeof(_prefs.low_batt_mv));             // 141
+    file.write((uint8_t *)&_prefs.batt_display_mode, sizeof(_prefs.batt_display_mode)); // 143
 
     file.close();
   }

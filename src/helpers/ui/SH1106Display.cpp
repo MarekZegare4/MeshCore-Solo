@@ -85,6 +85,15 @@ uint16_t SH1106Display::getTextWidth(const char *str)
   return w;
 }
 
+void SH1106Display::setBrightness(uint8_t level)
+{
+  // OLED contrast is highly non-linear: most perceptible change is in the low range.
+  // Values are tuned so each step looks visually distinct.
+  static const uint8_t contrast_values[] = { 8, 30, 80, 160, 255 };
+  uint8_t contrast = contrast_values[level < 5 ? level : 4];
+  display.setContrast(contrast);
+}
+
 void SH1106Display::endFrame()
 {
   display.display();

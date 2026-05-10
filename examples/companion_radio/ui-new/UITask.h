@@ -37,6 +37,7 @@ class UITask : public AbstractUITask {
   unsigned long _alert_expiry;
   int _msgcount;
   unsigned long ui_started_at, next_batt_chck;
+  uint16_t _batt_mv;  // EMA-filtered battery voltage
   int next_backlight_btn_check = 0;
 #ifdef PIN_STATUS_LED
   int led_state = 0;
@@ -51,6 +52,7 @@ class UITask : public AbstractUITask {
   UIScreen* splash;
   UIScreen* home;
   UIScreen* msg_preview;
+  UIScreen* settings;
   UIScreen* curr;
 
   void userLedHandler();
@@ -68,11 +70,15 @@ public:
   UITask(mesh::MainBoard* board, BaseSerialInterface* serial) : AbstractUITask(board, serial), _display(NULL), _sensors(NULL) {
     next_batt_chck = _next_refresh = 0;
     ui_started_at = 0;
+    _batt_mv = 0;
     curr = NULL;
   }
   void begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* node_prefs);
 
+  NodePrefs* getNodePrefs() const { return _node_prefs; }
+  uint16_t getBattMilliVolts() const { return _batt_mv > 0 ? _batt_mv : AbstractUITask::getBattMilliVolts(); }
   void gotoHomeScreen() { setCurrScreen(home); }
+  void gotoSettingsScreen() { setCurrScreen(settings); }
   void showAlert(const char* text, int duration_millis);
   int  getMsgCount() const { return _msgcount; }
   bool hasDisplay() const { return _display != NULL; }
@@ -89,6 +95,15 @@ public:
   void toggleBuzzer();
   bool getGPSState();
   void toggleGPS();
+  void applyBrightness();
+  void setBrightnessLevel(uint8_t level);
+  uint8_t getBrightnessLevel() const { return _node_prefs ? _node_prefs->display_brightness : 2; }
+  void applyTxPower();
+  void applyGPSInterval();
+  uint32_t autoOffMillis() const {
+    if (!_node_prefs || _node_prefs->auto_off_secs == 0) return 0;
+    return (uint32_t)_node_prefs->auto_off_secs * 1000UL;
+  }
 
 
   // from AbstractUITask
