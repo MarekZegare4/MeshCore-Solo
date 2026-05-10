@@ -330,6 +330,184 @@ const uint16_t SettingsScreen::LOW_BAT_OPTS[7]   = { 0, 3000, 3100, 3200, 3300, 
 const char*    SettingsScreen::LOW_BAT_LABELS[7]  = { "off", "3.0V", "3.1V", "3.2V", "3.3V", "3.4V", "3.5V" };
 const char*    SettingsScreen::BATT_DISPLAY_LABELS[3] = { "icon", "%", "V" };
 
+static const char* const QUICK_MSG_LABELS[] = {
+  "My location",
+  "I'm OK",
+  "Need help!",
+  "On my way",
+  "ETA 10min",
+  "ETA 30min",
+};
+static const int QUICK_MSG_COUNT = 6;
+
+class QuickMsgScreen : public UIScreen {
+  UITask* _task;
+
+  enum Phase { CONTACT_PICK, MSG_PICK };
+  Phase _phase;
+  int _contact_sel, _contact_scroll;
+  int _msg_sel, _msg_scroll;
+  int _num_contacts;
+  ContactInfo _sel_contact;
+
+  static const int VISIBLE = 4;
+  static const int ITEM_H  = 12;
+  static const int START_Y = 12;
+
+  void buildLocMsg(char* buf, int len) {
+#if ENV_INCLUDE_GPS == 1
+    LocationProvider* loc = sensors.getLocationProvider();
+    if (loc && loc->isValid()) {
+      snprintf(buf, len, "Loc: %.5f,%.5f",
+               loc->getLatitude() / 1000000.0,
+               loc->getLongitude() / 1000000.0);
+      return;
+    }
+#endif
+    snprintf(buf, len, "Loc: no GPS fix");
+  }
+
+  void renderScrollHints(DisplayDriver& display, int scroll, int count) {
+    display.setColor(DisplayDriver::LIGHT);
+    if (scroll > 0) {
+      display.setCursor(display.width() - 6, START_Y);
+      display.print("^");
+    }
+    if (scroll + VISIBLE < count) {
+      display.setCursor(display.width() - 6, START_Y + (VISIBLE-1)*ITEM_H);
+      display.print("v");
+    }
+  }
+
+public:
+  QuickMsgScreen(UITask* task)
+    : _task(task), _phase(CONTACT_PICK),
+      _contact_sel(0), _contact_scroll(0),
+      _msg_sel(0), _msg_scroll(0), _num_contacts(0) {}
+
+  void reset() {
+    _phase = CONTACT_PICK;
+    _contact_sel = _contact_scroll = 0;
+    _msg_sel = _msg_scroll = 0;
+    _num_contacts = the_mesh.getNumContacts();
+  }
+
+  int render(DisplayDriver& display) override {
+    display.setTextSize(1);
+    display.setColor(DisplayDriver::GREEN);
+
+    if (_phase == CONTACT_PICK) {
+      display.drawTextCentered(display.width()/2, 0, "SELECT CONTACT");
+      display.fillRect(0, 10, display.width(), 1);
+
+      if (_num_contacts == 0) {
+        display.setColor(DisplayDriver::YELLOW);
+        display.drawTextCentered(display.width()/2, 32, "No contacts");
+        return 5000;
+      }
+
+      for (int i = 0; i < VISIBLE && (_contact_scroll+i) < _num_contacts; i++) {
+        int idx = _contact_scroll + i;
+        bool sel = (idx == _contact_sel);
+        int y = START_Y + i * ITEM_H;
+        display.setColor(sel ? DisplayDriver::YELLOW : DisplayDriver::LIGHT);
+        display.setCursor(0, y);
+        display.print(sel ? ">" : " ");
+
+        ContactInfo c;
+        if (the_mesh.getContactByIdx(idx, c)) {
+          char filtered[sizeof(c.name)];
+          display.translateUTF8ToBlocks(filtered, c.name, sizeof(filtered));
+          display.drawTextEllipsized(8, y, display.width() - 24, filtered);
+          display.setColor(DisplayDriver::GREEN);
+          char hop[5];
+          snprintf(hop, sizeof(hop), c.path_len == 0xFF ? "D" : "%dh", (int)c.path_len);
+          display.setCursor(display.width() - display.getTextWidth(hop) - 1, y);
+          display.print(hop);
+        }
+      }
+      renderScrollHints(display, _contact_scroll, _num_contacts);
+
+    } else {
+      char title[24];
+      snprintf(title, sizeof(title), "TO:%.14s", _sel_contact.name);
+      display.drawTextCentered(display.width()/2, 0, title);
+      display.fillRect(0, 10, display.width(), 1);
+
+      for (int i = 0; i < VISIBLE && (_msg_scroll+i) < QUICK_MSG_COUNT; i++) {
+        int idx = _msg_scroll + i;
+        bool sel = (idx == _msg_sel);
+        int y = START_Y + i * ITEM_H;
+        display.setColor(sel ? DisplayDriver::YELLOW : DisplayDriver::LIGHT);
+        display.setCursor(0, y);
+        display.print(sel ? ">" : " ");
+
+        if (idx == 0) {
+          char loc[36];
+          buildLocMsg(loc, sizeof(loc));
+          display.drawTextEllipsized(8, y, display.width() - 10, loc);
+        } else {
+          display.setCursor(8, y);
+          display.print(QUICK_MSG_LABELS[idx]);
+        }
+      }
+      renderScrollHints(display, _msg_scroll, QUICK_MSG_COUNT);
+    }
+    return 300;
+  }
+
+  bool handleInput(char c) override {
+    if (_phase == CONTACT_PICK) {
+      if (c == KEY_CANCEL) { _task->gotoHomeScreen(); return true; }
+      if ((c == KEY_UP) && _contact_sel > 0) {
+        _contact_sel--;
+        if (_contact_sel < _contact_scroll) _contact_scroll = _contact_sel;
+        return true;
+      }
+      if ((c == KEY_DOWN) && _contact_sel < _num_contacts - 1) {
+        _contact_sel++;
+        if (_contact_sel >= _contact_scroll + VISIBLE) _contact_scroll = _contact_sel - VISIBLE + 1;
+        return true;
+      }
+      if (c == KEY_ENTER && _num_contacts > 0) {
+        if (the_mesh.getContactByIdx(_contact_sel, _sel_contact)) {
+          _phase = MSG_PICK;
+          _msg_sel = _msg_scroll = 0;
+        }
+        return true;
+      }
+    } else {
+      if (c == KEY_CANCEL) { _phase = CONTACT_PICK; return true; }
+      if ((c == KEY_UP) && _msg_sel > 0) {
+        _msg_sel--;
+        if (_msg_sel < _msg_scroll) _msg_scroll = _msg_sel;
+        return true;
+      }
+      if ((c == KEY_DOWN) && _msg_sel < QUICK_MSG_COUNT - 1) {
+        _msg_sel++;
+        if (_msg_sel >= _msg_scroll + VISIBLE) _msg_scroll = _msg_sel - VISIBLE + 1;
+        return true;
+      }
+      if (c == KEY_ENTER) {
+        char msg[80];
+        if (_msg_sel == 0) {
+          buildLocMsg(msg, sizeof(msg));
+        } else {
+          strncpy(msg, QUICK_MSG_LABELS[_msg_sel], sizeof(msg)-1);
+          msg[sizeof(msg)-1] = '\0';
+        }
+        uint32_t expected_ack = 0, est_timeout = 0;
+        int result = the_mesh.sendMessage(_sel_contact, rtc_clock.getCurrentTime(), 0,
+                                          msg, expected_ack, est_timeout);
+        _task->showAlert(result > 0 ? "Sent!" : "Send failed", 1500);
+        _task->gotoHomeScreen();
+        return true;
+      }
+    }
+    return false;
+  }
+};
+
 class HomeScreen : public UIScreen {
   enum HomePage {
     FIRST,
@@ -345,6 +523,7 @@ class HomeScreen : public UIScreen {
     SENSORS,
 #endif
     SETTINGS,
+    QUICK_MSG,
     SHUTDOWN,
     Count    // keep as last
   };
@@ -699,6 +878,13 @@ public:
       display.setColor(DisplayDriver::LIGHT);
       display.drawTextCentered(display.width() / 2, 38, "brightness, buzzer");
       display.drawTextCentered(display.width() / 2, 52, PRESS_LABEL " to open");
+    } else if (_page == HomePage::QUICK_MSG) {
+      display.setColor(DisplayDriver::GREEN);
+      display.setTextSize(1);
+      display.drawTextCentered(display.width() / 2, 22, "Quick Message");
+      display.setColor(DisplayDriver::LIGHT);
+      display.drawTextCentered(display.width() / 2, 38, "send to contact");
+      display.drawTextCentered(display.width() / 2, 52, PRESS_LABEL " to open");
     } else if (_page == HomePage::SHUTDOWN) {
       display.setColor(DisplayDriver::GREEN);
       display.setTextSize(1);
@@ -756,6 +942,10 @@ public:
 #endif
     if (c == KEY_ENTER && _page == HomePage::SETTINGS) {
       _task->gotoSettingsScreen();
+      return true;
+    }
+    if (c == KEY_ENTER && _page == HomePage::QUICK_MSG) {
+      _task->gotoQuickMsgScreen();
       return true;
     }
     if (c == KEY_ENTER && _page == HomePage::SHUTDOWN) {
@@ -892,9 +1082,15 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
   home = new HomeScreen(this, &rtc_clock, sensors, node_prefs);
   msg_preview = new MsgPreviewScreen(this, &rtc_clock);
   settings = new SettingsScreen(this);
+  quick_msg = new QuickMsgScreen(this);
   setCurrScreen(splash);
 
   applyBrightness();
+}
+
+void UITask::gotoQuickMsgScreen() {
+  ((QuickMsgScreen*)quick_msg)->reset();
+  setCurrScreen(quick_msg);
 }
 
 void UITask::showAlert(const char* text, int duration_millis) {

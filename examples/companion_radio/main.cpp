@@ -221,9 +221,19 @@ void setup() {
 #ifdef DISPLAY_CLASS
   ui_task.begin(disp, &sensors, the_mesh.getNodePrefs());  // still want to pass this in as dependency, as prefs might be moved
 #endif
+
+#ifdef NRF52_PLATFORM
+  NRF_WDT->CONFIG      = 0x01;        // run during sleep; pause during debug halt
+  NRF_WDT->CRV         = 32768*30-1;  // 30 second timeout
+  NRF_WDT->RREN        = 0x01;        // enable reload register 0
+  NRF_WDT->TASKS_START = 1;
+#endif
 }
 
 void loop() {
+#ifdef NRF52_PLATFORM
+  NRF_WDT->RR[0] = 0x6E524635UL;  // pet watchdog
+#endif
   the_mesh.loop();
   sensors.loop();
 #ifdef DISPLAY_CLASS

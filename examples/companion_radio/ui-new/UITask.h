@@ -53,6 +53,7 @@ class UITask : public AbstractUITask {
   UIScreen* home;
   UIScreen* msg_preview;
   UIScreen* settings;
+  UIScreen* quick_msg;
   UIScreen* curr;
 
   void userLedHandler();
@@ -79,6 +80,7 @@ public:
   uint16_t getBattMilliVolts() const { return _batt_mv > 0 ? _batt_mv : AbstractUITask::getBattMilliVolts(); }
   void gotoHomeScreen() { setCurrScreen(home); }
   void gotoSettingsScreen() { setCurrScreen(settings); }
+  void gotoQuickMsgScreen();
   void showAlert(const char* text, int duration_millis);
   int  getMsgCount() const { return _msgcount; }
   bool hasDisplay() const { return _display != NULL; }
