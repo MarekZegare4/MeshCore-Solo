@@ -986,6 +986,7 @@ void UITask::setCurrScreen(UIScreen* c) {
   hardware-agnostic pre-shutdown activity should be done here
 */
 void UITask::shutdown(bool restart){
+  the_mesh.saveRTCTime();
 
   #ifdef PIN_BUZZER
   /* note: we have a choice here -

@@ -165,6 +165,7 @@ protected:
 
 public:
   void savePrefs() { _store->savePrefs(_prefs, sensors.node_lat, sensors.node_lon); }
+  void saveRTCTime() { _store->saveRTCTime(); }
 
 #if ENV_INCLUDE_GPS == 1
   void applyGpsPrefs() {

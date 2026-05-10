@@ -288,6 +288,26 @@ void DataStore::savePrefs(const NodePrefs& _prefs, double node_lat, double node_
   }
 }
 
+void DataStore::saveRTCTime() {
+  uint32_t t = _clock->getCurrentTime();
+  if (t < 1000000000UL) return;  // don't save if time not yet synced
+  File file = openWrite(_fs, "/rtc_save");
+  if (file) {
+    file.write((uint8_t *)&t, sizeof(t));
+    file.close();
+  }
+}
+
+void DataStore::restoreRTCTime() {
+  File file = openRead(_fs, "/rtc_save");
+  if (file) {
+    uint32_t t = 0;
+    file.read((uint8_t *)&t, sizeof(t));
+    file.close();
+    if (t > 1000000000UL) _clock->setCurrentTime(t);
+  }
+}
+
 void DataStore::loadContacts(DataStoreHost* host) {
 File file = openRead(_getContactsChannelsFS(), "/contacts3");
     if (file) {

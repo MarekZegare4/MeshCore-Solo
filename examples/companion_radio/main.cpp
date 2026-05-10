@@ -211,6 +211,7 @@ void setup() {
   #error "need to define filesystem"
 #endif
 
+  store.restoreRTCTime();
   sensors.begin();
 
 #if ENV_INCLUDE_GPS == 1
