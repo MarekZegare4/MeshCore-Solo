@@ -348,6 +348,7 @@ class QuickMsgScreen : public UIScreen {
   int _contact_sel, _contact_scroll;
   int _msg_sel, _msg_scroll;
   int _num_contacts;
+  uint8_t _sorted[MAX_CONTACTS];  // contact indices, favourites sorted first
   ContactInfo _sel_contact;
 
   static const int VISIBLE = 4;
@@ -390,6 +391,18 @@ public:
     _contact_sel = _contact_scroll = 0;
     _msg_sel = _msg_scroll = 0;
     _num_contacts = the_mesh.getNumContacts();
+    // sort: favourites (flags & 0x01) first, rest after
+    ContactInfo c;
+    int nfavs = 0;
+    for (int i = 0; i < _num_contacts; i++)
+      if (the_mesh.getContactByIdx(i, c) && (c.flags & 0x01)) nfavs++;
+    int fpos = 0, npos = nfavs;
+    for (int i = 0; i < _num_contacts; i++) {
+      if (the_mesh.getContactByIdx(i, c) && (c.flags & 0x01))
+        _sorted[fpos++] = i;
+      else
+        _sorted[npos++] = i;
+    }
   }
 
   int render(DisplayDriver& display) override {
@@ -407,15 +420,17 @@ public:
       }
 
       for (int i = 0; i < VISIBLE && (_contact_scroll+i) < _num_contacts; i++) {
-        int idx = _contact_scroll + i;
-        bool sel = (idx == _contact_sel);
+        int list_idx = _contact_scroll + i;
+        int mesh_idx = _sorted[list_idx];
+        bool sel = (list_idx == _contact_sel);
         int y = START_Y + i * ITEM_H;
         display.setColor(sel ? DisplayDriver::YELLOW : DisplayDriver::LIGHT);
-        display.setCursor(0, y);
-        display.print(sel ? ">" : " ");
 
         ContactInfo c;
-        if (the_mesh.getContactByIdx(idx, c)) {
+        if (the_mesh.getContactByIdx(mesh_idx, c)) {
+          bool fav = (c.flags & 0x01);
+          display.setCursor(0, y);
+          display.print(sel ? ">" : (fav ? "*" : " "));
           char filtered[sizeof(c.name)];
           display.translateUTF8ToBlocks(filtered, c.name, sizeof(filtered));
           display.drawTextEllipsized(8, y, display.width() - 24, filtered);
@@ -470,7 +485,7 @@ public:
         return true;
       }
       if (c == KEY_ENTER && _num_contacts > 0) {
-        if (the_mesh.getContactByIdx(_contact_sel, _sel_contact)) {
+        if (the_mesh.getContactByIdx(_sorted[_contact_sel], _sel_contact)) {
           _phase = MSG_PICK;
           _msg_sel = _msg_scroll = 0;
         }
