@@ -436,7 +436,7 @@ public:
           display.drawTextEllipsized(8, y, display.width() - 24, filtered);
           display.setColor(DisplayDriver::GREEN);
           char hop[5];
-          snprintf(hop, sizeof(hop), c.path_len == 0xFF ? "D" : "%dh", (int)c.path_len);
+          snprintf(hop, sizeof(hop), c.out_path_len == 0xFF ? "D" : "%dh", (int)c.out_path_len);
           display.setCursor(display.width() - display.getTextWidth(hop) - 1, y);
           display.print(hop);
         }
