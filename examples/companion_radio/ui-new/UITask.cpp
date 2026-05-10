@@ -66,6 +66,11 @@ public:
     display.setTextSize(1);
     display.drawTextCentered(display.width()/2, 42, FIRMWARE_BUILD_DATE);
 
+#ifdef FIRMWARE_PLUS_BUILD
+    display.setColor(DisplayDriver::YELLOW);
+    display.drawTextCentered(display.width()/2, 54, "+ unofficial build");
+#endif
+
     return 1000;
   }
 
