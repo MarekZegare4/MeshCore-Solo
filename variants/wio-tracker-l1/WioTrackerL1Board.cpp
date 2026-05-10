@@ -8,6 +8,8 @@ void WioTrackerL1Board::begin() {
   btn_prev_state = HIGH;
 
   pinMode(PIN_VBAT_READ, INPUT); // VBAT ADC input
+  pinMode(VBAT_ENABLE, OUTPUT);
+  digitalWrite(VBAT_ENABLE, LOW); // keep voltage divider off; enabled only during ADC read
   // Set all button pins to INPUT_PULLUP
   pinMode(PIN_BUTTON1, INPUT_PULLUP);
   pinMode(PIN_BUTTON2, INPUT_PULLUP);

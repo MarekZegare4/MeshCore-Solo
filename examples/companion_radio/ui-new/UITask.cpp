@@ -1129,6 +1129,9 @@ void UITask::loop() {
 #if AUTO_OFF_MILLIS > 0
     if (autoOffMillis() > 0 && millis() > _auto_off) {
       _display->turnOff();
+#ifdef PIN_LED
+      digitalWrite(PIN_LED, LOW);  // turn off status LED with display to save power
+#endif
     }
 #endif
   }
@@ -1163,7 +1166,10 @@ void UITask::loop() {
 char UITask::checkDisplayOn(char c) {
   if (_display != NULL) {
     if (!_display->isOn()) {
-      _display->turnOn();   // turn display on and consume event
+      _display->turnOn();
+#ifdef PIN_LED
+      digitalWrite(PIN_LED, LOW);  // ensure LED is off when waking display (userLedHandler takes over)
+#endif
       c = 0;
     }
     { uint32_t aoff = autoOffMillis(); if (aoff > 0) _auto_off = millis() + aoff; }  // extend auto-off timer

@@ -229,4 +229,5 @@ void loop() {
   ui_task.loop();
 #endif
   rtc_clock.tick();
+  board.sleep(0);  // CPU sleeps until next interrupt (radio, timer, BLE); nRF52 ignores the seconds param
 }
