@@ -391,17 +391,19 @@ public:
     _contact_sel = _contact_scroll = 0;
     _msg_sel = _msg_scroll = 0;
     _num_contacts = the_mesh.getNumContacts();
-    // sort: favourites (flags & 0x01) first, rest after
+    // only show chat companions (not repeaters/rooms/sensors), favourites first
     ContactInfo c;
     int nfavs = 0;
     for (int i = 0; i < _num_contacts; i++)
-      if (the_mesh.getContactByIdx(i, c) && (c.flags & 0x01)) nfavs++;
+      if (the_mesh.getContactByIdx(i, c) && c.type == ADV_TYPE_CHAT && (c.flags & 0x01)) nfavs++;
     int fpos = 0, npos = nfavs;
-    for (int i = 0; i < _num_contacts; i++) {
-      if (the_mesh.getContactByIdx(i, c) && (c.flags & 0x01))
-        _sorted[fpos++] = i;
-      else
-        _sorted[npos++] = i;
+    _num_contacts = 0;
+    int total = the_mesh.getNumContacts();
+    for (int i = 0; i < total; i++) {
+      if (!the_mesh.getContactByIdx(i, c) || c.type != ADV_TYPE_CHAT) continue;
+      if (c.flags & 0x01) _sorted[fpos++] = i;
+      else                _sorted[npos++] = i;
+      _num_contacts++;
     }
   }
 
