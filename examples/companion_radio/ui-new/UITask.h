@@ -79,7 +79,7 @@ public:
   NodePrefs* getNodePrefs() const { return _node_prefs; }
   uint16_t getBattMilliVolts() const { return _batt_mv > 0 ? _batt_mv : AbstractUITask::getBattMilliVolts(); }
   void gotoHomeScreen() { setCurrScreen(home); }
-  void gotoSettingsScreen() { setCurrScreen(settings); }
+  void gotoSettingsScreen();
   void gotoQuickMsgScreen();
   void showAlert(const char* text, int duration_millis);
   int  getMsgCount() const { return _msgcount; }

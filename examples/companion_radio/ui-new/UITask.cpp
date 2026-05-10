@@ -100,6 +100,7 @@ class SettingsScreen : public UIScreen {
 
   int _selected;
   int _scroll;
+  bool _dirty;
 
   static const uint16_t AUTO_OFF_OPTS[5];
   static const char* AUTO_OFF_LABELS[5];
@@ -217,7 +218,9 @@ class SettingsScreen : public UIScreen {
   }
 
 public:
-  SettingsScreen(UITask* task) : _task(task), _selected(0), _scroll(0) { }
+  SettingsScreen(UITask* task) : _task(task), _selected(0), _scroll(0), _dirty(false) { }
+
+  void markClean() { _dirty = false; }
 
   int render(DisplayDriver& display) override {
     display.setTextSize(1);
@@ -262,7 +265,7 @@ public:
       return true;
     }
     if (c == KEY_CANCEL) {
-      the_mesh.savePrefs();
+      if (_dirty) the_mesh.savePrefs();
       _task->gotoHomeScreen();
       return true;
     }
@@ -273,23 +276,23 @@ public:
 
     if (_selected == BRIGHTNESS) {
       uint8_t lvl = _task->getBrightnessLevel();
-      if (right && lvl < 4) _task->setBrightnessLevel(lvl + 1);
-      if (left  && lvl > 0) _task->setBrightnessLevel(lvl - 1);
+      if (right && lvl < 4) { _task->setBrightnessLevel(lvl + 1); _dirty = true; return true; }
+      if (left  && lvl > 0) { _task->setBrightnessLevel(lvl - 1); _dirty = true; return true; }
       return right || left;
     }
     if (_selected == BUZZER && (left || right || enter)) {
-      _task->toggleBuzzer();
+      _task->toggleBuzzer();  // saves immediately internally
       return true;
     }
     if (_selected == TX_POWER && p) {
-      if (right && p->tx_power_dbm < 22) { p->tx_power_dbm++; _task->applyTxPower(); return true; }
-      if (left  && p->tx_power_dbm > 2)  { p->tx_power_dbm--; _task->applyTxPower(); return true; }
+      if (right && p->tx_power_dbm < 22) { p->tx_power_dbm++; _task->applyTxPower(); _dirty = true; return true; }
+      if (left  && p->tx_power_dbm > 2)  { p->tx_power_dbm--; _task->applyTxPower(); _dirty = true; return true; }
     }
     if (_selected == AUTO_OFF && p) {
       int idx = autoOffIndex();
       if (right) idx = (idx + 1) % AUTO_OFF_COUNT;
       if (left)  idx = (idx + AUTO_OFF_COUNT - 1) % AUTO_OFF_COUNT;
-      if (left || right) { p->auto_off_secs = AUTO_OFF_OPTS[idx]; return true; }
+      if (left || right) { p->auto_off_secs = AUTO_OFF_OPTS[idx]; _dirty = true; return true; }
     }
 #if ENV_INCLUDE_GPS == 1
     if (_selected == GPS_INTERVAL && p) {
@@ -299,25 +302,26 @@ public:
       if (left || right) {
         p->gps_interval = GPS_INTERVAL_OPTS[idx];
         _task->applyGPSInterval();
+        _dirty = true;
         return true;
       }
     }
 #endif
     if (_selected == TIMEZONE && p) {
-      if (right && p->tz_offset_hours < 14) { p->tz_offset_hours++; return true; }
-      if (left  && p->tz_offset_hours > -12) { p->tz_offset_hours--; return true; }
+      if (right && p->tz_offset_hours < 14)  { p->tz_offset_hours++; _dirty = true; return true; }
+      if (left  && p->tz_offset_hours > -12) { p->tz_offset_hours--; _dirty = true; return true; }
     }
     if (_selected == LOW_BAT && p) {
       int idx = lowBatIndex();
       if (right) idx = (idx + 1) % LOW_BAT_COUNT;
       if (left)  idx = (idx + LOW_BAT_COUNT - 1) % LOW_BAT_COUNT;
-      if (left || right) { p->low_batt_mv = LOW_BAT_OPTS[idx]; return true; }
+      if (left || right) { p->low_batt_mv = LOW_BAT_OPTS[idx]; _dirty = true; return true; }
     }
     if (_selected == BATT_DISPLAY && p) {
       int idx = p->batt_display_mode < BATT_DISPLAY_COUNT ? p->batt_display_mode : 0;
       if (right) idx = (idx + 1) % BATT_DISPLAY_COUNT;
       if (left)  idx = (idx + BATT_DISPLAY_COUNT - 1) % BATT_DISPLAY_COUNT;
-      if (left || right) { p->batt_display_mode = idx; return true; }
+      if (left || right) { p->batt_display_mode = idx; _dirty = true; return true; }
     }
     return false;
   }
@@ -1127,6 +1131,11 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
   setCurrScreen(splash);
 
   applyBrightness();
+}
+
+void UITask::gotoSettingsScreen() {
+  ((SettingsScreen*)settings)->markClean();
+  setCurrScreen(settings);
 }
 
 void UITask::gotoQuickMsgScreen() {
