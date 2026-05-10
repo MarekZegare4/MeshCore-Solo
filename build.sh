@@ -230,6 +230,11 @@ build_companion_firmwares() {
 
 }
 
+build_wio_tracker_l1_firmwares() {
+  build_firmware "WioTrackerL1_companion_radio_usb_settings"
+  build_firmware "WioTrackerL1_companion_radio_ble_settings"
+}
+
 build_room_server_firmwares() {
 
 #  # build specific room server firmwares
@@ -275,6 +280,8 @@ elif [[ $1 == "build-companion-firmwares" ]]; then
   build_companion_firmwares
 elif [[ $1 == "build-repeater-firmwares" ]]; then
   build_repeater_firmwares
+elif [[ $1 == "build-wio-tracker-l1-firmwares" ]]; then
+  build_wio_tracker_l1_firmwares
 elif [[ $1 == "build-room-server-firmwares" ]]; then
   build_room_server_firmwares
 fi
