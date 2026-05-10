@@ -231,8 +231,11 @@ build_companion_firmwares() {
 }
 
 build_wio_tracker_l1_firmwares() {
+  local _saved_version="$FIRMWARE_VERSION"
+  export FIRMWARE_VERSION="${FIRMWARE_VERSION}-Plus"
   build_firmware "WioTrackerL1_companion_radio_usb_settings"
   build_firmware "WioTrackerL1_companion_radio_ble_settings"
+  export FIRMWARE_VERSION="$_saved_version"
 }
 
 build_room_server_firmwares() {
