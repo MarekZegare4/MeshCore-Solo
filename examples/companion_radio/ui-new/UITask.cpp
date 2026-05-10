@@ -116,10 +116,11 @@ class SettingsScreen : public UIScreen {
   static const int BATT_DISPLAY_COUNT = 3;
 
   int lowBatIndex() {
-    uint16_t v = _task->getNodePrefs()->low_batt_mv;
+    NodePrefs* p = _task->getNodePrefs();
+    if (!p) return 0;
     for (int i = 0; i < LOW_BAT_COUNT; i++)
-      if (LOW_BAT_OPTS[i] == v) return i;
-    return 0; // default: off
+      if (LOW_BAT_OPTS[i] == p->low_batt_mv) return i;
+    return 0;
   }
 
   void renderBar(DisplayDriver& display, int x, int y, int value, int max_val) {
@@ -132,17 +133,19 @@ class SettingsScreen : public UIScreen {
   }
 
   int autoOffIndex() {
-    uint16_t v = _task->getNodePrefs()->auto_off_secs;
+    NodePrefs* p = _task->getNodePrefs();
+    if (!p) return 1;
     for (int i = 0; i < AUTO_OFF_COUNT; i++)
-      if (AUTO_OFF_OPTS[i] == v) return i;
-    return 1; // default: 15s
+      if (AUTO_OFF_OPTS[i] == p->auto_off_secs) return i;
+    return 1;
   }
 
 #if ENV_INCLUDE_GPS == 1
   int gpsIntervalIndex() {
-    uint32_t v = _task->getNodePrefs()->gps_interval;
+    NodePrefs* p = _task->getNodePrefs();
+    if (!p) return 0;
     for (int i = 0; i < GPS_INTERVAL_COUNT; i++)
-      if (GPS_INTERVAL_OPTS[i] == v) return i;
+      if (GPS_INTERVAL_OPTS[i] == p->gps_interval) return i;
     return 0;
   }
 #endif
