@@ -922,19 +922,13 @@ public:
     _kb_caps = false; _kb_ph_mode = false; _kb_ph_sel = 0;
     _kb_text[0] = '\0';
 
-    // build contact list: chat companions only, favourites first
+    // build contact list: favourited chat companions only
     ContactInfo c;
     int total = the_mesh.getNumContacts();
-    int nfavs = 0;
-    for (int i = 0; i < total; i++)
-      if (the_mesh.getContactByIdx(i, c) && c.type == ADV_TYPE_CHAT && (c.flags & 0x01)) nfavs++;
-    int fpos = 0, npos = nfavs;
     _num_contacts = 0;
     for (int i = 0; i < total; i++) {
       if (!the_mesh.getContactByIdx(i, c) || c.type != ADV_TYPE_CHAT) continue;
-      if (c.flags & 0x01) _sorted[fpos++] = i;
-      else                _sorted[npos++] = i;
-      _num_contacts++;
+      if (c.flags & 0x01) _sorted[_num_contacts++] = i;
     }
 
     buildChannelList();
@@ -979,7 +973,7 @@ public:
       display.fillRect(0, 10, display.width(), 1);
 
       if (_num_contacts == 0) {
-        display.drawTextCentered(display.width()/2, 32, "No contacts");
+        display.drawTextCentered(display.width()/2, 32, "No favourites");
         return 5000;
       }
 
@@ -999,9 +993,8 @@ public:
 
         ContactInfo c;
         if (the_mesh.getContactByIdx(mesh_idx, c)) {
-          bool fav = (c.flags & 0x01);
           display.setCursor(0, y);
-          display.print(sel ? ">" : (fav ? "*" : " "));
+          display.print(sel ? ">" : " ");
           char filtered[sizeof(c.name)];
           display.translateUTF8ToBlocks(filtered, c.name, sizeof(filtered));
           display.drawTextEllipsized(8, y, display.width() - 24, filtered);
