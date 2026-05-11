@@ -391,25 +391,26 @@ public:
 
       // placeholder picker overlay
       if (_edit_ph_mode) {
-        display.setColor(DisplayDriver::LIGHT);
-        display.fillRect(20, 20, 88, 12 + KB_PH_COUNT * 10);
         display.setColor(DisplayDriver::DARK);
-        display.fillRect(20, 20, 88, 10);
+        display.fillRect(20, 20, 88, 12 + KB_PH_COUNT * 10);
+        display.setColor(DisplayDriver::LIGHT);
+        display.drawRect(20, 20, 88, 12 + KB_PH_COUNT * 10);
         display.setCursor(24, 21);
         display.print("Placeholder:");
-        display.setColor(DisplayDriver::LIGHT);
+        display.fillRect(20, 30, 88, 1);
         for (int i = 0; i < KB_PH_COUNT; i++) {
-          int py = 32 + i * 10;
+          int py = 33 + i * 10;
           if (i == _edit_ph_sel) {
-            display.fillRect(20, py - 1, 88, 10);
+            display.setColor(DisplayDriver::LIGHT);
+            display.fillRect(21, py - 1, 86, 10);
             display.setColor(DisplayDriver::DARK);
           } else {
             display.setColor(DisplayDriver::LIGHT);
           }
           display.setCursor(24, py);
           display.print(KB_PH_LIST[i]);
-          display.setColor(DisplayDriver::LIGHT);
         }
+        display.setColor(DisplayDriver::LIGHT);
       }
 
       return 50;
@@ -446,19 +447,16 @@ public:
       if (c == KEY_UP) {
         if (_edit_kb_row > 0) {
           _edit_kb_row--;
-          if (_edit_kb_row == KB_ROWS_CHAR - 1 && _edit_kb_col > KB_COLS_CHAR - 1)
-            _edit_kb_col = KB_COLS_CHAR - 1;
+          if (_edit_kb_row == KB_ROWS_CHAR - 1)  // leaving special row upward
+            _edit_kb_col = _edit_kb_col * KB_COLS_CHAR / KB_SPECIAL;
         }
         return true;
       }
       if (c == KEY_DOWN) {
         if (_edit_kb_row < KB_ROWS_CHAR) {
-          int old_row = _edit_kb_row;
           _edit_kb_row++;
-          if (_edit_kb_row == KB_ROWS_CHAR) {
+          if (_edit_kb_row == KB_ROWS_CHAR)  // entering special row
             _edit_kb_col = _edit_kb_col * KB_SPECIAL / KB_COLS_CHAR;
-          }
-          (void)old_row;
         }
         return true;
       }
@@ -809,12 +807,12 @@ class QuickMsgScreen : public UIScreen {
 
   void afterSend(bool ok, const char* msg) {
     if (ok && _sending_to_channel) {
+      _hist_sel = 0;
+      _hist_scroll = 0;
+      _phase = CHANNEL_HIST;  // set before addChannelMsg so viewing=true, no unread bump
       char entry[sizeof(ChHistEntry::text)];
       snprintf(entry, sizeof(entry), "Me: %s", msg);
       addChannelMsg(_sel_channel_idx, entry);
-      _hist_sel = 0;
-      _hist_scroll = 0;
-      _phase = CHANNEL_HIST;
       _task->showAlert("Sent!", 600);
     } else {
       _task->showAlert(ok ? "Sent!" : "Send failed", 1500);
@@ -917,6 +915,7 @@ public:
       display.drawTextCentered(display.width()/2, 0, "MESSAGE");
       display.fillRect(0, 10, display.width(), 1);
       const char* opts[] = { "Direct message", "Channels" };
+      int dm_unread = _task->getMsgCount();
       for (int i = 0; i < 2; i++) {
         int y = START_Y + i * ITEM_H;
         bool sel = (i == _mode_sel);
@@ -931,6 +930,14 @@ public:
         display.print(sel ? ">" : " ");
         display.setCursor(8, y);
         display.print(opts[i]);
+        // DM unread badge on "Direct message" row
+        if (i == 0 && dm_unread > 0) {
+          char badge[5];
+          snprintf(badge, sizeof(badge), "%d", dm_unread);
+          int bw = display.getTextWidth(badge) + 2;
+          display.setCursor(display.width() - bw, y);
+          display.print(badge);
+        }
       }
       display.setColor(DisplayDriver::LIGHT);
 
@@ -1192,25 +1199,29 @@ public:
 
       // placeholder picker overlay
       if (_kb_ph_mode) {
-        display.setColor(DisplayDriver::LIGHT);
-        display.fillRect(20, 20, 88, 12 + KB_PH_COUNT * 10);
+        // Black box with white border
         display.setColor(DisplayDriver::DARK);
-        display.fillRect(20, 20, 88, 10);
+        display.fillRect(20, 20, 88, 12 + KB_PH_COUNT * 10);
+        display.setColor(DisplayDriver::LIGHT);
+        display.drawRect(20, 20, 88, 12 + KB_PH_COUNT * 10);
         display.setCursor(24, 21);
         display.print("Placeholder:");
-        display.setColor(DisplayDriver::LIGHT);
+        display.fillRect(20, 30, 88, 1);  // separator
         for (int i = 0; i < KB_PH_COUNT; i++) {
-          int py = 32 + i * 10;
+          int py = 33 + i * 10;
           if (i == _kb_ph_sel) {
-            display.fillRect(20, py - 1, 88, 10);
+            // Selected: white fill + black text
+            display.setColor(DisplayDriver::LIGHT);
+            display.fillRect(21, py - 1, 86, 10);
             display.setColor(DisplayDriver::DARK);
           } else {
+            // Unselected: white text on black
             display.setColor(DisplayDriver::LIGHT);
           }
           display.setCursor(24, py);
           display.print(KB_PH_LIST[i]);
-          display.setColor(DisplayDriver::LIGHT);
         }
+        display.setColor(DisplayDriver::LIGHT);
       }
 
     } else { // MSG_PICK
@@ -1368,19 +1379,16 @@ public:
       if (c == KEY_UP) {
         if (_kb_row > 0) {
           _kb_row--;
-          if (_kb_row == KB_ROWS_CHAR - 1 && _kb_col > KB_COLS_CHAR - 1)
-            _kb_col = KB_COLS_CHAR - 1;
+          if (_kb_row == KB_ROWS_CHAR - 1)  // leaving special row upward
+            _kb_col = _kb_col * KB_COLS_CHAR / KB_SPECIAL;
         }
         return true;
       }
       if (c == KEY_DOWN) {
         if (_kb_row < KB_ROWS_CHAR) {
-          int old_row = _kb_row;
           _kb_row++;
-          if (_kb_row == KB_ROWS_CHAR) {
+          if (_kb_row == KB_ROWS_CHAR)  // entering special row
             _kb_col = _kb_col * KB_SPECIAL / KB_COLS_CHAR;
-          } else if (old_row == KB_ROWS_CHAR) {
-          }
         }
         return true;
       }
@@ -1419,10 +1427,12 @@ public:
             _kb_ph_mode = true;
             _kb_ph_sel  = 0;
           } else {
-            // OK — send
+            // OK — send (expand placeholders first)
             if (_kb_len > 0) {
-              bool ok = sendText(_kb_text);
-              afterSend(ok, _kb_text);
+              char expanded[KB_MAX_LEN + 1];
+              expandMsg(_kb_text, expanded, sizeof(expanded));
+              bool ok = sendText(expanded);
+              afterSend(ok, expanded);
             }
           }
         }
@@ -1859,7 +1869,15 @@ public:
       display.setColor(DisplayDriver::LIGHT);
       display.setTextSize(1);
       display.drawTextCentered(display.width() / 2, 30, "Messages");
-      display.drawTextCentered(display.width() / 2, 46, PRESS_LABEL " to open");
+      int dm_unread = _task->getMsgCount();
+      if (dm_unread > 0) {
+        char badge[16];
+        snprintf(badge, sizeof(badge), "%d unread DM", dm_unread);
+        display.drawTextCentered(display.width() / 2, 41, badge);
+        display.drawTextCentered(display.width() / 2, 54, PRESS_LABEL " to open");
+      } else {
+        display.drawTextCentered(display.width() / 2, 46, PRESS_LABEL " to open");
+      }
     } else if (_page == HomePage::SHUTDOWN) {
       display.setColor(DisplayDriver::LIGHT);
       display.setTextSize(1);
@@ -2201,16 +2219,18 @@ void UITask::msgRead(int msgcount) {
 void UITask::newMsg(uint8_t path_len, const char* from_name, const char* text, int msgcount) {
   _msgcount = msgcount;
 
-  ((MsgPreviewScreen *) msg_preview)->addPreview(path_len, from_name, text);
-  setCurrScreen(msg_preview);
+  char alert_buf[80];
+  snprintf(alert_buf, sizeof(alert_buf), "Msg: %.20s", from_name);
+  showAlert(alert_buf, 3000);
 
   if (_display != NULL) {
     if (!_display->isOn() && !hasConnection()) {
       _display->turnOn();
     }
     if (_display->isOn()) {
-    { uint32_t aoff = autoOffMillis(); if (aoff > 0) _auto_off = millis() + aoff; }  // extend the auto-off timer
-    _next_refresh = 100;  // trigger refresh
+      uint32_t aoff = autoOffMillis();
+      if (aoff > 0) _auto_off = millis() + aoff;
+      _next_refresh = 100;
     }
   }
 }
@@ -2371,7 +2391,7 @@ void UITask::loop() {
     if (millis() >= _next_refresh && curr) {
       _display->startFrame();
       int delay_millis = curr->render(*_display);
-      if (millis() < _alert_expiry) {  // render alert popup
+      if (millis() < _alert_expiry && curr == home) {  // render alert only on home screen
         _display->setTextSize(1);
         int y = _display->height() / 3;
         int p = _display->height() / 32;
