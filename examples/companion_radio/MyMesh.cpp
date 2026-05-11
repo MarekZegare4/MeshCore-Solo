@@ -567,7 +567,7 @@ void MyMesh::onChannelMessageRecv(const mesh::GroupChannel &channel, mesh::Packe
 #endif
   }
 #ifdef DISPLAY_CLASS
-  // Get the channel name from the channel index
+  if (_ui) _ui->addChannelMsg(channel_idx, text);
   const char *channel_name = "Unknown";
   ChannelDetails channel_details;
   if (getChannel(channel_idx, channel_details)) {

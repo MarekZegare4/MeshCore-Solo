@@ -54,12 +54,11 @@ public:
 
   int render(DisplayDriver& display) override {
     // meshcore logo
-    display.setColor(DisplayDriver::BLUE);
+    display.setColor(DisplayDriver::LIGHT);
     int logoWidth = 128;
     display.drawXbm((display.width() - logoWidth) / 2, 3, meshcore_logo, logoWidth, 13);
 
     // version info
-    display.setColor(DisplayDriver::LIGHT);
     display.setTextSize(2);
     display.drawTextCentered(display.width()/2, 22, _version_info);
 
@@ -67,8 +66,10 @@ public:
     display.drawTextCentered(display.width()/2, 42, FIRMWARE_BUILD_DATE);
 
 #ifdef FIRMWARE_PLUS_BUILD
-    display.setColor(DisplayDriver::YELLOW);
-    display.drawTextCentered(display.width()/2, 54, "+ unofficial build");
+    display.fillRect(0, 53, display.width(), 10);
+    display.setColor(DisplayDriver::DARK);
+    display.drawTextCentered(display.width()/2, 54, "Plus for Wio");
+    display.setColor(DisplayDriver::LIGHT);
 #endif
 
     return 1000;
@@ -160,48 +161,47 @@ class SettingsScreen : public UIScreen {
     NodePrefs* p = _task->getNodePrefs();
     bool sel = (item == _selected);
 
-    display.setColor(sel ? DisplayDriver::YELLOW : DisplayDriver::LIGHT);
+    if (sel) {
+      display.setColor(DisplayDriver::LIGHT);
+      display.fillRect(0, y - 1, display.width(), ITEM_H);
+      display.setColor(DisplayDriver::DARK);
+    } else {
+      display.setColor(DisplayDriver::LIGHT);
+    }
+
     display.setCursor(0, y);
     display.print(sel ? ">" : " ");
     display.setCursor(8, y);
 
     if (item == BRIGHTNESS) {
       display.print("Bright");
-      display.setColor(DisplayDriver::GREEN);
       renderBar(display, VAL_X, y, (p ? p->display_brightness : 2) + 1, 5);
     } else if (item == BUZZER) {
       display.print("Buzzer");
-#ifdef PIN_BUZZER
-      bool quiet = _task->isBuzzerQuiet();
-      display.setColor(quiet ? DisplayDriver::RED : DisplayDriver::GREEN);
       display.setCursor(VAL_X, y);
-      display.print(quiet ? "OFF" : "ON");
+#ifdef PIN_BUZZER
+      display.print(_task->isBuzzerQuiet() ? "OFF" : "ON");
 #else
-      display.setColor(DisplayDriver::LIGHT);
-      display.setCursor(VAL_X, y); display.print("N/A");
+      display.print("N/A");
 #endif
     } else if (item == TX_POWER) {
       display.print("TX Pwr");
-      display.setColor(DisplayDriver::GREEN);
       char buf[8];
       sprintf(buf, "%ddBm", p ? p->tx_power_dbm : 0);
       display.setCursor(VAL_X, y);
       display.print(buf);
     } else if (item == AUTO_OFF) {
       display.print("AutoOff");
-      display.setColor(DisplayDriver::GREEN);
       display.setCursor(VAL_X, y);
       display.print(AUTO_OFF_LABELS[autoOffIndex()]);
 #if ENV_INCLUDE_GPS == 1
     } else if (item == GPS_INTERVAL) {
       display.print("GPS upd");
-      display.setColor(DisplayDriver::GREEN);
       display.setCursor(VAL_X, y);
       display.print(GPS_INTERVAL_LABELS[gpsIntervalIndex()]);
 #endif
     } else if (item == TIMEZONE) {
       display.print("TimeZone");
-      display.setColor(DisplayDriver::GREEN);
       char buf[8];
       int8_t tz = p ? p->tz_offset_hours : 0;
       if (tz >= 0) sprintf(buf, "UTC+%d", (int)tz);
@@ -210,12 +210,10 @@ class SettingsScreen : public UIScreen {
       display.print(buf);
     } else if (item == LOW_BAT) {
       display.print("LowBat");
-      display.setColor(DisplayDriver::GREEN);
       display.setCursor(VAL_X, y);
       display.print(LOW_BAT_LABELS[lowBatIndex()]);
     } else if (item == BATT_DISPLAY) {
       display.print("BattDisp");
-      display.setColor(DisplayDriver::GREEN);
       display.setCursor(VAL_X, y);
       uint8_t mode = p ? p->batt_display_mode : 0;
       display.print(BATT_DISPLAY_LABELS[mode < BATT_DISPLAY_COUNT ? mode : 0]);
@@ -229,7 +227,7 @@ public:
 
   int render(DisplayDriver& display) override {
     display.setTextSize(1);
-    display.setColor(DisplayDriver::GREEN);
+    display.setColor(DisplayDriver::LIGHT);
     display.drawTextCentered(display.width() / 2, 0, "SETTINGS");
     display.fillRect(0, 10, display.width(), 1);
 
@@ -352,20 +350,96 @@ static const char* const QUICK_MSG_LABELS[] = {
 };
 static const int QUICK_MSG_COUNT = 6;
 
+// On-screen keyboard layout (4 rows × 10 cols)
+static const char KB_CHARS[4][10] = {
+  {'a','b','c','d','e','f','g','h','i','j'},
+  {'k','l','m','n','o','p','q','r','s','t'},
+  {'u','v','w','x','y','z','.',' ','!','?'},
+  {'1','2','3','4','5','6','7','8','9','0'},
+};
+static const int KB_ROWS_CHAR  = 4;
+static const int KB_COLS_CHAR  = 10;
+static const int KB_SPECIAL    = 3;   // [Spc] [Del] [OK]
+static const int KB_MAX_LEN    = 100;
+static const int KB_CELL_W     = 12;  // 10 cols × 12px = 120px of 128px display
+static const int KB_CELL_H     = 9;
+static const int KB_TEXT_Y     = 0;
+static const int KB_SEP_Y      = 9;
+static const int KB_CHARS_Y    = 11;  // first char row
+static const int KB_SPECIAL_Y  = 48;
+
 class QuickMsgScreen : public UIScreen {
   UITask* _task;
 
-  enum Phase { CONTACT_PICK, MSG_PICK };
+  enum Phase { MODE_SELECT, CONTACT_PICK, MSG_PICK, CHANNEL_PICK, CHANNEL_HIST, KEYBOARD };
   Phase _phase;
+
+  // MODE_SELECT
+  int _mode_sel;  // 0=Direct, 1=Channel
+
+  // CONTACT_PICK
   int _contact_sel, _contact_scroll;
-  int _msg_sel, _msg_scroll;
   int _num_contacts;
-  uint8_t _sorted[MAX_CONTACTS];  // contact indices, favourites sorted first
+  uint8_t _sorted[MAX_CONTACTS];
   ContactInfo _sel_contact;
 
-  static const int VISIBLE = 4;
-  static const int ITEM_H  = 12;
-  static const int START_Y = 12;
+  // CHANNEL_PICK
+  int _channel_sel, _channel_scroll;
+  int _num_channels;
+  uint8_t _channel_indices[MAX_GROUP_CHANNELS];
+  int _sel_channel_idx;
+  bool _sending_to_channel;
+
+  // MSG_PICK (shared)
+  int _msg_sel, _msg_scroll;
+
+  // CHANNEL_HIST
+  int _hist_sel, _hist_scroll;
+  bool _hist_fullscreen;
+  int  _hist_fs_scroll;
+  static const int CH_HIST_MAX = 32;
+
+  static const int FS_CHARS   = 21;
+  static const int FS_LINE_H  = 9;
+  static const int FS_START_Y = 12;
+  static const int FS_VISIBLE = (64 - FS_START_Y) / FS_LINE_H;
+
+  int wrapLines(const char* text, char out[][FS_CHARS + 1], int max_lines) const {
+    int count = 0;
+    const char* p = text;
+    while (*p && count < max_lines) {
+      int len = strlen(p);
+      if (len <= FS_CHARS) {
+        strncpy(out[count++], p, FS_CHARS);
+        out[count-1][len] = '\0';
+        break;
+      }
+      int brk = FS_CHARS;
+      for (int i = FS_CHARS - 1; i > 0; i--) {
+        if (p[i] == ' ') { brk = i; break; }
+      }
+      strncpy(out[count], p, brk);
+      out[count++][brk] = '\0';
+      p += brk + (p[brk] == ' ' ? 1 : 0);
+    }
+    return count;
+  }
+
+  // KEYBOARD
+  int _kb_row, _kb_col;
+  char _kb_text[KB_MAX_LEN + 1];
+  int _kb_len;
+  struct ChHistEntry { uint8_t ch_idx; char text[80]; };
+  ChHistEntry _hist[CH_HIST_MAX];
+  int _hist_head, _hist_count;
+
+  static const int VISIBLE      = 4;
+  static const int ITEM_H       = 12;
+  static const int START_Y      = 12;
+  static const int HIST_VISIBLE = 2;   // 2-line boxed history entries
+  static const int HIST_ITEM_H  = 21;  // box(19) + gap(2)
+  static const int HIST_BOX_H   = 19;
+  static const int HIST_START_Y = 11;
 
   void buildLocMsg(char* buf, int len) {
 #if ENV_INCLUDE_GPS == 1
@@ -392,43 +466,150 @@ class QuickMsgScreen : public UIScreen {
     }
   }
 
+  // count history entries for a specific channel
+  int histCountForChannel(int ch_idx) const {
+    int n = 0;
+    for (int i = 0; i < _hist_count; i++) {
+      if (_hist[(_hist_head + i) % CH_HIST_MAX].ch_idx == (uint8_t)ch_idx) n++;
+    }
+    return n;
+  }
+
+  // get ring-buffer position of j-th history entry for channel (newest first)
+  int histEntryForChannel(int ch_idx, int j) const {
+    int n = 0;
+    for (int i = _hist_count - 1; i >= 0; i--) {
+      int pos = (_hist_head + i) % CH_HIST_MAX;
+      if (_hist[pos].ch_idx == (uint8_t)ch_idx) {
+        if (n == j) return pos;
+        n++;
+      }
+    }
+    return -1;
+  }
+
+  void afterSend(bool ok, const char* msg) {
+    if (ok && _sending_to_channel) {
+      char entry[sizeof(ChHistEntry::text)];
+      snprintf(entry, sizeof(entry), "Me: %s", msg);
+      addChannelMsg(_sel_channel_idx, entry);
+      _hist_sel = 0;
+      _hist_scroll = 0;
+      _phase = CHANNEL_HIST;
+      _task->showAlert("Sent!", 600);
+    } else {
+      _task->showAlert(ok ? "Sent!" : "Send failed", 1500);
+      _task->gotoHomeScreen();
+    }
+  }
+
+  bool sendText(const char* msg) {
+    if (_sending_to_channel) {
+      ChannelDetails ch;
+      if (!the_mesh.getChannel(_sel_channel_idx, ch)) return false;
+      return the_mesh.sendGroupMessage(rtc_clock.getCurrentTime(), ch.channel,
+                                       the_mesh.getNodeName(), msg, strlen(msg));
+    } else {
+      uint32_t expected_ack = 0, est_timeout = 0;
+      return the_mesh.sendMessage(_sel_contact, rtc_clock.getCurrentTime(), 0,
+                                  msg, expected_ack, est_timeout) > 0;
+    }
+  }
+
+  void buildChannelList() {
+    _num_channels = 0;
+    for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
+      ChannelDetails ch;
+      if (the_mesh.getChannel(i, ch) && ch.name[0] != '\0') {
+        _channel_indices[_num_channels++] = (uint8_t)i;
+      }
+    }
+  }
+
 public:
   QuickMsgScreen(UITask* task)
-    : _task(task), _phase(CONTACT_PICK),
-      _contact_sel(0), _contact_scroll(0),
-      _msg_sel(0), _msg_scroll(0), _num_contacts(0) {}
+    : _task(task), _phase(MODE_SELECT), _mode_sel(0),
+      _contact_sel(0), _contact_scroll(0), _num_contacts(0),
+      _channel_sel(0), _channel_scroll(0), _num_channels(0),
+      _sel_channel_idx(0), _sending_to_channel(false),
+      _msg_sel(0), _msg_scroll(0),
+      _hist_sel(0), _hist_scroll(0),
+      _hist_fullscreen(false), _hist_fs_scroll(0),
+      _hist_head(0), _hist_count(0),
+      _kb_row(0), _kb_col(0), _kb_len(0) { _kb_text[0] = '\0'; }
+
+  void addChannelMsg(uint8_t ch_idx, const char* text) {
+    int pos;
+    if (_hist_count < CH_HIST_MAX) {
+      pos = (_hist_head + _hist_count) % CH_HIST_MAX;
+      _hist_count++;
+    } else {
+      pos = _hist_head;
+      _hist_head = (_hist_head + 1) % CH_HIST_MAX;
+    }
+    _hist[pos].ch_idx = ch_idx;
+    strncpy(_hist[pos].text, text, sizeof(_hist[pos].text) - 1);
+    _hist[pos].text[sizeof(_hist[pos].text) - 1] = '\0';
+  }
 
   void reset() {
-    _phase = CONTACT_PICK;
+    _phase = MODE_SELECT;
+    _mode_sel = 0;
     _contact_sel = _contact_scroll = 0;
     _msg_sel = _msg_scroll = 0;
-    _num_contacts = the_mesh.getNumContacts();
-    // only show chat companions (not repeaters/rooms/sensors), favourites first
+    _channel_sel = _channel_scroll = 0;
+    _sending_to_channel = false;
+    _kb_row = _kb_col = _kb_len = 0;
+    _kb_text[0] = '\0';
+
+    // build contact list: chat companions only, favourites first
     ContactInfo c;
+    int total = the_mesh.getNumContacts();
     int nfavs = 0;
-    for (int i = 0; i < _num_contacts; i++)
+    for (int i = 0; i < total; i++)
       if (the_mesh.getContactByIdx(i, c) && c.type == ADV_TYPE_CHAT && (c.flags & 0x01)) nfavs++;
     int fpos = 0, npos = nfavs;
     _num_contacts = 0;
-    int total = the_mesh.getNumContacts();
     for (int i = 0; i < total; i++) {
       if (!the_mesh.getContactByIdx(i, c) || c.type != ADV_TYPE_CHAT) continue;
       if (c.flags & 0x01) _sorted[fpos++] = i;
       else                _sorted[npos++] = i;
       _num_contacts++;
     }
+
+    buildChannelList();
   }
 
   int render(DisplayDriver& display) override {
     display.setTextSize(1);
-    display.setColor(DisplayDriver::GREEN);
+    display.setColor(DisplayDriver::LIGHT);
 
-    if (_phase == CONTACT_PICK) {
+    if (_phase == MODE_SELECT) {
+      display.drawTextCentered(display.width()/2, 0, "MESSAGE");
+      display.fillRect(0, 10, display.width(), 1);
+      const char* opts[] = { "Direct message", "Channels" };
+      for (int i = 0; i < 2; i++) {
+        int y = START_Y + i * ITEM_H;
+        bool sel = (i == _mode_sel);
+        if (sel) {
+          display.setColor(DisplayDriver::LIGHT);
+          display.fillRect(0, y - 1, display.width(), ITEM_H - 1);
+          display.setColor(DisplayDriver::DARK);
+        } else {
+          display.setColor(DisplayDriver::LIGHT);
+        }
+        display.setCursor(0, y);
+        display.print(sel ? ">" : " ");
+        display.setCursor(8, y);
+        display.print(opts[i]);
+      }
+      display.setColor(DisplayDriver::LIGHT);
+
+    } else if (_phase == CONTACT_PICK) {
       display.drawTextCentered(display.width()/2, 0, "SELECT CONTACT");
       display.fillRect(0, 10, display.width(), 1);
 
       if (_num_contacts == 0) {
-        display.setColor(DisplayDriver::YELLOW);
         display.drawTextCentered(display.width()/2, 32, "No contacts");
         return 5000;
       }
@@ -438,7 +619,14 @@ public:
         int mesh_idx = _sorted[list_idx];
         bool sel = (list_idx == _contact_sel);
         int y = START_Y + i * ITEM_H;
-        display.setColor(sel ? DisplayDriver::YELLOW : DisplayDriver::LIGHT);
+
+        if (sel) {
+          display.setColor(DisplayDriver::LIGHT);
+          display.fillRect(0, y - 1, display.width(), ITEM_H - 1);
+          display.setColor(DisplayDriver::DARK);
+        } else {
+          display.setColor(DisplayDriver::LIGHT);
+        }
 
         ContactInfo c;
         if (the_mesh.getContactByIdx(mesh_idx, c)) {
@@ -448,88 +636,444 @@ public:
           char filtered[sizeof(c.name)];
           display.translateUTF8ToBlocks(filtered, c.name, sizeof(filtered));
           display.drawTextEllipsized(8, y, display.width() - 24, filtered);
-          display.setColor(DisplayDriver::GREEN);
           char hop[5];
           snprintf(hop, sizeof(hop), c.out_path_len == 0xFF ? "D" : "%dh", (int)c.out_path_len);
           display.setCursor(display.width() - display.getTextWidth(hop) - 1, y);
           display.print(hop);
         }
       }
+      display.setColor(DisplayDriver::LIGHT);
       renderScrollHints(display, _contact_scroll, _num_contacts);
 
-    } else {
+    } else if (_phase == CHANNEL_PICK) {
+      display.drawTextCentered(display.width()/2, 0, "SELECT CHANNEL");
+      display.fillRect(0, 10, display.width(), 1);
+
+      if (_num_channels == 0) {
+        display.drawTextCentered(display.width()/2, 32, "No channels");
+        return 5000;
+      }
+
+      for (int i = 0; i < VISIBLE && (_channel_scroll+i) < _num_channels; i++) {
+        int list_idx = _channel_scroll + i;
+        bool sel = (list_idx == _channel_sel);
+        int y = START_Y + i * ITEM_H;
+
+        if (sel) {
+          display.setColor(DisplayDriver::LIGHT);
+          display.fillRect(0, y - 1, display.width(), ITEM_H - 1);
+          display.setColor(DisplayDriver::DARK);
+        } else {
+          display.setColor(DisplayDriver::LIGHT);
+        }
+        display.setCursor(0, y);
+        display.print(sel ? ">" : " ");
+        ChannelDetails ch;
+        if (the_mesh.getChannel(_channel_indices[list_idx], ch)) {
+          display.drawTextEllipsized(8, y, display.width() - 10, ch.name);
+        }
+      }
+      display.setColor(DisplayDriver::LIGHT);
+      renderScrollHints(display, _channel_scroll, _num_channels);
+
+    } else if (_phase == CHANNEL_HIST) {
+      if (_hist_fullscreen && _hist_sel >= 0) {
+        int ring_pos = histEntryForChannel(_sel_channel_idx, _hist_sel);
+        if (ring_pos >= 0) {
+          const char* ftext = _hist[ring_pos].text;
+          const char* fsep = strstr(ftext, ": ");
+          char fsender[22], fmsg[79];
+          if (fsep) {
+            int nl = fsep - ftext; if (nl > 21) nl = 21;
+            strncpy(fsender, ftext, nl); fsender[nl] = '\0';
+            strncpy(fmsg, fsep + 2, sizeof(fmsg) - 1); fmsg[sizeof(fmsg)-1] = '\0';
+          } else {
+            strncpy(fsender, "?", sizeof(fsender));
+            strncpy(fmsg, ftext, sizeof(fmsg) - 1); fmsg[sizeof(fmsg)-1] = '\0';
+          }
+          display.setColor(DisplayDriver::LIGHT);
+          display.fillRect(0, 0, display.width(), 10);
+          display.setColor(DisplayDriver::DARK);
+          display.drawTextEllipsized(2, 1, display.width() - 4, fsender);
+          display.setColor(DisplayDriver::LIGHT);
+
+          char lines[12][FS_CHARS + 1];
+          int lcount = wrapLines(fmsg, lines, 12);
+          int max_scroll = lcount > FS_VISIBLE ? lcount - FS_VISIBLE : 0;
+          if (_hist_fs_scroll > max_scroll) _hist_fs_scroll = max_scroll;
+          for (int i = 0; i < FS_VISIBLE && (_hist_fs_scroll + i) < lcount; i++) {
+            display.setCursor(0, FS_START_Y + i * FS_LINE_H);
+            display.print(lines[_hist_fs_scroll + i]);
+          }
+          if (_hist_fs_scroll > 0) {
+            display.setCursor(display.width() - 6, FS_START_Y);
+            display.print("^");
+          }
+          if (_hist_fs_scroll < max_scroll) {
+            display.setCursor(display.width() - 6, FS_START_Y + (FS_VISIBLE - 1) * FS_LINE_H);
+            display.print("v");
+          }
+        }
+        return 300;
+      }
+
+      ChannelDetails ch;
+      the_mesh.getChannel(_sel_channel_idx, ch);
       char title[24];
-      snprintf(title, sizeof(title), "TO:%.14s", _sel_contact.name);
+      snprintf(title, sizeof(title), "#%.21s", ch.name);
+      display.drawTextCentered(display.width()/2, 0, title);
+      display.fillRect(0, 9, display.width(), 1);
+
+      int ch_hist_count = histCountForChannel(_sel_channel_idx);
+
+      for (int i = 0; i < HIST_VISIBLE && (_hist_scroll + i) < ch_hist_count; i++) {
+        int item = _hist_scroll + i;
+        bool sel = (item == _hist_sel);
+        int y = HIST_START_Y + i * HIST_ITEM_H;
+
+        int ring_pos = histEntryForChannel(_sel_channel_idx, item);
+        if (ring_pos < 0) continue;
+
+        const char* text = _hist[ring_pos].text;
+        const char* sep = strstr(text, ": ");
+        char sender[22], msg_part[79];
+        if (sep) {
+          int nl = sep - text; if (nl > 21) nl = 21;
+          strncpy(sender, text, nl); sender[nl] = '\0';
+          strncpy(msg_part, sep + 2, sizeof(msg_part) - 1);
+          msg_part[sizeof(msg_part) - 1] = '\0';
+        } else {
+          strncpy(sender, "?", sizeof(sender));
+          strncpy(msg_part, text, sizeof(msg_part) - 1);
+          msg_part[sizeof(msg_part) - 1] = '\0';
+        }
+
+        if (sel) {
+          display.setColor(DisplayDriver::LIGHT);
+          display.fillRect(0, y, display.width(), HIST_BOX_H);
+          display.setColor(DisplayDriver::DARK);
+          display.drawTextEllipsized(3, y + 1, display.width() - 6, sender);
+          display.drawTextEllipsized(3, y + 10, display.width() - 6, msg_part);
+        } else {
+          display.setColor(DisplayDriver::LIGHT);
+          display.drawRect(0, y, display.width(), HIST_BOX_H);
+          display.fillRect(1, y + 1, display.width() - 2, 8);
+          display.setColor(DisplayDriver::DARK);
+          display.drawTextEllipsized(3, y + 1, display.width() - 6, sender);
+          display.setColor(DisplayDriver::LIGHT);
+          display.drawTextEllipsized(3, y + 10, display.width() - 6, msg_part);
+        }
+      }
+
+      if (ch_hist_count == 0) {
+        display.setColor(DisplayDriver::LIGHT);
+        display.drawTextCentered(display.width()/2, 32, "No messages yet");
+      }
+
+      // scroll hints
+      display.setColor(DisplayDriver::LIGHT);
+      if (_hist_scroll > 0) {
+        display.setCursor(display.width() - 6, HIST_START_Y + 1);
+        display.print("^");
+      }
+      if (_hist_scroll + HIST_VISIBLE < ch_hist_count) {
+        display.setCursor(display.width() - 6, HIST_START_Y + HIST_VISIBLE * HIST_ITEM_H - 10);
+        display.print("v");
+      }
+
+      // small compose button (bottom-left, always bordered, inverted when selected)
+      bool compose_sel = (_hist_sel == -1);
+      const char* ctxt = "[+ send]";
+      int ctw = display.getTextWidth(ctxt);
+      int cbx = 1, cby = 55;
+      if (compose_sel) {
+        display.setColor(DisplayDriver::LIGHT);
+        display.fillRect(cbx - 1, cby - 1, ctw + 4, 10);
+        display.setColor(DisplayDriver::DARK);
+      } else {
+        display.setColor(DisplayDriver::LIGHT);
+        display.drawRect(cbx - 1, cby - 1, ctw + 4, 10);
+      }
+      display.setCursor(cbx + 1, cby);
+      display.print(ctxt);
+      display.setColor(DisplayDriver::LIGHT);
+
+    } else if (_phase == KEYBOARD) {
+      // text preview with cursor
+      display.setColor(DisplayDriver::LIGHT);
+      const char* disp_start = _kb_text;
+      int disp_len = _kb_len;
+      if (disp_len > 20) { disp_start = _kb_text + (disp_len - 20); disp_len = 20; }
+      char preview[24];
+      snprintf(preview, sizeof(preview), "%.*s_", disp_len, disp_start);
+      display.setCursor(0, KB_TEXT_Y);
+      display.print(preview);
+      display.fillRect(0, KB_SEP_Y, display.width(), 1);
+
+      // char rows
+      for (int row = 0; row < KB_ROWS_CHAR; row++) {
+        int y = KB_CHARS_Y + row * KB_CELL_H;
+        for (int col = 0; col < KB_COLS_CHAR; col++) {
+          bool sel = (_kb_row == row && _kb_col == col);
+          char ch_buf[2] = { KB_CHARS[row][col], '\0' };
+          if (ch_buf[0] == ' ') ch_buf[0] = '_';
+          int cx = col * KB_CELL_W;
+          if (sel) {
+            display.setColor(DisplayDriver::LIGHT);
+            display.fillRect(cx, y - 1, KB_CELL_W - 1, KB_CELL_H);
+            display.setColor(DisplayDriver::DARK);
+          } else {
+            display.setColor(DisplayDriver::LIGHT);
+          }
+          display.setCursor(cx + 3, y);
+          display.print(ch_buf);
+        }
+      }
+
+      // special row: [Spc] [Del] [OK]
+      const char* spec[] = { "[Sp]", "[Del]", "[OK]" };
+      for (int i = 0; i < KB_SPECIAL; i++) {
+        bool sel = (_kb_row == KB_ROWS_CHAR && _kb_col == i);
+        int sx = i * 43;
+        if (sel) {
+          display.setColor(DisplayDriver::LIGHT);
+          display.fillRect(sx, KB_SPECIAL_Y - 1, 41, KB_CELL_H);
+          display.setColor(DisplayDriver::DARK);
+        } else {
+          display.setColor(DisplayDriver::LIGHT);
+        }
+        display.setCursor(sx + 1, KB_SPECIAL_Y);
+        display.print(spec[i]);
+      }
+
+    } else { // MSG_PICK
+      char title[24];
+      if (_sending_to_channel) {
+        ChannelDetails ch;
+        the_mesh.getChannel(_sel_channel_idx, ch);
+        snprintf(title, sizeof(title), "#%.21s", ch.name);
+      } else {
+        snprintf(title, sizeof(title), "TO:%.14s", _sel_contact.name);
+      }
       display.drawTextCentered(display.width()/2, 0, title);
       display.fillRect(0, 10, display.width(), 1);
 
-      for (int i = 0; i < VISIBLE && (_msg_scroll+i) < QUICK_MSG_COUNT; i++) {
+      int total_msg_items = QUICK_MSG_COUNT + 1;  // +1 for "Custom message..."
+      for (int i = 0; i < VISIBLE && (_msg_scroll+i) < total_msg_items; i++) {
         int idx = _msg_scroll + i;
         bool sel = (idx == _msg_sel);
         int y = START_Y + i * ITEM_H;
-        display.setColor(sel ? DisplayDriver::YELLOW : DisplayDriver::LIGHT);
+
+        if (sel) {
+          display.setColor(DisplayDriver::LIGHT);
+          display.fillRect(0, y - 1, display.width(), ITEM_H - 1);
+          display.setColor(DisplayDriver::DARK);
+        } else {
+          display.setColor(DisplayDriver::LIGHT);
+        }
         display.setCursor(0, y);
         display.print(sel ? ">" : " ");
 
         if (idx == 0) {
+          display.setCursor(8, y);
+          display.print("Custom message...");
+        } else if (idx == 1) {
           char loc[36];
           buildLocMsg(loc, sizeof(loc));
           display.drawTextEllipsized(8, y, display.width() - 10, loc);
         } else {
           display.setCursor(8, y);
-          display.print(QUICK_MSG_LABELS[idx]);
+          display.print(QUICK_MSG_LABELS[idx - 1]);
         }
       }
-      renderScrollHints(display, _msg_scroll, QUICK_MSG_COUNT);
+      display.setColor(DisplayDriver::LIGHT);
+      renderScrollHints(display, _msg_scroll, total_msg_items);
     }
     return 300;
   }
 
   bool handleInput(char c) override {
-    if (_phase == CONTACT_PICK) {
+    if (_phase == MODE_SELECT) {
       if (c == KEY_CANCEL) { _task->gotoHomeScreen(); return true; }
-      if ((c == KEY_UP) && _contact_sel > 0) {
+      if (c == KEY_UP && _mode_sel > 0) { _mode_sel--; return true; }
+      if (c == KEY_DOWN && _mode_sel < 1) { _mode_sel++; return true; }
+      if (c == KEY_ENTER) {
+        _phase = (_mode_sel == 0) ? CONTACT_PICK : CHANNEL_PICK;
+        return true;
+      }
+
+    } else if (_phase == CONTACT_PICK) {
+      if (c == KEY_CANCEL) { _phase = MODE_SELECT; return true; }
+      if (c == KEY_UP && _contact_sel > 0) {
         _contact_sel--;
         if (_contact_sel < _contact_scroll) _contact_scroll = _contact_sel;
         return true;
       }
-      if ((c == KEY_DOWN) && _contact_sel < _num_contacts - 1) {
+      if (c == KEY_DOWN && _contact_sel < _num_contacts - 1) {
         _contact_sel++;
         if (_contact_sel >= _contact_scroll + VISIBLE) _contact_scroll = _contact_sel - VISIBLE + 1;
         return true;
       }
       if (c == KEY_ENTER && _num_contacts > 0) {
         if (the_mesh.getContactByIdx(_sorted[_contact_sel], _sel_contact)) {
+          _sending_to_channel = false;
           _phase = MSG_PICK;
           _msg_sel = _msg_scroll = 0;
         }
         return true;
       }
-    } else {
-      if (c == KEY_CANCEL) { _phase = CONTACT_PICK; return true; }
-      if ((c == KEY_UP) && _msg_sel > 0) {
+
+    } else if (_phase == CHANNEL_PICK) {
+      if (c == KEY_CANCEL) { _phase = MODE_SELECT; return true; }
+      if (c == KEY_UP && _channel_sel > 0) {
+        _channel_sel--;
+        if (_channel_sel < _channel_scroll) _channel_scroll = _channel_sel;
+        return true;
+      }
+      if (c == KEY_DOWN && _channel_sel < _num_channels - 1) {
+        _channel_sel++;
+        if (_channel_sel >= _channel_scroll + VISIBLE) _channel_scroll = _channel_sel - VISIBLE + 1;
+        return true;
+      }
+      if (c == KEY_ENTER && _num_channels > 0) {
+        _sel_channel_idx = _channel_indices[_channel_sel];
+        _hist_scroll = 0;
+        _hist_sel = histCountForChannel(_sel_channel_idx) > 0 ? 0 : -1;
+        _phase = CHANNEL_HIST;
+        return true;
+      }
+
+    } else if (_phase == CHANNEL_HIST) {
+      int ch_hist_count = histCountForChannel(_sel_channel_idx);
+      if (_hist_fullscreen) {
+        if (c == KEY_UP)   { if (_hist_fs_scroll > 0) _hist_fs_scroll--; return true; }
+        if (c == KEY_DOWN) { _hist_fs_scroll++; return true; }
+        if (c == KEY_ENTER || c == KEY_CANCEL) { _hist_fullscreen = false; return true; }
+        return true;
+      }
+      if (c == KEY_CANCEL) { _phase = CHANNEL_PICK; return true; }
+      if (c == KEY_UP) {
+        if (_hist_sel > 0) { _hist_sel--; if (_hist_sel < _hist_scroll) _hist_scroll = _hist_sel; }
+        else if (_hist_sel == 0) _hist_sel = -1;
+        return true;
+      }
+      if (c == KEY_DOWN) {
+        if (_hist_sel == -1 && ch_hist_count > 0) { _hist_sel = 0; _hist_scroll = 0; }
+        else if (_hist_sel >= 0 && _hist_sel < ch_hist_count - 1) {
+          _hist_sel++;
+          if (_hist_sel >= _hist_scroll + HIST_VISIBLE) _hist_scroll = _hist_sel - HIST_VISIBLE + 1;
+        }
+        return true;
+      }
+      if (c == KEY_ENTER) {
+        if (_hist_sel >= 0) {
+          _hist_fullscreen = true;
+          _hist_fs_scroll = 0;
+        } else {
+          _sending_to_channel = true;
+          _msg_sel = _msg_scroll = 0;
+          _phase = MSG_PICK;
+        }
+        return true;
+      }
+
+    } else if (_phase == KEYBOARD) {
+      if (c == KEY_CANCEL) {
+        _phase = MSG_PICK;
+        return true;
+      }
+      if (c == KEY_UP) {
+        if (_kb_row > 0) {
+          _kb_row--;
+          if (_kb_row == KB_ROWS_CHAR - 1 && _kb_col > KB_COLS_CHAR - 1)
+            _kb_col = KB_COLS_CHAR - 1;
+        }
+        return true;
+      }
+      if (c == KEY_DOWN) {
+        if (_kb_row < KB_ROWS_CHAR) {
+          int old_row = _kb_row;
+          _kb_row++;
+          if (_kb_row == KB_ROWS_CHAR) {
+            // entering special row: map col proportionally
+            _kb_col = _kb_col * KB_SPECIAL / KB_COLS_CHAR;
+          } else if (old_row == KB_ROWS_CHAR) {
+            // shouldn't happen but guard anyway
+          }
+        }
+        return true;
+      }
+      if (c == KEY_LEFT) {
+        if (_kb_col > 0) _kb_col--;
+        return true;
+      }
+      if (c == KEY_RIGHT) {
+        int max_col = (_kb_row == KB_ROWS_CHAR) ? KB_SPECIAL - 1 : KB_COLS_CHAR - 1;
+        if (_kb_col < max_col) _kb_col++;
+        return true;
+      }
+      if (c == KEY_ENTER) {
+        if (_kb_row < KB_ROWS_CHAR) {
+          // regular character
+          if (_kb_len < KB_MAX_LEN) {
+            _kb_text[_kb_len++] = KB_CHARS[_kb_row][_kb_col];
+            _kb_text[_kb_len] = '\0';
+          }
+        } else {
+          // special row
+          if (_kb_col == 0) {
+            // Space
+            if (_kb_len < KB_MAX_LEN) {
+              _kb_text[_kb_len++] = ' ';
+              _kb_text[_kb_len] = '\0';
+            }
+          } else if (_kb_col == 1) {
+            // Delete
+            if (_kb_len > 0) _kb_text[--_kb_len] = '\0';
+          } else {
+            // OK — send
+            if (_kb_len > 0) {
+              bool ok = sendText(_kb_text);
+              afterSend(ok, _kb_text);
+            }
+          }
+        }
+        return true;
+      }
+
+    } else { // MSG_PICK
+      int total_msg_items = QUICK_MSG_COUNT + 1;
+      if (c == KEY_CANCEL) {
+        _phase = _sending_to_channel ? CHANNEL_HIST : CONTACT_PICK;
+        return true;
+      }
+      if (c == KEY_UP && _msg_sel > 0) {
         _msg_sel--;
         if (_msg_sel < _msg_scroll) _msg_scroll = _msg_sel;
         return true;
       }
-      if ((c == KEY_DOWN) && _msg_sel < QUICK_MSG_COUNT - 1) {
+      if (c == KEY_DOWN && _msg_sel < total_msg_items - 1) {
         _msg_sel++;
         if (_msg_sel >= _msg_scroll + VISIBLE) _msg_scroll = _msg_sel - VISIBLE + 1;
         return true;
       }
       if (c == KEY_ENTER) {
-        char msg[80];
         if (_msg_sel == 0) {
+          // Custom message → open keyboard
+          _kb_row = _kb_col = _kb_len = 0;
+          _kb_text[0] = '\0';
+          _phase = KEYBOARD;
+          return true;
+        }
+        char msg[80];
+        if (_msg_sel == 1) {
           buildLocMsg(msg, sizeof(msg));
         } else {
-          strncpy(msg, QUICK_MSG_LABELS[_msg_sel], sizeof(msg)-1);
+          strncpy(msg, QUICK_MSG_LABELS[_msg_sel - 1], sizeof(msg)-1);
           msg[sizeof(msg)-1] = '\0';
         }
-        uint32_t expected_ack = 0, est_timeout = 0;
-        int result = the_mesh.sendMessage(_sel_contact, rtc_clock.getCurrentTime(), 0,
-                                          msg, expected_ack, est_timeout);
-        _task->showAlert(result > 0 ? "Sent!" : "Send failed", 1500);
-        _task->gotoHomeScreen();
+        bool ok = sendText(msg);
+        afterSend(ok, msg);
         return true;
       }
     }
@@ -605,7 +1149,7 @@ class HomeScreen : public UIScreen {
                      ? _node_prefs->batt_display_mode : 0;
 
     display.setTextSize(1);
-    display.setColor(DisplayDriver::GREEN);
+    display.setColor(DisplayDriver::LIGHT);
 
     int battLeftX;
     if (mode == 1) {  // percent
@@ -631,7 +1175,7 @@ class HomeScreen : public UIScreen {
 
 #ifdef PIN_BUZZER
     if (_task->isBuzzerQuiet()) {
-      display.setColor(DisplayDriver::RED);
+      display.setColor(DisplayDriver::LIGHT);
       display.drawXbm(battLeftX - 9, 1, muted_icon, 8, 8);
     }
 #endif
@@ -679,7 +1223,7 @@ public:
     char tmp[80];
     // node name
     display.setTextSize(1);
-    display.setColor(DisplayDriver::GREEN);
+    display.setColor(DisplayDriver::LIGHT);
     char filtered_name[sizeof(_node_prefs->node_name)];
     display.translateUTF8ToBlocks(filtered_name, _node_prefs->node_name, sizeof(filtered_name));
     display.setCursor(0, 0);
@@ -702,10 +1246,9 @@ public:
     if (_page == HomePage::CLOCK) {
       uint32_t unix_ts = _rtc->getCurrentTime();
       if (unix_ts < 1000000000UL) {
-        display.setColor(DisplayDriver::YELLOW);
-        display.setTextSize(1);
-        display.drawTextCentered(display.width() / 2, 25, "No time sync");
         display.setColor(DisplayDriver::LIGHT);
+        display.setTextSize(1);
+        display.drawTextCentered(display.width() / 2, 25, "! No time sync");
         display.drawTextCentered(display.width() / 2, 40, "Enable GPS or");
         display.drawTextCentered(display.width() / 2, 51, "connect app");
       } else {
@@ -715,25 +1258,23 @@ public:
         struct tm* ti = gmtime(&t);
 
         char buf[24];
-        display.setColor(DisplayDriver::YELLOW);
+        display.setColor(DisplayDriver::LIGHT);
         display.setTextSize(2);
         sprintf(buf, "%02d:%02d:%02d", ti->tm_hour, ti->tm_min, ti->tm_sec);
         display.drawTextCentered(display.width() / 2, 18, buf);
 
         display.setTextSize(1);
-        display.setColor(DisplayDriver::GREEN);
         const char* wd[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
         const char* mo[] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
         sprintf(buf, "%s %d %s %d", wd[ti->tm_wday], ti->tm_mday, mo[ti->tm_mon], 1900 + ti->tm_year);
         display.drawTextCentered(display.width() / 2, 40, buf);
 
-        display.setColor(DisplayDriver::LIGHT);
         if (tz >= 0) sprintf(buf, "UTC+%d", (int)tz);
         else         sprintf(buf, "UTC%d",  (int)tz);
         display.drawTextCentered(display.width() / 2, 54, buf);
       }
     } else if (_page == HomePage::FIRST) {
-      display.setColor(DisplayDriver::YELLOW);
+      display.setColor(DisplayDriver::LIGHT);
       display.setTextSize(2);
       sprintf(tmp, "MSG: %d", _task->getMsgCount());
       display.drawTextCentered(display.width() / 2, 20, tmp);
@@ -742,22 +1283,25 @@ public:
         IPAddress ip = WiFi.localIP();
         snprintf(tmp, sizeof(tmp), "IP: %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
         display.setTextSize(1);
-        display.drawTextCentered(display.width() / 2, 54, tmp); 
+        display.drawTextCentered(display.width() / 2, 54, tmp);
       #endif
       if (_task->hasConnection()) {
-        display.setColor(DisplayDriver::GREEN);
         display.setTextSize(1);
-        display.drawTextCentered(display.width() / 2, 43, "< Connected >");
-
-      } else if (the_mesh.getBLEPin() != 0) { // BT pin
-        display.setColor(DisplayDriver::RED);
+        const char* conn_label = "< Connected >";
+        int lw = display.getTextWidth(conn_label);
+        int lx = (display.width() - lw) / 2;
+        display.fillRect(lx - 2, 41, lw + 4, 10);
+        display.setColor(DisplayDriver::DARK);
+        display.drawTextCentered(display.width() / 2, 43, conn_label);
+        display.setColor(DisplayDriver::LIGHT);
+      } else if (the_mesh.getBLEPin() != 0) {
         display.setTextSize(2);
         sprintf(tmp, "Pin:%d", the_mesh.getBLEPin());
         display.drawTextCentered(display.width() / 2, 43, tmp);
       }
     } else if (_page == HomePage::RECENT) {
       the_mesh.getRecentlyHeard(recent, UI_RECENT_LIST_SIZE);
-      display.setColor(DisplayDriver::GREEN);
+      display.setColor(DisplayDriver::LIGHT);
       int y = 20;
       for (int i = 0; i < UI_RECENT_LIST_SIZE; i++, y += 11) {
         auto a = &recent[i];
@@ -781,7 +1325,7 @@ public:
         display.print(tmp);
       }
     } else if (_page == HomePage::RADIO) {
-      display.setColor(DisplayDriver::YELLOW);
+      display.setColor(DisplayDriver::LIGHT);
       display.setTextSize(1);
       // freq / sf
       display.setCursor(0, 20);
@@ -800,14 +1344,14 @@ public:
       sprintf(tmp, "Noise floor: %d", radio_driver.getNoiseFloor());
       display.print(tmp);
     } else if (_page == HomePage::BLUETOOTH) {
-      display.setColor(DisplayDriver::GREEN);
+      display.setColor(DisplayDriver::LIGHT);
       display.drawXbm((display.width() - 32) / 2, 18,
           _task->isSerialEnabled() ? bluetooth_on : bluetooth_off,
           32, 32);
       display.setTextSize(1);
       display.drawTextCentered(display.width() / 2, 64 - 11, "toggle: " PRESS_LABEL);
     } else if (_page == HomePage::ADVERT) {
-      display.setColor(DisplayDriver::GREEN);
+      display.setColor(DisplayDriver::LIGHT);
       display.drawXbm((display.width() - 32) / 2, 18, advert_icon, 32, 32);
       display.drawTextCentered(display.width() / 2, 64 - 11, "advert: " PRESS_LABEL);
 #if ENV_INCLUDE_GPS == 1
@@ -922,21 +1466,19 @@ public:
       else sensors_scroll_offset = 0;
 #endif
     } else if (_page == HomePage::SETTINGS) {
-      display.setColor(DisplayDriver::GREEN);
+      display.setColor(DisplayDriver::LIGHT);
       display.setTextSize(1);
       display.drawTextCentered(display.width() / 2, 22, "Settings");
-      display.setColor(DisplayDriver::LIGHT);
       display.drawTextCentered(display.width() / 2, 38, "brightness, buzzer");
       display.drawTextCentered(display.width() / 2, 52, PRESS_LABEL " to open");
     } else if (_page == HomePage::QUICK_MSG) {
-      display.setColor(DisplayDriver::GREEN);
+      display.setColor(DisplayDriver::LIGHT);
       display.setTextSize(1);
       display.drawTextCentered(display.width() / 2, 22, "Quick Message");
-      display.setColor(DisplayDriver::LIGHT);
       display.drawTextCentered(display.width() / 2, 38, "send to contact");
       display.drawTextCentered(display.width() / 2, 52, PRESS_LABEL " to open");
     } else if (_page == HomePage::SHUTDOWN) {
-      display.setColor(DisplayDriver::GREEN);
+      display.setColor(DisplayDriver::LIGHT);
       display.setTextSize(1);
       if (_shutdown_init) {
         display.drawTextCentered(display.width() / 2, 34, "hibernating...");
@@ -1015,81 +1557,156 @@ class MsgPreviewScreen : public UIScreen {
     char origin[62];
     char msg[78];
   };
-  #define MAX_UNREAD_MSGS   32
+  #define MAX_UNREAD_MSGS 32
   int num_unread;
-  int head = MAX_UNREAD_MSGS - 1; // index of latest unread message
+  int head;
+  int _view_offset;   // 0=newest, num_unread-1=oldest
+  bool _fullscreen;
+  int  _fs_scroll;    // line scroll offset in fullscreen
   MsgEntry unread[MAX_UNREAD_MSGS];
 
+  static const int FS_CHARS = 21;   // chars per line at text size 1, 128px wide
+  static const int FS_LINE_H = 9;
+  static const int FS_START_Y = 12;
+  static const int FS_VISIBLE = (64 - FS_START_Y) / FS_LINE_H;  // 5 lines
+
+  // word-wrap msg into lines; returns line count
+  int wrapLines(const char* text, char out[][FS_CHARS + 1], int max_lines) const {
+    int count = 0;
+    const char* p = text;
+    while (*p && count < max_lines) {
+      int len = strlen(p);
+      if (len <= FS_CHARS) {
+        strncpy(out[count++], p, FS_CHARS);
+        out[count-1][len] = '\0';
+        break;
+      }
+      int brk = FS_CHARS;
+      for (int i = FS_CHARS - 1; i > 0; i--) {
+        if (p[i] == ' ') { brk = i; break; }
+      }
+      strncpy(out[count], p, brk);
+      out[count++][brk] = '\0';
+      p += brk + (p[brk] == ' ' ? 1 : 0);
+    }
+    return count;
+  }
+
 public:
-  MsgPreviewScreen(UITask* task, mesh::RTCClock* rtc) : _task(task), _rtc(rtc) { num_unread = 0; }
+  MsgPreviewScreen(UITask* task, mesh::RTCClock* rtc)
+    : _task(task), _rtc(rtc), num_unread(0), head(MAX_UNREAD_MSGS - 1),
+      _view_offset(0), _fullscreen(false), _fs_scroll(0) {}
 
   void addPreview(uint8_t path_len, const char* from_name, const char* msg) {
     head = (head + 1) % MAX_UNREAD_MSGS;
     if (num_unread < MAX_UNREAD_MSGS) num_unread++;
+    _view_offset = 0;
+    _fullscreen = false;
 
     auto p = &unread[head];
     p->timestamp = _rtc->getCurrentTime();
     if (path_len == 0xFF) {
       sprintf(p->origin, "(D) %s:", from_name);
     } else {
-      sprintf(p->origin, "(%d) %s:", (uint32_t) path_len, from_name);
+      sprintf(p->origin, "(%d) %s:", (uint32_t)path_len, from_name);
     }
     StrHelper::strncpy(p->msg, msg, sizeof(p->msg));
   }
 
   int render(DisplayDriver& display) override {
-    char tmp[16];
-    display.setCursor(0, 0);
     display.setTextSize(1);
-    display.setColor(DisplayDriver::GREEN);
-    sprintf(tmp, "Unread: %d", num_unread);
-    display.print(tmp);
+    display.setColor(DisplayDriver::LIGHT);
 
-    auto p = &unread[head];
+    int msg_idx = (head - _view_offset + MAX_UNREAD_MSGS) % MAX_UNREAD_MSGS;
+    auto p = &unread[msg_idx];
 
-    int secs = _rtc->getCurrentTime() - p->timestamp;
-    if (secs < 60) {
-      sprintf(tmp, "%ds", secs);
-    } else if (secs < 60*60) {
-      sprintf(tmp, "%dm", secs / 60);
-    } else {
-      sprintf(tmp, "%dh", secs / (60*60));
-    }
-    display.setCursor(display.width() - display.getTextWidth(tmp) - 2, 0);
-    display.print(tmp);
-
-    display.drawRect(0, 11, display.width(), 1);  // horiz line
-
-    display.setCursor(0, 14);
-    display.setColor(DisplayDriver::YELLOW);
     char filtered_origin[sizeof(p->origin)];
     display.translateUTF8ToBlocks(filtered_origin, p->origin, sizeof(filtered_origin));
-    display.print(filtered_origin);
-
-    display.setCursor(0, 25);
-    display.setColor(DisplayDriver::LIGHT);
     char filtered_msg[sizeof(p->msg)];
     display.translateUTF8ToBlocks(filtered_msg, p->msg, sizeof(filtered_msg));
-    display.printWordWrap(filtered_msg, display.width());
 
-#if AUTO_OFF_MILLIS==0 // probably e-ink
-    return 10000; // 10 s
+    // inverted header: origin + counter
+    char counter[8];
+    snprintf(counter, sizeof(counter), "%d/%d", _view_offset + 1, num_unread);
+    int counter_w = display.getTextWidth(counter);
+    display.fillRect(0, 0, display.width(), 10);
+    display.setColor(DisplayDriver::DARK);
+    display.drawTextEllipsized(2, 1, display.width() - counter_w - 6, filtered_origin);
+    display.setCursor(display.width() - counter_w - 2, 1);
+    display.print(counter);
+    display.setColor(DisplayDriver::LIGHT);
+
+    if (_fullscreen) {
+      char lines[10][FS_CHARS + 1];
+      int line_count = wrapLines(filtered_msg, lines, 10);
+      int max_scroll = (line_count > FS_VISIBLE) ? line_count - FS_VISIBLE : 0;
+      if (_fs_scroll > max_scroll) _fs_scroll = max_scroll;
+
+      for (int i = 0; i < FS_VISIBLE && (_fs_scroll + i) < line_count; i++) {
+        display.setCursor(0, FS_START_Y + i * FS_LINE_H);
+        display.print(lines[_fs_scroll + i]);
+      }
+      if (_fs_scroll > 0) {
+        display.setCursor(display.width() - 6, FS_START_Y);
+        display.print("^");
+      }
+      if (_fs_scroll < max_scroll) {
+        display.setCursor(display.width() - 6, FS_START_Y + (FS_VISIBLE - 1) * FS_LINE_H);
+        display.print("v");
+      }
+    } else {
+      display.setCursor(0, 13);
+      display.printWordWrap(filtered_msg, display.width());
+
+      // nav hints
+      if (_view_offset < num_unread - 1) {
+        display.setCursor(display.width() - 6, 13);
+        display.print("^");
+      }
+      if (_view_offset > 0) {
+        display.setCursor(display.width() - 6, 55);
+        display.print("v");
+      }
+
+      // timestamp
+      char tmp[10];
+      int secs = _rtc->getCurrentTime() - p->timestamp;
+      if (secs < 60)        snprintf(tmp, sizeof(tmp), "%ds", secs);
+      else if (secs < 3600) snprintf(tmp, sizeof(tmp), "%dm", secs / 60);
+      else                  snprintf(tmp, sizeof(tmp), "%dh", secs / 3600);
+      display.setCursor(0, 56);
+      display.print(tmp);
+    }
+
+#if AUTO_OFF_MILLIS==0
+    return 10000;
 #else
-    return 1000;  // next render after 1000 ms
+    return 1000;
 #endif
   }
 
   bool handleInput(char c) override {
-    if (c == KEY_NEXT || c == KEY_RIGHT) {
-      head = (head + MAX_UNREAD_MSGS - 1) % MAX_UNREAD_MSGS;
-      num_unread--;
-      if (num_unread == 0) {
-        _task->gotoHomeScreen();
-      }
+    if (_fullscreen) {
+      if (c == KEY_UP)   { if (_fs_scroll > 0) _fs_scroll--; return true; }
+      if (c == KEY_DOWN) { _fs_scroll++; return true; }
+      if (c == KEY_ENTER || c == KEY_CANCEL) { _fullscreen = false; return true; }
+      return true;
+    }
+    if (c == KEY_UP || c == KEY_LEFT) {
+      if (_view_offset < num_unread - 1) _view_offset++;
+      return true;
+    }
+    if (c == KEY_DOWN || c == KEY_RIGHT) {
+      if (_view_offset > 0) _view_offset--;
       return true;
     }
     if (c == KEY_ENTER) {
-      num_unread = 0;  // clear unread queue
+      _fullscreen = true;
+      _fs_scroll = 0;
+      return true;
+    }
+    if (c == KEY_CANCEL) {
+      num_unread = 0;
       _task->gotoHomeScreen();
       return true;
     }
@@ -1146,6 +1763,10 @@ void UITask::gotoSettingsScreen() {
 void UITask::gotoQuickMsgScreen() {
   ((QuickMsgScreen*)quick_msg)->reset();
   setCurrScreen(quick_msg);
+}
+
+void UITask::addChannelMsg(uint8_t channel_idx, const char* text) {
+  ((QuickMsgScreen*)quick_msg)->addChannelMsg(channel_idx, text);
 }
 
 void UITask::showAlert(const char* text, int duration_millis) {

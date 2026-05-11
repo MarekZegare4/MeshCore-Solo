@@ -82,6 +82,7 @@ public:
   void gotoSettingsScreen();
   void gotoQuickMsgScreen();
   void showAlert(const char* text, int duration_millis);
+  void addChannelMsg(uint8_t channel_idx, const char* text) override;
   int  getMsgCount() const { return _msgcount; }
   bool hasDisplay() const { return _display != NULL; }
   bool isButtonPressed() const;
