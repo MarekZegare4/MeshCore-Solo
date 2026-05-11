@@ -730,6 +730,7 @@ class QuickMsgScreen : public UIScreen {
 
   // Context menu (opened by long-press ENTER in CHANNEL_PICK)
   bool _ctx_open;
+  bool _ctx_dirty;
   int  _ctx_ch_idx;
   int  _ctx_sel;
 
@@ -916,7 +917,6 @@ class QuickMsgScreen : public UIScreen {
       p->ch_notif_override |= mask;
       p->ch_notif_muted    &= ~mask;
     }
-    the_mesh.savePrefs();
   }
 
 public:
@@ -931,7 +931,7 @@ public:
       _hist_head(0), _hist_count(0),
       _kb_row(0), _kb_col(0), _kb_len(0),
       _kb_caps(false), _kb_ph_mode(false), _kb_ph_sel(0),
-      _ctx_open(false), _ctx_ch_idx(-1), _ctx_sel(0) {
+      _ctx_open(false), _ctx_dirty(false), _ctx_ch_idx(-1), _ctx_sel(0) {
     _kb_text[0] = '\0';
     memset(_ch_unread, 0, sizeof(_ch_unread));
   }
@@ -1416,18 +1416,22 @@ public:
     } else if (_phase == CHANNEL_PICK) {
       // Context menu consumes all input while open
       if (_ctx_open) {
-        if (c == KEY_CANCEL) { _ctx_open = false; return true; }
+        if (c == KEY_CANCEL) {
+          if (_ctx_dirty) { the_mesh.savePrefs(); _ctx_dirty = false; }
+          _ctx_open = false;
+          return true;
+        }
         if (c == KEY_UP   && _ctx_sel > 0) { _ctx_sel--; return true; }
         if (c == KEY_DOWN && _ctx_sel < 1) { _ctx_sel++; return true; }
         if (c == KEY_ENTER && _num_channels > 0) {
           uint8_t ch_idx = _channel_indices[_channel_sel];
           if (_ctx_sel == 0) {
-            _ch_unread[ch_idx] = 0;  // mark all read
+            _ch_unread[ch_idx] = 0;
           } else {
             uint8_t nstate = chNotifState(ch_idx);
-            setChNotifState(ch_idx, (nstate + 1) % 3);  // cycle: default→OFF→ON→default
+            setChNotifState(ch_idx, (nstate + 1) % 3);
+            _ctx_dirty = true;
           }
-          // stay open so user can see result; CANCEL closes
           return true;
         }
         return true;
@@ -1454,6 +1458,7 @@ public:
       if (c == KEY_CONTEXT_MENU && _num_channels > 0) {
         _ctx_ch_idx = _channel_indices[_channel_sel];
         _ctx_sel = 0;
+        _ctx_dirty = false;
         _ctx_open = true;
         return true;
       }
