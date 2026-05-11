@@ -39,4 +39,5 @@ struct NodePrefs {  // persisted to file
   int8_t tz_offset_hours;       // timezone offset from UTC, -12..+14 (default 0)
   uint16_t low_batt_mv;         // auto-shutdown threshold: 0=disabled, 3000-3500 mV
   uint8_t batt_display_mode;   // 0=icon, 1=percent, 2=voltage
+  char custom_msgs[10][140];   // user-defined quick messages (supports {loc}, {time})
 };
