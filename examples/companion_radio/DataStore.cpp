@@ -238,6 +238,13 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
     file.read((uint8_t *)&_prefs.tz_offset_hours, sizeof(_prefs.tz_offset_hours));      // 140
     file.read((uint8_t *)&_prefs.low_batt_mv, sizeof(_prefs.low_batt_mv));             // 141
     file.read((uint8_t *)&_prefs.batt_display_mode, sizeof(_prefs.batt_display_mode)); // 143
+    if (file.available()) {
+      file.read((uint8_t *)_prefs.custom_msgs, sizeof(_prefs.custom_msgs));            // 144
+      file.read((uint8_t *)&_prefs.ch_notif_override, sizeof(_prefs.ch_notif_override)); // 1544
+      file.read((uint8_t *)&_prefs.ch_notif_muted, sizeof(_prefs.ch_notif_muted));     // 1552
+      file.read((uint8_t *)&_prefs.dm_show_all, sizeof(_prefs.dm_show_all));           // 1560
+      file.read((uint8_t *)&_prefs.room_fav_only, sizeof(_prefs.room_fav_only));       // 1561
+    }
 
     file.close();
   }
@@ -283,6 +290,11 @@ void DataStore::savePrefs(const NodePrefs& _prefs, double node_lat, double node_
     file.write((uint8_t *)&_prefs.tz_offset_hours, sizeof(_prefs.tz_offset_hours));      // 140
     file.write((uint8_t *)&_prefs.low_batt_mv, sizeof(_prefs.low_batt_mv));             // 141
     file.write((uint8_t *)&_prefs.batt_display_mode, sizeof(_prefs.batt_display_mode)); // 143
+    file.write((uint8_t *)_prefs.custom_msgs, sizeof(_prefs.custom_msgs));              // 144
+    file.write((uint8_t *)&_prefs.ch_notif_override, sizeof(_prefs.ch_notif_override)); // 1544
+    file.write((uint8_t *)&_prefs.ch_notif_muted, sizeof(_prefs.ch_notif_muted));       // 1552
+    file.write((uint8_t *)&_prefs.dm_show_all, sizeof(_prefs.dm_show_all));             // 1560
+    file.write((uint8_t *)&_prefs.room_fav_only, sizeof(_prefs.room_fav_only));         // 1561
 
     file.close();
   }

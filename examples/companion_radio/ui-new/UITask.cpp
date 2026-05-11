@@ -731,7 +731,6 @@ class QuickMsgScreen : public UIScreen {
   // Context menu (opened by long-press ENTER in CHANNEL_PICK)
   bool _ctx_open;
   bool _ctx_dirty;
-  int  _ctx_ch_idx;
   int  _ctx_sel;
 
   struct ChHistEntry { uint8_t ch_idx; char text[140]; };
@@ -931,7 +930,7 @@ public:
       _hist_head(0), _hist_count(0),
       _kb_row(0), _kb_col(0), _kb_len(0),
       _kb_caps(false), _kb_ph_mode(false), _kb_ph_sel(0),
-      _ctx_open(false), _ctx_dirty(false), _ctx_ch_idx(-1), _ctx_sel(0) {
+      _ctx_open(false), _ctx_dirty(false), _ctx_sel(0) {
     _kb_text[0] = '\0';
     memset(_ch_unread, 0, sizeof(_ch_unread));
   }
@@ -974,8 +973,11 @@ public:
 
     _room_mode = false;
     buildContactList();
-
     buildChannelList();
+
+    _ctx_open = false;
+    _ctx_dirty = false;
+    _ctx_sel = 0;
   }
 
   int render(DisplayDriver& display) override {
@@ -1456,7 +1458,6 @@ public:
         return true;
       }
       if (c == KEY_CONTEXT_MENU && _num_channels > 0) {
-        _ctx_ch_idx = _channel_indices[_channel_sel];
         _ctx_sel = 0;
         _ctx_dirty = false;
         _ctx_open = true;
@@ -2379,7 +2380,7 @@ void UITask::msgRead(int msgcount) {
 
 void UITask::newMsg(uint8_t path_len, const char* from_name, const char* text, int msgcount, uint8_t contact_type) {
   _msgcount = msgcount;
-  if (contact_type == ADV_TYPE_ROOM) _room_unread++;
+  if (contact_type == ADV_TYPE_ROOM && _room_unread < _msgcount) _room_unread++;
 
   char alert_buf[80];
   snprintf(alert_buf, sizeof(alert_buf), "Msg: %.20s", from_name);
