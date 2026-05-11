@@ -39,4 +39,4 @@ jobs:
           name: Wio Tracker L1 Firmware ${{ env.GIT_TAG_VERSION }}
           body: ""
           draft: true
-          files: out/*
+          files: out/*.uf2
