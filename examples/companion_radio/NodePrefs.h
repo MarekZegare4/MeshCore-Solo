@@ -42,4 +42,6 @@ struct NodePrefs {  // persisted to file
   char custom_msgs[10][140];   // user-defined quick messages (supports {loc}, {time})
   uint64_t ch_notif_override;  // bitmask: bit i = channel i has explicit notification setting
   uint64_t ch_notif_muted;     // bitmask: bit i = channel i muted (only if override bit set)
+  uint8_t  dm_show_all;        // 0=favourites only (default), 1=all chat contacts
+  uint8_t  room_fav_only;      // 0=all room servers (default), 1=favourites only
 };

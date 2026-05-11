@@ -128,6 +128,8 @@ class SettingsScreen : public UIScreen {
     SECTION_GPS,
     GPS_INTERVAL,
 #endif
+    // Contacts section
+    SECTION_CONTACTS, DM_FILTER, ROOM_FILTER,
     // Messages section
     SECTION_MESSAGES,
     MSG_SLOT_0, MSG_SLOT_1, MSG_SLOT_2, MSG_SLOT_3, MSG_SLOT_4,
@@ -196,7 +198,7 @@ class SettingsScreen : public UIScreen {
   bool isSection(int item) const {
     return item == SECTION_DISPLAY || item == SECTION_SOUND ||
            item == SECTION_RADIO   || item == SECTION_SYSTEM ||
-           item == SECTION_MESSAGES
+           item == SECTION_CONTACTS || item == SECTION_MESSAGES
 #if ENV_INCLUDE_GPS == 1
            || item == SECTION_GPS
 #endif
@@ -208,6 +210,7 @@ class SettingsScreen : public UIScreen {
     if (item == SECTION_SOUND)    return "Sound";
     if (item == SECTION_RADIO)    return "Radio";
     if (item == SECTION_SYSTEM)   return "System";
+    if (item == SECTION_CONTACTS) return "Contacts";
     if (item == SECTION_MESSAGES) return "Messages";
 #if ENV_INCLUDE_GPS == 1
     if (item == SECTION_GPS)      return "GPS";
@@ -304,6 +307,14 @@ class SettingsScreen : public UIScreen {
       display.setCursor(VAL_X, y);
       uint8_t mode = p ? p->batt_display_mode : 0;
       display.print(BATT_DISPLAY_LABELS[mode < BATT_DISPLAY_COUNT ? mode : 0]);
+    } else if (item == DM_FILTER) {
+      display.print("DM");
+      display.setCursor(VAL_X, y);
+      display.print((p && p->dm_show_all) ? "all" : "fav");
+    } else if (item == ROOM_FILTER) {
+      display.print("Rooms");
+      display.setCursor(VAL_X, y);
+      display.print((p && p->room_fav_only) ? "fav" : "all");
     } else if (isMsgSlot(item)) {
       int slot = msgSlotIndex(item);
       char label[5];
@@ -605,6 +616,16 @@ public:
       if (left)  idx = (idx + BATT_DISPLAY_COUNT - 1) % BATT_DISPLAY_COUNT;
       if (left || right) { p->batt_display_mode = idx; _dirty = true; return true; }
     }
+    if (_selected == DM_FILTER && p && (left || right || enter)) {
+      p->dm_show_all = p->dm_show_all ? 0 : 1;
+      _dirty = true;
+      return true;
+    }
+    if (_selected == ROOM_FILTER && p && (left || right || enter)) {
+      p->room_fav_only = p->room_fav_only ? 0 : 1;
+      _dirty = true;
+      return true;
+    }
     if (isMsgSlot(_selected) && enter) {
       int slot = msgSlotIndex(_selected);
       _edit_slot = slot;
@@ -841,18 +862,23 @@ class QuickMsgScreen : public UIScreen {
   }
 
   void buildContactList() {
+    NodePrefs* p = _task->getNodePrefs();
     ContactInfo c;
     int total = the_mesh.getNumContacts();
     _num_contacts = 0;
     if (_room_mode) {
+      bool fav_only = (p && p->room_fav_only);
       for (int i = 0; i < total; i++) {
         if (!the_mesh.getContactByIdx(i, c) || c.type != ADV_TYPE_ROOM) continue;
+        if (fav_only && !(c.flags & 0x01)) continue;
         _sorted[_num_contacts++] = i;
       }
     } else {
+      bool show_all = (p && p->dm_show_all);
       for (int i = 0; i < total; i++) {
         if (!the_mesh.getContactByIdx(i, c) || c.type != ADV_TYPE_CHAT) continue;
-        if (c.flags & 0x01) _sorted[_num_contacts++] = i;
+        if (!show_all && !(c.flags & 0x01)) continue;
+        _sorted[_num_contacts++] = i;
       }
     }
   }
