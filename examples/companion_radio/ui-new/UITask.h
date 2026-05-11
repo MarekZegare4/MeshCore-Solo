@@ -36,6 +36,7 @@ class UITask : public AbstractUITask {
   char _alert[80];
   unsigned long _alert_expiry;
   int _msgcount;
+  int _room_unread;
   int _last_notif_ch_idx;
   unsigned long ui_started_at, next_batt_chck;
   uint16_t _batt_mv;  // EMA-filtered battery voltage
@@ -73,6 +74,7 @@ public:
     next_batt_chck = _next_refresh = 0;
     ui_started_at = 0;
     _batt_mv = 0;
+    _msgcount = _room_unread = 0;
     _last_notif_ch_idx = -1;
     curr = NULL;
   }
@@ -87,6 +89,8 @@ public:
   void addChannelMsg(uint8_t channel_idx, const char* text) override;
   int  getMsgCount() const { return _msgcount; }
   int  getChannelUnreadCount() const;
+  int  getRoomUnreadCount() const { return _room_unread; }
+  void clearRoomUnread() { _room_unread = 0; }
   bool hasDisplay() const { return _display != NULL; }
   bool isButtonPressed() const;
 
@@ -114,7 +118,7 @@ public:
 
   // from AbstractUITask
   void msgRead(int msgcount) override;
-  void newMsg(uint8_t path_len, const char* from_name, const char* text, int msgcount) override;
+  void newMsg(uint8_t path_len, const char* from_name, const char* text, int msgcount, uint8_t contact_type = 0) override;
   void notify(UIEventType t = UIEventType::none) override;
   void loop() override;
 

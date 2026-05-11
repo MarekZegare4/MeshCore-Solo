@@ -986,7 +986,12 @@ public:
       display.drawTextCentered(display.width()/2, 0, "MESSAGE");
       display.fillRect(0, 10, display.width(), 1);
       const char* opts[] = { "Direct message", "Channels", "Room Servers" };
-      int dm_unread = _task->getMsgCount();
+      int badges[3] = {
+        _task->getMsgCount() - _task->getRoomUnreadCount(),  // DM only
+        _task->getChannelUnreadCount(),
+        _task->getRoomUnreadCount()
+      };
+      if (badges[0] < 0) badges[0] = 0;
       for (int i = 0; i < 3; i++) {
         int y = START_Y + i * ITEM_H;
         bool sel = (i == _mode_sel);
@@ -1001,9 +1006,9 @@ public:
         display.print(sel ? ">" : " ");
         display.setCursor(8, y);
         display.print(opts[i]);
-        if (i == 0 && dm_unread > 0) {
+        if (badges[i] > 0) {
           char badge[5];
-          snprintf(badge, sizeof(badge), "%d", dm_unread);
+          snprintf(badge, sizeof(badge), "%d", badges[i]);
           int bw = display.getTextWidth(badge) + 2;
           display.setCursor(display.width() - bw, y);
           display.print(badge);
@@ -1379,6 +1384,7 @@ public:
           _phase = CHANNEL_PICK;
         } else {
           _room_mode = (_mode_sel == 2);
+          if (_room_mode) _task->clearRoomUnread();
           buildContactList();
           _contact_sel = _contact_scroll = 0;
           _phase = CONTACT_PICK;
@@ -1421,7 +1427,7 @@ public:
             uint8_t nstate = chNotifState(ch_idx);
             setChNotifState(ch_idx, (nstate + 1) % 3);  // cycle: default→OFF→ON→default
           }
-          _ctx_open = false;
+          // stay open so user can see result; CANCEL closes
           return true;
         }
         return true;
@@ -2002,6 +2008,7 @@ public:
       display.setTextSize(1);
       display.drawTextCentered(display.width() / 2, 22, "Messages");
       int total_unread = _task->getMsgCount() + _task->getChannelUnreadCount();
+      // getMsgCount() already includes room msgs via offline_queue_len; avoid double-count
       if (total_unread > 0) {
         char badge[20];
         snprintf(badge, sizeof(badge), "%d unread", total_unread);
@@ -2360,12 +2367,14 @@ switch(t){
 void UITask::msgRead(int msgcount) {
   _msgcount = msgcount;
   if (msgcount == 0) {
+    _room_unread = 0;
     gotoHomeScreen();
   }
 }
 
-void UITask::newMsg(uint8_t path_len, const char* from_name, const char* text, int msgcount) {
+void UITask::newMsg(uint8_t path_len, const char* from_name, const char* text, int msgcount, uint8_t contact_type) {
   _msgcount = msgcount;
+  if (contact_type == ADV_TYPE_ROOM) _room_unread++;
 
   char alert_buf[80];
   snprintf(alert_buf, sizeof(alert_buf), "Msg: %.20s", from_name);
