@@ -86,6 +86,7 @@ public:
   void showAlert(const char* text, int duration_millis);
   void addChannelMsg(uint8_t channel_idx, const char* text) override;
   int  getMsgCount() const { return _msgcount; }
+  int  getChannelUnreadCount() const;
   bool hasDisplay() const { return _display != NULL; }
   bool isButtonPressed() const;
 

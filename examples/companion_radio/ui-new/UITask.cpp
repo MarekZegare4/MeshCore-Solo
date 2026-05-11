@@ -911,6 +911,12 @@ public:
     }
   }
 
+  int getTotalChannelUnread() const {
+    int total = 0;
+    for (int i = 0; i < MAX_GROUP_CHANNELS; i++) total += _ch_unread[i];
+    return total;
+  }
+
   void reset() {
     _phase = MODE_SELECT;
     _mode_sel = 0;
@@ -1950,16 +1956,14 @@ public:
     } else if (_page == HomePage::QUICK_MSG) {
       display.setColor(DisplayDriver::LIGHT);
       display.setTextSize(1);
-      display.drawTextCentered(display.width() / 2, 30, "Messages");
-      int dm_unread = _task->getMsgCount();
-      if (dm_unread > 0) {
-        char badge[16];
-        snprintf(badge, sizeof(badge), "%d unread DM", dm_unread);
-        display.drawTextCentered(display.width() / 2, 41, badge);
-        display.drawTextCentered(display.width() / 2, 54, PRESS_LABEL " to open");
-      } else {
-        display.drawTextCentered(display.width() / 2, 46, PRESS_LABEL " to open");
+      display.drawTextCentered(display.width() / 2, 22, "Messages");
+      int total_unread = _task->getMsgCount() + _task->getChannelUnreadCount();
+      if (total_unread > 0) {
+        char badge[20];
+        snprintf(badge, sizeof(badge), "%d unread", total_unread);
+        display.drawTextCentered(display.width() / 2, 35, badge);
       }
+      display.drawTextCentered(display.width() / 2, 50, PRESS_LABEL " to open");
     } else if (_page == HomePage::SHUTDOWN) {
       display.setColor(DisplayDriver::LIGHT);
       display.setTextSize(1);
@@ -2255,6 +2259,10 @@ void UITask::gotoQuickMsgScreen() {
 void UITask::addChannelMsg(uint8_t channel_idx, const char* text) {
   _last_notif_ch_idx = (int)channel_idx;
   ((QuickMsgScreen*)quick_msg)->addChannelMsg(channel_idx, text);
+}
+
+int UITask::getChannelUnreadCount() const {
+  return ((QuickMsgScreen*)quick_msg)->getTotalChannelUnread();
 }
 
 void UITask::showAlert(const char* text, int duration_millis) {
