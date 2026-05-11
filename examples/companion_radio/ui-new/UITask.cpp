@@ -2197,6 +2197,14 @@ public:
         display.setCursor(display.width() - 6, FS_START_Y + (FS_VISIBLE - 1) * FS_LINE_H);
         display.print("v");
       }
+      if (_view_offset < num_unread - 1) {
+        display.setCursor(0, 56);
+        display.print("<");
+      }
+      if (_view_offset > 0) {
+        display.setCursor(display.width() - 6, 56);
+        display.print(">");
+      }
     } else {
       display.setCursor(0, 13);
       display.printWordWrap(filtered_msg, display.width());
@@ -2232,6 +2240,14 @@ public:
     if (_fullscreen) {
       if (c == KEY_UP)   { if (_fs_scroll > 0) _fs_scroll--; return true; }
       if (c == KEY_DOWN) { _fs_scroll++; return true; }
+      if (c == KEY_LEFT) {
+        if (_view_offset < num_unread - 1) { _view_offset++; _fs_scroll = 0; }
+        return true;
+      }
+      if (c == KEY_RIGHT) {
+        if (_view_offset > 0) { _view_offset--; _fs_scroll = 0; }
+        return true;
+      }
       if (c == KEY_ENTER || c == KEY_CANCEL) { _fullscreen = false; return true; }
       return true;
     }
@@ -2374,7 +2390,7 @@ void UITask::msgRead(int msgcount) {
   _msgcount = msgcount;
   if (msgcount == 0) {
     _room_unread = 0;
-    gotoHomeScreen();
+    if (curr == msg_preview) gotoHomeScreen();
   }
 }
 
