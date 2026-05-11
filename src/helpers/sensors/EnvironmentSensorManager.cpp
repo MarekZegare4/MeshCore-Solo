@@ -540,6 +540,46 @@ bool EnvironmentSensorManager::querySensors(uint8_t requester_permissions, Cayen
 }
 
 
+int EnvironmentSensorManager::getAvailableLPPTypes(uint8_t* types, int max_count) const {
+  int n = 0;
+  auto add = [&](uint8_t t) { if (n < max_count) types[n++] = t; };
+
+  add(LPP_VOLTAGE);  // battery voltage — always present
+
+#if ENV_INCLUDE_GPS
+  add(LPP_GPS);
+#endif
+
+  bool has_temp = AHTX0_initialized || BME680_initialized || BME280_initialized ||
+                  BMP280_initialized || SHTC3_initialized || SHT4X_initialized ||
+                  LPS22HB_initialized || MLX90614_initialized || BMP085_initialized ||
+                  RAK12035_initialized;
+  if (has_temp) add(LPP_TEMPERATURE);
+
+  bool has_hum = AHTX0_initialized || BME680_initialized || BME280_initialized ||
+                 SHTC3_initialized || SHT4X_initialized || RAK12035_initialized;
+  if (has_hum) add(LPP_RELATIVE_HUMIDITY);
+
+  bool has_press = BME680_initialized || LPS22HB_initialized;
+  if (has_press) add(LPP_BAROMETRIC_PRESSURE);
+
+  bool has_alt = BME680_initialized || BME280_initialized || BMP280_initialized || BMP085_initialized;
+  if (has_alt) add(LPP_ALTITUDE);
+
+  bool has_power = INA3221_initialized || INA219_initialized || INA260_initialized || INA226_initialized;
+  if (has_power) { add(LPP_CURRENT); add(LPP_POWER); }
+
+#if ENV_INCLUDE_VL53L0X
+  if (VL53L0X_initialized) add(LPP_DISTANCE);
+#endif
+
+#if ENV_INCLUDE_RAK12035
+  if (RAK12035_initialized) add(LPP_PERCENTAGE);
+#endif
+
+  return n;
+}
+
 int EnvironmentSensorManager::getNumSettings() const {
   int settings = 0;
   #if ENV_INCLUDE_GPS

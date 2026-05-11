@@ -136,6 +136,22 @@ public:
     m = getFloat(&_buf[_pos], 2, 1, true); _pos += 2;
     return _pos <= _len;
   }
+  bool readLuminosity(float& lux) {
+    lux = getFloat(&_buf[_pos], 2, 1, false); _pos += 2;
+    return _pos <= _len;
+  }
+  bool readPercentage(float& pct) {
+    pct = getFloat(&_buf[_pos], 1, 1, false); _pos += 1;
+    return _pos <= _len;
+  }
+  bool readConcentration(float& ppm) {
+    ppm = getFloat(&_buf[_pos], 2, 1, false); _pos += 2;
+    return _pos <= _len;
+  }
+  bool readDistance(float& m) {
+    m = getFloat(&_buf[_pos], 4, 1000, false); _pos += 4;
+    return _pos <= _len;
+  }
 
   void skipData(uint8_t type) {
     switch (type) {

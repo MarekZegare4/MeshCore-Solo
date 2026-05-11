@@ -49,6 +49,7 @@ public:
   #endif
   bool begin() override;
   bool querySensors(uint8_t requester_permissions, CayenneLPP& telemetry) override;
+  int getAvailableLPPTypes(uint8_t* types, int max_count) const override;
   #if ENV_INCLUDE_GPS
   void loop() override;
   #endif

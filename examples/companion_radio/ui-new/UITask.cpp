@@ -1976,72 +1976,73 @@ public:
     } else if (_page == HomePage::SENSORS) {
       int y = 18;
       refresh_sensors();
-      char buf[30];
-      char name[30];
-      LPPReader r(sensors_lpp.getBuffer(), sensors_lpp.getSize());
 
-      for (int i = 0; i < sensors_scroll_offset; i++) {
-        uint8_t channel, type;
-        r.readHeader(channel, type);
-        r.skipData(type);
-      }
+      uint8_t avail_types[16];
+      int avail_count = _sensors ? _sensors->getAvailableLPPTypes(avail_types, 16) : 0;
+      bool need_scroll = avail_count > UI_RECENT_LIST_SIZE;
+      int offset = need_scroll ? (sensors_scroll_offset % avail_count) : 0;
+      int show_n = need_scroll ? UI_RECENT_LIST_SIZE : avail_count;
 
-      for (int i = 0; i < (sensors_scroll?UI_RECENT_LIST_SIZE:sensors_nb); i++) {
-        uint8_t channel, type;
-        if (!r.readHeader(channel, type)) { // reached end, reset
-          r.reset();
-          r.readHeader(channel, type);
+      for (int i = 0; i < show_n; i++) {
+        uint8_t target = avail_types[(offset + i) % avail_count];
+
+        // scan LPP buffer for this type
+        LPPReader r(sensors_lpp.getBuffer(), sensors_lpp.getSize());
+        uint8_t ch, type;
+        bool found = false;
+        char buf[22] = "--";
+        while (r.readHeader(ch, type)) {
+          if (type == target) {
+            float v, v2, v3;
+            switch (type) {
+              case LPP_GPS:
+                r.readGPS(v, v2, v3);
+                if (v != 0 || v2 != 0) snprintf(buf, sizeof(buf), "%.4f %.4f", v, v2);
+                break;
+              case LPP_VOLTAGE:    r.readVoltage(v);          snprintf(buf, sizeof(buf), "%.2fV", v); break;
+              case LPP_CURRENT:    r.readCurrent(v);          snprintf(buf, sizeof(buf), "%.3fA", v); break;
+              case LPP_POWER:      r.readPower(v);            snprintf(buf, sizeof(buf), "%.1fW", v); break;
+              case LPP_TEMPERATURE:r.readTemperature(v);      snprintf(buf, sizeof(buf), "%.1f\xf8""C", v); break;
+              case LPP_RELATIVE_HUMIDITY: r.readRelativeHumidity(v); snprintf(buf, sizeof(buf), "%.0f%%", v); break;
+              case LPP_BAROMETRIC_PRESSURE: r.readPressure(v); snprintf(buf, sizeof(buf), "%.1fhPa", v); break;
+              case LPP_ALTITUDE:   r.readAltitude(v);         snprintf(buf, sizeof(buf), "%.0fm", v); break;
+              case LPP_LUMINOSITY: r.readLuminosity(v);       snprintf(buf, sizeof(buf), "%.0flux", v); break;
+              case LPP_PERCENTAGE: r.readPercentage(v);       snprintf(buf, sizeof(buf), "%.0f%%", v); break;
+              case LPP_DISTANCE:   r.readDistance(v);         snprintf(buf, sizeof(buf), "%.2fm", v); break;
+              case LPP_CONCENTRATION: r.readConcentration(v); snprintf(buf, sizeof(buf), "%.0fppm", v); break;
+              default:             r.skipData(type); continue;
+            }
+            found = true;
+            break;
+          }
+          r.skipData(type);
         }
+        (void)found;
 
-        display.setCursor(0, y);
-        float v;
-        switch (type) {
-          case LPP_GPS: // GPS
-            float lat, lon, alt;
-            r.readGPS(lat, lon, alt);
-            strcpy(name, "gps"); sprintf(buf, "%.4f %.4f", lat, lon);
-            break;
-          case LPP_VOLTAGE:
-            r.readVoltage(v);
-            strcpy(name, "voltage"); sprintf(buf, "%6.2f", v);
-            break;
-          case LPP_CURRENT:
-            r.readCurrent(v);
-            strcpy(name, "current"); sprintf(buf, "%.3f", v);
-            break;
-          case LPP_TEMPERATURE:
-            r.readTemperature(v);
-            strcpy(name, "temperature"); sprintf(buf, "%.2f", v);
-            break;
-          case LPP_RELATIVE_HUMIDITY:
-            r.readRelativeHumidity(v);
-            strcpy(name, "humidity"); sprintf(buf, "%.2f", v);
-            break;
-          case LPP_BAROMETRIC_PRESSURE:
-            r.readPressure(v);
-            strcpy(name, "pressure"); sprintf(buf, "%.2f", v);
-            break;
-          case LPP_ALTITUDE:
-            r.readAltitude(v);
-            strcpy(name, "altitude"); sprintf(buf, "%.0f", v);
-            break;
-          case LPP_POWER:
-            r.readPower(v);
-            strcpy(name, "power"); sprintf(buf, "%6.2f", v);
-            break;
-          default:
-            r.skipData(type);
-            strcpy(name, "unk"); sprintf(buf, "");
-        }
+        static const struct { uint8_t type; const char* name; } TYPE_NAMES[] = {
+          { LPP_VOLTAGE,            "voltage"  },
+          { LPP_GPS,                "gps"      },
+          { LPP_TEMPERATURE,        "temp"     },
+          { LPP_RELATIVE_HUMIDITY,  "humidity" },
+          { LPP_BAROMETRIC_PRESSURE,"pressure" },
+          { LPP_ALTITUDE,           "altitude" },
+          { LPP_CURRENT,            "current"  },
+          { LPP_POWER,              "power"    },
+          { LPP_LUMINOSITY,         "light"    },
+          { LPP_PERCENTAGE,         "moisture" },
+          { LPP_DISTANCE,           "distance" },
+          { LPP_CONCENTRATION,      "CO2"      },
+        };
+        const char* name = "sensor";
+        for (auto& tn : TYPE_NAMES) { if (tn.type == target) { name = tn.name; break; } }
+
         display.setCursor(0, y);
         display.print(name);
-        display.setCursor(
-          display.width()-display.getTextWidth(buf)-1, y
-        );
+        display.setCursor(display.width() - display.getTextWidth(buf) - 1, y);
         display.print(buf);
-        y = y + 12;
+        y += 12;
       }
-      if (sensors_scroll) sensors_scroll_offset = (sensors_scroll_offset+1)%sensors_nb;
+      if (need_scroll) sensors_scroll_offset = (sensors_scroll_offset + 1) % avail_count;
       else sensors_scroll_offset = 0;
 #endif
     } else if (_page == HomePage::SETTINGS) {
