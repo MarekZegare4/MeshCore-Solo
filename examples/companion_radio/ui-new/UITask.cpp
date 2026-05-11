@@ -645,13 +645,14 @@ class QuickMsgScreen : public UIScreen {
   Phase _phase;
 
   // MODE_SELECT
-  int _mode_sel;  // 0=Direct, 1=Channel
+  int _mode_sel;  // 0=Direct, 1=Channel, 2=Room Servers
 
   // CONTACT_PICK
   int _contact_sel, _contact_scroll;
   int _num_contacts;
   uint8_t _sorted[MAX_CONTACTS];
   ContactInfo _sel_contact;
+  bool _room_mode;  // true = picking a room server, false = picking a DM contact
 
   // CHANNEL_PICK
   int _channel_sel, _channel_scroll;
@@ -839,6 +840,23 @@ class QuickMsgScreen : public UIScreen {
     }
   }
 
+  void buildContactList() {
+    ContactInfo c;
+    int total = the_mesh.getNumContacts();
+    _num_contacts = 0;
+    if (_room_mode) {
+      for (int i = 0; i < total; i++) {
+        if (!the_mesh.getContactByIdx(i, c) || c.type != ADV_TYPE_ROOM) continue;
+        _sorted[_num_contacts++] = i;
+      }
+    } else {
+      for (int i = 0; i < total; i++) {
+        if (!the_mesh.getContactByIdx(i, c) || c.type != ADV_TYPE_CHAT) continue;
+        if (c.flags & 0x01) _sorted[_num_contacts++] = i;
+      }
+    }
+  }
+
   void buildChannelList() {
     _num_channels = 0;
     for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
@@ -878,7 +896,7 @@ class QuickMsgScreen : public UIScreen {
 public:
   QuickMsgScreen(UITask* task)
     : _task(task), _phase(MODE_SELECT), _mode_sel(0),
-      _contact_sel(0), _contact_scroll(0), _num_contacts(0),
+      _contact_sel(0), _contact_scroll(0), _num_contacts(0), _room_mode(false),
       _channel_sel(0), _channel_scroll(0), _num_channels(0),
       _sel_channel_idx(0), _sending_to_channel(false),
       _msg_sel(0), _msg_scroll(0), _active_msg_count(0),
@@ -928,14 +946,8 @@ public:
     _kb_caps = false; _kb_ph_mode = false; _kb_ph_sel = 0;
     _kb_text[0] = '\0';
 
-    // build contact list: favourited chat companions only
-    ContactInfo c;
-    int total = the_mesh.getNumContacts();
-    _num_contacts = 0;
-    for (int i = 0; i < total; i++) {
-      if (!the_mesh.getContactByIdx(i, c) || c.type != ADV_TYPE_CHAT) continue;
-      if (c.flags & 0x01) _sorted[_num_contacts++] = i;
-    }
+    _room_mode = false;
+    buildContactList();
 
     buildChannelList();
   }
@@ -947,9 +959,9 @@ public:
     if (_phase == MODE_SELECT) {
       display.drawTextCentered(display.width()/2, 0, "MESSAGE");
       display.fillRect(0, 10, display.width(), 1);
-      const char* opts[] = { "Direct message", "Channels" };
+      const char* opts[] = { "Direct message", "Channels", "Room Servers" };
       int dm_unread = _task->getMsgCount();
-      for (int i = 0; i < 2; i++) {
+      for (int i = 0; i < 3; i++) {
         int y = START_Y + i * ITEM_H;
         bool sel = (i == _mode_sel);
         if (sel) {
@@ -963,7 +975,6 @@ public:
         display.print(sel ? ">" : " ");
         display.setCursor(8, y);
         display.print(opts[i]);
-        // DM unread badge on "Direct message" row
         if (i == 0 && dm_unread > 0) {
           char badge[5];
           snprintf(badge, sizeof(badge), "%d", dm_unread);
@@ -975,11 +986,11 @@ public:
       display.setColor(DisplayDriver::LIGHT);
 
     } else if (_phase == CONTACT_PICK) {
-      display.drawTextCentered(display.width()/2, 0, "SELECT CONTACT");
+      display.drawTextCentered(display.width()/2, 0, _room_mode ? "SELECT ROOM" : "SELECT CONTACT");
       display.fillRect(0, 10, display.width(), 1);
 
       if (_num_contacts == 0) {
-        display.drawTextCentered(display.width()/2, 32, "No favourites");
+        display.drawTextCentered(display.width()/2, 32, _room_mode ? "No room servers" : "No favourites");
         return 5000;
       }
 
@@ -1336,14 +1347,21 @@ public:
     if (_phase == MODE_SELECT) {
       if (c == KEY_CANCEL) { _task->gotoHomeScreen(); return true; }
       if (c == KEY_UP && _mode_sel > 0) { _mode_sel--; return true; }
-      if (c == KEY_DOWN && _mode_sel < 1) { _mode_sel++; return true; }
+      if (c == KEY_DOWN && _mode_sel < 2) { _mode_sel++; return true; }
       if (c == KEY_ENTER) {
-        _phase = (_mode_sel == 0) ? CONTACT_PICK : CHANNEL_PICK;
+        if (_mode_sel == 1) {
+          _phase = CHANNEL_PICK;
+        } else {
+          _room_mode = (_mode_sel == 2);
+          buildContactList();
+          _contact_sel = _contact_scroll = 0;
+          _phase = CONTACT_PICK;
+        }
         return true;
       }
 
     } else if (_phase == CONTACT_PICK) {
-      if (c == KEY_CANCEL) { _phase = MODE_SELECT; return true; }
+      if (c == KEY_CANCEL) { _room_mode = false; _phase = MODE_SELECT; return true; }
       if (c == KEY_UP && _contact_sel > 0) {
         _contact_sel--;
         if (_contact_sel < _contact_scroll) _contact_scroll = _contact_sel;
