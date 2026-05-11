@@ -40,4 +40,6 @@ struct NodePrefs {  // persisted to file
   uint16_t low_batt_mv;         // auto-shutdown threshold: 0=disabled, 3000-3500 mV
   uint8_t batt_display_mode;   // 0=icon, 1=percent, 2=voltage
   char custom_msgs[10][140];   // user-defined quick messages (supports {loc}, {time})
+  uint64_t ch_notif_override;  // bitmask: bit i = channel i has explicit notification setting
+  uint64_t ch_notif_muted;     // bitmask: bit i = channel i muted (only if override bit set)
 };

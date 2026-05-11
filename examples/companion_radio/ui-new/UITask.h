@@ -36,6 +36,7 @@ class UITask : public AbstractUITask {
   char _alert[80];
   unsigned long _alert_expiry;
   int _msgcount;
+  int _last_notif_ch_idx;
   unsigned long ui_started_at, next_batt_chck;
   uint16_t _batt_mv;  // EMA-filtered battery voltage
   int next_backlight_btn_check = 0;
@@ -72,6 +73,7 @@ public:
     next_batt_chck = _next_refresh = 0;
     ui_started_at = 0;
     _batt_mv = 0;
+    _last_notif_ch_idx = -1;
     curr = NULL;
   }
   void begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* node_prefs);

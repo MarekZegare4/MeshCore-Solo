@@ -705,6 +705,12 @@ class QuickMsgScreen : public UIScreen {
   bool _kb_caps;
   bool _kb_ph_mode;
   int  _kb_ph_sel;
+
+  // Context menu (opened by long-press ENTER in CHANNEL_PICK)
+  bool _ctx_open;
+  int  _ctx_ch_idx;
+  int  _ctx_sel;
+
   struct ChHistEntry { uint8_t ch_idx; char text[140]; };
   ChHistEntry _hist[CH_HIST_MAX];
   int _hist_head, _hist_count;
@@ -843,6 +849,32 @@ class QuickMsgScreen : public UIScreen {
     }
   }
 
+  // Returns per-channel notification state: 0=follow global, 1=muted, 2=force-on
+  uint8_t chNotifState(uint8_t ch_idx) const {
+    NodePrefs* p = _task->getNodePrefs();
+    if (!p) return 0;
+    uint64_t mask = 1ULL << ch_idx;
+    if (!(p->ch_notif_override & mask)) return 0;
+    return (p->ch_notif_muted & mask) ? 1 : 2;
+  }
+
+  void setChNotifState(uint8_t ch_idx, uint8_t state) {
+    NodePrefs* p = _task->getNodePrefs();
+    if (!p) return;
+    uint64_t mask = 1ULL << ch_idx;
+    if (state == 0) {
+      p->ch_notif_override &= ~mask;
+      p->ch_notif_muted    &= ~mask;
+    } else if (state == 1) {
+      p->ch_notif_override |= mask;
+      p->ch_notif_muted    |= mask;
+    } else {
+      p->ch_notif_override |= mask;
+      p->ch_notif_muted    &= ~mask;
+    }
+    the_mesh.savePrefs();
+  }
+
 public:
   QuickMsgScreen(UITask* task)
     : _task(task), _phase(MODE_SELECT), _mode_sel(0),
@@ -854,7 +886,8 @@ public:
       _hist_fullscreen(false), _hist_fs_scroll(0),
       _hist_head(0), _hist_count(0),
       _kb_row(0), _kb_col(0), _kb_len(0),
-      _kb_caps(false), _kb_ph_mode(false), _kb_ph_sel(0) {
+      _kb_caps(false), _kb_ph_mode(false), _kb_ph_sel(0),
+      _ctx_open(false), _ctx_ch_idx(-1), _ctx_sel(0) {
     _kb_text[0] = '\0';
     memset(_ch_unread, 0, sizeof(_ch_unread));
   }
@@ -1022,6 +1055,38 @@ public:
       }
       display.setColor(DisplayDriver::LIGHT);
       renderScrollHints(display, _channel_scroll, _num_channels);
+
+      // Context menu overlay (long-press ENTER)
+      if (_ctx_open && _num_channels > 0) {
+        static const char* NOTIF_LABELS[] = { "default", "OFF", "ON" };
+        uint8_t ch_idx = _channel_indices[_channel_sel];
+        uint8_t nstate = chNotifState(ch_idx);
+        char notif_item[22];
+        snprintf(notif_item, sizeof(notif_item), "Notif: %s", NOTIF_LABELS[nstate]);
+        const char* items[] = { "Mark all read", notif_item };
+        const int CTX_COUNT = 2;
+
+        display.setColor(DisplayDriver::DARK);
+        display.fillRect(15, 14, 98, 34);
+        display.setColor(DisplayDriver::LIGHT);
+        display.drawRect(15, 14, 98, 34);
+        display.setCursor(19, 15);
+        display.print("Channel options");
+        display.fillRect(15, 24, 98, 1);
+        for (int i = 0; i < CTX_COUNT; i++) {
+          int py = 27 + i * 10;
+          if (i == _ctx_sel) {
+            display.setColor(DisplayDriver::LIGHT);
+            display.fillRect(16, py - 1, 96, 10);
+            display.setColor(DisplayDriver::DARK);
+          } else {
+            display.setColor(DisplayDriver::LIGHT);
+          }
+          display.setCursor(19, py);
+          display.print(items[i]);
+        }
+        display.setColor(DisplayDriver::LIGHT);
+      }
 
     } else if (_phase == CHANNEL_HIST) {
       if (_hist_fullscreen && _hist_sel >= 0) {
@@ -1300,6 +1365,24 @@ public:
       }
 
     } else if (_phase == CHANNEL_PICK) {
+      // Context menu consumes all input while open
+      if (_ctx_open) {
+        if (c == KEY_CANCEL) { _ctx_open = false; return true; }
+        if (c == KEY_UP   && _ctx_sel > 0) { _ctx_sel--; return true; }
+        if (c == KEY_DOWN && _ctx_sel < 1) { _ctx_sel++; return true; }
+        if (c == KEY_ENTER && _num_channels > 0) {
+          uint8_t ch_idx = _channel_indices[_channel_sel];
+          if (_ctx_sel == 0) {
+            _ch_unread[ch_idx] = 0;  // mark all read
+          } else {
+            uint8_t nstate = chNotifState(ch_idx);
+            setChNotifState(ch_idx, (nstate + 1) % 3);  // cycle: default→OFF→ON→default
+          }
+          _ctx_open = false;
+          return true;
+        }
+        return true;
+      }
       if (c == KEY_CANCEL) { _phase = MODE_SELECT; return true; }
       if (c == KEY_UP && _channel_sel > 0) {
         _channel_sel--;
@@ -1317,6 +1400,12 @@ public:
         _hist_scroll = 0;
         _hist_sel = histCountForChannel(_sel_channel_idx) > 0 ? 0 : -1;
         _phase = CHANNEL_HIST;
+        return true;
+      }
+      if (c == KEY_CONTEXT_MENU && _num_channels > 0) {
+        _ctx_ch_idx = _channel_indices[_channel_sel];
+        _ctx_sel = 0;
+        _ctx_open = true;
         return true;
       }
 
@@ -2171,6 +2260,7 @@ void UITask::gotoQuickMsgScreen() {
 }
 
 void UITask::addChannelMsg(uint8_t channel_idx, const char* text) {
+  _last_notif_ch_idx = (int)channel_idx;
   ((QuickMsgScreen*)quick_msg)->addChannelMsg(channel_idx, text);
 }
 
@@ -2186,9 +2276,22 @@ switch(t){
     // gemini's pick
     buzzer.play("MsgRcv3:d=4,o=6,b=200:32e,32g,32b,16c7");
     break;
-  case UIEventType::channelMessage:
-    buzzer.play("kerplop:d=16,o=6,b=120:32g#,32c#");
+  case UIEventType::channelMessage: {
+    bool play = true;
+    if (_last_notif_ch_idx >= 0 && _node_prefs) {
+      uint64_t mask = 1ULL << _last_notif_ch_idx;
+      if (_node_prefs->ch_notif_override & mask) {
+        play = !(_node_prefs->ch_notif_muted & mask);  // explicit override
+      } else {
+        play = !buzzer.isQuiet();  // follow global
+      }
+    } else {
+      play = !buzzer.isQuiet();
+    }
+    _last_notif_ch_idx = -1;
+    if (play) buzzer.play("kerplop:d=16,o=6,b=120:32g#,32c#");
     break;
+  }
   case UIEventType::ack:
     buzzer.play("ack:d=32,o=8,b=120:c");
     break;
@@ -2461,8 +2564,9 @@ char UITask::checkDisplayOn(char c) {
 char UITask::handleLongPress(char c) {
   if (millis() - ui_started_at < 8000) {   // long press in first 8 seconds since startup -> CLI/rescue
     the_mesh.enterCLIRescue();
-    c = 0;   // consume event
+    return 0;
   }
+  if (c == KEY_ENTER) return KEY_CONTEXT_MENU;
   return c;
 }
 
