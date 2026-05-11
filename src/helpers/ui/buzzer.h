@@ -20,7 +20,8 @@ class genericBuzzer
 {
     public:
         void begin();  // set up buzzer port
-        void play(const char *melody); // Generic play function
+        void play(const char *melody);
+        void playForced(const char *melody);  // play regardless of quiet state
         void loop();  // loop driven-nonblocking
         void startup();  // play startup sound
         void shutdown();  // play shutdown sound

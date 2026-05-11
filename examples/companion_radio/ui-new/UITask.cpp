@@ -2391,19 +2391,24 @@ switch(t){
     buzzer.play("MsgRcv3:d=4,o=6,b=200:32e,32g,32b,16c7");
     break;
   case UIEventType::channelMessage: {
-    bool play = true;
+    bool play = false;
+    bool force = false;
     if (_last_notif_ch_idx >= 0 && _node_prefs) {
       uint64_t mask = 1ULL << _last_notif_ch_idx;
       if (_node_prefs->ch_notif_override & mask) {
-        play = !(_node_prefs->ch_notif_muted & mask);  // explicit override
+        if (!(_node_prefs->ch_notif_muted & mask)) { play = true; force = true; }  // state 2: force-on
+        // state 1: muted — play stays false
       } else {
-        play = !buzzer.isQuiet();  // follow global
+        play = !buzzer.isQuiet();  // state 0: follow global
       }
     } else {
       play = !buzzer.isQuiet();
     }
     _last_notif_ch_idx = -1;
-    if (play) buzzer.play("kerplop:d=16,o=6,b=120:32g#,32c#");
+    if (play) {
+      if (force) buzzer.playForced("kerplop:d=16,o=6,b=120:32g#,32c#");
+      else       buzzer.play("kerplop:d=16,o=6,b=120:32g#,32c#");
+    }
     break;
   }
   case UIEventType::ack:

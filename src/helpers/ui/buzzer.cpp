@@ -15,16 +15,16 @@ void genericBuzzer::begin() {
 }
 
 void genericBuzzer::play(const char *melody) {
-    if (isPlaying())   // interrupt existing
-    {
-        rtttl::stop();
-    }
-
+    if (isPlaying()) rtttl::stop();
     if (_is_quiet) return;
-
-    rtttl::begin(PIN_BUZZER,melody);
+    rtttl::begin(PIN_BUZZER, melody);
 //    Serial.print("DBG: Playing melody - isQuiet: ");
 //    Serial.println(isQuiet());
+}
+
+void genericBuzzer::playForced(const char *melody) {
+    if (isPlaying()) rtttl::stop();
+    rtttl::begin(PIN_BUZZER, melody);
 }
 
 bool genericBuzzer::isPlaying() {
