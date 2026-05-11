@@ -692,6 +692,8 @@ class QuickMsgScreen : public UIScreen {
   int _hist_sel, _hist_scroll;
   bool _hist_fullscreen;
   int  _hist_fs_scroll;
+  int  _viewing_unread_start;  // index of first "unread" message when entering CHANNEL_HIST
+  int  _viewing_max_seen;      // highest _hist_sel reached in current session
   static const int CH_HIST_MAX = 32;
 
   static const int FS_CHARS   = 21;
@@ -927,6 +929,7 @@ public:
       _msg_sel(0), _msg_scroll(0), _active_msg_count(0),
       _hist_sel(0), _hist_scroll(0),
       _hist_fullscreen(false), _hist_fs_scroll(0),
+      _viewing_unread_start(0), _viewing_max_seen(0),
       _hist_head(0), _hist_count(0),
       _kb_row(0), _kb_col(0), _kb_len(0),
       _kb_caps(false), _kb_ph_mode(false), _kb_ph_sel(0),
@@ -960,6 +963,16 @@ public:
     return total;
   }
 
+  void updateChannelUnread() {
+    if (_hist_sel < 0 || _sel_channel_idx < 0 || _sel_channel_idx >= MAX_GROUP_CHANNELS) return;
+    if (_hist_sel > _viewing_max_seen) _viewing_max_seen = _hist_sel;
+    int hist_count = histCountForChannel(_sel_channel_idx);
+    int watermark = _viewing_max_seen > (_viewing_unread_start - 1)
+                    ? _viewing_max_seen : (_viewing_unread_start - 1);
+    int remaining = (hist_count - 1) - watermark;
+    _ch_unread[_sel_channel_idx] = (uint8_t)(remaining > 0 ? remaining : 0);
+  }
+
   void reset() {
     _phase = MODE_SELECT;
     _mode_sel = 0;
@@ -978,6 +991,8 @@ public:
     _ctx_open = false;
     _ctx_dirty = false;
     _ctx_sel = 0;
+    _viewing_unread_start = 0;
+    _viewing_max_seen = 0;
   }
 
   int render(DisplayDriver& display) override {
@@ -1133,6 +1148,7 @@ public:
 
     } else if (_phase == CHANNEL_HIST) {
       if (_hist_fullscreen && _hist_sel >= 0) {
+        int fs_hist_count = histCountForChannel(_sel_channel_idx);
         int ring_pos = histEntryForChannel(_sel_channel_idx, _hist_sel);
         if (ring_pos >= 0) {
           const char* ftext = _hist[ring_pos].text;
@@ -1167,6 +1183,14 @@ public:
           if (_hist_fs_scroll < max_scroll) {
             display.setCursor(display.width() - 6, FS_START_Y + (FS_VISIBLE - 1) * FS_LINE_H);
             display.print("v");
+          }
+          if (_hist_sel > 0) {
+            display.setCursor(0, 56);
+            display.print("<");
+          }
+          if (_hist_sel < fs_hist_count - 1) {
+            display.setCursor(display.width() - 6, 56);
+            display.print(">");
           }
         }
         return 300;
@@ -1451,10 +1475,14 @@ public:
       }
       if (c == KEY_ENTER && _num_channels > 0) {
         _sel_channel_idx = _channel_indices[_channel_sel];
-        _ch_unread[_sel_channel_idx] = 0;
+        int hc = histCountForChannel(_sel_channel_idx);
+        _viewing_unread_start = hc - (int)_ch_unread[_sel_channel_idx];
+        if (_viewing_unread_start < 0) _viewing_unread_start = 0;
         _hist_scroll = 0;
-        _hist_sel = histCountForChannel(_sel_channel_idx) > 0 ? 0 : -1;
+        _hist_sel = hc > 0 ? 0 : -1;
+        _viewing_max_seen = _hist_sel >= 0 ? _hist_sel : 0;
         _phase = CHANNEL_HIST;
+        updateChannelUnread();
         return true;
       }
       if (c == KEY_CONTEXT_MENU && _num_channels > 0) {
@@ -1469,6 +1497,15 @@ public:
       if (_hist_fullscreen) {
         if (c == KEY_UP)   { if (_hist_fs_scroll > 0) _hist_fs_scroll--; return true; }
         if (c == KEY_DOWN) { _hist_fs_scroll++; return true; }
+        if (c == KEY_LEFT) {
+          if (_hist_sel > 0) { _hist_sel--; _hist_fs_scroll = 0; updateChannelUnread(); }
+          return true;
+        }
+        if (c == KEY_RIGHT) {
+          int count = histCountForChannel(_sel_channel_idx);
+          if (_hist_sel < count - 1) { _hist_sel++; _hist_fs_scroll = 0; updateChannelUnread(); }
+          return true;
+        }
         if (c == KEY_ENTER || c == KEY_CANCEL) { _hist_fullscreen = false; return true; }
         return true;
       }
@@ -1476,6 +1513,7 @@ public:
       if (c == KEY_UP) {
         if (_hist_sel > 0) { _hist_sel--; if (_hist_sel < _hist_scroll) _hist_scroll = _hist_sel; }
         else if (_hist_sel == 0) _hist_sel = -1;
+        updateChannelUnread();
         return true;
       }
       if (c == KEY_DOWN) {
@@ -1484,12 +1522,14 @@ public:
           _hist_sel++;
           if (_hist_sel >= _hist_scroll + HIST_VISIBLE) _hist_scroll = _hist_sel - HIST_VISIBLE + 1;
         }
+        updateChannelUnread();
         return true;
       }
       if (c == KEY_ENTER) {
         if (_hist_sel >= 0) {
           _hist_fullscreen = true;
           _hist_fs_scroll = 0;
+          updateChannelUnread();
         } else {
           _sending_to_channel = true;
           setupMsgPick();
