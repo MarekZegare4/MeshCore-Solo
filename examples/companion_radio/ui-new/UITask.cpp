@@ -295,7 +295,6 @@ class SettingsScreen : public UIScreen {
     uint16_t bit = homePageBit(item);
     if (!bit) return false;
     uint16_t mask = p ? p->home_pages_mask : HP_ALL;
-    if (mask == 0) mask = HP_ALL;
     return (mask & bit) != 0;
   }
 
@@ -679,9 +678,7 @@ public:
       return right || left;
     }
     if (isHomePage(_selected) && p && (left || right || enter)) {
-      uint16_t bit = homePageBit(_selected);
-      uint16_t mask = p->home_pages_mask ? p->home_pages_mask : HP_ALL;
-      p->home_pages_mask = mask ^ bit;
+      p->home_pages_mask ^= homePageBit(_selected);
       _dirty = true;
       return true;
     }
@@ -2169,7 +2166,6 @@ class HomeScreen : public UIScreen {
     int bit = pageBit(page);
     if (bit < 0) return true;
     uint16_t mask = _node_prefs ? _node_prefs->home_pages_mask : HP_ALL;
-    if (mask == 0) mask = HP_ALL;
     return (mask >> bit) & 1;
   }
 
@@ -2325,9 +2321,7 @@ public:
     renderBatteryIndicator(display, _task->getBattMilliVolts());
 
     // ensure current page is visible (e.g. after settings change)
-    if (!isPageVisible(_page)) {
-      for (int i = 0; i < (int)Count; i++) { if (isPageVisible(i)) { _page = i; break; } }
-    }
+    if (!isPageVisible(_page)) _page = navPage(_page, +1);
 
     // curr page indicator — only visible pages get a dot
     {
