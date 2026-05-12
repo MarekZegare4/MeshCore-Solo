@@ -6,10 +6,13 @@ class BotScreen : public UIScreen {
   UITask*    _task;
   NodePrefs* _prefs;
 
-  static const int ITEM_COUNT = 4;
+  // Items: 0=Enable(DM), 1=Channel, 2=Trigger, 3=Reply DM, 4=Reply Ch
+  static const int ITEM_COUNT = 5;
   static const int ITEM_H     = 11;
   static const int START_Y    = 12;
   static const int VAL_X      = 70;
+
+  int  _sel;
 
   // keyboard state (reused for trigger and reply fields)
   int  _kb_field;   // -1=off, 2=trigger, 3=reply
@@ -21,17 +24,9 @@ class BotScreen : public UIScreen {
   bool _kb_ph_mode;
   int  _kb_ph_sel;
 
-  int  _sel;
-
-  // channel + DM contact caches (refreshed on enter)
-  static const int MAX_BOT_DM = 16;
-
+  // channel cache (refreshed on enter)
   int     _num_channels;
   uint8_t _channel_indices[MAX_GROUP_CHANNELS];
-
-  int     _num_dm;
-  uint8_t _dm_pubkeys[MAX_BOT_DM][4];
-  char    _dm_names[MAX_BOT_DM][32];
 
   void refreshChannels() {
     _num_channels = 0;
@@ -42,33 +37,12 @@ class BotScreen : public UIScreen {
     }
   }
 
-  void refreshContacts() {
-    _num_dm = 0;
-    ContactInfo ci;
-    int n = the_mesh.getNumContacts();
-    for (int i = 0; i < n && _num_dm < MAX_BOT_DM; i++) {
-      if (!the_mesh.getContactByIdx(i, ci)) continue;
-      if (ci.type != ADV_TYPE_CHAT) continue;
-      if (!(ci.flags & 0x01)) continue;  // favourites only
-      memcpy(_dm_pubkeys[_num_dm], ci.id.pub_key, 4);
-      strncpy(_dm_names[_num_dm], ci.name, sizeof(_dm_names[0]) - 1);
-      _dm_names[_num_dm][sizeof(_dm_names[0]) - 1] = '\0';
-      _num_dm++;
-    }
-  }
-
-  // returns combined index in [channels..., DM contacts...]
-  int currentTargetIdx() const {
-    if (_prefs->bot_target_type == 0) {
-      for (int i = 0; i < _num_channels; i++)
-        if (_channel_indices[i] == _prefs->bot_channel_idx) return i;
-      return 0;
-    } else {
-      for (int i = 0; i < _num_dm; i++)
-        if (memcmp(_dm_pubkeys[i], _prefs->bot_dm_pubkey, 4) == 0)
-          return _num_channels + i;
-      return _num_channels;  // fallback: first DM
-    }
+  // Returns index into _channel_indices[] for current bot_channel_idx, or -1 if not found/disabled.
+  int currentChannelListIdx() const {
+    if (!_prefs->bot_channel_enabled) return -1;
+    for (int i = 0; i < _num_channels; i++)
+      if (_channel_indices[i] == _prefs->bot_channel_idx) return i;
+    return -1;
   }
 
 public:
@@ -78,7 +52,6 @@ public:
     _sel      = 0;
     _kb_field = -1;
     refreshChannels();
-    refreshContacts();
   }
 
   int render(DisplayDriver& display) override {
@@ -86,7 +59,6 @@ public:
     display.setColor(DisplayDriver::LIGHT);
 
     if (_kb_field >= 0) {
-      // keyboard mode — uses same layout as global keyboard
       const char* label = (_kb_field == 2) ? "Trigger:" : "Reply:";
       const char* disp_start = _kb_buf;
       int disp_len = _kb_len;
@@ -97,7 +69,6 @@ public:
       display.print(preview);
       display.fillRect(0, KB_SEP_Y, display.width(), 1);
 
-      // char rows
       for (int row = 0; row < KB_ROWS_CHAR; row++) {
         int y = KB_CHARS_Y + row * KB_CELL_H;
         for (int col = 0; col < KB_COLS_CHAR; col++) {
@@ -118,7 +89,6 @@ public:
         }
       }
 
-      // special row: [^] [Sp] [Del] [{}] [OK] — 5 buttons at 25px each
       const char* spec[] = { "[^]", "[Sp]", "[Del]", "[{}]", "[OK]" };
       for (int i = 0; i < KB_SPECIAL; i++) {
         bool sel = (_kb_row == KB_ROWS_CHAR && _kb_col == i);
@@ -136,7 +106,6 @@ public:
         display.setColor(DisplayDriver::LIGHT);
       }
 
-      // placeholder picker overlay
       if (_kb_ph_mode) {
         display.setColor(DisplayDriver::DARK);
         display.fillRect(20, 20, 88, 12 + KB_PH_COUNT * 10);
@@ -165,7 +134,7 @@ public:
     display.drawTextCentered(display.width() / 2, 0, "AUTO-REPLY BOT");
     display.fillRect(0, 10, display.width(), 1);
 
-    static const char* labels[] = { "Enable", NULL, "Trigger", "Reply" };
+    static const char* labels[] = { "Enable", "Channel", "Trigger", "Reply DM", "Reply Ch" };
     for (int i = 0; i < ITEM_COUNT; i++) {
       int y = START_Y + i * ITEM_H;
       bool sel = (i == _sel);
@@ -174,46 +143,33 @@ public:
         display.setColor(DisplayDriver::DARK);
       }
       display.setCursor(2, y);
-      if (i == 1)
-        display.print(_prefs->bot_target_type == 0 ? "Channel" : "Contact");
-      else
-        display.print(labels[i]);
+      display.print(labels[i]);
       display.setCursor(VAL_X, y);
 
       if (i == 0) {
         display.print(_prefs->bot_enabled ? "ON" : "OFF");
       } else if (i == 1) {
-        int total = _num_channels + _num_dm;
-        if (total == 0) {
-          display.print("none");
-        } else if (_prefs->bot_target_type == 0) {
+        if (!_prefs->bot_channel_enabled || _num_channels == 0) {
+          display.print("OFF");
+        } else {
           ChannelDetails ch;
-          if (_num_channels > 0 && the_mesh.getChannel(_prefs->bot_channel_idx, ch) && ch.name[0])
+          if (the_mesh.getChannel(_prefs->bot_channel_idx, ch) && ch.name[0])
             display.drawTextEllipsized(VAL_X, y, display.width() - VAL_X - 1, ch.name);
           else
             display.print("?");
-        } else {
-          bool found = false;
-          for (int j = 0; j < _num_dm && !found; j++) {
-            if (memcmp(_dm_pubkeys[j], _prefs->bot_dm_pubkey, 4) == 0) {
-              display.drawTextEllipsized(VAL_X, y, display.width() - VAL_X - 1, _dm_names[j]);
-              found = true;
-            }
-          }
-          if (!found) display.print("?");
         }
       } else if (i == 2) {
         const char* tr = _prefs->bot_trigger;
         display.drawTextEllipsized(VAL_X, y, display.width() - VAL_X - 1, tr[0] ? tr : "(none)");
+      } else if (i == 3) {
+        const char* rp = _prefs->bot_reply_dm;
+        display.drawTextEllipsized(VAL_X, y, display.width() - VAL_X - 1, rp[0] ? rp : "(none)");
       } else {
-        const char* rp = _prefs->bot_reply;
+        const char* rp = _prefs->bot_reply_ch;
         display.drawTextEllipsized(VAL_X, y, display.width() - VAL_X - 1, rp[0] ? rp : "(none)");
       }
       display.setColor(DisplayDriver::LIGHT);
     }
-
-    display.setCursor(0, 54);
-    display.print("ENT:edit  CANCEL:save");
     return 300;
   }
 
@@ -226,7 +182,6 @@ public:
     bool cancel = (c == KEY_CANCEL || c == KEY_CONTEXT_MENU);
 
     if (_kb_field >= 0) {
-      // placeholder picker overlay takes priority
       if (_kb_ph_mode) {
         if (c == KEY_UP   && _kb_ph_sel > 0) { _kb_ph_sel--; return true; }
         if (c == KEY_DOWN && _kb_ph_sel < KB_PH_COUNT - 1) { _kb_ph_sel++; return true; }
@@ -249,7 +204,7 @@ public:
       if (up) {
         if (_kb_row > 0) {
           _kb_row--;
-          if (_kb_row == KB_ROWS_CHAR - 1)  // leaving special row upward
+          if (_kb_row == KB_ROWS_CHAR - 1)
             _kb_col = _kb_col * KB_COLS_CHAR / KB_SPECIAL;
         }
         return true;
@@ -257,15 +212,12 @@ public:
       if (down) {
         if (_kb_row < KB_ROWS_CHAR) {
           _kb_row++;
-          if (_kb_row == KB_ROWS_CHAR)  // entering special row
+          if (_kb_row == KB_ROWS_CHAR)
             _kb_col = _kb_col * KB_SPECIAL / KB_COLS_CHAR;
         }
         return true;
       }
-      if (left) {
-        if (_kb_col > 0) _kb_col--;
-        return true;
-      }
+      if (left)  { if (_kb_col > 0) _kb_col--; return true; }
       if (right) {
         int max_col = (_kb_row == KB_ROWS_CHAR) ? KB_SPECIAL - 1 : KB_COLS_CHAR - 1;
         if (_kb_col < max_col) _kb_col++;
@@ -293,13 +245,15 @@ public:
               _kb_ph_sel  = 0;
               break;
             case 4:
-              // OK — commit to prefs
               if (_kb_field == 2) {
                 strncpy(_prefs->bot_trigger, _kb_buf, sizeof(_prefs->bot_trigger) - 1);
                 _prefs->bot_trigger[sizeof(_prefs->bot_trigger) - 1] = '\0';
+              } else if (_kb_field == 3) {
+                strncpy(_prefs->bot_reply_dm, _kb_buf, sizeof(_prefs->bot_reply_dm) - 1);
+                _prefs->bot_reply_dm[sizeof(_prefs->bot_reply_dm) - 1] = '\0';
               } else {
-                strncpy(_prefs->bot_reply, _kb_buf, sizeof(_prefs->bot_reply) - 1);
-                _prefs->bot_reply[sizeof(_prefs->bot_reply) - 1] = '\0';
+                strncpy(_prefs->bot_reply_ch, _kb_buf, sizeof(_prefs->bot_reply_ch) - 1);
+                _prefs->bot_reply_ch[sizeof(_prefs->bot_reply_ch) - 1] = '\0';
               }
               _kb_field = -1;
               break;
@@ -323,24 +277,28 @@ public:
       return true;
     }
     if (_sel == 1) {
-      int total = _num_channels + _num_dm;
-      if (total == 0) return false;
-      int idx = currentTargetIdx();
-      if (right || enter) idx = (idx + 1) % total;
-      if (left)           idx = (idx + total - 1) % total;
+      if (_num_channels == 0) return false;
+      // Cycle: OFF → ch[0] → ch[1] → ... → OFF
+      int idx = currentChannelListIdx();  // -1 = OFF
+      if (right || enter) {
+        idx++;
+        if (idx >= _num_channels) idx = -1;  // wrap to OFF
+      }
+      if (left) {
+        idx--;
+        if (idx < -1) idx = _num_channels - 1;
+      }
       if (left || right || enter) {
-        if (idx < _num_channels) {
-          _prefs->bot_target_type = 0;
-          _prefs->bot_channel_idx = _channel_indices[idx];
+        if (idx < 0) {
+          _prefs->bot_channel_enabled = 0;
         } else {
-          int di = idx - _num_channels;
-          _prefs->bot_target_type = 1;
-          memcpy(_prefs->bot_dm_pubkey, _dm_pubkeys[di], 4);
+          _prefs->bot_channel_enabled = 1;
+          _prefs->bot_channel_idx = _channel_indices[idx];
         }
         return true;
       }
     }
-    if ((_sel == 2 || _sel == 3) && enter) {
+    if ((_sel == 2 || _sel == 3 || _sel == 4) && enter) {
       _kb_field   = _sel;
       _kb_row     = 0;
       _kb_col     = 0;
@@ -350,9 +308,12 @@ public:
       if (_sel == 2) {
         strncpy(_kb_buf, _prefs->bot_trigger, sizeof(_kb_buf) - 1);
         _kb_maxlen = sizeof(_prefs->bot_trigger) - 1;
+      } else if (_sel == 3) {
+        strncpy(_kb_buf, _prefs->bot_reply_dm, sizeof(_kb_buf) - 1);
+        _kb_maxlen = sizeof(_prefs->bot_reply_dm) - 1;
       } else {
-        strncpy(_kb_buf, _prefs->bot_reply, sizeof(_kb_buf) - 1);
-        _kb_maxlen = sizeof(_prefs->bot_reply) - 1;
+        strncpy(_kb_buf, _prefs->bot_reply_ch, sizeof(_kb_buf) - 1);
+        _kb_maxlen = sizeof(_prefs->bot_reply_ch) - 1;
       }
       _kb_buf[sizeof(_kb_buf) - 1] = '\0';
       _kb_len = strlen(_kb_buf);

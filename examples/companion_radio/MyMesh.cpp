@@ -876,11 +876,11 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   _prefs.ringtone_len = 0;       // no custom ringtone by default
   _prefs.home_pages_mask = 0x01FF;  // all pages visible
   _prefs.bot_enabled = 0;
+  _prefs.bot_channel_enabled = 0;
   _prefs.bot_channel_idx = 0;
   _prefs.bot_trigger[0] = '\0';
-  _prefs.bot_reply[0] = '\0';
-  _prefs.bot_target_type = 0;
-  memset(_prefs.bot_dm_pubkey, 0, sizeof(_prefs.bot_dm_pubkey));
+  _prefs.bot_reply_dm[0] = '\0';
+  _prefs.bot_reply_ch[0] = '\0';
   _prefs.auto_off_secs = 15;    // 15 seconds auto-off by default
   _prefs.tz_offset_hours = 0;  // UTC by default
   _prefs.low_batt_mv = 3400;  // auto-shutdown at 3.4V by default

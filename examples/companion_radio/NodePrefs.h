@@ -49,10 +49,12 @@ struct NodePrefs {  // persisted to file
   uint8_t  ringtone_len;        // number of notes in custom ringtone (0 = use default)
   uint8_t  ringtone_notes[32]; // packed: bits0-2=pitch, bits3-4=octave-4, bits5-6=dur_idx
   uint16_t home_pages_mask;    // bitmask of visible home pages (bit0=Clock..bit8=Shutdown); 0=all visible
-  uint8_t  bot_enabled;        // 0=disabled, 1=enabled
-  uint8_t  bot_channel_idx;    // channel index to monitor (when bot_target_type==0)
-  char     bot_trigger[64];    // trigger phrase (case-insensitive contains match)
-  char     bot_reply[140];     // auto-reply text
-  uint8_t  bot_target_type;   // 0=channel (default), 1=DM contact
-  uint8_t  bot_dm_pubkey[4];  // pubkey prefix of DM target; all-zero = any DM sender
+  uint8_t  bot_enabled;         // 0=disabled, 1=DM bot active (responds to all DMs)
+  uint8_t  bot_channel_enabled; // 0=disabled, 1=channel bot active for bot_channel_idx
+  uint8_t  bot_channel_idx;     // channel index for channel bot
+  char     bot_trigger[64];     // trigger phrase (case-insensitive contains match)
+  char     bot_reply_dm[140];   // auto-reply text for DM
+  char     bot_reply_ch[140];   // auto-reply text for channel
+  uint8_t  clock_hide_seconds; // 0=show HH:MM:SS/refresh 1s (default), 1=hide/refresh 60s
+  uint8_t  buzzer_auto;        // 0=manual (default), 1=auto-mute when BT connected
 };

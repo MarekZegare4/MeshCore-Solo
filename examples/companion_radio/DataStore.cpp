@@ -255,12 +255,16 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
             file.read((uint8_t *)&_prefs.home_pages_mask, sizeof(_prefs.home_pages_mask));
             if (file.available()) {
               file.read((uint8_t *)&_prefs.bot_enabled, sizeof(_prefs.bot_enabled));
+              file.read((uint8_t *)&_prefs.bot_channel_enabled, sizeof(_prefs.bot_channel_enabled));
               file.read((uint8_t *)&_prefs.bot_channel_idx, sizeof(_prefs.bot_channel_idx));
               file.read((uint8_t *)_prefs.bot_trigger, sizeof(_prefs.bot_trigger));
-              file.read((uint8_t *)_prefs.bot_reply, sizeof(_prefs.bot_reply));
+              file.read((uint8_t *)_prefs.bot_reply_dm, sizeof(_prefs.bot_reply_dm));
+              file.read((uint8_t *)_prefs.bot_reply_ch, sizeof(_prefs.bot_reply_ch));
               if (file.available()) {
-                file.read((uint8_t *)&_prefs.bot_target_type, sizeof(_prefs.bot_target_type));
-                file.read((uint8_t *)_prefs.bot_dm_pubkey, sizeof(_prefs.bot_dm_pubkey));
+                file.read((uint8_t *)&_prefs.clock_hide_seconds, sizeof(_prefs.clock_hide_seconds));
+                if (file.available()) {
+                  file.read((uint8_t *)&_prefs.buzzer_auto, sizeof(_prefs.buzzer_auto));
+                }
               }
             }
           }
@@ -323,11 +327,13 @@ void DataStore::savePrefs(const NodePrefs& _prefs, double node_lat, double node_
     file.write((uint8_t *)_prefs.ringtone_notes, sizeof(_prefs.ringtone_notes));
     file.write((uint8_t *)&_prefs.home_pages_mask, sizeof(_prefs.home_pages_mask));
     file.write((uint8_t *)&_prefs.bot_enabled, sizeof(_prefs.bot_enabled));
+    file.write((uint8_t *)&_prefs.bot_channel_enabled, sizeof(_prefs.bot_channel_enabled));
     file.write((uint8_t *)&_prefs.bot_channel_idx, sizeof(_prefs.bot_channel_idx));
     file.write((uint8_t *)_prefs.bot_trigger, sizeof(_prefs.bot_trigger));
-    file.write((uint8_t *)_prefs.bot_reply, sizeof(_prefs.bot_reply));
-    file.write((uint8_t *)&_prefs.bot_target_type, sizeof(_prefs.bot_target_type));
-    file.write((uint8_t *)_prefs.bot_dm_pubkey, sizeof(_prefs.bot_dm_pubkey));
+    file.write((uint8_t *)_prefs.bot_reply_dm, sizeof(_prefs.bot_reply_dm));
+    file.write((uint8_t *)_prefs.bot_reply_ch, sizeof(_prefs.bot_reply_ch));
+    file.write((uint8_t *)&_prefs.clock_hide_seconds, sizeof(_prefs.clock_hide_seconds));
+    file.write((uint8_t *)&_prefs.buzzer_auto, sizeof(_prefs.buzzer_auto));
 
     file.close();
   }

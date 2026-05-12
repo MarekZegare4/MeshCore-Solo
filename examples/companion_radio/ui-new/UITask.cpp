@@ -126,6 +126,7 @@ class SettingsScreen : public UIScreen {
     BRIGHTNESS,
     AUTO_OFF,
     BATT_DISPLAY,
+    CLOCK_SECONDS,
     // Sound section
     SECTION_SOUND,
     BUZZER,
@@ -350,7 +351,9 @@ class SettingsScreen : public UIScreen {
       display.print("Buzzer");
       display.setCursor(VAL_X, y);
 #ifdef PIN_BUZZER
-      display.print(_task->isBuzzerQuiet() ? "OFF" : "ON");
+      { static const char* labels[] = { "ON", "OFF", "Auto" };
+        int m = _task->getBuzzerMode();
+        display.print(labels[m < 3 ? m : 0]); }
 #else
       display.print("N/A");
 #endif
@@ -399,6 +402,10 @@ class SettingsScreen : public UIScreen {
       display.setCursor(VAL_X, y);
       uint8_t mode = p ? p->batt_display_mode : 0;
       display.print(BATT_DISPLAY_LABELS[mode < BATT_DISPLAY_COUNT ? mode : 0]);
+    } else if (item == CLOCK_SECONDS) {
+      display.print("Seconds");
+      display.setCursor(VAL_X, y);
+      display.print((p && p->clock_hide_seconds) ? "OFF" : "ON");
     } else if (item == DM_FILTER) {
       display.print("DM");
       display.setCursor(VAL_X, y);
@@ -615,11 +622,11 @@ public:
             _edit_ph_mode = true;
             _edit_ph_sel  = 0;
           } else {
-            // OK — save
+            // OK — commit to prefs, save deferred to settings exit
             if (p) {
               strncpy(p->custom_msgs[_edit_slot], _edit_buf, sizeof(p->custom_msgs[0]) - 1);
               p->custom_msgs[_edit_slot][sizeof(p->custom_msgs[0]) - 1] = '\0';
-              the_mesh.savePrefs();
+              _dirty = true;
             }
             _edit_slot = -1;
           }
@@ -666,7 +673,8 @@ public:
       return right || left;
     }
     if (_selected == BUZZER && (left || right || enter)) {
-      _task->toggleBuzzer();  // saves immediately internally
+      _task->cycleBuzzerMode();
+      _dirty = true;
       return true;
     }
     if (_selected == BUZZER_VOLUME) {
@@ -720,6 +728,11 @@ public:
       if (right) idx = (idx + 1) % BATT_DISPLAY_COUNT;
       if (left)  idx = (idx + BATT_DISPLAY_COUNT - 1) % BATT_DISPLAY_COUNT;
       if (left || right) { p->batt_display_mode = idx; _dirty = true; return true; }
+    }
+    if (_selected == CLOCK_SECONDS && p && (left || right || enter)) {
+      p->clock_hide_seconds ^= 1;
+      _dirty = true;
+      return true;
     }
     if (_selected == DM_FILTER && p && (left || right || enter)) {
       p->dm_show_all = p->dm_show_all ? 0 : 1;
@@ -1237,7 +1250,7 @@ public:
         if (ring_pos >= 0) {
           const char* ftext = _hist[ring_pos].text;
           const char* fsep = strstr(ftext, ": ");
-          char fsender[22], fmsg[79];
+          char fsender[22], fmsg[140];
           if (fsep) {
             int nl = fsep - ftext; if (nl > 21) nl = 21;
             strncpy(fsender, ftext, nl); fsender[nl] = '\0';
@@ -1992,7 +2005,11 @@ public:
         char buf[24];
         display.setColor(DisplayDriver::LIGHT);
         display.setTextSize(2);
-        sprintf(buf, "%02d:%02d:%02d", ti->tm_hour, ti->tm_min, ti->tm_sec);
+        bool show_sec = !_node_prefs || !_node_prefs->clock_hide_seconds;
+        if (show_sec)
+          sprintf(buf, "%02d:%02d:%02d", ti->tm_hour, ti->tm_min, ti->tm_sec);
+        else
+          sprintf(buf, "%02d:%02d", ti->tm_hour, ti->tm_min);
         display.drawTextCentered(display.width() / 2, 18, buf);
 
         display.setTextSize(1);
@@ -2209,7 +2226,11 @@ public:
         display.drawTextCentered(display.width() / 2, 64 - 11, "hibernate:" PRESS_LABEL);
       }
     }
-    return (_page == HomePage::CLOCK) ? 1000 : 5000;
+    if (_page == HomePage::CLOCK) {
+      bool show_sec = !_node_prefs || !_node_prefs->clock_hide_seconds;
+      return show_sec ? 1000 : 60000;
+    }
+    return 5000;
   }
 
   bool handleInput(char c) override {
@@ -2604,6 +2625,13 @@ void UITask::loop() {
   userLedHandler();
 
 #ifdef PIN_BUZZER
+  if (_node_prefs && _node_prefs->buzzer_auto) {
+    bool should_quiet = hasConnection();
+    if (buzzer.isQuiet() != should_quiet) {
+      buzzer.quiet(should_quiet);
+      _next_refresh = 0;
+    }
+  }
   if (buzzer.isPlaying())  buzzer.loop();
 #endif
 
@@ -2776,17 +2804,41 @@ void UITask::setBuzzerVolumeLevel(uint8_t level) {
 }
 
 void UITask::toggleBuzzer() {
-    // Toggle buzzer quiet mode
   #ifdef PIN_BUZZER
+    if (_node_prefs) _node_prefs->buzzer_auto = 0;  // exit auto mode
     if (buzzer.isQuiet()) {
       buzzer.quiet(false);
       notify(UIEventType::ack);
     } else {
       buzzer.quiet(true);
     }
-    _node_prefs->buzzer_quiet = buzzer.isQuiet();
+    if (_node_prefs) _node_prefs->buzzer_quiet = buzzer.isQuiet();
     the_mesh.savePrefs();
     showAlert(buzzer.isQuiet() ? "Buzzer: OFF" : "Buzzer: ON", 800);
-    _next_refresh = 0;  // trigger refresh
+    _next_refresh = 0;
   #endif
+}
+
+int UITask::getBuzzerMode() {
+#ifdef PIN_BUZZER
+  if (_node_prefs && _node_prefs->buzzer_auto) return 2;
+  return buzzer.isQuiet() ? 1 : 0;
+#else
+  return 1;
+#endif
+}
+
+void UITask::cycleBuzzerMode() {
+#ifdef PIN_BUZZER
+  if (!_node_prefs) return;
+  int mode = getBuzzerMode();
+  mode = (mode + 1) % 3;  // ON(0) → OFF(1) → Auto(2) → ON
+  _node_prefs->buzzer_auto = (mode == 2) ? 1 : 0;
+  if (mode == 0) { buzzer.quiet(false); _node_prefs->buzzer_quiet = 0; notify(UIEventType::ack); }
+  if (mode == 1) { buzzer.quiet(true);  _node_prefs->buzzer_quiet = 1; }
+  if (mode == 2) { buzzer.quiet(hasConnection()); }
+  static const char* labels[] = { "Buzzer: ON", "Buzzer: OFF", "Buzzer: Auto" };
+  showAlert(labels[mode], 800);
+  _next_refresh = 0;
+#endif
 }

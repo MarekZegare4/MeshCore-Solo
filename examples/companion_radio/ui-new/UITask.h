@@ -111,6 +111,8 @@ public:
   }
 
   void toggleBuzzer();
+  void cycleBuzzerMode();   // ON → OFF → Auto → ON
+  int  getBuzzerMode(); // 0=ON, 1=OFF, 2=Auto
   bool getGPSState();
   void toggleGPS();
   void applyBrightness();

@@ -26,6 +26,7 @@ class RingtoneEditorScreen : public UIScreen {
   bool    _menu_open;
   int     _menu_sel;
   int     _menu_scroll;
+  char    _play_buf[220];  // persistent RTTTL buffer — library holds a pointer into it
 
   enum MenuOpt {
     M_PLAY_STOP, M_DURATION, M_BPM_UP, M_BPM_DOWN,
@@ -46,28 +47,27 @@ class RingtoneEditorScreen : public UIScreen {
     if (_scroll < 0) _scroll = 0;
   }
 
-  void buildRTTTL(char* buf, int buf_len) {
+  void buildRTTTL() {
     uint16_t bpm = BPM_OPTS[_bpm_idx < 5 ? _bpm_idx : 2];
-    int pos = snprintf(buf, buf_len, "Ring:d=8,o=5,b=%u:", bpm);
-    for (int i = 0; i < _len && pos < buf_len - 8; i++) {
-      if (i > 0 && pos < buf_len - 1) buf[pos++] = ',';
+    int pos = snprintf(_play_buf, sizeof(_play_buf), "Ring:d=8,o=5,b=%u:", bpm);
+    for (int i = 0; i < _len && pos < (int)sizeof(_play_buf) - 8; i++) {
+      if (i > 0 && pos < (int)sizeof(_play_buf) - 1) _play_buf[pos++] = ',';
       uint8_t pitch   = notePitch(_notes[i]);
       uint8_t octave  = noteOctave(_notes[i]);
       uint8_t dur_val = DUR_VALS[noteDurIdx(_notes[i])];
       if (pitch == 0)
-        pos += snprintf(buf + pos, buf_len - pos, "%dp", dur_val);
+        pos += snprintf(_play_buf + pos, sizeof(_play_buf) - pos, "%dp", dur_val);
       else
-        pos += snprintf(buf + pos, buf_len - pos, "%d%c%d", dur_val, PITCH_NAMES[pitch], octave);
+        pos += snprintf(_play_buf + pos, sizeof(_play_buf) - pos, "%d%c%d", dur_val, PITCH_NAMES[pitch], octave);
     }
-    if (pos < buf_len) buf[pos] = '\0';
+    if (pos < (int)sizeof(_play_buf)) _play_buf[pos] = '\0';
   }
 
   void previewNote(uint8_t note_byte) {
     uint8_t pitch = notePitch(note_byte);
     if (pitch == 0) { _task->stopMelody(); return; }
-    char buf[28];
-    snprintf(buf, sizeof(buf), "P:d=16,o=5,b=240:%c%d", PITCH_NAMES[pitch], noteOctave(note_byte));
-    _task->playMelody(buf);
+    snprintf(_play_buf, sizeof(_play_buf), "P:d=16,o=5,b=240:%c%d", PITCH_NAMES[pitch], noteOctave(note_byte));
+    _task->playMelody(_play_buf);
   }
 
 public:
@@ -211,9 +211,8 @@ public:
           if (_task->isMelodyPlaying()) {
             _task->stopMelody();
           } else if (_len > 0) {
-            char buf[220];
-            buildRTTTL(buf, sizeof(buf));
-            _task->playMelody(buf);
+            buildRTTTL();
+            _task->playMelody(_play_buf);
           }
           break;
         case M_DURATION:

@@ -3,16 +3,9 @@
 // Included at the bottom of MyMesh.cpp after all class definitions.
 
 void MyMesh::tryBotReplyDM(const ContactInfo& from, const char* text) {
-  if (!(_prefs.bot_enabled && _prefs.bot_target_type == 1 &&
-        _prefs.bot_trigger[0] && _prefs.bot_reply[0] &&
+  if (!(_prefs.bot_enabled && _prefs.bot_trigger[0] && _prefs.bot_reply_dm[0] &&
         millis() - _bot_last_reply_ms > 10000UL))
     return;
-
-  // all-zero pubkey = any sender; otherwise match first 4 bytes
-  bool key_ok = (_prefs.bot_dm_pubkey[0] == 0 && _prefs.bot_dm_pubkey[1] == 0 &&
-                 _prefs.bot_dm_pubkey[2] == 0 && _prefs.bot_dm_pubkey[3] == 0) ||
-                memcmp(from.id.pub_key, _prefs.bot_dm_pubkey, 4) == 0;
-  if (!key_ok) return;
 
   const char* tr = _prefs.bot_trigger;
   int tlen = strlen(tr);
@@ -26,7 +19,7 @@ void MyMesh::tryBotReplyDM(const ContactInfo& from, const char* text) {
 
   uint32_t ts = getRTCClock()->getCurrentTime();
   char expanded[200];
-  expandMsg(_prefs.bot_reply, expanded, sizeof(expanded),
+  expandMsg(_prefs.bot_reply_dm, expanded, sizeof(expanded),
             sensors.node_lat, sensors.node_lon,
             sensors.node_lat != 0.0 || sensors.node_lon != 0.0,
             ts, _prefs.tz_offset_hours);
@@ -36,8 +29,7 @@ void MyMesh::tryBotReplyDM(const ContactInfo& from, const char* text) {
 }
 
 void MyMesh::tryBotReplyChannel(uint8_t channel_idx, const char* text) {
-  if (!(_prefs.bot_enabled && _prefs.bot_target_type == 0 &&
-        _prefs.bot_trigger[0] && _prefs.bot_reply[0] &&
+  if (!(_prefs.bot_channel_enabled && _prefs.bot_trigger[0] && _prefs.bot_reply_ch[0] &&
         channel_idx == _prefs.bot_channel_idx &&
         millis() - _bot_last_reply_ms > 10000UL))
     return;
@@ -57,7 +49,7 @@ void MyMesh::tryBotReplyChannel(uint8_t channel_idx, const char* text) {
 
   uint32_t ts = getRTCClock()->getCurrentTime();
   char expanded[200];
-  expandMsg(_prefs.bot_reply, expanded, sizeof(expanded),
+  expandMsg(_prefs.bot_reply_ch, expanded, sizeof(expanded),
             sensors.node_lat, sensors.node_lon,
             sensors.node_lat != 0.0 || sensors.node_lon != 0.0,
             ts, _prefs.tz_offset_hours);
