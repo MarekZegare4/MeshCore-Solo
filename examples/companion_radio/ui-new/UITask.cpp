@@ -2108,9 +2108,15 @@ class BotScreen : public UIScreen {
   static const char KB_CHARS[4][10];
   static const int  KB_ROWS = 4, KB_COLS = 10;
 
-  // channel count cache (refreshed on enter)
-  int _num_channels;
+  // channel + DM contact caches (refreshed on enter)
+  static const int MAX_BOT_DM = 16;
+
+  int     _num_channels;
   uint8_t _channel_indices[MAX_GROUP_CHANNELS];
+
+  int     _num_dm;
+  uint8_t _dm_pubkeys[MAX_BOT_DM][4];
+  char    _dm_names[MAX_BOT_DM][32];
 
   void refreshChannels() {
     _num_channels = 0;
@@ -2121,11 +2127,32 @@ class BotScreen : public UIScreen {
     }
   }
 
-  // returns display index of current bot_channel_idx in _channel_indices
-  int currentChanDisplayIdx() const {
-    for (int i = 0; i < _num_channels; i++)
-      if (_channel_indices[i] == _prefs->bot_channel_idx) return i;
-    return 0;
+  void refreshContacts() {
+    _num_dm = 0;
+    ContactInfo ci;
+    int n = the_mesh.getNumContacts();
+    for (int i = 0; i < n && _num_dm < MAX_BOT_DM; i++) {
+      if (!the_mesh.getContactByIdx(i, ci)) continue;
+      if (ci.type != ADV_TYPE_CHAT) continue;
+      memcpy(_dm_pubkeys[_num_dm], ci.id.pub_key, 4);
+      strncpy(_dm_names[_num_dm], ci.name, sizeof(_dm_names[0]) - 1);
+      _dm_names[_num_dm][sizeof(_dm_names[0]) - 1] = '\0';
+      _num_dm++;
+    }
+  }
+
+  // returns combined index in [channels..., DM contacts...]
+  int currentTargetIdx() const {
+    if (_prefs->bot_target_type == 0) {
+      for (int i = 0; i < _num_channels; i++)
+        if (_channel_indices[i] == _prefs->bot_channel_idx) return i;
+      return 0;
+    } else {
+      for (int i = 0; i < _num_dm; i++)
+        if (memcmp(_dm_pubkeys[i], _prefs->bot_dm_pubkey, 4) == 0)
+          return _num_channels + i;
+      return _num_channels;  // fallback: first DM
+    }
   }
 
 public:
@@ -2135,6 +2162,7 @@ public:
     _sel      = 0;
     _kb_field = -1;
     refreshChannels();
+    refreshContacts();
   }
 
   int render(DisplayDriver& display) override {
@@ -2194,7 +2222,7 @@ public:
     display.drawTextCentered(display.width() / 2, 0, "AUTO-REPLY BOT");
     display.fillRect(0, 10, display.width(), 1);
 
-    static const char* labels[] = { "Enable", "Channel", "Trigger", "Reply" };
+    static const char* labels[] = { "Enable", NULL, "Trigger", "Reply" };
     for (int i = 0; i < ITEM_COUNT; i++) {
       int y = START_Y + i * ITEM_H;
       bool sel = (i == _sel);
@@ -2203,20 +2231,33 @@ public:
         display.setColor(DisplayDriver::DARK);
       }
       display.setCursor(2, y);
-      display.print(labels[i]);
+      if (i == 1)
+        display.print(_prefs->bot_target_type == 0 ? "Channel" : "Contact");
+      else
+        display.print(labels[i]);
       display.setCursor(VAL_X, y);
 
       if (i == 0) {
         display.print(_prefs->bot_enabled ? "ON" : "OFF");
       } else if (i == 1) {
-        if (_num_channels == 0) {
+        int total = _num_channels + _num_dm;
+        if (total == 0) {
           display.print("none");
-        } else {
+        } else if (_prefs->bot_target_type == 0) {
           ChannelDetails ch;
-          if (the_mesh.getChannel(_prefs->bot_channel_idx, ch) && ch.name[0])
+          if (_num_channels > 0 && the_mesh.getChannel(_prefs->bot_channel_idx, ch) && ch.name[0])
             display.drawTextEllipsized(VAL_X, y, display.width() - VAL_X - 1, ch.name);
           else
-            display.print("Ch?");
+            display.print("?");
+        } else {
+          bool found = false;
+          for (int j = 0; j < _num_dm && !found; j++) {
+            if (memcmp(_dm_pubkeys[j], _prefs->bot_dm_pubkey, 4) == 0) {
+              display.drawTextEllipsized(VAL_X, y, display.width() - VAL_X - 1, _dm_names[j]);
+              found = true;
+            }
+          }
+          if (!found) display.print("?");
         }
       } else if (i == 2) {
         const char* tr = _prefs->bot_trigger;
@@ -2297,11 +2338,23 @@ public:
       _prefs->bot_enabled ^= 1;
       return true;
     }
-    if (_sel == 1 && _num_channels > 0) {
-      int idx = currentChanDisplayIdx();
-      if (right || enter) idx = (idx + 1) % _num_channels;
-      if (left)           idx = (idx + _num_channels - 1) % _num_channels;
-      if (left || right || enter) { _prefs->bot_channel_idx = _channel_indices[idx]; return true; }
+    if (_sel == 1) {
+      int total = _num_channels + _num_dm;
+      if (total == 0) return false;
+      int idx = currentTargetIdx();
+      if (right || enter) idx = (idx + 1) % total;
+      if (left)           idx = (idx + total - 1) % total;
+      if (left || right || enter) {
+        if (idx < _num_channels) {
+          _prefs->bot_target_type = 0;
+          _prefs->bot_channel_idx = _channel_indices[idx];
+        } else {
+          int di = idx - _num_channels;
+          _prefs->bot_target_type = 1;
+          memcpy(_prefs->bot_dm_pubkey, _dm_pubkeys[di], 4);
+        }
+        return true;
+      }
     }
     if ((_sel == 2 || _sel == 3) && enter) {
       _kb_field = _sel;

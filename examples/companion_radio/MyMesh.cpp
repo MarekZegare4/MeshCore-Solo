@@ -512,6 +512,33 @@ void MyMesh::onMessageRecv(const ContactInfo &from, mesh::Packet *pkt, uint32_t 
                            const char *text) {
   markConnectionActive(from); // in case this is from a server, and we have a connection
   queueMessage(from, TXT_TYPE_PLAIN, pkt, sender_timestamp, NULL, 0, text);
+
+  // DM auto-reply bot
+  if (_prefs.bot_enabled && _prefs.bot_target_type == 1 &&
+      _prefs.bot_trigger[0] && _prefs.bot_reply[0] &&
+      millis() - _bot_last_reply_ms > 10000UL) {
+    // all-zero pubkey = any sender; otherwise match first 4 bytes
+    bool key_ok = (_prefs.bot_dm_pubkey[0] == 0 && _prefs.bot_dm_pubkey[1] == 0 &&
+                   _prefs.bot_dm_pubkey[2] == 0 && _prefs.bot_dm_pubkey[3] == 0) ||
+                  memcmp(from.id.pub_key, _prefs.bot_dm_pubkey, 4) == 0;
+    if (key_ok) {
+      const char* t = text;
+      const char* tr = _prefs.bot_trigger;
+      int tlen = strlen(tr);
+      bool matched = false;
+      for (; *t && !matched; t++) {
+        int i = 0;
+        while (i < tlen && tolower((uint8_t)t[i]) == tolower((uint8_t)tr[i])) i++;
+        if (i == tlen) matched = true;
+      }
+      if (matched) {
+        uint32_t ts = getRTCClock()->getCurrentTime();
+        uint32_t expected_ack, est_timeout;
+        if (sendMessage(from, ts, 0, _prefs.bot_reply, expected_ack, est_timeout) != MSG_SEND_FAILED)
+          _bot_last_reply_ms = millis();
+      }
+    }
+  }
 }
 
 void MyMesh::onCommandDataRecv(const ContactInfo &from, mesh::Packet *pkt, uint32_t sender_timestamp,
@@ -899,6 +926,8 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   _prefs.bot_channel_idx = 0;
   _prefs.bot_trigger[0] = '\0';
   _prefs.bot_reply[0] = '\0';
+  _prefs.bot_target_type = 0;
+  memset(_prefs.bot_dm_pubkey, 0, sizeof(_prefs.bot_dm_pubkey));
   _prefs.auto_off_secs = 15;    // 15 seconds auto-off by default
   _prefs.tz_offset_hours = 0;  // UTC by default
   _prefs.low_batt_mv = 3400;  // auto-shutdown at 3.4V by default
