@@ -8,11 +8,12 @@
 #define FIRMWARE_VER_CODE 11
 
 #ifndef FIRMWARE_BUILD_DATE
-#define FIRMWARE_BUILD_DATE "19 Apr 2026"
+#define FIRMWARE_BUILD_DATE "12 May 2026"
 #endif
 
+// Versioning: vX.Y = upstream base, plus.N = fork revision
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION "v1.15.3"
+#define FIRMWARE_VERSION "v1.15-plus.1"
 #endif
 
 #if defined(NRF52_PLATFORM) || defined(STM32_PLATFORM)
