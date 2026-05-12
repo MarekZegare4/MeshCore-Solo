@@ -570,6 +570,32 @@ void MyMesh::onChannelMessageRecv(const mesh::GroupChannel &channel, mesh::Packe
   }
   if (_ui) _ui->newMsg(path_len, channel_name, text, offline_queue_len, 0);
 #endif
+
+  // auto-reply bot
+  if (_prefs.bot_enabled && _prefs.bot_trigger[0] && _prefs.bot_reply[0] &&
+      channel_idx == _prefs.bot_channel_idx &&
+      millis() - _bot_last_reply_ms > 10000UL) {
+    // case-insensitive substring match
+    const char* t = text;
+    const char* tr = _prefs.bot_trigger;
+    int tlen = strlen(tr);
+    bool matched = false;
+    for (; *t && !matched; t++) {
+      int i = 0;
+      while (i < tlen && tolower((uint8_t)t[i]) == tolower((uint8_t)tr[i])) i++;
+      if (i == tlen) matched = true;
+    }
+    if (matched) {
+      ChannelDetails ch;
+      if (getChannel(channel_idx, ch)) {
+        uint32_t ts = getRTCClock()->getCurrentTime();
+        int rlen = strlen(_prefs.bot_reply);
+        if (sendGroupMessage(ts, ch.channel, _prefs.node_name, _prefs.bot_reply, rlen)) {
+          _bot_last_reply_ms = millis();
+        }
+      }
+    }
+  }
 }
 
 void MyMesh::onChannelDataRecv(const mesh::GroupChannel &channel, mesh::Packet *pkt, uint16_t data_type,
@@ -868,6 +894,10 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   _prefs.ringtone_bpm_idx = 2;  // 120 bpm default
   _prefs.ringtone_len = 0;       // no custom ringtone by default
   _prefs.home_pages_mask = 0x01FF;  // all pages visible
+  _prefs.bot_enabled = 0;
+  _prefs.bot_channel_idx = 0;
+  _prefs.bot_trigger[0] = '\0';
+  _prefs.bot_reply[0] = '\0';
   _prefs.auto_off_secs = 15;    // 15 seconds auto-off by default
   _prefs.tz_offset_hours = 0;  // UTC by default
   _prefs.low_batt_mv = 3400;  // auto-shutdown at 3.4V by default

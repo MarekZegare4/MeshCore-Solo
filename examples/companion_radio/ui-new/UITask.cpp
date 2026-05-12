@@ -2085,12 +2085,254 @@ const char*    RingtoneEditorScreen::MENU_LABELS[RingtoneEditorScreen::M_COUNT] 
   "Play/Stop", "Duration", "BPM+", "BPM-", "Insert", "Delete", "Save & Exit", "Discard"
 };
 
+// ── BotScreen ─────────────────────────────────────────────────────────────────
+class BotScreen : public UIScreen {
+  UITask*    _task;
+  NodePrefs* _prefs;
+
+  static const int ITEM_COUNT = 4;
+  static const int ITEM_H     = 11;
+  static const int START_Y    = 12;
+  static const int VAL_X      = 70;
+
+  // keyboard state (reused for trigger and reply fields)
+  int  _kb_field;   // -1=off, 2=trigger, 3=reply
+  char _kb_buf[140];
+  int  _kb_len;
+  int  _kb_maxlen;
+  int  _kb_row, _kb_col;
+  bool _kb_caps;
+
+  int  _sel;
+
+  static const char KB_CHARS[4][10];
+  static const int  KB_ROWS = 4, KB_COLS = 10;
+
+  // channel count cache (refreshed on enter)
+  int _num_channels;
+  uint8_t _channel_indices[MAX_GROUP_CHANNELS];
+
+  void refreshChannels() {
+    _num_channels = 0;
+    ChannelDetails ch;
+    for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
+      if (the_mesh.getChannel(i, ch) && ch.name[0] != '\0')
+        _channel_indices[_num_channels++] = (uint8_t)i;
+    }
+  }
+
+  // returns display index of current bot_channel_idx in _channel_indices
+  int currentChanDisplayIdx() const {
+    for (int i = 0; i < _num_channels; i++)
+      if (_channel_indices[i] == _prefs->bot_channel_idx) return i;
+    return 0;
+  }
+
+public:
+  BotScreen(UITask* task, NodePrefs* prefs) : _task(task), _prefs(prefs) {}
+
+  void enter() {
+    _sel      = 0;
+    _kb_field = -1;
+    refreshChannels();
+  }
+
+  int render(DisplayDriver& display) override {
+    display.setTextSize(1);
+    display.setColor(DisplayDriver::LIGHT);
+
+    if (_kb_field >= 0) {
+      // keyboard mode
+      const char* label = (_kb_field == 2) ? "Trigger:" : "Reply:";
+      char preview[24];
+      const char* disp = _kb_buf;
+      int dlen = _kb_len;
+      if (dlen > 16) { disp = _kb_buf + (dlen - 16); dlen = 16; }
+      snprintf(preview, sizeof(preview), "%s %.*s_", label, dlen, disp);
+      display.setCursor(0, 0);
+      display.print(preview);
+      display.fillRect(0, 10, display.width(), 1);
+
+      for (int row = 0; row < KB_ROWS; row++) {
+        int y = 14 + row * 11;
+        for (int col = 0; col < KB_COLS; col++) {
+          bool sel = (_kb_row == row && _kb_col == col);
+          char ch = KB_CHARS[row][col];
+          if (_kb_caps && ch >= 'a' && ch <= 'z') ch -= 32;
+          char buf[2] = { ch == ' ' ? '_' : ch, '\0' };
+          int cx = col * 12;
+          if (sel) {
+            display.fillRect(cx, y - 1, 11, 10);
+            display.setColor(DisplayDriver::DARK);
+          } else {
+            display.setColor(DisplayDriver::LIGHT);
+          }
+          display.setCursor(cx + 3, y);
+          display.print(buf);
+          display.setColor(DisplayDriver::LIGHT);
+        }
+      }
+      // special row
+      const char* spec[] = { "[^]", "[Sp]", "[Del]", "[OK]" };
+      for (int i = 0; i < 4; i++) {
+        bool sel = (_kb_row == KB_ROWS && _kb_col == i);
+        bool active = (i == 0 && _kb_caps);
+        int sx = i * 32;
+        if (sel || active) {
+          display.fillRect(sx, 58, 31, 9);
+          display.setColor(DisplayDriver::DARK);
+        } else {
+          display.setColor(DisplayDriver::LIGHT);
+        }
+        display.setCursor(sx + 2, 59);
+        display.print(spec[i]);
+        display.setColor(DisplayDriver::LIGHT);
+      }
+      return 50;
+    }
+
+    display.drawTextCentered(display.width() / 2, 0, "AUTO-REPLY BOT");
+    display.fillRect(0, 10, display.width(), 1);
+
+    static const char* labels[] = { "Enable", "Channel", "Trigger", "Reply" };
+    for (int i = 0; i < ITEM_COUNT; i++) {
+      int y = START_Y + i * ITEM_H;
+      bool sel = (i == _sel);
+      if (sel) {
+        display.fillRect(0, y - 1, display.width(), ITEM_H);
+        display.setColor(DisplayDriver::DARK);
+      }
+      display.setCursor(2, y);
+      display.print(labels[i]);
+      display.setCursor(VAL_X, y);
+
+      if (i == 0) {
+        display.print(_prefs->bot_enabled ? "ON" : "OFF");
+      } else if (i == 1) {
+        if (_num_channels == 0) {
+          display.print("none");
+        } else {
+          ChannelDetails ch;
+          if (the_mesh.getChannel(_prefs->bot_channel_idx, ch) && ch.name[0])
+            display.drawTextEllipsized(VAL_X, y, display.width() - VAL_X - 1, ch.name);
+          else
+            display.print("Ch?");
+        }
+      } else if (i == 2) {
+        const char* tr = _prefs->bot_trigger;
+        display.drawTextEllipsized(VAL_X, y, display.width() - VAL_X - 1, tr[0] ? tr : "(none)");
+      } else {
+        const char* rp = _prefs->bot_reply;
+        display.drawTextEllipsized(VAL_X, y, display.width() - VAL_X - 1, rp[0] ? rp : "(none)");
+      }
+      display.setColor(DisplayDriver::LIGHT);
+    }
+
+    display.setCursor(0, 54);
+    display.print("ENT:edit  CANCEL:save");
+    return 300;
+  }
+
+  bool handleInput(char c) override {
+    bool up    = (c == KEY_UP);
+    bool down  = (c == KEY_DOWN);
+    bool left  = (c == KEY_LEFT  || c == KEY_PREV);
+    bool right = (c == KEY_RIGHT || c == KEY_NEXT);
+    bool enter = (c == KEY_ENTER);
+    bool cancel = (c == KEY_CANCEL || c == KEY_CONTEXT_MENU);
+
+    if (_kb_field >= 0) {
+      // keyboard input
+      if (cancel) { _kb_field = -1; return true; }
+      if (up   && _kb_row > 0) { _kb_row--; return true; }
+      if (down && _kb_row < KB_ROWS) { _kb_row++; return true; }
+      if (left  && _kb_col > 0) { _kb_col--; return true; }
+      if (right && _kb_col < (_kb_row < KB_ROWS ? KB_COLS - 1 : 3)) { _kb_col++; return true; }
+      if (enter) {
+        if (_kb_row < KB_ROWS) {
+          // character press
+          if (_kb_len < _kb_maxlen) {
+            char ch = KB_CHARS[_kb_row][_kb_col];
+            if (_kb_caps && ch >= 'a' && ch <= 'z') ch -= 32;
+            _kb_buf[_kb_len++] = ch;
+            _kb_buf[_kb_len]   = '\0';
+          }
+        } else {
+          // special row
+          switch (_kb_col) {
+            case 0: _kb_caps = !_kb_caps; break;
+            case 1: if (_kb_len < _kb_maxlen) { _kb_buf[_kb_len++] = ' '; _kb_buf[_kb_len] = '\0'; } break;
+            case 2: if (_kb_len > 0) { _kb_buf[--_kb_len] = '\0'; } break;
+            case 3:
+              // commit
+              if (_kb_field == 2)
+                strncpy(_prefs->bot_trigger, _kb_buf, sizeof(_prefs->bot_trigger) - 1);
+              else
+                strncpy(_prefs->bot_reply, _kb_buf, sizeof(_prefs->bot_reply) - 1);
+              _kb_field = -1;
+              break;
+          }
+        }
+        return true;
+      }
+      return true;
+    }
+
+    if (cancel) {
+      the_mesh.savePrefs();
+      _task->gotoToolsScreen();
+      return true;
+    }
+    if (up   && _sel > 0) { _sel--; return true; }
+    if (down && _sel < ITEM_COUNT - 1) { _sel++; return true; }
+
+    if (_sel == 0 && (enter || left || right)) {
+      _prefs->bot_enabled ^= 1;
+      return true;
+    }
+    if (_sel == 1 && _num_channels > 0) {
+      int idx = currentChanDisplayIdx();
+      if (right || enter) idx = (idx + 1) % _num_channels;
+      if (left)           idx = (idx + _num_channels - 1) % _num_channels;
+      if (left || right || enter) { _prefs->bot_channel_idx = _channel_indices[idx]; return true; }
+    }
+    if ((_sel == 2 || _sel == 3) && enter) {
+      _kb_field = _sel;
+      _kb_row   = 0;
+      _kb_col   = 0;
+      _kb_caps  = false;
+      if (_sel == 2) {
+        strncpy(_kb_buf, _prefs->bot_trigger, sizeof(_kb_buf) - 1);
+        _kb_maxlen = sizeof(_prefs->bot_trigger) - 1;
+      } else {
+        strncpy(_kb_buf, _prefs->bot_reply, sizeof(_kb_buf) - 1);
+        _kb_maxlen = sizeof(_prefs->bot_reply) - 1;
+      }
+      _kb_buf[sizeof(_kb_buf) - 1] = '\0';
+      _kb_len = strlen(_kb_buf);
+      return true;
+    }
+    return false;
+  }
+};
+
+const char BotScreen::KB_CHARS[4][10] = {
+  {'a','b','c','d','e','f','g','h','i','j'},
+  {'k','l','m','n','o','p','q','r','s','t'},
+  {'u','v','w','x','y','z','.',' ','!','?'},
+  {'1','2','3','4','5','6','7','8','9','0'},
+};
+
 // ── ToolsScreen ───────────────────────────────────────────────────────────────
 class ToolsScreen : public UIScreen {
   UITask* _task;
+  int _sel;
+
+  static const int ITEM_COUNT = 2;
+  static const char* ITEMS[ITEM_COUNT];
 
 public:
-  ToolsScreen(UITask* task) : _task(task) {}
+  ToolsScreen(UITask* task) : _task(task), _sel(0) {}
 
   int render(DisplayDriver& display) override {
     display.setTextSize(1);
@@ -2098,11 +2340,17 @@ public:
     display.drawTextCentered(display.width() / 2, 0, "TOOLS");
     display.fillRect(0, 10, display.width(), 1);
 
-    display.fillRect(0, 12, display.width(), 11);
-    display.setColor(DisplayDriver::DARK);
-    display.setCursor(4, 13);
-    display.print("Ringtone Editor");
-    display.setColor(DisplayDriver::LIGHT);
+    for (int i = 0; i < ITEM_COUNT; i++) {
+      int y = 14 + i * 12;
+      bool sel = (i == _sel);
+      if (sel) {
+        display.fillRect(0, y - 1, display.width(), 11);
+        display.setColor(DisplayDriver::DARK);
+      }
+      display.setCursor(4, y);
+      display.print(ITEMS[i]);
+      display.setColor(DisplayDriver::LIGHT);
+    }
 
     display.setCursor(0, 54);
     display.print("ENT:open  CANCEL:back");
@@ -2110,11 +2358,17 @@ public:
   }
 
   bool handleInput(char c) override {
+    if (c == KEY_UP   && _sel > 0) { _sel--; return true; }
+    if (c == KEY_DOWN && _sel < ITEM_COUNT - 1) { _sel++; return true; }
     if (c == KEY_CANCEL || c == KEY_CONTEXT_MENU) { _task->gotoHomeScreen(); return true; }
-    if (c == KEY_ENTER) { _task->gotoRingtoneEditor(); return true; }
+    if (c == KEY_ENTER) {
+      if (_sel == 0) { _task->gotoRingtoneEditor(); return true; }
+      if (_sel == 1) { _task->gotoBotScreen();      return true; }
+    }
     return false;
   }
 };
+const char* ToolsScreen::ITEMS[2] = { "Ringtone Editor", "Auto-Reply Bot" };
 
 // ── HomeScreen ────────────────────────────────────────────────────────────────
 class HomeScreen : public UIScreen {
@@ -2685,6 +2939,7 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
   quick_msg = new QuickMsgScreen(this);
   tools_screen  = new ToolsScreen(this);
   ringtone_edit = new RingtoneEditorScreen(this, node_prefs);
+  bot_screen    = new BotScreen(this, node_prefs);
   setCurrScreen(splash);
 
   applyBrightness();
@@ -2702,6 +2957,11 @@ void UITask::gotoToolsScreen() {
 void UITask::gotoRingtoneEditor() {
   ((RingtoneEditorScreen*)ringtone_edit)->enter();
   setCurrScreen(ringtone_edit);
+}
+
+void UITask::gotoBotScreen() {
+  ((BotScreen*)bot_screen)->enter();
+  setCurrScreen(bot_screen);
 }
 
 void UITask::playMelody(const char* melody) {

@@ -49,4 +49,8 @@ struct NodePrefs {  // persisted to file
   uint8_t  ringtone_len;        // number of notes in custom ringtone (0 = use default)
   uint8_t  ringtone_notes[32]; // packed: bits0-2=pitch, bits3-4=octave-4, bits5-6=dur_idx
   uint16_t home_pages_mask;    // bitmask of visible home pages (bit0=Clock..bit8=Shutdown); 0=all visible
+  uint8_t  bot_enabled;        // 0=disabled, 1=enabled
+  uint8_t  bot_channel_idx;    // channel index to monitor
+  char     bot_trigger[64];    // trigger phrase (case-insensitive contains match)
+  char     bot_reply[140];     // auto-reply text
 };

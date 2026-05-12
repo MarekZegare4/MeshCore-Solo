@@ -253,6 +253,12 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
           file.read((uint8_t *)_prefs.ringtone_notes, sizeof(_prefs.ringtone_notes));
           if (file.available()) {
             file.read((uint8_t *)&_prefs.home_pages_mask, sizeof(_prefs.home_pages_mask));
+            if (file.available()) {
+              file.read((uint8_t *)&_prefs.bot_enabled, sizeof(_prefs.bot_enabled));
+              file.read((uint8_t *)&_prefs.bot_channel_idx, sizeof(_prefs.bot_channel_idx));
+              file.read((uint8_t *)_prefs.bot_trigger, sizeof(_prefs.bot_trigger));
+              file.read((uint8_t *)_prefs.bot_reply, sizeof(_prefs.bot_reply));
+            }
           }
         }
       }
@@ -312,6 +318,10 @@ void DataStore::savePrefs(const NodePrefs& _prefs, double node_lat, double node_
     file.write((uint8_t *)&_prefs.ringtone_len, sizeof(_prefs.ringtone_len));
     file.write((uint8_t *)_prefs.ringtone_notes, sizeof(_prefs.ringtone_notes));
     file.write((uint8_t *)&_prefs.home_pages_mask, sizeof(_prefs.home_pages_mask));
+    file.write((uint8_t *)&_prefs.bot_enabled, sizeof(_prefs.bot_enabled));
+    file.write((uint8_t *)&_prefs.bot_channel_idx, sizeof(_prefs.bot_channel_idx));
+    file.write((uint8_t *)_prefs.bot_trigger, sizeof(_prefs.bot_trigger));
+    file.write((uint8_t *)_prefs.bot_reply, sizeof(_prefs.bot_reply));
 
     file.close();
   }
