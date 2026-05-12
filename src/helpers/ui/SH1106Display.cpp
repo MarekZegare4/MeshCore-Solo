@@ -17,6 +17,9 @@ bool SH1106Display::begin()
 void SH1106Display::turnOn()
 {
   display.oled_command(SH110X_DISPLAYON);
+  uint8_t pre[] = { 0xD9, _precharge };
+  display.oled_commandList(pre, 2);
+  display.setContrast(_contrast);
   _isOn = true;
 }
 
@@ -87,11 +90,17 @@ uint16_t SH1106Display::getTextWidth(const char *str)
 
 void SH1106Display::setBrightness(uint8_t level)
 {
-  // OLED contrast is highly non-linear: most perceptible change is in the low range.
-  // Values are tuned so each step looks visually distinct.
-  static const uint8_t contrast_values[] = { 8, 30, 80, 160, 255 };
-  uint8_t contrast = contrast_values[level < 5 ? level : 4];
-  display.setContrast(contrast);
+  // Contrast alone has limited effect on some OLED panels; combining with
+  // pre-charge period (0xD9) gives a wider perceptible dimming range.
+  // Pre-charge 0x11 = phase1=1,phase2=1 (minimum drive); 0x1F = default.
+  static const uint8_t contrast_values[]  = {   0,  25,  60, 150, 255 };
+  static const uint8_t precharge_values[] = { 0x11, 0x15, 0x1F, 0x1F, 0x1F };
+  uint8_t idx = level < 5 ? level : 4;
+  _contrast  = contrast_values[idx];
+  _precharge = precharge_values[idx];
+  uint8_t pre[] = { 0xD9, _precharge };
+  display.oled_commandList(pre, 2);
+  display.setContrast(_contrast);
 }
 
 void SH1106Display::endFrame()

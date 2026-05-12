@@ -19,11 +19,13 @@ class SH1106Display : public DisplayDriver
   Adafruit_SH1106G display;
   bool _isOn;
   uint8_t _color;
+  uint8_t _contrast;
+  uint8_t _precharge;
 
   bool i2c_probe(TwoWire &wire, uint8_t addr);
 
 public:
-  SH1106Display() : DisplayDriver(128, 64), display(128, 64, &Wire, PIN_OLED_RESET) { _isOn = false; }
+  SH1106Display() : DisplayDriver(128, 64), display(128, 64, &Wire, PIN_OLED_RESET) { _isOn = false; _contrast = 255; _precharge = 0x1F; }
   bool begin();
 
   bool isOn() override { return _isOn; }

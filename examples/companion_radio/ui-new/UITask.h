@@ -53,7 +53,6 @@ class UITask : public AbstractUITask {
 
   UIScreen* splash;
   UIScreen* home;
-  UIScreen* msg_preview;
   UIScreen* settings;
   UIScreen* quick_msg;
   UIScreen* curr;

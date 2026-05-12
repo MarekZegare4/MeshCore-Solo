@@ -692,8 +692,8 @@ class QuickMsgScreen : public UIScreen {
   int _hist_sel, _hist_scroll;
   bool _hist_fullscreen;
   int  _hist_fs_scroll;
-  int  _viewing_unread_start;  // index of first "unread" message when entering CHANNEL_HIST
-  int  _viewing_max_seen;      // highest _hist_sel reached in current session
+  int  _unread_at_entry;    // _ch_unread value when entering CHANNEL_HIST
+  int  _viewing_max_seen;  // highest _hist_sel reached in current session
   static const int CH_HIST_MAX = 32;
 
   static const int FS_CHARS   = 21;
@@ -843,6 +843,11 @@ class QuickMsgScreen : public UIScreen {
       char entry[sizeof(ChHistEntry::text)];
       snprintf(entry, sizeof(entry), "Me: %s", msg);
       addChannelMsg(_sel_channel_idx, entry);
+      // After inserting sent msg at index 0, the unread index range is stale.
+      // User is active in this channel — treat as fully read.
+      _ch_unread[_sel_channel_idx] = 0;
+      _unread_at_entry = 0;
+      _viewing_max_seen = 0;
       _task->showAlert("Sent!", 600);
     } else {
       _task->showAlert(ok ? "Sent!" : "Send failed", 1500);
@@ -929,7 +934,7 @@ public:
       _msg_sel(0), _msg_scroll(0), _active_msg_count(0),
       _hist_sel(0), _hist_scroll(0),
       _hist_fullscreen(false), _hist_fs_scroll(0),
-      _viewing_unread_start(0), _viewing_max_seen(0),
+      _unread_at_entry(0), _viewing_max_seen(0),
       _hist_head(0), _hist_count(0),
       _kb_row(0), _kb_col(0), _kb_len(0),
       _kb_caps(false), _kb_ph_mode(false), _kb_ph_sel(0),
@@ -966,10 +971,9 @@ public:
   void updateChannelUnread() {
     if (_hist_sel < 0 || _sel_channel_idx < 0 || _sel_channel_idx >= MAX_GROUP_CHANNELS) return;
     if (_hist_sel > _viewing_max_seen) _viewing_max_seen = _hist_sel;
-    int hist_count = histCountForChannel(_sel_channel_idx);
-    int watermark = _viewing_max_seen > (_viewing_unread_start - 1)
-                    ? _viewing_max_seen : (_viewing_unread_start - 1);
-    int remaining = (hist_count - 1) - watermark;
+    // histEntryForChannel is newest-first: index 0 = newest (unread), higher = older.
+    // Each step down from 0 sees one more message; seen count = max_seen + 1.
+    int remaining = _unread_at_entry - (_viewing_max_seen + 1);
     _ch_unread[_sel_channel_idx] = (uint8_t)(remaining > 0 ? remaining : 0);
   }
 
@@ -991,7 +995,7 @@ public:
     _ctx_open = false;
     _ctx_dirty = false;
     _ctx_sel = 0;
-    _viewing_unread_start = 0;
+    _unread_at_entry = 0;
     _viewing_max_seen = 0;
   }
 
@@ -1476,8 +1480,7 @@ public:
       if (c == KEY_ENTER && _num_channels > 0) {
         _sel_channel_idx = _channel_indices[_channel_sel];
         int hc = histCountForChannel(_sel_channel_idx);
-        _viewing_unread_start = hc - (int)_ch_unread[_sel_channel_idx];
-        if (_viewing_unread_start < 0) _viewing_unread_start = 0;
+        _unread_at_entry = (int)_ch_unread[_sel_channel_idx];
         _hist_scroll = 0;
         _hist_sel = hc > 0 ? 0 : -1;
         _viewing_max_seen = _hist_sel >= 0 ? _hist_sel : 0;
@@ -2133,186 +2136,6 @@ public:
   }
 };
 
-class MsgPreviewScreen : public UIScreen {
-  UITask* _task;
-  mesh::RTCClock* _rtc;
-
-  struct MsgEntry {
-    uint32_t timestamp;
-    char origin[62];
-    char msg[78];
-  };
-  #define MAX_UNREAD_MSGS 32
-  int num_unread;
-  int head;
-  int _view_offset;   // 0=newest, num_unread-1=oldest
-  bool _fullscreen;
-  int  _fs_scroll;    // line scroll offset in fullscreen
-  MsgEntry unread[MAX_UNREAD_MSGS];
-
-  static const int FS_CHARS = 21;   // chars per line at text size 1, 128px wide
-  static const int FS_LINE_H = 9;
-  static const int FS_START_Y = 12;
-  static const int FS_VISIBLE = (64 - FS_START_Y) / FS_LINE_H;  // 5 lines
-
-  // word-wrap msg into lines; returns line count
-  int wrapLines(const char* text, char out[][FS_CHARS + 1], int max_lines) const {
-    int count = 0;
-    const char* p = text;
-    while (*p && count < max_lines) {
-      int len = strlen(p);
-      if (len <= FS_CHARS) {
-        strncpy(out[count++], p, FS_CHARS);
-        out[count-1][len] = '\0';
-        break;
-      }
-      int brk = FS_CHARS;
-      for (int i = FS_CHARS - 1; i > 0; i--) {
-        if (p[i] == ' ') { brk = i; break; }
-      }
-      strncpy(out[count], p, brk);
-      out[count++][brk] = '\0';
-      p += brk + (p[brk] == ' ' ? 1 : 0);
-    }
-    return count;
-  }
-
-public:
-  MsgPreviewScreen(UITask* task, mesh::RTCClock* rtc)
-    : _task(task), _rtc(rtc), num_unread(0), head(MAX_UNREAD_MSGS - 1),
-      _view_offset(0), _fullscreen(false), _fs_scroll(0) {}
-
-  void addPreview(uint8_t path_len, const char* from_name, const char* msg) {
-    head = (head + 1) % MAX_UNREAD_MSGS;
-    if (num_unread < MAX_UNREAD_MSGS) num_unread++;
-    _view_offset = 0;
-    _fullscreen = false;
-
-    auto p = &unread[head];
-    p->timestamp = _rtc->getCurrentTime();
-    if (path_len == 0xFF) {
-      sprintf(p->origin, "(D) %s:", from_name);
-    } else {
-      sprintf(p->origin, "(%d) %s:", (uint32_t)path_len, from_name);
-    }
-    StrHelper::strncpy(p->msg, msg, sizeof(p->msg));
-  }
-
-  int render(DisplayDriver& display) override {
-    display.setTextSize(1);
-    display.setColor(DisplayDriver::LIGHT);
-
-    int msg_idx = (head - _view_offset + MAX_UNREAD_MSGS) % MAX_UNREAD_MSGS;
-    auto p = &unread[msg_idx];
-
-    char filtered_origin[sizeof(p->origin)];
-    display.translateUTF8ToBlocks(filtered_origin, p->origin, sizeof(filtered_origin));
-    char filtered_msg[sizeof(p->msg)];
-    display.translateUTF8ToBlocks(filtered_msg, p->msg, sizeof(filtered_msg));
-
-    // header: origin + counter, tekst + separator
-    char counter[8];
-    snprintf(counter, sizeof(counter), "%d/%d", _view_offset + 1, num_unread);
-    int counter_w = display.getTextWidth(counter);
-    display.setColor(DisplayDriver::LIGHT);
-    display.drawTextEllipsized(2, 1, display.width() - counter_w - 6, filtered_origin);
-    display.setCursor(display.width() - counter_w - 2, 1);
-    display.print(counter);
-    display.fillRect(0, 10, display.width(), 1);
-
-    if (_fullscreen) {
-      char lines[10][FS_CHARS + 1];
-      int line_count = wrapLines(filtered_msg, lines, 10);
-      int max_scroll = (line_count > FS_VISIBLE) ? line_count - FS_VISIBLE : 0;
-      if (_fs_scroll > max_scroll) _fs_scroll = max_scroll;
-
-      for (int i = 0; i < FS_VISIBLE && (_fs_scroll + i) < line_count; i++) {
-        display.setCursor(0, FS_START_Y + i * FS_LINE_H);
-        display.print(lines[_fs_scroll + i]);
-      }
-      if (_fs_scroll > 0) {
-        display.setCursor(display.width() - 6, FS_START_Y);
-        display.print("^");
-      }
-      if (_fs_scroll < max_scroll) {
-        display.setCursor(display.width() - 6, FS_START_Y + (FS_VISIBLE - 1) * FS_LINE_H);
-        display.print("v");
-      }
-      if (_view_offset < num_unread - 1) {
-        display.setCursor(0, 56);
-        display.print("<");
-      }
-      if (_view_offset > 0) {
-        display.setCursor(display.width() - 6, 56);
-        display.print(">");
-      }
-    } else {
-      display.setCursor(0, 13);
-      display.printWordWrap(filtered_msg, display.width());
-
-      // nav hints
-      if (_view_offset < num_unread - 1) {
-        display.setCursor(display.width() - 6, 13);
-        display.print("^");
-      }
-      if (_view_offset > 0) {
-        display.setCursor(display.width() - 6, 55);
-        display.print("v");
-      }
-
-      // timestamp
-      char tmp[10];
-      int secs = _rtc->getCurrentTime() - p->timestamp;
-      if (secs < 60)        snprintf(tmp, sizeof(tmp), "%ds", secs);
-      else if (secs < 3600) snprintf(tmp, sizeof(tmp), "%dm", secs / 60);
-      else                  snprintf(tmp, sizeof(tmp), "%dh", secs / 3600);
-      display.setCursor(0, 56);
-      display.print(tmp);
-    }
-
-#if AUTO_OFF_MILLIS==0
-    return 10000;
-#else
-    return 1000;
-#endif
-  }
-
-  bool handleInput(char c) override {
-    if (_fullscreen) {
-      if (c == KEY_UP)   { if (_fs_scroll > 0) _fs_scroll--; return true; }
-      if (c == KEY_DOWN) { _fs_scroll++; return true; }
-      if (c == KEY_LEFT) {
-        if (_view_offset < num_unread - 1) { _view_offset++; _fs_scroll = 0; }
-        return true;
-      }
-      if (c == KEY_RIGHT) {
-        if (_view_offset > 0) { _view_offset--; _fs_scroll = 0; }
-        return true;
-      }
-      if (c == KEY_ENTER || c == KEY_CANCEL) { _fullscreen = false; return true; }
-      return true;
-    }
-    if (c == KEY_UP || c == KEY_LEFT) {
-      if (_view_offset < num_unread - 1) _view_offset++;
-      return true;
-    }
-    if (c == KEY_DOWN || c == KEY_RIGHT) {
-      if (_view_offset > 0) _view_offset--;
-      return true;
-    }
-    if (c == KEY_ENTER) {
-      _fullscreen = true;
-      _fs_scroll = 0;
-      return true;
-    }
-    if (c == KEY_CANCEL) {
-      num_unread = 0;
-      _task->gotoHomeScreen();
-      return true;
-    }
-    return false;
-  }
-};
 
 void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* node_prefs) {
   _display = display;
@@ -2352,7 +2175,6 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
 
   splash = new SplashScreen(this);
   home = new HomeScreen(this, &rtc_clock, sensors, node_prefs);
-  msg_preview = new MsgPreviewScreen(this, &rtc_clock);
   settings = new SettingsScreen(this);
   quick_msg = new QuickMsgScreen(this);
   setCurrScreen(splash);
@@ -2380,7 +2202,7 @@ int UITask::getChannelUnreadCount() const {
 }
 
 void UITask::showAlert(const char* text, int duration_millis) {
-  strcpy(_alert, text);
+  snprintf(_alert, sizeof(_alert), "%s", text);
   _alert_expiry = millis() + duration_millis;
 }
 
@@ -2436,7 +2258,6 @@ void UITask::msgRead(int msgcount) {
   _msgcount = msgcount;
   if (msgcount == 0) {
     _room_unread = 0;
-    if (curr == msg_preview) gotoHomeScreen();
   }
 }
 

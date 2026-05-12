@@ -465,9 +465,7 @@ void MyMesh::queueMessage(const ContactInfo &from, uint8_t txt_type, mesh::Packe
   bool should_display = txt_type == TXT_TYPE_PLAIN || txt_type == TXT_TYPE_SIGNED_PLAIN;
   if (should_display && _ui) {
     _ui->newMsg(path_len, from.name, text, offline_queue_len, from.type);
-    if (!_serial->isConnected()) {
-      _ui->notify(UIEventType::contactMessage);
-    }
+    _ui->notify(UIEventType::contactMessage);
   }
 #endif
 }
@@ -561,13 +559,10 @@ void MyMesh::onChannelMessageRecv(const mesh::GroupChannel &channel, mesh::Packe
     uint8_t frame[1];
     frame[0] = PUSH_CODE_MSG_WAITING; // send push 'tickle'
     _serial->writeFrame(frame, 1);
-  } else {
-#ifdef DISPLAY_CLASS
-    if (_ui) _ui->notify(UIEventType::channelMessage);
-#endif
   }
 #ifdef DISPLAY_CLASS
   if (_ui) _ui->addChannelMsg(channel_idx, text);
+  if (_ui) _ui->notify(UIEventType::channelMessage);
   const char *channel_name = "Unknown";
   ChannelDetails channel_details;
   if (getChannel(channel_idx, channel_details)) {
