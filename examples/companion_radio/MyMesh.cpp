@@ -865,6 +865,8 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   _prefs.gps_interval = 0;      // No automatic GPS updates by default
   _prefs.display_brightness = 2; // medium brightness by default
   _prefs.buzzer_volume = 4;      // max volume by default
+  _prefs.ringtone_bpm_idx = 2;  // 120 bpm default
+  _prefs.ringtone_len = 0;       // no custom ringtone by default
   _prefs.auto_off_secs = 15;    // 15 seconds auto-off by default
   _prefs.tz_offset_hours = 0;  // UTC by default
   _prefs.low_batt_mv = 3400;  // auto-shutdown at 3.4V by default

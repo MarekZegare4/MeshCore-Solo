@@ -44,6 +44,10 @@ void genericBuzzer::setVolume(uint8_t level) {
     if (isPlaying()) applyVolume();
 }
 
+void genericBuzzer::stop() {
+    rtttl::stop();
+}
+
 void genericBuzzer::loop() {
     if (!rtttl::done()) {
         rtttl::play();

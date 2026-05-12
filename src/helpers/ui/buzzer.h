@@ -30,6 +30,7 @@ class genericBuzzer
         bool isQuiet();  // get buzzer state on/off
         void setVolume(uint8_t level);  // 0=min..4=max
         uint8_t getVolume() const { return _volume_level; }
+        void stop();  // stop any playing melody
 
     private:
         uint8_t _volume_level = 4;

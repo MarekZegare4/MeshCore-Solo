@@ -45,4 +45,7 @@ struct NodePrefs {  // persisted to file
   uint64_t ch_notif_muted;     // bitmask: bit i = channel i muted (only if override bit set)
   uint8_t  dm_show_all;        // 0=favourites only (default), 1=all chat contacts
   uint8_t  room_fav_only;      // 0=all room servers (default), 1=favourites only
+  uint8_t  ringtone_bpm_idx;   // index into {60,90,120,150,180}
+  uint8_t  ringtone_len;        // number of notes in custom ringtone (0 = use default)
+  uint8_t  ringtone_notes[32]; // packed: bits0-2=pitch, bits3-4=octave-4, bits5-6=dur_idx
 };

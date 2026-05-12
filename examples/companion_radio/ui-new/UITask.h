@@ -55,6 +55,8 @@ class UITask : public AbstractUITask {
   UIScreen* home;
   UIScreen* settings;
   UIScreen* quick_msg;
+  UIScreen* tools_screen;
+  UIScreen* ringtone_edit;
   UIScreen* curr;
 
   void userLedHandler();
@@ -84,6 +86,11 @@ public:
   void gotoHomeScreen() { setCurrScreen(home); }
   void gotoSettingsScreen();
   void gotoQuickMsgScreen();
+  void gotoToolsScreen();
+  void gotoRingtoneEditor();
+  void playMelody(const char* melody);
+  void stopMelody();
+  bool isMelodyPlaying();
   void showAlert(const char* text, int duration_millis);
   void addChannelMsg(uint8_t channel_idx, const char* text) override;
   int  getMsgCount() const { return _msgcount; }
