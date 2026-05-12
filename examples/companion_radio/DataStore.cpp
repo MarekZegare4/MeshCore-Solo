@@ -251,6 +251,9 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
           file.read((uint8_t *)&_prefs.ringtone_len, sizeof(_prefs.ringtone_len));          // 1564
           if (_prefs.ringtone_len > 32) _prefs.ringtone_len = 0;
           file.read((uint8_t *)_prefs.ringtone_notes, sizeof(_prefs.ringtone_notes));       // 1565
+          if (file.available()) {
+            file.read((uint8_t *)&_prefs.home_pages_mask, sizeof(_prefs.home_pages_mask)); // 1598
+          }
         }
       }
     }
@@ -308,6 +311,7 @@ void DataStore::savePrefs(const NodePrefs& _prefs, double node_lat, double node_
     file.write((uint8_t *)&_prefs.ringtone_bpm_idx, sizeof(_prefs.ringtone_bpm_idx));   // 1563
     file.write((uint8_t *)&_prefs.ringtone_len, sizeof(_prefs.ringtone_len));            // 1564
     file.write((uint8_t *)_prefs.ringtone_notes, sizeof(_prefs.ringtone_notes));         // 1565
+    file.write((uint8_t *)&_prefs.home_pages_mask, sizeof(_prefs.home_pages_mask));      // 1598
 
     file.close();
   }

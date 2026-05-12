@@ -84,6 +84,19 @@ public:
 
 static const int QUICK_MSGS_MAX = 10;
 
+// Bit positions for NodePrefs::home_pages_mask.
+// Bit=1 means page is shown. 0 in the field means ALL visible (default/unset).
+static const uint16_t HP_CLOCK     = 1 << 0;
+static const uint16_t HP_RECENT    = 1 << 1;
+static const uint16_t HP_RADIO     = 1 << 2;
+static const uint16_t HP_BLUETOOTH = 1 << 3;
+static const uint16_t HP_ADVERT    = 1 << 4;
+static const uint16_t HP_GPS       = 1 << 5;
+static const uint16_t HP_SENSORS   = 1 << 6;
+static const uint16_t HP_TOOLS     = 1 << 7;
+static const uint16_t HP_SHUTDOWN  = 1 << 8;
+static const uint16_t HP_ALL       = 0x01FF;
+
 // On-screen keyboard layout (4 rows × 10 cols)
 static const char KB_CHARS[4][10] = {
   {'a','b','c','d','e','f','g','h','i','j'},
@@ -117,6 +130,16 @@ class SettingsScreen : public UIScreen {
     SECTION_SOUND,
     BUZZER,
     BUZZER_VOLUME,
+    // Home pages section
+    SECTION_HOME_PAGES,
+    HOME_CLOCK, HOME_RECENT, HOME_RADIO, HOME_BT, HOME_ADVERT,
+#if ENV_INCLUDE_GPS == 1
+    HOME_GPS,
+#endif
+#if UI_SENSORS_PAGE == 1
+    HOME_SENSORS,
+#endif
+    HOME_TOOLS, HOME_SHUTDOWN,
     // Radio section
     SECTION_RADIO,
     TX_POWER,
@@ -198,6 +221,7 @@ class SettingsScreen : public UIScreen {
 
   bool isSection(int item) const {
     return item == SECTION_DISPLAY || item == SECTION_SOUND ||
+           item == SECTION_HOME_PAGES ||
            item == SECTION_RADIO   || item == SECTION_SYSTEM ||
            item == SECTION_CONTACTS || item == SECTION_MESSAGES
 #if ENV_INCLUDE_GPS == 1
@@ -207,16 +231,72 @@ class SettingsScreen : public UIScreen {
   }
 
   const char* sectionName(int item) const {
-    if (item == SECTION_DISPLAY)  return "Display";
-    if (item == SECTION_SOUND)    return "Sound";
-    if (item == SECTION_RADIO)    return "Radio";
-    if (item == SECTION_SYSTEM)   return "System";
-    if (item == SECTION_CONTACTS) return "Contacts";
-    if (item == SECTION_MESSAGES) return "Messages";
+    if (item == SECTION_DISPLAY)    return "Display";
+    if (item == SECTION_SOUND)      return "Sound";
+    if (item == SECTION_HOME_PAGES) return "Home Pages";
+    if (item == SECTION_RADIO)      return "Radio";
+    if (item == SECTION_SYSTEM)     return "System";
+    if (item == SECTION_CONTACTS)   return "Contacts";
+    if (item == SECTION_MESSAGES)   return "Messages";
 #if ENV_INCLUDE_GPS == 1
-    if (item == SECTION_GPS)      return "GPS";
+    if (item == SECTION_GPS)        return "GPS";
 #endif
     return "";
+  }
+
+  bool isHomePage(int item) const {
+    return item == HOME_CLOCK || item == HOME_RECENT || item == HOME_RADIO ||
+           item == HOME_BT    || item == HOME_ADVERT || item == HOME_TOOLS ||
+           item == HOME_SHUTDOWN
+#if ENV_INCLUDE_GPS == 1
+           || item == HOME_GPS
+#endif
+#if UI_SENSORS_PAGE == 1
+           || item == HOME_SENSORS
+#endif
+    ;
+  }
+
+  uint16_t homePageBit(int item) const {
+    if (item == HOME_CLOCK)    return HP_CLOCK;
+    if (item == HOME_RECENT)   return HP_RECENT;
+    if (item == HOME_RADIO)    return HP_RADIO;
+    if (item == HOME_BT)       return HP_BLUETOOTH;
+    if (item == HOME_ADVERT)   return HP_ADVERT;
+    if (item == HOME_TOOLS)    return HP_TOOLS;
+    if (item == HOME_SHUTDOWN) return HP_SHUTDOWN;
+#if ENV_INCLUDE_GPS == 1
+    if (item == HOME_GPS)      return HP_GPS;
+#endif
+#if UI_SENSORS_PAGE == 1
+    if (item == HOME_SENSORS)  return HP_SENSORS;
+#endif
+    return 0;
+  }
+
+  const char* homePageLabel(int item) const {
+    if (item == HOME_CLOCK)    return "Clock";
+    if (item == HOME_RECENT)   return "Recent";
+    if (item == HOME_RADIO)    return "Radio";
+    if (item == HOME_BT)       return "Bluetooth";
+    if (item == HOME_ADVERT)   return "Advert";
+    if (item == HOME_TOOLS)    return "Tools";
+    if (item == HOME_SHUTDOWN) return "Shutdown";
+#if ENV_INCLUDE_GPS == 1
+    if (item == HOME_GPS)      return "GPS";
+#endif
+#if UI_SENSORS_PAGE == 1
+    if (item == HOME_SENSORS)  return "Sensors";
+#endif
+    return "";
+  }
+
+  bool homePageVisible(int item, const NodePrefs* p) const {
+    uint16_t bit = homePageBit(item);
+    if (!bit) return false;
+    uint16_t mask = p ? p->home_pages_mask : HP_ALL;
+    if (mask == 0) mask = HP_ALL;
+    return (mask & bit) != 0;
   }
 
   bool isMsgSlot(int item) const {
@@ -283,6 +363,10 @@ class SettingsScreen : public UIScreen {
       display.setCursor(VAL_X, y);
       display.print("N/A");
 #endif
+    } else if (isHomePage(item)) {
+      display.print(homePageLabel(item));
+      display.setCursor(VAL_X, y);
+      display.print(homePageVisible(item, p) ? "ON" : "OFF");
     } else if (item == TX_POWER) {
       display.print("TX Pwr");
       char buf[8];
@@ -593,6 +677,13 @@ public:
       if (left  && lvl > 0) { _task->setBuzzerVolumeLevel(lvl - 1); _dirty = true; return true; }
 #endif
       return right || left;
+    }
+    if (isHomePage(_selected) && p && (left || right || enter)) {
+      uint16_t bit = homePageBit(_selected);
+      uint16_t mask = p->home_pages_mask ? p->home_pages_mask : HP_ALL;
+      p->home_pages_mask = mask ^ bit;
+      _dirty = true;
+      return true;
     }
     if (_selected == TX_POWER && p) {
       if (right && p->tx_power_dbm < 22) { p->tx_power_dbm++; _task->applyTxPower(); _dirty = true; return true; }
@@ -2057,6 +2148,38 @@ class HomeScreen : public UIScreen {
   bool _shutdown_init;
   AdvertPath recent[UI_RECENT_LIST_SIZE];
 
+  int pageBit(int page) const {
+    if (page == CLOCK)     return 0;
+    if (page == RECENT)    return 1;
+    if (page == RADIO)     return 2;
+    if (page == BLUETOOTH) return 3;
+    if (page == ADVERT)    return 4;
+#if ENV_INCLUDE_GPS == 1
+    if (page == GPS)       return 5;
+#endif
+#if UI_SENSORS_PAGE == 1
+    if (page == SENSORS)   return 6;
+#endif
+    if (page == TOOLS)     return 7;
+    if (page == SHUTDOWN)  return 8;
+    return -1;  // SETTINGS, QUICK_MSG always visible
+  }
+
+  bool isPageVisible(int page) const {
+    int bit = pageBit(page);
+    if (bit < 0) return true;
+    uint16_t mask = _node_prefs ? _node_prefs->home_pages_mask : HP_ALL;
+    if (mask == 0) mask = HP_ALL;
+    return (mask >> bit) & 1;
+  }
+
+  int navPage(int from, int dir) const {
+    for (int i = 1; i < (int)Count; i++) {
+      int next = ((from + dir * i) % (int)Count + (int)Count) % (int)Count;
+      if (isPageVisible(next)) return next;
+    }
+    return from;
+  }
 
   void renderBatteryIndicator(DisplayDriver& display, uint16_t batteryMilliVolts) {
 #ifndef BATT_MIN_MILLIVOLTS
@@ -2201,14 +2324,27 @@ public:
     // battery voltage
     renderBatteryIndicator(display, _task->getBattMilliVolts());
 
-    // curr page indicator
-    int y = 14;
-    int x = display.width() / 2 - 5 * (HomePage::Count-1);
-    for (uint8_t i = 0; i < HomePage::Count; i++, x += 10) {
-      if (i == _page) {
-        display.fillRect(x-1, y-1, 3, 3);
-      } else {
-        display.fillRect(x, y, 1, 1);
+    // ensure current page is visible (e.g. after settings change)
+    if (!isPageVisible(_page)) {
+      for (int i = 0; i < (int)Count; i++) { if (isPageVisible(i)) { _page = i; break; } }
+    }
+
+    // curr page indicator — only visible pages get a dot
+    {
+      int vis_count = 0, curr_vis = 0;
+      for (int i = 0; i < (int)Count; i++) {
+        if (!isPageVisible(i)) continue;
+        if (i == _page) curr_vis = vis_count;
+        vis_count++;
+      }
+      int y = 14;
+      int x = display.width() / 2 - 5 * (vis_count - 1);
+      int vi = 0;
+      for (int i = 0; i < (int)Count; i++) {
+        if (!isPageVisible(i)) continue;
+        if (vi == curr_vis) display.fillRect(x-1, y-1, 3, 3);
+        else                 display.fillRect(x, y, 1, 1);
+        x += 10; vi++;
       }
     }
 
@@ -2451,11 +2587,11 @@ public:
 
   bool handleInput(char c) override {
     if (c == KEY_LEFT || c == KEY_PREV) {
-      _page = (_page + HomePage::Count - 1) % HomePage::Count;
+      _page = navPage(_page, -1);
       return true;
     }
     if (c == KEY_NEXT || c == KEY_RIGHT) {
-      _page = (_page + 1) % HomePage::Count;
+      _page = navPage(_page, +1);
       if (_page == HomePage::RECENT) {
         _task->showAlert("Recent adverts", 800);
       }

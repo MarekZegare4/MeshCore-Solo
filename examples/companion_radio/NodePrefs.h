@@ -48,4 +48,5 @@ struct NodePrefs {  // persisted to file
   uint8_t  ringtone_bpm_idx;   // index into {60,90,120,150,180}
   uint8_t  ringtone_len;        // number of notes in custom ringtone (0 = use default)
   uint8_t  ringtone_notes[32]; // packed: bits0-2=pitch, bits3-4=octave-4, bits5-6=dur_idx
+  uint16_t home_pages_mask;    // bitmask of visible home pages (bit0=Clock..bit8=Shutdown); 0=all visible
 };
