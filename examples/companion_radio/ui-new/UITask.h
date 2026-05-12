@@ -107,6 +107,8 @@ public:
   void applyBrightness();
   void setBrightnessLevel(uint8_t level);
   uint8_t getBrightnessLevel() const { return _node_prefs ? _node_prefs->display_brightness : 2; }
+  void setBuzzerVolumeLevel(uint8_t level);
+  uint8_t getBuzzerVolume() const { return _node_prefs ? _node_prefs->buzzer_volume : 4; }
   void applyTxPower();
   void applyGPSInterval();
   uint32_t autoOffMillis() const {

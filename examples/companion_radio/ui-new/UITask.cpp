@@ -116,6 +116,7 @@ class SettingsScreen : public UIScreen {
     // Sound section
     SECTION_SOUND,
     BUZZER,
+    BUZZER_VOLUME,
     // Radio section
     SECTION_RADIO,
     TX_POWER,
@@ -272,6 +273,14 @@ class SettingsScreen : public UIScreen {
 #ifdef PIN_BUZZER
       display.print(_task->isBuzzerQuiet() ? "OFF" : "ON");
 #else
+      display.print("N/A");
+#endif
+    } else if (item == BUZZER_VOLUME) {
+      display.print("BzrVol");
+#ifdef PIN_BUZZER
+      renderBar(display, VAL_X, y, _task->getBuzzerVolume() + 1, 5);
+#else
+      display.setCursor(VAL_X, y);
       display.print("N/A");
 #endif
     } else if (item == TX_POWER) {
@@ -576,6 +585,14 @@ public:
     if (_selected == BUZZER && (left || right || enter)) {
       _task->toggleBuzzer();  // saves immediately internally
       return true;
+    }
+    if (_selected == BUZZER_VOLUME) {
+#ifdef PIN_BUZZER
+      uint8_t lvl = _task->getBuzzerVolume();
+      if (right && lvl < 4) { _task->setBuzzerVolumeLevel(lvl + 1); _dirty = true; return true; }
+      if (left  && lvl > 0) { _task->setBuzzerVolumeLevel(lvl - 1); _dirty = true; return true; }
+#endif
+      return right || left;
     }
     if (_selected == TX_POWER && p) {
       if (right && p->tx_power_dbm < 22) { p->tx_power_dbm++; _task->applyTxPower(); _dirty = true; return true; }
@@ -2157,6 +2174,7 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
 
 #ifdef PIN_BUZZER
   buzzer.quiet(_node_prefs->buzzer_quiet);
+  buzzer.setVolume(_node_prefs->buzzer_volume);
   buzzer.begin();
 #endif
 
@@ -2587,6 +2605,16 @@ void UITask::setBrightnessLevel(uint8_t level) {
   _node_prefs->display_brightness = level;
   applyBrightness();
   _next_refresh = 0;
+}
+
+void UITask::setBuzzerVolumeLevel(uint8_t level) {
+#ifdef PIN_BUZZER
+  if (_node_prefs == NULL) return;
+  if (level > 4) level = 4;
+  _node_prefs->buzzer_volume = level;
+  buzzer.setVolume(level);
+  _next_refresh = 0;
+#endif
 }
 
 void UITask::toggleBuzzer() {

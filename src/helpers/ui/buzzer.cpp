@@ -31,8 +31,24 @@ bool genericBuzzer::isPlaying() {
     return rtttl::isPlaying();
 }
 
+void genericBuzzer::applyVolume() {
+    // After tone() sets 50% duty, analogWrite overrides duty cycle on the same PWM channel.
+    // Level 4 = 50% (leave tone as-is), lower levels reduce duty = quieter output.
+    static const uint8_t duty[] = { 6, 20, 50, 90, 128 };
+    uint8_t d = duty[_volume_level < 5 ? _volume_level : 4];
+    if (d < 128) analogWrite(PIN_BUZZER, d);
+}
+
+void genericBuzzer::setVolume(uint8_t level) {
+    _volume_level = level < 5 ? level : 4;
+    if (isPlaying()) applyVolume();
+}
+
 void genericBuzzer::loop() {
-    if (!rtttl::done()) rtttl::play();
+    if (!rtttl::done()) {
+        rtttl::play();
+        if (_volume_level < 4) applyVolume();
+    }
 }
 
 void genericBuzzer::startup() {

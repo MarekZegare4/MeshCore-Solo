@@ -244,6 +244,9 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
       file.read((uint8_t *)&_prefs.ch_notif_muted, sizeof(_prefs.ch_notif_muted));     // 1552
       file.read((uint8_t *)&_prefs.dm_show_all, sizeof(_prefs.dm_show_all));           // 1560
       file.read((uint8_t *)&_prefs.room_fav_only, sizeof(_prefs.room_fav_only));       // 1561
+      if (file.available()) {
+        file.read((uint8_t *)&_prefs.buzzer_volume, sizeof(_prefs.buzzer_volume));     // 1562
+      }
     }
 
     file.close();
@@ -295,6 +298,7 @@ void DataStore::savePrefs(const NodePrefs& _prefs, double node_lat, double node_
     file.write((uint8_t *)&_prefs.ch_notif_muted, sizeof(_prefs.ch_notif_muted));       // 1552
     file.write((uint8_t *)&_prefs.dm_show_all, sizeof(_prefs.dm_show_all));             // 1560
     file.write((uint8_t *)&_prefs.room_fav_only, sizeof(_prefs.room_fav_only));         // 1561
+    file.write((uint8_t *)&_prefs.buzzer_volume, sizeof(_prefs.buzzer_volume));         // 1562
 
     file.close();
   }

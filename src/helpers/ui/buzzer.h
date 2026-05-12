@@ -28,8 +28,12 @@ class genericBuzzer
         bool isPlaying();  // returns true if a sound is still playing else false
         void quiet(bool buzzer_state);  // enables or disables the buzzer
         bool isQuiet();  // get buzzer state on/off
+        void setVolume(uint8_t level);  // 0=min..4=max
+        uint8_t getVolume() const { return _volume_level; }
 
     private:
+        uint8_t _volume_level = 4;
+        void applyVolume();
         // gemini's picks:
         const char *startup_song = "Startup:d=4,o=5,b=160:16c6,16e6,8g6";
         const char *shutdown_song = "Shutdown:d=4,o=5,b=100:8g5,16e5,16c5";
