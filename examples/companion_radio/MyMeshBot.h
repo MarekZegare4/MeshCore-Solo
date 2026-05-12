@@ -36,7 +36,8 @@ void MyMesh::tryBotReplyDM(const ContactInfo& from, const char* text) {
 }
 
 void MyMesh::tryBotReplyChannel(uint8_t channel_idx, const char* text) {
-  if (!(_prefs.bot_enabled && _prefs.bot_trigger[0] && _prefs.bot_reply[0] &&
+  if (!(_prefs.bot_enabled && _prefs.bot_target_type == 0 &&
+        _prefs.bot_trigger[0] && _prefs.bot_reply[0] &&
         channel_idx == _prefs.bot_channel_idx &&
         millis() - _bot_last_reply_ms > 10000UL))
     return;
