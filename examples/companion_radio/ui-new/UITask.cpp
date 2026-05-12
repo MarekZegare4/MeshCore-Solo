@@ -1742,6 +1742,14 @@ class RingtoneEditorScreen : public UIScreen {
     if (pos < buf_len) buf[pos] = '\0';
   }
 
+  void previewNote(uint8_t note_byte) {
+    uint8_t pitch = notePitch(note_byte);
+    if (pitch == 0) { _task->stopMelody(); return; }
+    char buf[28];
+    snprintf(buf, sizeof(buf), "P:d=16,o=5,b=240:%c%d", PITCH_NAMES[pitch], noteOctave(note_byte));
+    _task->playMelody(buf);
+  }
+
 public:
   RingtoneEditorScreen(UITask* task, NodePrefs* prefs) : _task(task), _prefs(prefs) {}
 
@@ -1957,6 +1965,7 @@ public:
       if (up)   p = (p + 1) & 0x07;
       if (down) p = (p + 7) & 0x07;
       _notes[_cursor] = packNote(p, o, di);
+      previewNote(_notes[_cursor]);
       return true;
     }
 
@@ -1966,12 +1975,14 @@ public:
       uint8_t di = noteDurIdx(_notes[_cursor]);
       if (p != 0) o = (o < 6) ? o + 1 : 4;
       _notes[_cursor] = packNote(p, o, di);
+      previewNote(_notes[_cursor]);
       return true;
     }
     if (enter && _cursor == _len && _len < MAX_NOTES) {
       _notes[_len] = packNote(1, 5, 1);
       _len++;
       clampScroll();
+      previewNote(_notes[_cursor]);
       return true;
     }
     return false;
