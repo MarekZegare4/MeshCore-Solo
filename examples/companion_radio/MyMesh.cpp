@@ -1,4 +1,5 @@
 #include "MyMesh.h"
+#include "MsgExpand.h"
 
 #include <Arduino.h> // needed for PlatformIO
 #include <Mesh.h>
@@ -508,6 +509,7 @@ void MyMesh::sendFloodScoped(const mesh::GroupChannel& channel, mesh::Packet* pk
   sendFloodScoped(*scope, pkt, delay_millis);
 }
 
+
 void MyMesh::onMessageRecv(const ContactInfo &from, mesh::Packet *pkt, uint32_t sender_timestamp,
                            const char *text) {
   markConnectionActive(from); // in case this is from a server, and we have a connection
@@ -533,8 +535,13 @@ void MyMesh::onMessageRecv(const ContactInfo &from, mesh::Packet *pkt, uint32_t 
       }
       if (matched) {
         uint32_t ts = getRTCClock()->getCurrentTime();
+        char expanded[200];
+        expandMsg(_prefs.bot_reply, expanded, sizeof(expanded),
+                  sensors.node_lat, sensors.node_lon,
+                  sensors.node_lat != 0.0 || sensors.node_lon != 0.0,
+                  ts, _prefs.tz_offset_hours);
         uint32_t expected_ack, est_timeout;
-        if (sendMessage(from, ts, 0, _prefs.bot_reply, expected_ack, est_timeout) != MSG_SEND_FAILED)
+        if (sendMessage(from, ts, 0, expanded, expected_ack, est_timeout) != MSG_SEND_FAILED)
           _bot_last_reply_ms = millis();
       }
     }
@@ -616,10 +623,14 @@ void MyMesh::onChannelMessageRecv(const mesh::GroupChannel &channel, mesh::Packe
       ChannelDetails ch;
       if (getChannel(channel_idx, ch)) {
         uint32_t ts = getRTCClock()->getCurrentTime();
-        int rlen = strlen(_prefs.bot_reply);
-        if (sendGroupMessage(ts, ch.channel, _prefs.node_name, _prefs.bot_reply, rlen)) {
+        char expanded[200];
+        expandMsg(_prefs.bot_reply, expanded, sizeof(expanded),
+                  sensors.node_lat, sensors.node_lon,
+                  sensors.node_lat != 0.0 || sensors.node_lon != 0.0,
+                  ts, _prefs.tz_offset_hours);
+        int rlen = strlen(expanded);
+        if (sendGroupMessage(ts, ch.channel, _prefs.node_name, expanded, rlen))
           _bot_last_reply_ms = millis();
-        }
       }
     }
   }
