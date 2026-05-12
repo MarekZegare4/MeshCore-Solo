@@ -179,6 +179,9 @@ public:
 #endif
 
 private:
+  void tryBotReplyDM(const ContactInfo& from, const char* text);
+  void tryBotReplyChannel(uint8_t channel_idx, const char* text);
+
   void writeOKFrame();
   void writeErrFrame(uint8_t err_code);
   void writeDisabledFrame();
