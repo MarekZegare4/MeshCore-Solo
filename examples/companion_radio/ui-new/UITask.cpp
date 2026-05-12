@@ -2021,18 +2021,18 @@ public:
             the_mesh.savePrefs();
           }
           _task->stopMelody();
-          _task->gotoHomeScreen();
+          _task->gotoToolsScreen();
           break;
         case M_DISCARD:
           _task->stopMelody();
-          _task->gotoHomeScreen();
+          _task->gotoToolsScreen();
           break;
         default: break;
       }
       return true;
     }
 
-    if (cancel)   { _task->stopMelody(); _task->gotoHomeScreen(); return true; }
+    if (cancel)   { _task->stopMelody(); _task->gotoToolsScreen(); return true; }
     if (menu_key) { _menu_open = true; _menu_sel = 0; _menu_scroll = 0; return true; }
 
     if (left && _cursor > 0) { _cursor--; clampScroll(); return true; }
@@ -2245,7 +2245,11 @@ public:
       // keyboard input
       if (cancel) { _kb_field = -1; return true; }
       if (up   && _kb_row > 0) { _kb_row--; return true; }
-      if (down && _kb_row < KB_ROWS) { _kb_row++; return true; }
+      if (down && _kb_row < KB_ROWS) {
+        _kb_row++;
+        if (_kb_row == KB_ROWS && _kb_col > 3) _kb_col = 3;
+        return true;
+      }
       if (left  && _kb_col > 0) { _kb_col--; return true; }
       if (right && _kb_col < (_kb_row < KB_ROWS ? KB_COLS - 1 : 3)) { _kb_col++; return true; }
       if (enter) {
@@ -2265,10 +2269,13 @@ public:
             case 2: if (_kb_len > 0) { _kb_buf[--_kb_len] = '\0'; } break;
             case 3:
               // commit
-              if (_kb_field == 2)
+              if (_kb_field == 2) {
                 strncpy(_prefs->bot_trigger, _kb_buf, sizeof(_prefs->bot_trigger) - 1);
-              else
+                _prefs->bot_trigger[sizeof(_prefs->bot_trigger) - 1] = '\0';
+              } else {
                 strncpy(_prefs->bot_reply, _kb_buf, sizeof(_prefs->bot_reply) - 1);
+                _prefs->bot_reply[sizeof(_prefs->bot_reply) - 1] = '\0';
+              }
               _kb_field = -1;
               break;
           }
