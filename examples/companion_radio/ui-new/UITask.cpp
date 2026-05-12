@@ -2134,6 +2134,7 @@ class BotScreen : public UIScreen {
     for (int i = 0; i < n && _num_dm < MAX_BOT_DM; i++) {
       if (!the_mesh.getContactByIdx(i, ci)) continue;
       if (ci.type != ADV_TYPE_CHAT) continue;
+      if (!(ci.flags & 0x01)) continue;  // favourites only
       memcpy(_dm_pubkeys[_num_dm], ci.id.pub_key, 4);
       strncpy(_dm_names[_num_dm], ci.name, sizeof(_dm_names[0]) - 1);
       _dm_names[_num_dm][sizeof(_dm_names[0]) - 1] = '\0';
@@ -2401,16 +2402,21 @@ public:
     display.fillRect(0, 10, display.width(), 1);
 
     for (int i = 0; i < ITEM_COUNT; i++) {
-      int y = 14 + i * 12;
+      int y = 12 + i * 12;
       bool sel = (i == _sel);
       if (sel) {
+        display.setColor(DisplayDriver::LIGHT);
         display.fillRect(0, y - 1, display.width(), 11);
         display.setColor(DisplayDriver::DARK);
+      } else {
+        display.setColor(DisplayDriver::LIGHT);
       }
-      display.setCursor(4, y);
+      display.setCursor(0, y);
+      display.print(sel ? ">" : " ");
+      display.setCursor(8, y);
       display.print(ITEMS[i]);
-      display.setColor(DisplayDriver::LIGHT);
     }
+    display.setColor(DisplayDriver::LIGHT);
 
     display.setCursor(0, 54);
     display.print("ENT:open  CANCEL:back");
