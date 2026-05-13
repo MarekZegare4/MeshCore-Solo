@@ -1118,6 +1118,10 @@ public:
     return total;
   }
 
+  void clearAllChannelUnread() {
+    memset(_ch_unread, 0, sizeof(_ch_unread));
+  }
+
   void updateChannelUnread() {
     if (_hist_sel < 0 || _sel_channel_idx < 0 || _sel_channel_idx >= MAX_GROUP_CHANNELS) return;
     if (_hist_sel > _viewing_max_seen) _viewing_max_seen = _hist_sel;
@@ -2626,6 +2630,7 @@ void UITask::msgRead(int msgcount) {
   if (msgcount == 0) {
     _room_unread = 0;
     memset(_dm_unread_table, 0, sizeof(_dm_unread_table));
+    ((QuickMsgScreen*)quick_msg)->clearAllChannelUnread();
   }
 }
 
