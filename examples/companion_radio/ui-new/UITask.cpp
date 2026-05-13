@@ -1727,13 +1727,14 @@ public:
         if (c == KEY_DOWN && _ctx_sel < 1) { _ctx_sel++; return true; }
         if (c == KEY_ENTER && _num_contacts > 0) {
           ContactInfo ci;
-          the_mesh.getContactByIdx(_sorted[_contact_sel], ci);
-          if (_ctx_sel == 0) {
-            _task->clearDMUnread(ci.id.pub_key);
-          } else {
-            uint8_t nstate = dmNotifState(ci.id.pub_key);
-            setDmNotifState(ci.id.pub_key, (nstate + 1) % 3);
-            _ctx_dirty = true;
+          if (the_mesh.getContactByIdx(_sorted[_contact_sel], ci)) {
+            if (_ctx_sel == 0) {
+              _task->clearDMUnread(ci.id.pub_key);
+            } else {
+              uint8_t nstate = dmNotifState(ci.id.pub_key);
+              setDmNotifState(ci.id.pub_key, (nstate + 1) % 3);
+              _ctx_dirty = true;
+            }
           }
           return true;
         }
