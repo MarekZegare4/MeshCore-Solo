@@ -38,6 +38,8 @@ class UITask : public AbstractUITask {
   int _msgcount;
   int _room_unread;
   int _last_notif_ch_idx;
+  uint8_t _last_notif_dm_prefix[4];
+  bool _last_notif_dm_valid;
   struct DMUnreadEntry { uint8_t prefix[4]; uint8_t count; };
   static const int DM_UNREAD_TABLE_SIZE = 16;
   DMUnreadEntry _dm_unread_table[DM_UNREAD_TABLE_SIZE];
@@ -81,6 +83,8 @@ public:
     _batt_mv = 0;
     _msgcount = _room_unread = 0;
     _last_notif_ch_idx = -1;
+    _last_notif_dm_valid = false;
+    memset(_last_notif_dm_prefix, 0, sizeof(_last_notif_dm_prefix));
     memset(_dm_unread_table, 0, sizeof(_dm_unread_table));
     curr = NULL;
   }

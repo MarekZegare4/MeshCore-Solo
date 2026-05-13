@@ -1065,6 +1065,38 @@ class QuickMsgScreen : public UIScreen {
     }
   }
 
+  uint8_t dmNotifState(const uint8_t* pub_key) const {
+    NodePrefs* p = _task->getNodePrefs();
+    if (!p) return 0;
+    for (int i = 0; i < NodePrefs::DM_NOTIF_TABLE_MAX; i++)
+      if (p->dm_notif[i].state && memcmp(p->dm_notif[i].prefix, pub_key, 4) == 0)
+        return p->dm_notif[i].state;
+    return 0;
+  }
+
+  void setDmNotifState(const uint8_t* pub_key, uint8_t state) {
+    NodePrefs* p = _task->getNodePrefs();
+    if (!p) return;
+    for (int i = 0; i < NodePrefs::DM_NOTIF_TABLE_MAX; i++) {
+      if (p->dm_notif[i].state && memcmp(p->dm_notif[i].prefix, pub_key, 4) == 0) {
+        if (state == 0) { memset(&p->dm_notif[i], 0, sizeof(p->dm_notif[i])); }
+        else              p->dm_notif[i].state = state;
+        return;
+      }
+    }
+    if (state == 0) return;
+    for (int i = 0; i < NodePrefs::DM_NOTIF_TABLE_MAX; i++) {
+      if (p->dm_notif[i].state == 0) {
+        memcpy(p->dm_notif[i].prefix, pub_key, 4);
+        p->dm_notif[i].state = state;
+        return;
+      }
+    }
+    // table full — overwrite slot 0
+    memcpy(p->dm_notif[0].prefix, pub_key, 4);
+    p->dm_notif[0].state = state;
+  }
+
 public:
   QuickMsgScreen(UITask* task)
     : _task(task), _phase(MODE_SELECT), _mode_sel(0),
@@ -1235,6 +1267,39 @@ public:
       }
       display.setColor(DisplayDriver::LIGHT);
       renderScrollHints(display, _contact_scroll, _num_contacts);
+
+      // Context menu overlay (long-press ENTER), DM mode only
+      if (_ctx_open && _num_contacts > 0 && !_room_mode) {
+        static const char* NOTIF_LABELS[] = { "default", "OFF", "ON" };
+        ContactInfo ci;
+        the_mesh.getContactByIdx(_sorted[_contact_sel], ci);
+        uint8_t nstate = dmNotifState(ci.id.pub_key);
+        char notif_item[22];
+        snprintf(notif_item, sizeof(notif_item), "Notif: %s", NOTIF_LABELS[nstate]);
+        const char* items[] = { "Mark as read", notif_item };
+        const int CTX_COUNT = 2;
+
+        display.setColor(DisplayDriver::DARK);
+        display.fillRect(15, 14, 98, 34);
+        display.setColor(DisplayDriver::LIGHT);
+        display.drawRect(15, 14, 98, 34);
+        display.setCursor(19, 15);
+        display.print("Contact options");
+        display.fillRect(15, 24, 98, 1);
+        for (int i = 0; i < CTX_COUNT; i++) {
+          int py = 27 + i * 10;
+          if (i == _ctx_sel) {
+            display.setColor(DisplayDriver::LIGHT);
+            display.fillRect(16, py - 1, 96, 10);
+            display.setColor(DisplayDriver::DARK);
+          } else {
+            display.setColor(DisplayDriver::LIGHT);
+          }
+          display.setCursor(19, py);
+          display.print(items[i]);
+        }
+        display.setColor(DisplayDriver::LIGHT);
+      }
 
     } else if (_phase == CHANNEL_PICK) {
       display.drawTextCentered(display.width()/2, 0, "SELECT CHANNEL");
@@ -1651,6 +1716,29 @@ public:
       }
 
     } else if (_phase == CONTACT_PICK) {
+      // Context menu consumes all input while open
+      if (_ctx_open) {
+        if (c == KEY_CANCEL) {
+          if (_ctx_dirty) { the_mesh.savePrefs(); _ctx_dirty = false; }
+          _ctx_open = false;
+          return true;
+        }
+        if (c == KEY_UP   && _ctx_sel > 0) { _ctx_sel--; return true; }
+        if (c == KEY_DOWN && _ctx_sel < 1) { _ctx_sel++; return true; }
+        if (c == KEY_ENTER && _num_contacts > 0) {
+          ContactInfo ci;
+          the_mesh.getContactByIdx(_sorted[_contact_sel], ci);
+          if (_ctx_sel == 0) {
+            _task->clearDMUnread(ci.id.pub_key);
+          } else {
+            uint8_t nstate = dmNotifState(ci.id.pub_key);
+            setDmNotifState(ci.id.pub_key, (nstate + 1) % 3);
+            _ctx_dirty = true;
+          }
+          return true;
+        }
+        return true;
+      }
       if (c == KEY_CANCEL) { _room_mode = false; _phase = MODE_SELECT; return true; }
       if (c == KEY_UP && _contact_sel > 0) {
         _contact_sel--;
@@ -1669,6 +1757,12 @@ public:
           _dm_hist_scroll = 0;
           _phase = DM_HIST;
         }
+        return true;
+      }
+      if (c == KEY_CONTEXT_MENU && _num_contacts > 0 && !_room_mode) {
+        _ctx_sel = 0;
+        _ctx_dirty = false;
+        _ctx_open = true;
         return true;
       }
 
@@ -2580,10 +2674,30 @@ void UITask::showAlert(const char* text, int duration_millis) {
 void UITask::notify(UIEventType t) {
 #if defined(PIN_BUZZER)
 switch(t){
-  case UIEventType::contactMessage:
-    // gemini's pick
-    buzzer.play("MsgRcv3:d=4,o=6,b=200:32e,32g,32b,16c7");
+  case UIEventType::contactMessage: {
+    bool play = false;
+    bool force = false;
+    if (_last_notif_dm_valid && _node_prefs) {
+      uint8_t state = 0;
+      for (int i = 0; i < NodePrefs::DM_NOTIF_TABLE_MAX; i++) {
+        if (_node_prefs->dm_notif[i].state &&
+            memcmp(_node_prefs->dm_notif[i].prefix, _last_notif_dm_prefix, 4) == 0) {
+          state = _node_prefs->dm_notif[i].state; break;
+        }
+      }
+      if (state == 2) { play = true; force = true; }   // force-on
+      else if (state == 1) { /* muted */ }
+      else { play = !buzzer.isQuiet(); }               // default: follow global
+    } else {
+      play = !buzzer.isQuiet();
+    }
+    _last_notif_dm_valid = false;
+    if (play) {
+      if (force) buzzer.playForced("MsgRcv3:d=4,o=6,b=200:32e,32g,32b,16c7");
+      else       buzzer.play("MsgRcv3:d=4,o=6,b=200:32e,32g,32b,16c7");
+    }
     break;
+  }
   case UIEventType::channelMessage: {
     bool play = false;
     bool force = false;
@@ -2638,6 +2752,8 @@ void UITask::newMsg(uint8_t path_len, const char* from_name, const char* text, i
   _msgcount = msgcount;
   if (contact_type == ADV_TYPE_ROOM && _room_unread < _msgcount) _room_unread++;
   if (contact_type == ADV_TYPE_CHAT && pub_key != nullptr) {
+    memcpy(_last_notif_dm_prefix, pub_key, 4);
+    _last_notif_dm_valid = true;
     int slot = -1, empty_slot = -1;
     for (int i = 0; i < DM_UNREAD_TABLE_SIZE; i++) {
       if (_dm_unread_table[i].count > 0 && memcmp(_dm_unread_table[i].prefix, pub_key, 4) == 0) { slot = i; break; }

@@ -57,4 +57,7 @@ struct NodePrefs {  // persisted to file
   char     bot_reply_ch[140];   // auto-reply text for channel
   uint8_t  clock_hide_seconds; // 0=show HH:MM:SS/refresh 1s (default), 1=hide/refresh 60s
   uint8_t  buzzer_auto;        // 0=manual (default), 1=auto-mute when BT connected
+  struct DmNotifEntry { uint8_t prefix[4]; uint8_t state; }; // state: 0=default,1=muted,2=force-on
+  static const int DM_NOTIF_TABLE_MAX = 16;
+  DmNotifEntry dm_notif[DM_NOTIF_TABLE_MAX]; // 16*5 = 80 bytes
 };
