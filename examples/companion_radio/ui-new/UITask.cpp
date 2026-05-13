@@ -295,7 +295,7 @@ class SettingsScreen : public UIScreen {
   bool homePageVisible(int item, const NodePrefs* p) const {
     uint16_t bit = homePageBit(item);
     if (!bit) return false;
-    uint16_t mask = p ? p->home_pages_mask : HP_ALL;
+    uint16_t mask = (p && p->home_pages_mask) ? p->home_pages_mask : HP_ALL;
     return (mask & bit) != 0;
   }
 
@@ -780,7 +780,7 @@ const char*    SettingsScreen::BATT_DISPLAY_LABELS[3] = { "icon", "%", "V" };
 class QuickMsgScreen : public UIScreen {
   UITask* _task;
 
-  enum Phase { MODE_SELECT, CONTACT_PICK, MSG_PICK, CHANNEL_PICK, CHANNEL_HIST, KEYBOARD };
+  enum Phase { MODE_SELECT, CONTACT_PICK, DM_HIST, MSG_PICK, CHANNEL_PICK, CHANNEL_HIST, KEYBOARD };
   Phase _phase;
 
   // MODE_SELECT
@@ -789,7 +789,7 @@ class QuickMsgScreen : public UIScreen {
   // CONTACT_PICK
   int _contact_sel, _contact_scroll;
   int _num_contacts;
-  uint8_t _sorted[MAX_CONTACTS];
+  uint16_t _sorted[MAX_CONTACTS];
   ContactInfo _sel_contact;
   bool _room_mode;  // true = picking a room server, false = picking a DM contact
 
@@ -856,6 +856,13 @@ class QuickMsgScreen : public UIScreen {
   struct ChHistEntry { uint8_t ch_idx; char text[140]; };
   ChHistEntry _hist[CH_HIST_MAX];
   int _hist_head, _hist_count;
+
+  // DM_HIST
+  struct DmHistEntry { uint8_t prefix[4]; uint8_t outgoing; char text[80]; };
+  static const int DM_HIST_MAX = 32;
+  DmHistEntry _dm_hist[DM_HIST_MAX];
+  int _dm_hist_head, _dm_hist_count;
+  int _dm_hist_sel, _dm_hist_scroll;
 
   static const int VISIBLE      = 4;
   static const int ITEM_H       = 12;
@@ -928,6 +935,40 @@ class QuickMsgScreen : public UIScreen {
     return -1;
   }
 
+  void storeDMMsg(const uint8_t* pub_key, bool outgoing, const char* text) {
+    int pos;
+    if (_dm_hist_count < DM_HIST_MAX) {
+      pos = (_dm_hist_head + _dm_hist_count) % DM_HIST_MAX;
+      _dm_hist_count++;
+    } else {
+      pos = _dm_hist_head;
+      _dm_hist_head = (_dm_hist_head + 1) % DM_HIST_MAX;
+    }
+    memcpy(_dm_hist[pos].prefix, pub_key, 4);
+    _dm_hist[pos].outgoing = outgoing ? 1 : 0;
+    strncpy(_dm_hist[pos].text, text, sizeof(DmHistEntry::text) - 1);
+    _dm_hist[pos].text[sizeof(DmHistEntry::text) - 1] = '\0';
+  }
+
+  int dmHistCountForContact(const uint8_t* prefix) const {
+    int n = 0;
+    for (int i = 0; i < _dm_hist_count; i++)
+      if (memcmp(_dm_hist[(_dm_hist_head + i) % DM_HIST_MAX].prefix, prefix, 4) == 0) n++;
+    return n;
+  }
+
+  int dmHistEntryForContact(const uint8_t* prefix, int j) const { // j=0 = newest
+    int n = 0;
+    for (int i = _dm_hist_count - 1; i >= 0; i--) {
+      int pos = (_dm_hist_head + i) % DM_HIST_MAX;
+      if (memcmp(_dm_hist[pos].prefix, prefix, 4) == 0) {
+        if (n == j) return pos;
+        n++;
+      }
+    }
+    return -1;
+  }
+
   void afterSend(bool ok, const char* msg) {
     if (ok && _sending_to_channel) {
       _hist_sel = 0;
@@ -942,8 +983,14 @@ class QuickMsgScreen : public UIScreen {
       _unread_at_entry = 0;
       _viewing_max_seen = 0;
       _task->showAlert("Sent!", 600);
+    } else if (ok) {
+      storeDMMsg(_sel_contact.id.pub_key, true, msg);
+      _dm_hist_sel = 0;
+      _dm_hist_scroll = 0;
+      _phase = DM_HIST;
+      _task->showAlert("Sent!", 600);
     } else {
-      _task->showAlert(ok ? "Sent!" : "Send failed", 1500);
+      _task->showAlert("Send failed", 1500);
       _task->gotoHomeScreen();
     }
   }
@@ -1029,6 +1076,8 @@ public:
       _hist_fullscreen(false), _hist_fs_scroll(0),
       _unread_at_entry(0), _viewing_max_seen(0),
       _hist_head(0), _hist_count(0),
+      _dm_hist_head(0), _dm_hist_count(0),
+      _dm_hist_sel(-1), _dm_hist_scroll(0),
       _kb_row(0), _kb_col(0), _kb_len(0),
       _kb_caps(false), _kb_ph_mode(false), _kb_ph_sel(0),
       _ctx_open(false), _ctx_dirty(false), _ctx_sel(0) {
@@ -1053,6 +1102,14 @@ public:
       bool viewing = (_phase == CHANNEL_HIST && _sel_channel_idx == (int)ch_idx);
       if (!viewing && _ch_unread[ch_idx] < 99) _ch_unread[ch_idx]++;
     }
+  }
+
+  void addDMMsg(const uint8_t* pub_key, bool outgoing, const char* text) {
+    storeDMMsg(pub_key, outgoing, text);
+  }
+
+  int getDMUnreadTotal() const {
+    return _task->getDMUnreadTotal();
   }
 
   int getTotalChannelUnread() const {
@@ -1101,11 +1158,10 @@ public:
       display.fillRect(0, 10, display.width(), 1);
       const char* opts[] = { "Direct message", "Channels", "Room Servers" };
       int badges[3] = {
-        _task->getMsgCount() - _task->getRoomUnreadCount(),  // DM only
+        getDMUnreadTotal(),
         _task->getChannelUnreadCount(),
         _task->getRoomUnreadCount()
       };
-      if (badges[0] < 0) badges[0] = 0;
       for (int i = 0; i < 3; i++) {
         int y = START_Y + i * ITEM_H;
         bool sel = (i == _mode_sel);
@@ -1159,11 +1215,18 @@ public:
           display.print(sel ? ">" : " ");
           char filtered[sizeof(c.name)];
           display.translateUTF8ToBlocks(filtered, c.name, sizeof(filtered));
-          display.drawTextEllipsized(8, y, display.width() - 24, filtered);
-          char hop[5];
-          snprintf(hop, sizeof(hop), c.out_path_len == 0xFF ? "D" : "%dh", (int)c.out_path_len);
-          display.setCursor(display.width() - display.getTextWidth(hop) - 1, y);
-          display.print(hop);
+          uint8_t dm_unread = _task->getDMUnread(c.id.pub_key);
+          char badge[5] = "";
+          int bw = 0;
+          if (dm_unread > 0) {
+            snprintf(badge, sizeof(badge), "%d", (int)dm_unread);
+            bw = display.getTextWidth(badge) + 2;
+          }
+          display.drawTextEllipsized(8, y, display.width() - 8 - bw - 1, filtered);
+          if (dm_unread > 0) {
+            display.setCursor(display.width() - bw + 1, y);
+            display.print(badge);
+          }
         }
       }
       display.setColor(DisplayDriver::LIGHT);
@@ -1242,6 +1305,74 @@ public:
         }
         display.setColor(DisplayDriver::LIGHT);
       }
+
+    } else if (_phase == DM_HIST) {
+      char title[24];
+      display.setTextSize(1);
+      display.setColor(DisplayDriver::LIGHT);
+      char filtered_name[sizeof(_sel_contact.name)];
+      display.translateUTF8ToBlocks(filtered_name, _sel_contact.name, sizeof(filtered_name));
+      snprintf(title, sizeof(title), "%.23s", filtered_name);
+      display.drawTextCentered(display.width()/2, 0, title);
+      display.fillRect(0, 9, display.width(), 1);
+
+      int dm_count = dmHistCountForContact(_sel_contact.id.pub_key);
+
+      for (int i = 0; i < HIST_VISIBLE && (_dm_hist_scroll + i) < dm_count; i++) {
+        int item = _dm_hist_scroll + i;
+        bool sel = (item == _dm_hist_sel);
+        int y = HIST_START_Y + i * HIST_ITEM_H;
+
+        int ring_pos = dmHistEntryForContact(_sel_contact.id.pub_key, item);
+        if (ring_pos < 0) continue;
+
+        const DmHistEntry& e = _dm_hist[ring_pos];
+        const char* sender = e.outgoing ? "Me" : filtered_name;
+
+        if (sel) {
+          display.setColor(DisplayDriver::LIGHT);
+          display.fillRect(0, y, display.width(), HIST_BOX_H);
+          display.setColor(DisplayDriver::DARK);
+          display.drawTextEllipsized(3, y + 1, display.width() - 6, sender);
+          display.drawTextEllipsized(3, y + 10, display.width() - 6, e.text);
+        } else {
+          display.setColor(DisplayDriver::LIGHT);
+          display.drawRect(0, y, display.width(), HIST_BOX_H);
+          display.fillRect(1, y + 1, display.width() - 2, 8);
+          display.setColor(DisplayDriver::DARK);
+          display.drawTextEllipsized(3, y + 1, display.width() - 6, sender);
+          display.setColor(DisplayDriver::LIGHT);
+          display.drawTextEllipsized(3, y + 10, display.width() - 6, e.text);
+        }
+      }
+
+      if (dm_count == 0) {
+        display.setColor(DisplayDriver::LIGHT);
+        display.drawTextCentered(display.width()/2, 32, "No messages yet");
+      }
+
+      display.setColor(DisplayDriver::LIGHT);
+      if (_dm_hist_scroll > 0) {
+        display.setCursor(display.width() - 6, HIST_START_Y + 1);
+        display.print("^");
+      }
+      if (_dm_hist_scroll + HIST_VISIBLE < dm_count) {
+        display.setCursor(display.width() - 6, HIST_START_Y + HIST_VISIBLE * HIST_ITEM_H - 10);
+        display.print("v");
+      }
+
+      bool compose_sel = (_dm_hist_sel == -1);
+      const char* ctxt = "[+ send]";
+      int ctw = display.getTextWidth(ctxt);
+      int cbx = 1, cby = 55;
+      if (compose_sel) {
+        display.fillRect(cbx, cby - 1, ctw + 4, 9);
+        display.setColor(DisplayDriver::DARK);
+      }
+      display.setCursor(cbx + 2, cby);
+      display.print(ctxt);
+      display.setColor(DisplayDriver::LIGHT);
+      return dm_count > 0 ? 500 : 2000;
 
     } else if (_phase == CHANNEL_HIST) {
       if (_hist_fullscreen && _hist_sel >= 0) {
@@ -1529,9 +1660,10 @@ public:
       }
       if (c == KEY_ENTER && _num_contacts > 0) {
         if (the_mesh.getContactByIdx(_sorted[_contact_sel], _sel_contact)) {
-          _sending_to_channel = false;
-          setupMsgPick();
-          _phase = MSG_PICK;
+          _task->clearDMUnread(_sel_contact.id.pub_key);
+          _dm_hist_sel = -1;
+          _dm_hist_scroll = 0;
+          _phase = DM_HIST;
         }
         return true;
       }
@@ -1585,6 +1717,34 @@ public:
         _ctx_sel = 0;
         _ctx_dirty = false;
         _ctx_open = true;
+        return true;
+      }
+
+    } else if (_phase == DM_HIST) {
+      int dm_count = dmHistCountForContact(_sel_contact.id.pub_key);
+      if (c == KEY_CANCEL) { _phase = CONTACT_PICK; return true; }
+      if (c == KEY_UP) {
+        if (_dm_hist_sel > 0) {
+          _dm_hist_sel--;
+          if (_dm_hist_sel < _dm_hist_scroll) _dm_hist_scroll = _dm_hist_sel;
+        } else if (_dm_hist_sel == 0) {
+          _dm_hist_sel = -1;
+        }
+        return true;
+      }
+      if (c == KEY_DOWN) {
+        if (_dm_hist_sel == -1 && dm_count > 0) { _dm_hist_sel = 0; _dm_hist_scroll = 0; }
+        else if (_dm_hist_sel >= 0 && _dm_hist_sel < dm_count - 1) {
+          _dm_hist_sel++;
+          if (_dm_hist_sel >= _dm_hist_scroll + HIST_VISIBLE)
+            _dm_hist_scroll = _dm_hist_sel - HIST_VISIBLE + 1;
+        }
+        return true;
+      }
+      if (c == KEY_ENTER) {
+        _sending_to_channel = false;
+        setupMsgPick();
+        _phase = MSG_PICK;
         return true;
       }
 
@@ -1722,7 +1882,7 @@ public:
     } else { // MSG_PICK
       int total_msg_items = 1 + _active_msg_count;
       if (c == KEY_CANCEL) {
-        _phase = _sending_to_channel ? CHANNEL_HIST : CONTACT_PICK;
+        _phase = _sending_to_channel ? CHANNEL_HIST : DM_HIST;
         return true;
       }
       if (c == KEY_UP && _msg_sel > 0) {
@@ -1811,7 +1971,7 @@ class HomeScreen : public UIScreen {
   bool isPageVisible(int page) const {
     int bit = pageBit(page);
     if (bit < 0) return true;
-    uint16_t mask = _node_prefs ? _node_prefs->home_pages_mask : HP_ALL;
+    uint16_t mask = (_node_prefs && _node_prefs->home_pages_mask) ? _node_prefs->home_pages_mask : HP_ALL;
     return (mask >> bit) & 1;
   }
 
@@ -2208,8 +2368,7 @@ public:
       display.setColor(DisplayDriver::LIGHT);
       display.setTextSize(1);
       display.drawTextCentered(display.width() / 2, 22, "Messages");
-      int total_unread = _task->getMsgCount() + _task->getChannelUnreadCount();
-      // getMsgCount() already includes room msgs via offline_queue_len; avoid double-count
+      int total_unread = _task->getDMUnreadTotal() + _task->getChannelUnreadCount() + _task->getRoomUnreadCount();
       if (total_unread > 0) {
         char badge[20];
         snprintf(badge, sizeof(badge), "%d unread", total_unread);
@@ -2398,6 +2557,17 @@ int UITask::getChannelUnreadCount() const {
   return ((QuickMsgScreen*)quick_msg)->getTotalChannelUnread();
 }
 
+void UITask::addDMMsg(const uint8_t* pub_key, bool outgoing, const char* text) {
+  ((QuickMsgScreen*)quick_msg)->addDMMsg(pub_key, outgoing, text);
+}
+
+int UITask::getDMUnreadTotal() const {
+  int total = 0;
+  for (int i = 0; i < DM_UNREAD_TABLE_SIZE; i++)
+    total += _dm_unread_table[i].count;
+  return total;
+}
+
 void UITask::showAlert(const char* text, int duration_millis) {
   snprintf(_alert, sizeof(_alert), "%s", text);
   _alert_expiry = millis() + duration_millis;
@@ -2455,12 +2625,26 @@ void UITask::msgRead(int msgcount) {
   _msgcount = msgcount;
   if (msgcount == 0) {
     _room_unread = 0;
+    memset(_dm_unread_table, 0, sizeof(_dm_unread_table));
   }
 }
 
-void UITask::newMsg(uint8_t path_len, const char* from_name, const char* text, int msgcount, uint8_t contact_type) {
+void UITask::newMsg(uint8_t path_len, const char* from_name, const char* text, int msgcount, uint8_t contact_type, const uint8_t* pub_key) {
   _msgcount = msgcount;
   if (contact_type == ADV_TYPE_ROOM && _room_unread < _msgcount) _room_unread++;
+  if (contact_type == ADV_TYPE_CHAT && pub_key != nullptr) {
+    int slot = -1, empty_slot = -1;
+    for (int i = 0; i < DM_UNREAD_TABLE_SIZE; i++) {
+      if (_dm_unread_table[i].count > 0 && memcmp(_dm_unread_table[i].prefix, pub_key, 4) == 0) { slot = i; break; }
+      if (empty_slot < 0 && _dm_unread_table[i].count == 0) empty_slot = i;
+    }
+    if (slot >= 0) {
+      if (_dm_unread_table[slot].count < 99) _dm_unread_table[slot].count++;
+    } else if (empty_slot >= 0) {
+      memcpy(_dm_unread_table[empty_slot].prefix, pub_key, 4);
+      _dm_unread_table[empty_slot].count = 1;
+    }
+  }
 
   char alert_buf[80];
   snprintf(alert_buf, sizeof(alert_buf), "Msg: %.20s", from_name);

@@ -40,8 +40,9 @@ public:
   void enableSerial() { _serial->enable(); }
   void disableSerial() { _serial->disable(); }
   virtual void msgRead(int msgcount) = 0;
-  virtual void newMsg(uint8_t path_len, const char* from_name, const char* text, int msgcount, uint8_t contact_type = 0) = 0;
+  virtual void newMsg(uint8_t path_len, const char* from_name, const char* text, int msgcount, uint8_t contact_type = 0, const uint8_t* pub_key = nullptr) = 0;
   virtual void notify(UIEventType t = UIEventType::none) = 0;
   virtual void addChannelMsg(uint8_t channel_idx, const char* text) {}
+  virtual void addDMMsg(const uint8_t* pub_key, bool outgoing, const char* text) {}
   virtual void loop() = 0;
 };

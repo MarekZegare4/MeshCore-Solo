@@ -3,6 +3,7 @@
 // Included at the bottom of MyMesh.cpp after all class definitions.
 
 void MyMesh::tryBotReplyDM(const ContactInfo& from, const char* text) {
+  if (from.type != ADV_TYPE_CHAT) return;
   if (!(_prefs.bot_enabled && _prefs.bot_trigger[0] && _prefs.bot_reply_dm[0] &&
         millis() - _bot_last_reply_ms > 10000UL))
     return;
@@ -24,8 +25,12 @@ void MyMesh::tryBotReplyDM(const ContactInfo& from, const char* text) {
             sensors.node_lat != 0.0 || sensors.node_lon != 0.0,
             ts, _prefs.tz_offset_hours);
   uint32_t expected_ack, est_timeout;
-  if (sendMessage(from, ts, 0, expanded, expected_ack, est_timeout) != MSG_SEND_FAILED)
+  if (sendMessage(from, ts, 0, expanded, expected_ack, est_timeout) != MSG_SEND_FAILED) {
     _bot_last_reply_ms = millis();
+#ifdef DISPLAY_CLASS
+    if (_ui) _ui->addDMMsg(from.id.pub_key, true, expanded);
+#endif
+  }
 }
 
 void MyMesh::tryBotReplyChannel(uint8_t channel_idx, const char* text) {
@@ -54,6 +59,14 @@ void MyMesh::tryBotReplyChannel(uint8_t channel_idx, const char* text) {
             sensors.node_lat != 0.0 || sensors.node_lon != 0.0,
             ts, _prefs.tz_offset_hours);
   int rlen = strlen(expanded);
-  if (sendGroupMessage(ts, ch.channel, _prefs.node_name, expanded, rlen))
+  if (sendGroupMessage(ts, ch.channel, _prefs.node_name, expanded, rlen)) {
     _bot_last_reply_ms = millis();
+#ifdef DISPLAY_CLASS
+    if (_ui) {
+      char with_sender[160];
+      snprintf(with_sender, sizeof(with_sender), "%s: %s", _prefs.node_name, expanded);
+      _ui->addChannelMsg(channel_idx, with_sender);
+    }
+#endif
+  }
 }

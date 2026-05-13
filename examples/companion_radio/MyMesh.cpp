@@ -465,8 +465,10 @@ void MyMesh::queueMessage(const ContactInfo &from, uint8_t txt_type, mesh::Packe
   // we only want to show text messages on display, not cli data
   bool should_display = txt_type == TXT_TYPE_PLAIN || txt_type == TXT_TYPE_SIGNED_PLAIN;
   if (should_display && _ui) {
-    _ui->newMsg(path_len, from.name, text, offline_queue_len, from.type);
+    _ui->newMsg(path_len, from.name, text, offline_queue_len, from.type, from.id.pub_key);
     _ui->notify(UIEventType::contactMessage);
+    if (from.type == ADV_TYPE_CHAT)
+      _ui->addDMMsg(from.id.pub_key, false, text);
   }
 #endif
 }
@@ -881,6 +883,7 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   _prefs.bot_trigger[0] = '\0';
   _prefs.bot_reply_dm[0] = '\0';
   _prefs.bot_reply_ch[0] = '\0';
+  _prefs.dm_show_all = 1;        // show all contacts by default
   _prefs.auto_off_secs = 15;    // 15 seconds auto-off by default
   _prefs.tz_offset_hours = 0;  // UTC by default
   _prefs.low_batt_mv = 3400;  // auto-shutdown at 3.4V by default
@@ -1272,7 +1275,9 @@ void MyMesh::handleCmdFrame(size_t len) {
     ContactInfo *recipient = lookupContactByPubKey(pub_key, PUB_KEY_SIZE);
     uint32_t last_mod = getRTCClock()->getCurrentTime();  // fallback value if not present in cmd_frame
     if (recipient) {
+      uint8_t saved_type = recipient->type; // type is authoritative from advert, not app
       updateContactFromFrame(*recipient, last_mod, cmd_frame, len);
+      if (saved_type != ADV_TYPE_NONE) recipient->type = saved_type;
       recipient->lastmod = last_mod;
       dirty_contacts_expiry = futureMillis(LAZY_CONTACTS_WRITE_DELAY);
       writeOKFrame();
@@ -1690,13 +1695,22 @@ void MyMesh::handleCmdFrame(size_t len) {
       writeErrFrame(ERR_CODE_NOT_FOUND);
     }
   } else if (cmd_frame[0] == CMD_SET_CHANNEL && len >= 2 + 32 + 32) {
-    writeErrFrame(ERR_CODE_UNSUPPORTED_CMD); // not supported (yet)
+    uint8_t channel_idx = cmd_frame[1];
+    ChannelDetails channel;
+    StrHelper::strncpy(channel.name, (char *)&cmd_frame[2], 32);
+    memcpy(channel.channel.secret, &cmd_frame[2 + 32], 32); // 256-bit key
+    if (setChannel(channel_idx, channel)) {
+      saveChannels();
+      writeOKFrame();
+    } else {
+      writeErrFrame(ERR_CODE_NOT_FOUND); // bad channel_idx
+    }
   } else if (cmd_frame[0] == CMD_SET_CHANNEL && len >= 2 + 32 + 16) {
     uint8_t channel_idx = cmd_frame[1];
     ChannelDetails channel;
     StrHelper::strncpy(channel.name, (char *)&cmd_frame[2], 32);
     memset(channel.channel.secret, 0, sizeof(channel.channel.secret));
-    memcpy(channel.channel.secret, &cmd_frame[2 + 32], 16); // NOTE: only 128-bit supported
+    memcpy(channel.channel.secret, &cmd_frame[2 + 32], 16); // 128-bit key
     if (setChannel(channel_idx, channel)) {
       saveChannels();
       writeOKFrame();
