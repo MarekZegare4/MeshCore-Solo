@@ -2849,9 +2849,9 @@ void UITask::loop() {
     if (low_mv > 0 && _batt_mv > 0 && _batt_mv < low_mv) {
       if (_display != NULL) {
         _display->startFrame();
-        _display->setTextSize(2);
+        _display->setTextSize(1);
         _display->setColor(DisplayDriver::LIGHT);
-        _display->drawTextCentered(_display->width() / 2, 16, "Low Battery");
+        _display->drawTextCentered(_display->width() / 2, 24, "Low Battery");
         _display->drawTextCentered(_display->width() / 2, 36, "Shutting down");
         _display->endFrame();
         delay(2000);
