@@ -479,7 +479,7 @@ public:
       display.print("v");
     }
 
-    return 300;
+    return 2000;
   }
 
   bool handleInput(char c) override {
@@ -1298,7 +1298,7 @@ public:
                             _hist_sel < fs_hist_count - 1,
                             _hist_sel > 0);
         }
-        return 300;
+        return 2000;
       }
 
       ChannelDetails ch;
@@ -1426,7 +1426,7 @@ public:
       display.setColor(DisplayDriver::LIGHT);
       renderScrollHints(display, _msg_scroll, total_msg_items);
     }
-    return 300;
+    return 2000;
   }
 
   bool handleInput(char c) override {
