@@ -3,10 +3,8 @@
 #include <helpers/ui/DisplayDriver.h>
 #include <Arduino.h>
 
-static const int FS_CHARS   = 21;
-static const int FS_LINE_H  = 9;
-static const int FS_START_Y = 12;
-static const int FS_VISIBLE = (64 - FS_START_Y) / FS_LINE_H;
+static const int FS_CHARS_MAX = 32;  // max buffer per line (larger than any font needs)
+static const int FS_START_Y   = 12;  // header height (fixed, not font-dependent)
 
 struct FullscreenMsgView {
   int  scroll;
@@ -18,22 +16,23 @@ struct FullscreenMsgView {
 
   void begin() { scroll = 0; active = true; }
 
-  static int wrapLines(const char* text, char out[][FS_CHARS + 1], int max_lines) {
+  static int wrapLines(const char* text, int chars, char out[][FS_CHARS_MAX], int max_lines) {
     int count = 0;
     const char* p = text;
     while (*p && count < max_lines) {
       int len = strlen(p);
-      if (len <= FS_CHARS) {
-        strncpy(out[count++], p, FS_CHARS);
-        out[count - 1][len] = '\0';
+      if (len <= chars) {
+        strncpy(out[count++], p, FS_CHARS_MAX - 1);
+        out[count - 1][len < FS_CHARS_MAX ? len : FS_CHARS_MAX - 1] = '\0';
         break;
       }
-      int brk = FS_CHARS;
-      for (int i = FS_CHARS - 1; i > 0; i--) {
+      int brk = chars;
+      for (int i = chars - 1; i > 0; i--) {
         if (p[i] == ' ') { brk = i; break; }
       }
-      strncpy(out[count], p, brk);
-      out[count++][brk] = '\0';
+      int copy = brk < FS_CHARS_MAX - 1 ? brk : FS_CHARS_MAX - 1;
+      strncpy(out[count], p, copy);
+      out[count++][copy] = '\0';
       p += brk + (p[brk] == ' ' ? 1 : 0);
     }
     return count;
@@ -42,19 +41,23 @@ struct FullscreenMsgView {
   int render(DisplayDriver& display, const char* sender, const char* text,
              bool has_prev, bool has_next) {
     display.setTextSize(1);
+    const int lineH   = display.getLineHeight();
+    const int chars   = (display.width() - 6) / display.getCharWidth();
+    const int visible = (display.height() - FS_START_Y - lineH) / lineH;
+
     display.setColor(DisplayDriver::LIGHT);
     display.fillRect(0, 0, display.width(), 10);
     display.setColor(DisplayDriver::DARK);
     display.drawTextEllipsized(2, 1, display.width() - 4, sender);
     display.setColor(DisplayDriver::LIGHT);
 
-    char lines[12][FS_CHARS + 1];
-    int lcount = wrapLines(text, lines, 12);
-    int max_scroll = lcount > FS_VISIBLE ? lcount - FS_VISIBLE : 0;
+    char lines[12][FS_CHARS_MAX];
+    int lcount = wrapLines(text, chars, lines, 12);
+    int max_scroll = lcount > visible ? lcount - visible : 0;
     if (scroll > max_scroll) scroll = max_scroll;
 
-    for (int i = 0; i < FS_VISIBLE && (scroll + i) < lcount; i++) {
-      display.setCursor(0, FS_START_Y + i * FS_LINE_H);
+    for (int i = 0; i < visible && (scroll + i) < lcount; i++) {
+      display.setCursor(0, FS_START_Y + i * lineH);
       display.print(lines[scroll + i]);
     }
     if (scroll > 0) {
@@ -62,15 +65,16 @@ struct FullscreenMsgView {
       display.print("^");
     }
     if (scroll < max_scroll) {
-      display.setCursor(display.width() - 6, FS_START_Y + (FS_VISIBLE - 1) * FS_LINE_H);
+      display.setCursor(display.width() - 6, FS_START_Y + (visible - 1) * lineH);
       display.print("v");
     }
+    const int nav_y = display.height() - lineH;
     if (has_next) {
-      display.setCursor(0, 56);
+      display.setCursor(0, nav_y);
       display.print("<");
     }
     if (has_prev) {
-      display.setCursor(display.width() - 6, 56);
+      display.setCursor(display.width() - 6, nav_y);
       display.print(">");
     }
     return 300;

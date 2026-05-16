@@ -27,6 +27,8 @@ public:
   virtual void drawRect(int x, int y, int w, int h) = 0;
   virtual void drawXbm(int x, int y, const uint8_t* bits, int w, int h) = 0;
   virtual uint16_t getTextWidth(const char* str) = 0;
+  virtual int getCharWidth() const { return 6; }   // advance width of a typical character (xAdvance for monospace)
+  virtual int getLineHeight() const { return 8; }  // pixel rows per line (cell height, not just glyph height)
   virtual void drawTextCentered(int mid_x, int y, const char* str) {   // helper method (override to optimise)
     int w = getTextWidth(str);
     setCursor(mid_x - w/2, y);

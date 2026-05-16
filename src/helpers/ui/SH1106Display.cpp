@@ -2,6 +2,7 @@
 #include <Adafruit_GrayOLED.h>
 #include "Adafruit_SH110X.h"
 #include "LemonFont.h"
+#include "LemonIcons.h"
 
 bool SH1106Display::i2c_probe(TwoWire &wire, uint8_t addr)
 {
@@ -90,6 +91,27 @@ uint32_t SH1106Display::decodeUtf8(const uint8_t*& p) {
 
 // Draw one Lemon glyph at (x, y), return new cursor x.
 int16_t SH1106Display::drawLemonChar(int16_t x, int16_t y, uint32_t cp) {
+  // Check icon table for Private Use Area codepoints
+  for (uint8_t i = 0; i < lemonIconCount; i++) {
+    if (pgm_read_dword(&lemonIconCPs[i]) == cp) {
+      const GFXglyph* g = &lemonIconGlyphs[i];
+      uint8_t  w  = pgm_read_byte(&g->width);
+      uint8_t  h  = pgm_read_byte(&g->height);
+      int8_t   xo = (int8_t)pgm_read_byte(&g->xOffset);
+      int8_t   yo = (int8_t)pgm_read_byte(&g->yOffset);
+      uint8_t  xa = pgm_read_byte(&g->xAdvance);
+      uint16_t bo = pgm_read_word(&g->bitmapOffset);
+      uint8_t bits = 0, bit = 0;
+      for (uint8_t row = 0; row < h; row++)
+        for (uint8_t col = 0; col < w; col++) {
+          if (!bit) { bits = pgm_read_byte(&lemonIconBitmaps[bo++]); bit = 0x80; }
+          if (bits & bit) display.drawPixel(x + xo + col, y + 6 + yo + row, _color);
+          bit >>= 1;
+        }
+      return x + xa;
+    }
+  }
+
   if (cp < Lemon.first || cp > Lemon.last) {
     // outside font range — use default advance
     return x + 6;
@@ -107,7 +129,7 @@ int16_t SH1106Display::drawLemonChar(int16_t x, int16_t y, uint32_t cp) {
     for (uint8_t col = 0; col < w; col++) {
       if (!bit) { bits = pgm_read_byte(&lemonBitmaps[bo++]); bit = 0x80; }
       if (bits & bit)
-        display.drawPixel(x + xo + col, y + yo + row, _color);
+        display.drawPixel(x + xo + col, y + 6 + yo + row, _color);  // +6 = cap height: cursor y aligns with top of uppercase/digit glyphs
       bit >>= 1;
     }
   }

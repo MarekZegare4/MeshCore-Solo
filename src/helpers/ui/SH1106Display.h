@@ -45,6 +45,8 @@ public:
   void drawRect(int x, int y, int w, int h) override;
   void drawXbm(int x, int y, const uint8_t *bits, int w, int h) override;
   uint16_t getTextWidth(const char *str) override;
+  int getCharWidth() const override { return 5; }   // Lemon font: xAdvance = 5
+  int getLineHeight() const override { return 9; }  // Lemon font: visual line spacing (yAdvance=10, used as 9 for tighter fit)
   void setBrightness(uint8_t level) override;
   void endFrame() override;
 
