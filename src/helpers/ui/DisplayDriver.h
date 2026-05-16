@@ -44,17 +44,64 @@ public:
     print(str);
   }
   
-  // convert UTF-8 characters to displayable block characters for compatibility
+  static char transliterateCodepoint(uint32_t cp) {
+    switch (cp) {
+      // Polish
+      case 0x0105: return 'a'; case 0x0104: return 'A';  // ą Ą
+      case 0x0107: return 'c'; case 0x0106: return 'C';  // ć Ć
+      case 0x0119: return 'e'; case 0x0118: return 'E';  // ę Ę
+      case 0x0142: return 'l'; case 0x0141: return 'L';  // ł Ł
+      case 0x0144: return 'n'; case 0x0143: return 'N';  // ń Ń
+      case 0x00F3: return 'o'; case 0x00D3: return 'O';  // ó Ó
+      case 0x015B: return 's'; case 0x015A: return 'S';  // ś Ś
+      case 0x017A: return 'z'; case 0x0179: return 'Z';  // ź Ź
+      case 0x017C: return 'z'; case 0x017B: return 'Z';  // ż Ż
+      // German
+      case 0x00E4: return 'a'; case 0x00C4: return 'A';  // ä Ä
+      case 0x00F6: return 'o'; case 0x00D6: return 'O';  // ö Ö
+      case 0x00FC: return 'u'; case 0x00DC: return 'U';  // ü Ü
+      case 0x00DF: return 's';                            // ß
+      // French/Spanish/Portuguese common accents
+      case 0x00E0: case 0x00E1: case 0x00E2: case 0x00E3: return 'a';
+      case 0x00C0: case 0x00C1: case 0x00C2: case 0x00C3: return 'A';
+      case 0x00E8: case 0x00E9: case 0x00EA: case 0x00EB: return 'e';
+      case 0x00C8: case 0x00C9: case 0x00CA: case 0x00CB: return 'E';
+      case 0x00EC: case 0x00ED: case 0x00EE: case 0x00EF: return 'i';
+      case 0x00CC: case 0x00CD: case 0x00CE: case 0x00CF: return 'I';
+      case 0x00F2: case 0x00F4: case 0x00F5: return 'o';
+      case 0x00D2: case 0x00D4: case 0x00D5: return 'O';
+      case 0x00F9: case 0x00FA: case 0x00FB: return 'u';
+      case 0x00D9: case 0x00DA: case 0x00DB: return 'U';
+      case 0x00E7: return 'c'; case 0x00C7: return 'C';  // ç Ç
+      case 0x00F1: return 'n'; case 0x00D1: return 'N';  // ñ Ñ
+      case 0x00FD: return 'y'; case 0x00DD: return 'Y';  // ý Ý
+      default: return '?';
+    }
+  }
+
+  // convert UTF-8 to ASCII, transliterating accented/diacritic characters
   virtual void translateUTF8ToBlocks(char* dest, const char* src, size_t dest_size) {
     size_t j = 0;
-    for (size_t i = 0; src[i] != 0 && j < dest_size - 1; i++) {
-      unsigned char c = (unsigned char)src[i];
-      if (c >= 32 && c <= 126) {
-        dest[j++] = c;  // ASCII printable
-      } else if (c >= 0x80) {
-        dest[j++] = '\xDB';  // CP437 full block █
-        while (src[i+1] && (src[i+1] & 0xC0) == 0x80) 
-          i++;  // skip UTF-8 continuation bytes
+    const uint8_t* p = (const uint8_t*)src;
+    while (*p && j < dest_size - 1) {
+      uint8_t c = *p++;
+      if (c < 0x80) {
+        if (c >= 32) dest[j++] = c;
+      } else {
+        uint32_t cp = c;
+        if ((c & 0xE0) == 0xC0) {
+          cp = c & 0x1F;
+          if (*p) cp = (cp << 6) | (*p++ & 0x3F);
+        } else if ((c & 0xF0) == 0xE0) {
+          cp = c & 0x0F;
+          if (*p) cp = (cp << 6) | (*p++ & 0x3F);
+          if (*p) cp = (cp << 6) | (*p++ & 0x3F);
+        } else {
+          while (*p && (*p & 0xC0) == 0x80) p++;
+          dest[j++] = '?';
+          continue;
+        }
+        dest[j++] = transliterateCodepoint(cp);
       }
     }
     dest[j] = 0;
