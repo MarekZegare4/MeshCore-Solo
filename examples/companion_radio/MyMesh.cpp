@@ -853,7 +853,8 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   _cli_rescue = false;
   offline_queue_len = 0;
   app_target_ver = 0;
-  _bot_last_reply_ms = 0;
+  _bot_last_dm_reply_ms = 0;
+  _bot_last_ch_reply_ms = 0;
   _next_auto_advert_ms = 0;
   clearPendingReqs();
   next_ack_idx = 0;
