@@ -219,6 +219,10 @@ void setup() {
 #endif
 
 #ifdef DISPLAY_CLASS
+  // Apply saved brightness as soon as prefs are available so the tail of
+  // the loading screen is not stuck at full brightness.
+  if (disp && the_mesh.getNodePrefs())
+    disp->setBrightness(the_mesh.getNodePrefs()->display_brightness);
   ui_task.begin(disp, &sensors, the_mesh.getNodePrefs());  // still want to pass this in as dependency, as prefs might be moved
 #endif
 
