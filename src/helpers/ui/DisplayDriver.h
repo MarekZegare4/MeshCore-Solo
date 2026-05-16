@@ -75,7 +75,7 @@ public:
       case 0x00E7: return 'c'; case 0x00C7: return 'C';  // ç Ç
       case 0x00F1: return 'n'; case 0x00D1: return 'N';  // ñ Ñ
       case 0x00FD: return 'y'; case 0x00DD: return 'Y';  // ý Ý
-      default: return '?';
+      default: return '\xDB';  // CP437 full block █
     }
   }
 
@@ -98,7 +98,7 @@ public:
           if (*p) cp = (cp << 6) | (*p++ & 0x3F);
         } else {
           while (*p && (*p & 0xC0) == 0x80) p++;
-          dest[j++] = '?';
+          dest[j++] = '\xDB';
           continue;
         }
         dest[j++] = transliterateCodepoint(cp);
