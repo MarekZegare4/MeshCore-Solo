@@ -40,10 +40,15 @@ void MyMesh::tryBotReplyChannel(uint8_t channel_idx, const char* text) {
         millis() - _bot_last_reply_ms > 10000UL))
     return;
 
+  // Skip "sender_name: " prefix so the trigger is only matched against the message body.
+  const char* msg = text;
+  const char* sep = strstr(text, ": ");
+  if (sep) msg = sep + 2;
+
   const char* tr = _prefs.bot_trigger;
   int tlen = strlen(tr);
   bool matched = false;
-  for (const char* t = text; *t && !matched; t++) {
+  for (const char* t = msg; *t && !matched; t++) {
     int i = 0;
     while (i < tlen && tolower((uint8_t)t[i]) == tolower((uint8_t)tr[i])) i++;
     if (i == tlen) matched = true;
