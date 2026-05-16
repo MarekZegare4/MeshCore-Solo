@@ -70,7 +70,7 @@ void MyMesh::tryBotReplyChannel(uint8_t channel_idx, const char* text) {
     _bot_last_reply_ms = millis();
 #ifdef DISPLAY_CLASS
     if (_ui) {
-      char with_sender[160];
+      char with_sender[240];  // node_name(32) + ": "(2) + expanded(200) + margin
       snprintf(with_sender, sizeof(with_sender), "%s: %s", _prefs.node_name, expanded);
       _ui->addChannelMsg(channel_idx, with_sender);
     }
