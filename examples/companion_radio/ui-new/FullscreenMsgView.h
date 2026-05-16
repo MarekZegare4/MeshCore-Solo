@@ -63,10 +63,16 @@ struct FullscreenMsgView {
       display.print(lines[scroll + i]);
     }
     if (scroll > 0) {
+      display.setColor(DisplayDriver::DARK);
+      display.fillRect(display.width() - 6, FS_START_Y, 6, FS_LINE_H);
+      display.setColor(DisplayDriver::LIGHT);
       display.setCursor(display.width() - 6, FS_START_Y);
       display.print("^");
     }
     if (scroll < max_scroll) {
+      display.setColor(DisplayDriver::DARK);
+      display.fillRect(display.width() - 6, FS_START_Y + (visible - 1) * lineH, 6, lineH);
+      display.setColor(DisplayDriver::LIGHT);
       display.setCursor(display.width() - 6, FS_START_Y + (visible - 1) * lineH);
       display.print("v");
     }
