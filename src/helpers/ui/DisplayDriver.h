@@ -110,10 +110,7 @@ public:
   // draw text with ellipsis if it exceeds max_width
   virtual void drawTextEllipsized(int x, int y, int max_width, const char* str) {
     char temp_str[256];  // reasonable buffer size
-    size_t len = strlen(str);
-    if (len >= sizeof(temp_str)) len = sizeof(temp_str) - 1;
-    memcpy(temp_str, str, len);
-    temp_str[len] = 0;
+    translateUTF8ToBlocks(temp_str, str, sizeof(temp_str));
     
     if (getTextWidth(temp_str) <= max_width) {
       setCursor(x, y);
