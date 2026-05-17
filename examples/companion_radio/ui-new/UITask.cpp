@@ -1123,7 +1123,8 @@ bool UITask::isButtonPressed() const {
 #endif
 }
 
-static void formatDashVal(uint8_t field, char* val, int val_len, uint16_t batt_mv) {
+static void formatDashVal(uint8_t field, char* val, int val_len, uint16_t batt_mv,
+                          CayenneLPP* lpp = nullptr) {
   val[0] = '\0';
   switch (field) {
     case DASH_NONE: return;
@@ -1146,7 +1147,7 @@ static void formatDashVal(uint8_t field, char* val, int val_len, uint16_t batt_m
 #endif
     default: break;
   }
-  // LPP sensor fields: query sensors into a local buffer
+  // LPP sensor fields
   uint8_t lpp_type = 0;
   switch (field) {
     case DASH_TEMP: lpp_type = LPP_TEMPERATURE;         break;
@@ -1157,10 +1158,9 @@ static void formatDashVal(uint8_t field, char* val, int val_len, uint16_t batt_m
     case DASH_CO2:  lpp_type = LPP_CONCENTRATION;       break;
   }
   if (lpp_type) {
-    CayenneLPP lpp(200);
-    lpp.reset();
-    sensors.querySensors(0xFF, lpp);
-    LPPReader r(lpp.getBuffer(), lpp.getSize());
+    CayenneLPP local_lpp(200);
+    if (!lpp) { local_lpp.reset(); sensors.querySensors(0xFF, local_lpp); lpp = &local_lpp; }
+    LPPReader r(lpp->getBuffer(), lpp->getSize());
     uint8_t ch, type;
     while (r.readHeader(ch, type)) {
       if (type == lpp_type) {
@@ -1345,8 +1345,17 @@ void UITask::loop() {
         // Two sensor values side by side (dashboard_fields[0] and [1])
         if (_node_prefs) {
           char v0[20] = "", v1[20] = "";
-          formatDashVal(_node_prefs->dashboard_fields[0], v0, sizeof(v0), _batt_mv);
-          formatDashVal(_node_prefs->dashboard_fields[1], v1, sizeof(v1), _batt_mv);
+          CayenneLPP shared_lpp(200);
+          CayenneLPP* lpp_ptr = nullptr;
+          uint8_t f0 = _node_prefs->dashboard_fields[0], f1 = _node_prefs->dashboard_fields[1];
+          auto isLPP = [](uint8_t f) {
+            return f==DASH_TEMP||f==DASH_HUM||f==DASH_PRES||f==DASH_ALT||f==DASH_LUX||f==DASH_CO2;
+          };
+          if (isLPP(f0) || isLPP(f1)) {
+            shared_lpp.reset(); sensors.querySensors(0xFF, shared_lpp); lpp_ptr = &shared_lpp;
+          }
+          formatDashVal(f0, v0, sizeof(v0), _batt_mv, lpp_ptr);
+          formatDashVal(f1, v1, sizeof(v1), _batt_mv, lpp_ptr);
           if (v0[0] || v1[0]) {
             _display->setTextSize(1);
             _display->setColor(DisplayDriver::LIGHT);
