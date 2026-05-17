@@ -1237,6 +1237,9 @@ void UITask::loop() {
   } else if (ev == BUTTON_EVENT_LONG_PRESS) {
     c = handleLongPress(KEY_RIGHT);
   }
+  if (_lock_seq_used && millis() - _lock_seq_ms > 5000) {
+    _lock_seq_used = false;  // safety reset if Back release event was missed
+  }
   ev = back_btn.check();
   if (ev == BUTTON_EVENT_CLICK) {
     if (_lock_seq_count > 0 || _lock_seq_used) {
