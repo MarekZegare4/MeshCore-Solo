@@ -1188,19 +1188,25 @@ void UITask::loop() {
   if (ev == BUTTON_EVENT_CLICK) {
     if (back_btn.isPressed()) {
       // Enter clicked while Back is held — lock/unlock sequence
+      if (_display && !_display->isOn()) {
+        _display->turnOn();  // turn on display so hints are visible
+      }
+      _lock_wake_until = millis() + 5000;  // keep display on during sequence
       if (millis() - _lock_seq_ms > 3000) _lock_seq_count = 0;  // timeout reset
       _lock_seq_count++;
       _lock_seq_ms = millis();
+      _next_refresh = 0;  // update hint immediately on each press
       if (_lock_seq_count >= 3) {
         _lock_seq_count = 0;
+        _lock_seq_used = true;  // suppress Back release click
         _locked = !_locked;
         if (_locked) {
           _lock_wake_until = millis() + 2000;
         } else {
+          if (_display && !_display->isOn()) _display->turnOn();
           uint32_t aoff = autoOffMillis();
           if (aoff > 0) _auto_off = millis() + aoff;
         }
-        _next_refresh = 0;
       }
       // eat the Enter — don't pass to curr
     } else {
@@ -1233,14 +1239,15 @@ void UITask::loop() {
   }
   ev = back_btn.check();
   if (ev == BUTTON_EVENT_CLICK) {
-    if (_lock_seq_count > 0) {
-      // Back released mid-sequence — cancel sequence, eat the click
+    if (_lock_seq_count > 0 || _lock_seq_used) {
+      // Back released mid-sequence or after completing it — cancel/suppress
       _lock_seq_count = 0;
+      _lock_seq_used = false;
     } else {
       c = checkDisplayOn(KEY_CANCEL);
     }
   } else if (ev == BUTTON_EVENT_TRIPLE_CLICK) {
-    c = handleTripleClick(KEY_SELECT);
+    if (!_locked) c = handleTripleClick(KEY_SELECT);
   }
 #elif defined(PIN_USER_BTN)
   int ev = user_btn.check();
