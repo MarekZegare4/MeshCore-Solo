@@ -1124,6 +1124,63 @@ bool UITask::isButtonPressed() const {
 #endif
 }
 
+static void formatDashVal(uint8_t field, char* val, int val_len, uint16_t batt_mv) {
+  val[0] = '\0';
+  switch (field) {
+    case DASH_NONE: return;
+    case DASH_BATT:
+      if (batt_mv > 0) snprintf(val, val_len, "%u.%02uV", batt_mv/1000, (batt_mv%1000)/10);
+      else              strcpy(val, "--");
+      return;
+    case DASH_NODES:
+      snprintf(val, val_len, "%d nodes", the_mesh.getNumContacts());
+      return;
+#if ENV_INCLUDE_GPS == 1
+    case DASH_GPS: {
+      LocationProvider* loc = sensors.getLocationProvider();
+      if (loc && loc->isValid())
+        snprintf(val, val_len, "%.2f %.2f",
+                 loc->getLatitude()/1000000.0f, loc->getLongitude()/1000000.0f);
+      else strcpy(val, "no fix");
+      return;
+    }
+#endif
+    default: break;
+  }
+  // LPP sensor fields: query sensors into a local buffer
+  uint8_t lpp_type = 0;
+  switch (field) {
+    case DASH_TEMP: lpp_type = LPP_TEMPERATURE;         break;
+    case DASH_HUM:  lpp_type = LPP_RELATIVE_HUMIDITY;   break;
+    case DASH_PRES: lpp_type = LPP_BAROMETRIC_PRESSURE; break;
+    case DASH_ALT:  lpp_type = LPP_ALTITUDE;            break;
+    case DASH_LUX:  lpp_type = LPP_LUMINOSITY;          break;
+    case DASH_CO2:  lpp_type = LPP_CONCENTRATION;       break;
+  }
+  if (lpp_type) {
+    CayenneLPP lpp(200);
+    lpp.reset();
+    sensors.querySensors(0xFF, lpp);
+    LPPReader r(lpp.getBuffer(), lpp.getSize());
+    uint8_t ch, type;
+    while (r.readHeader(ch, type)) {
+      if (type == lpp_type) {
+        float v;
+        switch (lpp_type) {
+          case LPP_TEMPERATURE:         r.readTemperature(v);      snprintf(val, val_len, "%.1f\xf8""C", v); return;
+          case LPP_RELATIVE_HUMIDITY:   r.readRelativeHumidity(v); snprintf(val, val_len, "%.0f%%", v);      return;
+          case LPP_BAROMETRIC_PRESSURE: r.readPressure(v);         snprintf(val, val_len, "%.0fhPa", v);     return;
+          case LPP_ALTITUDE:            r.readAltitude(v);         snprintf(val, val_len, "%.0fm", v);       return;
+          case LPP_LUMINOSITY:          r.readLuminosity(v);       snprintf(val, val_len, "%.0flux", v);     return;
+          case LPP_CONCENTRATION:       r.readConcentration(v);    snprintf(val, val_len, "%.0fppm", v);     return;
+        }
+      }
+      r.skipData(type);
+    }
+    strcpy(val, "--");
+  }
+}
+
 void UITask::loop() {
   char c = 0;
 #if UI_HAS_JOYSTICK
@@ -1291,6 +1348,27 @@ void UITask::loop() {
         static const char* mo[] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
         sprintf(buf, "%s %d %s", wd[ti->tm_wday], ti->tm_mday, mo[ti->tm_mon]);
         _display->drawTextCentered(_display->width() / 2, 26, buf);
+
+        // Two sensor values side by side (dashboard_fields[0] and [1])
+        if (_node_prefs) {
+          char v0[20] = "", v1[20] = "";
+          formatDashVal(_node_prefs->dashboard_fields[0], v0, sizeof(v0), _batt_mv);
+          formatDashVal(_node_prefs->dashboard_fields[1], v1, sizeof(v1), _batt_mv);
+          if (v0[0] || v1[0]) {
+            _display->setTextSize(1);
+            _display->setColor(DisplayDriver::LIGHT);
+            if (v0[0] && v1[0]) {
+              _display->setCursor(0, 37);
+              _display->print(v0);
+              int vw = _display->getTextWidth(v1);
+              _display->setCursor(_display->width() - vw, 37);
+              _display->print(v1);
+            } else {
+              const char* sv = v0[0] ? v0 : v1;
+              _display->drawTextCentered(_display->width() / 2, 37, sv);
+            }
+          }
+        }
       }
       // Hint popup at bottom (like alert style)
       _display->setTextSize(1);
