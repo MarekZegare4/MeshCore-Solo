@@ -1186,7 +1186,26 @@ void UITask::loop() {
 #if UI_HAS_JOYSTICK
   int ev = user_btn.check();
   if (ev == BUTTON_EVENT_CLICK) {
-    c = checkDisplayOn(KEY_ENTER);
+    if (back_btn.isPressed()) {
+      // Enter clicked while Back is held — lock/unlock sequence
+      if (millis() - _lock_seq_ms > 3000) _lock_seq_count = 0;  // timeout reset
+      _lock_seq_count++;
+      _lock_seq_ms = millis();
+      if (_lock_seq_count >= 3) {
+        _lock_seq_count = 0;
+        _locked = !_locked;
+        if (_locked) {
+          _lock_wake_until = millis() + 2000;
+        } else {
+          uint32_t aoff = autoOffMillis();
+          if (aoff > 0) _auto_off = millis() + aoff;
+        }
+        _next_refresh = 0;
+      }
+      // eat the Enter — don't pass to curr
+    } else {
+      c = checkDisplayOn(KEY_ENTER);
+    }
   } else if (ev == BUTTON_EVENT_LONG_PRESS) {
     c = handleLongPress(KEY_ENTER);  // REVISIT: could be mapped to different key code
   }
@@ -1214,13 +1233,11 @@ void UITask::loop() {
   }
   ev = back_btn.check();
   if (ev == BUTTON_EVENT_CLICK) {
-    c = checkDisplayOn(KEY_CANCEL);
-  } else if (ev == BUTTON_EVENT_LONG_PRESS) {
-    if (_display != NULL && _display->isOn()) {
-      _lock_seq = 1;
+    if (_lock_seq_count > 0) {
+      // Back released mid-sequence — cancel sequence, eat the click
       _lock_seq_count = 0;
-      _lock_seq_ms = millis();
-      _next_refresh = 0;
+    } else {
+      c = checkDisplayOn(KEY_CANCEL);
     }
   } else if (ev == BUTTON_EVENT_TRIPLE_CLICK) {
     c = handleTripleClick(KEY_SELECT);
@@ -1264,43 +1281,13 @@ void UITask::loop() {
   }
 #endif
 
-  // Lock sequence timeout check
-  if (_lock_seq == 1 && millis() - _lock_seq_ms > 3000) {
-    _lock_seq = 0;
-    _lock_seq_count = 0;
-  }
-
   if (c != 0) {
-    // Intercept Enter presses when a lock/unlock sequence is active
-    if (_lock_seq == 1 && c == KEY_ENTER) {
-      _lock_seq_count++;
-      if (_lock_seq_count >= 3) {
-        _lock_seq = 0;
-        _lock_seq_count = 0;
-        _locked = !_locked;
-        if (_locked) {
-          _lock_wake_until = millis() + 2000;  // brief "locked" display, then blank
-        } else {
-          uint32_t aoff = autoOffMillis();
-          if (aoff > 0) _auto_off = millis() + aoff;
-        }
-      }
-      _next_refresh = 0;
-    } else if (_lock_seq == 1) {
-      // Non-Enter key cancels the sequence; process key normally below
-      _lock_seq = 0;
-      _lock_seq_count = 0;
-      if (!_locked && curr) {
-        curr->handleInput(c);
-        { uint32_t aoff = autoOffMillis(); if (aoff > 0) _auto_off = millis() + aoff; }
-        _next_refresh = 100;
-      }
-    } else if (!_locked && curr) {
+    if (!_locked && curr) {
       curr->handleInput(c);
       { uint32_t aoff = autoOffMillis(); if (aoff > 0) _auto_off = millis() + aoff; }  // extend auto-off timer
       _next_refresh = 100;  // trigger refresh
     } else if (_locked) {
-      // Locked: eat all keys except unlock sequence (handled above)
+      // Locked: eat all keys (unlock sequence handled at button-event level above)
       // Any key extends the wake window if display is already on
       if (_display != NULL && _display->isOn())
         _lock_wake_until = millis() + 5000;
@@ -1372,10 +1359,8 @@ void UITask::loop() {
       }
       // Hint popup at bottom (like alert style)
       _display->setTextSize(1);
-      const char* hint = _lock_seq == 1
-        ? (_lock_seq_count == 0 ? "Enter x3 to unlock" :
-           _lock_seq_count == 1 ? "Enter x2 more..."   : "Enter x1 more...")
-        : "Hold Back + 3xEnter";
+      const char* hint = _lock_seq_count == 0 ? "Hold Back + 3xEnter" :
+                         _lock_seq_count == 1 ? "Enter x2 more..."   : "Enter x1 more...";
       int p = 3;
       int hy = _display->height() - 13;
       int hw = _display->getTextWidth(hint);
