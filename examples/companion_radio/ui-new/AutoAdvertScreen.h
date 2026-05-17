@@ -7,7 +7,7 @@ class AutoAdvertScreen : public UIScreen {
   NodePrefs* _prefs;
   bool       _dirty;
 
-  static const int OPT_COUNT = 7;
+  static const int OPT_COUNT = 8;
   static const uint32_t OPTS[OPT_COUNT];
   static const char*    OPT_LABELS[OPT_COUNT];
 
@@ -64,5 +64,5 @@ public:
   }
 };
 
-const uint32_t AutoAdvertScreen::OPTS[AutoAdvertScreen::OPT_COUNT]       = { 0, 60, 120, 300, 600, 1800, 3600 };
-const char*    AutoAdvertScreen::OPT_LABELS[AutoAdvertScreen::OPT_COUNT] = { "off", "1min", "2min", "5min", "10min", "30min", "1h" };
+const uint32_t AutoAdvertScreen::OPTS[AutoAdvertScreen::OPT_COUNT]       = { 0, 30, 60, 120, 300, 600, 1800, 3600 };
+const char*    AutoAdvertScreen::OPT_LABELS[AutoAdvertScreen::OPT_COUNT] = { "off", "30s", "1min", "2min", "5min", "10min", "30min", "1h" };
