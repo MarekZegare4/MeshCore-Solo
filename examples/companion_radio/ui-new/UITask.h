@@ -33,6 +33,11 @@ class UITask : public AbstractUITask {
 #endif
   unsigned long _next_refresh, _auto_off;
   NodePrefs* _node_prefs;
+  bool _locked;
+  unsigned long _lock_wake_until;  // when to blank screen again after locked wake (5s)
+  int  _lock_seq;                  // 0=idle, 1=active (long-Back pressed, awaiting Enters)
+  int  _lock_seq_count;            // Enter presses so far in current sequence
+  unsigned long _lock_seq_ms;      // millis() when sequence started
   char _alert[80];
   char _notif_mel_buf[220];  // persistent RTTTL buffer for custom notification melodies
   unsigned long _alert_expiry;
@@ -86,6 +91,9 @@ public:
     ui_started_at = 0;
     _batt_mv = 0;
     _msgcount = _room_unread = 0;
+    _locked = false;
+    _lock_wake_until = 0;
+    _lock_seq = 0; _lock_seq_count = 0; _lock_seq_ms = 0;
     _last_notif_ch_idx = -1;
     _last_notif_dm_valid = false;
     memset(_last_notif_dm_prefix, 0, sizeof(_last_notif_dm_prefix));

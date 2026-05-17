@@ -10,6 +10,7 @@ class SettingsScreen : public UIScreen {
     SECTION_DISPLAY,
     BRIGHTNESS,
     AUTO_OFF,
+    AUTO_LOCK,
     BATT_DISPLAY,
     CLOCK_SECONDS,
     // Sound section
@@ -279,6 +280,10 @@ class SettingsScreen : public UIScreen {
       display.print("AutoOff");
       display.setCursor(VAL_X, y);
       display.print(AUTO_OFF_LABELS[autoOffIndex()]);
+    } else if (item == AUTO_LOCK) {
+      display.print("AutoLock");
+      display.setCursor(VAL_X, y);
+      display.print((p && p->auto_lock) ? "ON" : "OFF");
 #if ENV_INCLUDE_GPS == 1
     } else if (item == GPS_INTERVAL) {
       display.print("GPS upd");
@@ -451,6 +456,11 @@ public:
       if (right) idx = (idx + 1) % AUTO_OFF_COUNT;
       if (left)  idx = (idx + AUTO_OFF_COUNT - 1) % AUTO_OFF_COUNT;
       if (left || right) { p->auto_off_secs = AUTO_OFF_OPTS[idx]; _dirty = true; return true; }
+    }
+    if (_selected == AUTO_LOCK && p && (left || right || enter)) {
+      p->auto_lock ^= 1;
+      _dirty = true;
+      return true;
     }
 #if ENV_INCLUDE_GPS == 1
     if (_selected == GPS_INTERVAL && p) {

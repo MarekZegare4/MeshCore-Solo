@@ -1050,7 +1050,7 @@ void UITask::newMsg(uint8_t path_len, const char* from_name, const char* text, i
   snprintf(alert_buf, sizeof(alert_buf), "Msg: %.20s", from_name);
   showAlert(alert_buf, 3000);
 
-  if (_display != NULL) {
+  if (_display != NULL && !_locked) {
     if (!_display->isOn() && !hasConnection()) {
       _display->turnOn();
     }
@@ -1158,6 +1158,13 @@ void UITask::loop() {
   ev = back_btn.check();
   if (ev == BUTTON_EVENT_CLICK) {
     c = checkDisplayOn(KEY_CANCEL);
+  } else if (ev == BUTTON_EVENT_LONG_PRESS) {
+    if (_display != NULL && _display->isOn()) {
+      _lock_seq = 1;
+      _lock_seq_count = 0;
+      _lock_seq_ms = millis();
+      _next_refresh = 0;
+    }
   } else if (ev == BUTTON_EVENT_TRIPLE_CLICK) {
     c = handleTripleClick(KEY_SELECT);
   }
@@ -1200,10 +1207,48 @@ void UITask::loop() {
   }
 #endif
 
-  if (c != 0 && curr) {
-    curr->handleInput(c);
-    { uint32_t aoff = autoOffMillis(); if (aoff > 0) _auto_off = millis() + aoff; }  // extend auto-off timer
-    _next_refresh = 100;  // trigger refresh
+  // Lock sequence timeout check
+  if (_lock_seq == 1 && millis() - _lock_seq_ms > 3000) {
+    _lock_seq = 0;
+    _lock_seq_count = 0;
+  }
+
+  if (c != 0) {
+    // Intercept Enter presses when a lock/unlock sequence is active
+    if (_lock_seq == 1 && c == KEY_ENTER) {
+      _lock_seq_count++;
+      if (_lock_seq_count >= 3) {
+        _lock_seq = 0;
+        _lock_seq_count = 0;
+        _locked = !_locked;
+        if (_locked) {
+          _lock_wake_until = millis() + 2000;  // brief "locked" display, then blank
+        } else {
+          uint32_t aoff = autoOffMillis();
+          if (aoff > 0) _auto_off = millis() + aoff;
+        }
+      }
+      _next_refresh = 0;
+    } else if (_lock_seq == 1) {
+      // Non-Enter key cancels the sequence; process key normally below
+      _lock_seq = 0;
+      _lock_seq_count = 0;
+      if (!_locked && curr) {
+        curr->handleInput(c);
+        { uint32_t aoff = autoOffMillis(); if (aoff > 0) _auto_off = millis() + aoff; }
+        _next_refresh = 100;
+      }
+    } else if (!_locked && curr) {
+      curr->handleInput(c);
+      { uint32_t aoff = autoOffMillis(); if (aoff > 0) _auto_off = millis() + aoff; }  // extend auto-off timer
+      _next_refresh = 100;  // trigger refresh
+    } else if (_locked) {
+      // Locked: eat all keys except unlock sequence (handled above)
+      // Any key extends the wake window if display is already on
+      if (_display != NULL && _display->isOn())
+        _lock_wake_until = millis() + 5000;
+      _next_refresh = 0;
+    }
   }
 
   userLedHandler();
@@ -1222,7 +1267,49 @@ void UITask::loop() {
   if (curr) curr->poll();
 
   if (_display != NULL && _display->isOn()) {
-    if (millis() >= _next_refresh && curr) {
+    if (_locked && millis() > _lock_wake_until) {
+      _display->turnOff();
+    } else if (_locked && millis() >= _next_refresh) {
+      _display->startFrame();
+      // Lock screen: clock + unlock hint popup
+      uint32_t unix_ts = rtc_clock.getCurrentTime();
+      _display->setColor(DisplayDriver::LIGHT);
+      if (unix_ts < 1000000000UL) {
+        _display->setTextSize(1);
+        _display->drawTextCentered(_display->width() / 2, 20, "No time sync");
+      } else {
+        int8_t tz = _node_prefs ? _node_prefs->tz_offset_hours : 0;
+        unix_ts += (int32_t)tz * 3600;
+        time_t t = (time_t)unix_ts;
+        struct tm* ti = gmtime(&t);
+        char buf[12];
+        _display->setTextSize(2);
+        sprintf(buf, "%02d:%02d", ti->tm_hour, ti->tm_min);
+        _display->drawTextCentered(_display->width() / 2, 8, buf);
+        _display->setTextSize(1);
+        static const char* wd[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
+        static const char* mo[] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
+        sprintf(buf, "%s %d %s", wd[ti->tm_wday], ti->tm_mday, mo[ti->tm_mon]);
+        _display->drawTextCentered(_display->width() / 2, 26, buf);
+      }
+      // Hint popup at bottom (like alert style)
+      _display->setTextSize(1);
+      const char* hint = _lock_seq == 1
+        ? (_lock_seq_count == 0 ? "Enter x3 to unlock" :
+           _lock_seq_count == 1 ? "Enter x2 more..."   : "Enter x1 more...")
+        : "Hold Back + 3xEnter";
+      int p = 3;
+      int hy = _display->height() - 13;
+      int hw = _display->getTextWidth(hint);
+      int hx = (_display->width() - hw) / 2;
+      _display->setColor(DisplayDriver::LIGHT);
+      _display->fillRect(hx - p, hy - p, hw + p*2, 8 + p*2);
+      _display->setColor(DisplayDriver::DARK);
+      _display->setCursor(hx, hy);
+      _display->print(hint);
+      _display->endFrame();
+      _next_refresh = millis() + 1000;
+    } else if (!_locked && millis() >= _next_refresh && curr) {
       _display->startFrame();
       int delay_millis = curr->render(*_display);
       if (millis() < _alert_expiry && curr == home) {  // render alert only on home screen
@@ -1241,11 +1328,15 @@ void UITask::loop() {
       _display->endFrame();
     }
 #if AUTO_OFF_MILLIS > 0
-    if (autoOffMillis() > 0 && millis() > _auto_off) {
+    if (!_locked && autoOffMillis() > 0 && millis() > _auto_off) {
       _display->turnOff();
 #ifdef PIN_LED
       digitalWrite(PIN_LED, LOW);  // turn off status LED with display to save power
 #endif
+      if (_node_prefs && _node_prefs->auto_lock) {
+        _locked = true;
+        _lock_wake_until = 0;
+      }
     }
 #endif
   }
@@ -1284,9 +1375,17 @@ char UITask::checkDisplayOn(char c) {
 #ifdef PIN_LED
       digitalWrite(PIN_LED, LOW);  // ensure LED is off when waking display (userLedHandler takes over)
 #endif
+      if (_locked) {
+        _lock_wake_until = millis() + 5000;
+        _next_refresh = 0;
+        return 0;  // eat the waking key press
+      }
       c = 0;
     }
-    { uint32_t aoff = autoOffMillis(); if (aoff > 0) _auto_off = millis() + aoff; }  // extend auto-off timer
+    if (!_locked) {
+      uint32_t aoff = autoOffMillis();
+      if (aoff > 0) _auto_off = millis() + aoff;  // extend auto-off timer
+    }
     _next_refresh = 0;  // trigger refresh
   }
   return c;
