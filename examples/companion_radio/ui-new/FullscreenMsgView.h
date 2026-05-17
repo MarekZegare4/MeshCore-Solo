@@ -64,7 +64,7 @@ struct FullscreenMsgView {
     }
     if (scroll > 0) {
       display.setColor(DisplayDriver::DARK);
-      display.fillRect(display.width() - 6, FS_START_Y, 6, FS_LINE_H);
+      display.fillRect(display.width() - 6, FS_START_Y, 6, lineH);
       display.setColor(DisplayDriver::LIGHT);
       display.setCursor(display.width() - 6, FS_START_Y);
       display.print("^");
