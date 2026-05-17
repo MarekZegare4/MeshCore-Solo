@@ -127,6 +127,7 @@ static const uint16_t HP_ALL       = 0x01FF;
 #include "NearbyScreen.h"
 #include "DashboardConfigScreen.h"
 #include "AutoAdvertScreen.h"
+#include "CharTestScreen.h"
 #include "ToolsScreen.h"
 
 // ── HomeScreen ────────────────────────────────────────────────────────────────
@@ -808,6 +809,7 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
   nearby_screen = new NearbyScreen(this);
   dashboard_config = new DashboardConfigScreen(this, node_prefs);
   auto_advert_screen = new AutoAdvertScreen(this, node_prefs);
+  char_test_screen   = new CharTestScreen(this);
   setCurrScreen(splash);
 
   applyBrightness();
@@ -845,6 +847,11 @@ void UITask::gotoDashboardConfig() {
 void UITask::gotoAutoAdvertScreen() {
   ((AutoAdvertScreen*)auto_advert_screen)->enter();
   setCurrScreen(auto_advert_screen);
+}
+
+void UITask::gotoCharTestScreen() {
+  ((CharTestScreen*)char_test_screen)->enter();
+  setCurrScreen(char_test_screen);
 }
 
 void UITask::playMelody(const char* melody) {

@@ -6,7 +6,7 @@ class ToolsScreen : public UIScreen {
   UITask* _task;
   int _sel;
 
-  static const int ITEM_COUNT = 4;
+  static const int ITEM_COUNT = 5;
   static const char* ITEMS[ITEM_COUNT];
 
 public:
@@ -46,8 +46,9 @@ public:
       if (_sel == 1) { _task->gotoBotScreen();        return true; }
       if (_sel == 2) { _task->gotoNearbyScreen();     return true; }
       if (_sel == 3) { _task->gotoAutoAdvertScreen(); return true; }
+      if (_sel == 4) { _task->gotoCharTestScreen();   return true; }
     }
     return false;
   }
 };
-const char* ToolsScreen::ITEMS[4] = { "Ringtone Editor", "Auto-Reply Bot", "Nearby Nodes", "Auto-Advert" };
+const char* ToolsScreen::ITEMS[5] = { "Ringtone Editor", "Auto-Reply Bot", "Nearby Nodes", "Auto-Advert", "Char Test" };
