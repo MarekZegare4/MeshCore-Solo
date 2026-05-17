@@ -1297,10 +1297,7 @@ void UITask::loop() {
       { uint32_t aoff = autoOffMillis(); if (aoff > 0) _auto_off = millis() + aoff; }  // extend auto-off timer
       _next_refresh = 100;  // trigger refresh
     } else if (_locked) {
-      // Locked: eat all keys (unlock sequence handled at button-event level above)
-      // Any key extends the wake window if display is already on
-      if (_display != NULL && _display->isOn())
-        _lock_wake_until = millis() + 5000;
+      // Locked: eat all keys — wake window is set only when display first turns on
       _next_refresh = 0;
     }
   }
