@@ -2,7 +2,7 @@
 
 This branch extends the official MeshCore companion radio firmware for the **Seeed Wio Tracker L1**.
 
-Join the discussion: https://discord.com/channels/1495203904898728149/1505294337884553447
+Join the discussion on offical MeshCore discord: https://discord.gg/sdhYArU2jr
 
 ## New Features
 
