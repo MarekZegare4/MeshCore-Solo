@@ -84,9 +84,16 @@ uint32_t SH1106Display::decodeUtf8(const uint8_t*& p) {
     if (*p) cp = (cp << 6) | (*p++ & 0x3F);
     return cp;
   }
-  // 4-byte and invalid — skip continuation bytes
+  if ((c & 0xF8) == 0xF0) {  // 4-byte: U+10000–U+10FFFF
+    uint32_t cp = c & 0x07;
+    if (*p) cp = (cp << 6) | (*p++ & 0x3F);
+    if (*p) cp = (cp << 6) | (*p++ & 0x3F);
+    if (*p) cp = (cp << 6) | (*p++ & 0x3F);
+    return cp;
+  }
+  // invalid byte — skip continuation bytes
   while (*p && (*p & 0xC0) == 0x80) p++;
-  return '?';
+  return 0xFFFD;
 }
 
 // Draw one Lemon glyph at (x, y), return new cursor x.
@@ -113,7 +120,8 @@ int16_t SH1106Display::drawLemonChar(int16_t x, int16_t y, uint32_t cp) {
   }
 
   if (cp < Lemon.first || cp > Lemon.last) {
-    // outside font range — use default advance
+    if (cp >= 0x20)  // not a control character — draw substitution block
+      display.fillRect(x + 1, y - 1, 4, 6, _color);
     return x + 6;
   }
   const GFXglyph* glyph = &lemonGlyphs[cp - Lemon.first];
