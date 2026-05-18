@@ -1059,7 +1059,7 @@ public:
         NodePrefs* p = _task->getNodePrefs();
         int slot = _active_msgs[_msg_sel - 1];
         const char* tmpl = p ? p->custom_msgs[slot] : "OK";
-        char msg[80];
+        char msg[140];
         expandMsg(tmpl, msg, sizeof(msg));
         bool ok = sendText(msg);
         afterSend(ok, msg);

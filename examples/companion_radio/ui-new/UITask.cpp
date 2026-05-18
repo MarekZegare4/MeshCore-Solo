@@ -117,7 +117,6 @@ static const uint16_t HP_ALL       = 0x01FF;
 #include "KeyboardWidget.h"
 #include "FullscreenMsgView.h"
 #include "SensorPlaceholders.h"
-// placeholder to find end of conflict
 #include "SettingsScreen.h"
 #include "QuickMsgScreen.h"
 

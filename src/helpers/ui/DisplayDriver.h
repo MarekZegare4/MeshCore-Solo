@@ -56,11 +56,59 @@ public:
       case 0x015B: return 's'; case 0x015A: return 'S';  // ś Ś
       case 0x017A: return 'z'; case 0x0179: return 'Z';  // ź Ź
       case 0x017C: return 'z'; case 0x017B: return 'Z';  // ż Ż
+      // Czech/Slovak
+      case 0x010D: return 'c'; case 0x010C: return 'C';  // č Č
+      case 0x0161: return 's'; case 0x0160: return 'S';  // š Š
+      case 0x017E: return 'z'; case 0x017D: return 'Z';  // ž Ž
+      case 0x0159: return 'r'; case 0x0158: return 'R';  // ř Ř
+      case 0x011B: return 'e'; case 0x011A: return 'E';  // ě Ě
+      case 0x016F: return 'u'; case 0x016E: return 'U';  // ů Ů
+      case 0x010F: return 'd'; case 0x010E: return 'D';  // ď Ď
+      case 0x0165: return 't'; case 0x0164: return 'T';  // ť Ť
+      case 0x0148: return 'n'; case 0x0147: return 'N';  // ň Ň
+      case 0x013E: return 'l'; case 0x013D: return 'L';  // ľ Ľ
+      case 0x013A: return 'l'; case 0x0139: return 'L';  // ĺ Ĺ
+      case 0x0155: return 'r'; case 0x0154: return 'R';  // ŕ Ŕ
       // German
       case 0x00E4: return 'a'; case 0x00C4: return 'A';  // ä Ä
       case 0x00F6: return 'o'; case 0x00D6: return 'O';  // ö Ö
       case 0x00FC: return 'u'; case 0x00DC: return 'U';  // ü Ü
       case 0x00DF: return 's';                            // ß
+      // Scandinavian
+      case 0x00E5: return 'a'; case 0x00C5: return 'A';  // å Å
+      case 0x00F8: return 'o'; case 0x00D8: return 'O';  // ø Ø
+      case 0x00E6: return 'a'; case 0x00C6: return 'A';  // æ Æ
+      // Hungarian
+      case 0x0151: return 'o'; case 0x0150: return 'O';  // ő Ő
+      case 0x0171: return 'u'; case 0x0170: return 'U';  // ű Ű
+      // Romanian
+      case 0x0103: return 'a'; case 0x0102: return 'A';  // ă Ă
+      case 0x0219: return 's'; case 0x0218: return 'S';  // ș Ș
+      case 0x021B: return 't'; case 0x021A: return 'T';  // ț Ț
+      // Croatian
+      case 0x0111: return 'd'; case 0x0110: return 'D';  // đ Đ
+      // Icelandic
+      case 0x00F0: return 'd'; case 0x00D0: return 'D';  // ð Ð (eth)
+      case 0x00FE: return 't'; case 0x00DE: return 'T';  // þ Þ (thorn)
+      // Romanian cedilla variants (legacy encoding)
+      case 0x0163: return 't'; case 0x0162: return 'T';  // ţ Ţ
+      // Turkish
+      case 0x011F: return 'g'; case 0x011E: return 'G';  // ğ Ğ
+      case 0x015F: return 's'; case 0x015E: return 'S';  // ş Ş
+      case 0x0131: return 'i';                            // ı
+      // Baltic (Lithuanian/Latvian)
+      case 0x0101: return 'a'; case 0x0100: return 'A';  // ā Ā
+      case 0x0113: return 'e'; case 0x0112: return 'E';  // ē Ē
+      case 0x012B: return 'i'; case 0x012A: return 'I';  // ī Ī
+      case 0x016B: return 'u'; case 0x016A: return 'U';  // ū Ū
+      case 0x0123: return 'g'; case 0x0122: return 'G';  // ģ Ģ
+      case 0x0137: return 'k'; case 0x0136: return 'K';  // ķ Ķ
+      case 0x013C: return 'l'; case 0x013B: return 'L';  // ļ Ļ
+      case 0x0146: return 'n'; case 0x0145: return 'N';  // ņ Ņ
+      case 0x0157: return 'r'; case 0x0156: return 'R';  // ŗ Ŗ
+      case 0x0173: return 'u'; case 0x0172: return 'U';  // ų Ų
+      case 0x0117: return 'e'; case 0x0116: return 'E';  // ė Ė
+      case 0x012F: return 'i'; case 0x012E: return 'I';  // į Į
       // French/Spanish/Portuguese common accents
       case 0x00E0: case 0x00E1: case 0x00E2: case 0x00E3: return 'a';
       case 0x00C0: case 0x00C1: case 0x00C2: case 0x00C3: return 'A';
