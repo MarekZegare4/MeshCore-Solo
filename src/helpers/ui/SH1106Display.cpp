@@ -41,21 +41,13 @@ void SH1106Display::startFrame(Color bkg)
 {
   display.clearDisplay(); // TODO: apply 'bkg'
   _color = SH110X_WHITE;
-  display.setTextColor(_color);
-  display.setTextSize(1);
-  display.cp437(true); // Use full 256 char 'Code Page 437' font
 }
 
 void SH1106Display::setTextSize(int sz)
 {
   _text_size = (uint8_t)sz;
-  if (sz == 1) {
-    display.setFont(nullptr);  // use default font path; we override print() ourselves
-    display.setTextSize(1);
-  } else {
-    display.setFont(nullptr);
-    display.setTextSize(sz);
-  }
+  display.setFont(nullptr);
+  display.setTextSize(sz);
 }
 
 void SH1106Display::setColor(Color c)

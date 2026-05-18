@@ -50,11 +50,4 @@ public:
   void setBrightness(uint8_t level) override;
   void endFrame() override;
 
-  // UTF-8 is handled natively in print() — no substitution needed
-  void translateUTF8ToBlocks(char* dest, const char* src, size_t dest_size) override {
-    size_t len = strlen(src);
-    if (len >= dest_size) len = dest_size - 1;
-    memcpy(dest, src, len);
-    dest[len] = '\0';
-  }
 };

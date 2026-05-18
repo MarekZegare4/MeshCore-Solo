@@ -1,6 +1,6 @@
 #pragma once
-// Test screen that displays sample characters from various alphabets/scripts.
-// Useful for verifying transliteration and font coverage on experimental fonts.
+// Test screen that displays sample characters from various alphabets/scripts
+// to verify native font coverage (no transliteration — Lemon renders natively).
 
 class CharTestScreen : public UIScreen {
   UITask* _task;
@@ -41,7 +41,7 @@ public:
       display.setCursor(display.width() - 6, startY + (_visible - 1) * lineH);
       display.print("v");
     }
-    return 500;
+    return 2000;
   }
 
   bool handleInput(char c) override {
@@ -52,7 +52,6 @@ public:
   }
 };
 
-// Sample strings are printed as raw UTF-8 (no transliteration) to test native font coverage.
 // Lemon font covers U+0020–U+04FF: Latin, Greek and Cyrillic all render natively.
 const CharTestScreen::TestLine CharTestScreen::LINES[CharTestScreen::LINE_COUNT] = {
   { "PL", "ąćęłńóśźżĄĆĘŁŃ"  },  // Polish
@@ -65,5 +64,5 @@ const CharTestScreen::TestLine CharTestScreen::LINES[CharTestScreen::LINE_COUNT]
   { "TR", "çğışöüİŞĞ"          },  // Turkish
   { "LT", "āēīūģķļņŗėįų"      },  // Baltic (Latvian/Lithuanian)
   { "RU", "АБВГДЕЖЗабвгдеж"   },  // Cyrillic
-  { "GR", "\xCE\xB1\xCE\xB2\xCE\xB3\xCE\xB4\xCE\xB5\xCE\xB6\xCE\xB7\xCE\xB8\xCE\xB9\xCE\xBA" },  // Greek αβγδεζηθικ
+  { "GR", "αβγδεζηθικλμ"         },  // Greek
 };
