@@ -24,7 +24,7 @@ jobs:
       - name: Build Firmwares
         env:
           FIRMWARE_VERSION: ${{ env.GIT_TAG_VERSION }}-experimental
-        run: /usr/bin/env bash build.sh build-companion-firmwares
+        run: /usr/bin/env bash build.sh build-wio-tracker-l1-firmwares
 
       - name: Upload Workflow Artifacts
         uses: actions/upload-artifact@v4
