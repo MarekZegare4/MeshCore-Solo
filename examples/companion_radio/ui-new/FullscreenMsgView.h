@@ -3,7 +3,7 @@
 #include <helpers/ui/DisplayDriver.h>
 #include <Arduino.h>
 
-static const int FS_CHARS_MAX = 32;  // max buffer per line (larger than any font needs)
+static const int FS_CHARS_MAX = 80;  // max bytes per line; sized for worst-case narrow glyphs (122px / 2px = 61 chars)
 static const int FS_START_Y   = 12;  // header height (fixed, not font-dependent)
 
 struct FullscreenMsgView {
@@ -16,24 +16,55 @@ struct FullscreenMsgView {
 
   void begin() { scroll = 0; active = true; }
 
-  static int wrapLines(const char* text, int chars, char out[][FS_CHARS_MAX], int max_lines) {
+  // Pixel-accurate word-wrap using display.getTextWidth().
+  // Breaks at the last space that fits within max_px; hard-breaks long words.
+  static int wrapLines(DisplayDriver& display, const char* text, int max_px,
+                       char out[][FS_CHARS_MAX], int max_lines) {
     int count = 0;
-    const char* p = text;
-    while (*p && count < max_lines) {
-      int len = strlen(p);
-      if (len <= chars) {
-        strncpy(out[count++], p, FS_CHARS_MAX - 1);
-        out[count - 1][len < FS_CHARS_MAX ? len : FS_CHARS_MAX - 1] = '\0';
-        break;
+    const char* seg = text;
+    while (*seg && count < max_lines) {
+      const char* p        = seg;
+      const char* last_sp  = nullptr;  // pointer to last space that fits
+      const char* last_fit = seg;      // pointer past last char that fits
+
+      while (*p && (p - seg) < FS_CHARS_MAX - 1) {
+        // Byte length of this UTF-8 codepoint
+        uint8_t b0 = (uint8_t)*p;
+        int cb = (b0 < 0x80) ? 1 : (b0 < 0xE0) ? 2 : (b0 < 0xF0) ? 3 : 4;
+        if ((p - seg) + cb >= FS_CHARS_MAX) break;
+
+        // Measure [seg .. p+cb)
+        char buf[FS_CHARS_MAX];
+        int n = (int)(p - seg) + cb;
+        memcpy(buf, seg, n); buf[n] = '\0';
+
+        // Stop if this character would overflow — but always accept the first one
+        // so we never get stuck on a single very-wide character.
+        if (display.getTextWidth(buf) > max_px && p > seg) break;
+
+        if (*p == ' ') last_sp = p;
+        p       += cb;
+        last_fit = p;
       }
-      int brk = chars;
-      for (int i = chars - 1; i > 0; i--) {
-        if (p[i] == ' ') { brk = i; break; }
+
+      // Determine break point: prefer last space, fall back to last fitting char
+      const char* end;
+      const char* next_seg;
+      if (!*p) {
+        end = p; next_seg = p;                         // reached end of text
+      } else if (last_sp && last_sp > seg) {
+        end = last_sp; next_seg = last_sp + 1;         // break at space
+      } else {
+        end = last_fit; next_seg = last_fit;           // hard break (no space found)
       }
-      int copy = brk < FS_CHARS_MAX - 1 ? brk : FS_CHARS_MAX - 1;
-      strncpy(out[count], p, copy);
-      out[count++][copy] = '\0';
-      p += brk + (p[brk] == ' ' ? 1 : 0);
+
+      int len = (int)(end - seg);
+      if (len <= 0) { seg = *seg ? seg + 1 : seg; continue; }  // safety
+      if (len > FS_CHARS_MAX - 1) len = FS_CHARS_MAX - 1;
+      memcpy(out[count], seg, len);
+      out[count][len] = '\0';
+      count++;
+      seg = next_seg;
     }
     return count;
   }
@@ -42,7 +73,7 @@ struct FullscreenMsgView {
              bool has_prev, bool has_next) {
     display.setTextSize(1);
     const int lineH   = display.getLineHeight();
-    const int chars   = (display.width() - 6) / display.getCharWidth();
+    const int max_px  = display.width() - 6;
     const int visible = (display.height() - FS_START_Y - lineH) / lineH;
 
     display.setColor(DisplayDriver::LIGHT);
@@ -54,7 +85,7 @@ struct FullscreenMsgView {
     char trans_text[512];
     display.translateUTF8ToBlocks(trans_text, text, sizeof(trans_text));
     char lines[12][FS_CHARS_MAX];
-    int lcount = wrapLines(trans_text, chars, lines, 12);
+    int lcount = wrapLines(display, trans_text, max_px, lines, 12);
     int max_scroll = lcount > visible ? lcount - visible : 0;
     if (scroll > max_scroll) scroll = max_scroll;
 

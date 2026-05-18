@@ -18,19 +18,23 @@ public:
     display.drawTextCentered(display.width() / 2, 0, "TOOLS");
     display.fillRect(0, 10, display.width(), 1);
 
-    for (int i = 0; i < ITEM_COUNT; i++) {
-      int y = 12 + i * 12;
+    const int lineH   = display.getLineHeight();
+    const int itemH   = lineH + 1;
+    const int startY  = 12;
+    const int visible = (display.height() - startY) / itemH;
+    for (int i = 0; i < ITEM_COUNT && i < visible; i++) {
+      int y = startY + i * itemH;
       bool sel = (i == _sel);
       if (sel) {
         display.setColor(DisplayDriver::LIGHT);
-        display.fillRect(0, y - 1, display.width(), 11);
+        display.fillRect(0, y - 1, display.width(), itemH);
         display.setColor(DisplayDriver::DARK);
       } else {
         display.setColor(DisplayDriver::LIGHT);
       }
       display.setCursor(0, y);
       display.print(sel ? ">" : " ");
-      display.setCursor(8, y);
+      display.setCursor(display.getCharWidth() + 3, y);
       display.print(ITEMS[i]);
     }
     display.setColor(DisplayDriver::LIGHT);

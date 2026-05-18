@@ -38,7 +38,7 @@ public:
       display.print("^");
     }
     if (_scroll + _visible < LINE_COUNT) {
-      display.setCursor(display.width() - 6, display.height() - lineH);
+      display.setCursor(display.width() - 6, startY + (_visible - 1) * lineH);
       display.print("v");
     }
     return 500;
@@ -64,6 +64,6 @@ const CharTestScreen::TestLine CharTestScreen::LINES[CharTestScreen::LINE_COUNT]
   { "HR", "čćđšžČĆĐŠŽ"        },  // Croatian
   { "TR", "çğışöüİŞĞ"          },  // Turkish
   { "LT", "āēīūģķļņŗėįų"      },  // Baltic (Latvian/Lithuanian)
-  { "RU", "АБВГДЕЖЗабвгдеж"   },  // Cyrillic (→ blocks █)
-  { "GR", "\xCE\xB1\xCE\xB2\xCE\xB3\xCE\xB4\xCE\xB5\xCE\xB6\xCE\xB7\xCE\xB8\xCE\xB9\xCE\xBA" },  // Greek αβγδεζηθικ (→ blocks █)
+  { "RU", "АБВГДЕЖЗабвгдеж"   },  // Cyrillic
+  { "GR", "\xCE\xB1\xCE\xB2\xCE\xB3\xCE\xB4\xCE\xB5\xCE\xB6\xCE\xB7\xCE\xB8\xCE\xB9\xCE\xBA" },  // Greek αβγδεζηθικ
 };

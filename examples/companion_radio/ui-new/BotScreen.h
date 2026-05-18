@@ -8,8 +8,6 @@ class BotScreen : public UIScreen {
 
   // Items: 0=Enable(DM), 1=Channel, 2=Trigger, 3=Reply DM, 4=Reply Ch
   static const int ITEM_COUNT = 5;
-  static const int ITEM_H     = 11;
-  static const int START_Y    = 12;
   static const int VAL_X      = 70;
 
   int  _sel;
@@ -61,12 +59,15 @@ public:
     display.drawTextCentered(display.width() / 2, 0, "AUTO-REPLY BOT");
     display.fillRect(0, 10, display.width(), 1);
 
+    const int lineH  = display.getLineHeight();
+    const int itemH  = lineH + 1;
+    const int startY = 12;
     static const char* labels[] = { "Enable", "Channel", "Trigger", "Reply DM", "Reply Ch" };
     for (int i = 0; i < ITEM_COUNT; i++) {
-      int y = START_Y + i * ITEM_H;
+      int y = startY + i * itemH;
       bool sel = (i == _sel);
       if (sel) {
-        display.fillRect(0, y - 1, display.width(), ITEM_H);
+        display.fillRect(0, y - 1, display.width(), itemH);
         display.setColor(DisplayDriver::DARK);
       }
       display.setCursor(2, y);

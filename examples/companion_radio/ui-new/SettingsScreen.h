@@ -50,10 +50,9 @@ class SettingsScreen : public UIScreen {
     Count
   };
 
-  static const int VISIBLE_ITEMS = 4;
-  static const int ITEM_H = 11;
-  static const int START_Y = 12;
   static const int VAL_X = 80;
+  int _vis;    // visible item rows — updated each render() from getLineHeight()
+  int _item_h; // item row height in pixels — updated each render()
 
   int _selected;
   int _scroll;
@@ -223,7 +222,7 @@ class SettingsScreen : public UIScreen {
 
     if (sel) {
       display.setColor(DisplayDriver::LIGHT);
-      display.fillRect(0, y - 1, display.width(), ITEM_H);
+      display.fillRect(0, y - 1, display.width(), _item_h);
       display.setColor(DisplayDriver::DARK);
     } else {
       display.setColor(DisplayDriver::LIGHT);
@@ -335,7 +334,8 @@ class SettingsScreen : public UIScreen {
 
 public:
   SettingsScreen(UITask* task)
-    : _task(task), _selected(BRIGHTNESS), _scroll(0), _dirty(false), _edit_slot(-1) {}
+    : _task(task), _selected(BRIGHTNESS), _scroll(0), _dirty(false), _edit_slot(-1),
+      _vis(4), _item_h(11) {}
 
 
   void markClean() { _dirty = false; }
@@ -351,19 +351,23 @@ public:
     display.drawTextCentered(display.width() / 2, 0, "SETTINGS");
     display.fillRect(0, 10, display.width(), 1);
 
-    for (int i = 0; i < VISIBLE_ITEMS && (_scroll + i) < SettingItem::Count; i++) {
-      renderItem(display, _scroll + i, START_Y + i * ITEM_H);
+    _item_h = display.getLineHeight() + 1;
+    const int startY = 12;
+    _vis = (display.height() - startY) / _item_h;
+
+    for (int i = 0; i < _vis && (_scroll + i) < SettingItem::Count; i++) {
+      renderItem(display, _scroll + i, startY + i * _item_h);
     }
 
     // scroll indicators
     if (_scroll > 0) {
       display.setColor(DisplayDriver::LIGHT);
-      display.setCursor(display.width() - 6, START_Y);
+      display.setCursor(display.width() - 6, startY);
       display.print("^");
     }
-    if (_scroll + VISIBLE_ITEMS < SettingItem::Count) {
+    if (_scroll + _vis < SettingItem::Count) {
       display.setColor(DisplayDriver::LIGHT);
-      display.setCursor(display.width() - 6, START_Y + (VISIBLE_ITEMS - 1) * ITEM_H);
+      display.setCursor(display.width() - 6, startY + (_vis - 1) * _item_h);
       display.print("v");
     }
 
@@ -401,7 +405,7 @@ public:
       int next = nextSelectable(_selected);
       if (next != _selected) {
         _selected = next;
-        if (_selected >= _scroll + VISIBLE_ITEMS) _scroll = _selected - VISIBLE_ITEMS + 1;
+        if (_selected >= _scroll + _vis) _scroll = _selected - _vis + 1;
       }
       return true;
     }
