@@ -8,7 +8,7 @@
 #define FIRMWARE_VER_CODE 11
 
 #ifndef FIRMWARE_BUILD_DATE
-#define FIRMWARE_BUILD_DATE "12 May 2026"
+#define FIRMWARE_BUILD_DATE "19 May 2026"
 #endif
 
 // Versioning: vX.Y = upstream base, plus.N = fork revision

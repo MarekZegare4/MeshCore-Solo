@@ -80,6 +80,12 @@ public:
     while (str_len > 0 && getTextWidth(temp_str) > max_width - ellipsis_width) {
       temp_str[--str_len] = 0;
     }
+    // Strip any orphaned UTF-8 leading byte left by the byte-at-a-time trimming above.
+    // A leading byte (0xC0-0xFF, high two bits = 11) with no following continuation
+    // byte renders as an invisible 6px advance, leaving a gap before the ellipsis.
+    while (str_len > 0 && ((uint8_t)temp_str[str_len - 1] & 0xC0) == 0xC0) {
+      temp_str[--str_len] = 0;
+    }
     strcat(temp_str, ellipsis);
     
     setCursor(x, y);
