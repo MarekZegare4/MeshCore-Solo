@@ -41,11 +41,13 @@ class QuickMsgScreen : public UIScreen {
   // KEYBOARD
   KeyboardWidget _kb;
 
-  // Context menu (opened by KEY_CONTEXT_MENU in CHANNEL_PICK / CONTACT_PICK)
+  // Context menu (opened by KEY_CONTEXT_MENU in CHANNEL_PICK / CONTACT_PICK / histories)
   PopupMenu _ctx_menu;
   bool      _ctx_dirty;
   char      _ctx_notif_item[22];
   char      _ctx_melody_item[20];
+  char      _reply_prefix[36];   // "@[nick] " built when reply is triggered
+  bool      _reply_mode;         // true while composing a reply (prefix is prepended)
 
   struct ChHistEntry { uint8_t ch_idx; char text[140]; };
   ChHistEntry _hist[CH_HIST_MAX];
@@ -84,6 +86,25 @@ class QuickMsgScreen : public UIScreen {
                 rtc_clock.getCurrentTime(),
                 np ? np->tz_offset_hours : 0,
                 &sensors, batt);
+  }
+
+  // Build "@[nick] " prefix from a channel message text ("nick: body") into _reply_prefix.
+  // Returns false if sender is "Me" (own message — no reply prefix needed).
+  bool buildChannelReplyPrefix(const char* text) {
+    const char* sep = strstr(text, ": ");
+    if (!sep) return false;
+    int slen = (int)(sep - text);
+    if (slen == 2 && strncmp(text, "Me", 2) == 0) return false;
+    if (slen > 31) slen = 31;
+    snprintf(_reply_prefix, sizeof(_reply_prefix), "@[%.*s] ", slen, text);
+    return true;
+  }
+
+  void startReply(bool to_channel) {
+    _sending_to_channel = to_channel;
+    _reply_mode = true;
+    setupMsgPick();
+    _phase = MSG_PICK;
   }
 
   void setupMsgPick() {
@@ -167,6 +188,7 @@ class QuickMsgScreen : public UIScreen {
   }
 
   void afterSend(bool ok, const char* msg) {
+    _reply_mode = false;
     if (ok && _sending_to_channel) {
       _hist_sel = 0;
       _hist_scroll = 0;
@@ -361,7 +383,7 @@ public:
       _hist_head(0), _hist_count(0),
       _dm_hist_head(0), _dm_hist_count(0),
       _dm_hist_sel(-1), _dm_hist_scroll(0),
-      _ctx_dirty(false) {
+      _ctx_dirty(false), _reply_mode(false) {
     memset(_ch_unread, 0, sizeof(_ch_unread));
   }
 
@@ -571,9 +593,11 @@ public:
           const DmHistEntry& e = _dm_hist[ring_pos];
           const char* sender = e.outgoing ? "Me" : filtered_name;
           int dm_count = dmHistCountForContact(_sel_contact.id.pub_key);
-          return _dm_fs.render(display, sender, e.text,
-                               _dm_hist_sel < dm_count - 1,
-                               _dm_hist_sel > 0);
+          int ret = _dm_fs.render(display, sender, e.text,
+                                  _dm_hist_sel < dm_count - 1,
+                                  _dm_hist_sel > 0);
+          if (_ctx_menu.active) _ctx_menu.render(display);
+          return ret;
         }
         return 500;
       }
@@ -640,6 +664,7 @@ public:
       display.setCursor(cbx + 2, cby);
       display.print(ctxt);
       display.setColor(DisplayDriver::LIGHT);
+      if (_ctx_menu.active) _ctx_menu.render(display);
       return dm_count > 0 ? 500 : 2000;
 
     } else if (_phase == CHANNEL_HIST) {
@@ -658,9 +683,11 @@ public:
             strncpy(fsender, "?", sizeof(fsender));
             strncpy(fmsg, ftext, sizeof(fmsg) - 1); fmsg[sizeof(fmsg)-1] = '\0';
           }
-          return _fs.render(display, fsender, fmsg,
-                            _hist_sel < fs_hist_count - 1,
-                            _hist_sel > 0);
+          int ret = _fs.render(display, fsender, fmsg,
+                               _hist_sel < fs_hist_count - 1,
+                               _hist_sel > 0);
+          if (_ctx_menu.active) _ctx_menu.render(display);
+          return ret;
         }
         return 2000;
       }
@@ -745,13 +772,22 @@ public:
       display.setCursor(cbx + 1, cby);
       display.print(ctxt);
       display.setColor(DisplayDriver::LIGHT);
+      if (_ctx_menu.active) _ctx_menu.render(display);
 
     } else if (_phase == KEYBOARD) {
       return _kb.render(display);
 
     } else { // MSG_PICK
       char title[24];
-      if (_sending_to_channel) {
+      if (_reply_mode) {
+        int rlen = (int)strlen(_reply_prefix) - 4; // exclude "@[" and "] "
+        if (rlen < 0) rlen = 0;
+        if (rlen > 20) rlen = 20;
+        char nick_raw[32], nick_trans[32];
+        snprintf(nick_raw, sizeof(nick_raw), "%.*s", rlen, _reply_prefix + 2);
+        display.translateUTF8ToBlocks(nick_trans, nick_raw, sizeof(nick_trans));
+        snprintf(title, sizeof(title), "RE:%s", nick_trans);
+      } else if (_sending_to_channel) {
         ChannelDetails ch;
         the_mesh.getChannel(_sel_channel_idx, ch);
         snprintf(title, sizeof(title), "%.23s", ch.name);
@@ -938,6 +974,16 @@ public:
     } else if (_phase == DM_HIST) {
       int dm_count = dmHistCountForContact(_sel_contact.id.pub_key);
       if (_dm_fs.active) {
+        if (_ctx_menu.active) {
+          auto res = _ctx_menu.handleInput(c);
+          if (res == PopupMenu::SELECTED) {
+            _dm_fs.active = false;
+            startReply(false);
+          } else if (res != PopupMenu::NONE) {
+            _ctx_menu.active = false;
+          }
+          return true;
+        }
         auto res = _dm_fs.handleInput(c);
         if (res == FullscreenMsgView::PREV) {
           if (_dm_hist_sel < dm_count - 1) { _dm_hist_sel++; _dm_fs.scroll = 0; }
@@ -945,6 +991,22 @@ public:
           if (_dm_hist_sel > 0) { _dm_hist_sel--; _dm_fs.scroll = 0; }
         } else if (res == FullscreenMsgView::CLOSE) {
           _dm_fs.active = false;
+        } else if (res == FullscreenMsgView::REPLY) {
+          int ring_pos = dmHistEntryForContact(_sel_contact.id.pub_key, _dm_hist_sel);
+          if (ring_pos >= 0 && !_dm_hist[ring_pos].outgoing) {
+            snprintf(_reply_prefix, sizeof(_reply_prefix), "@[%.31s] ", _sel_contact.name);
+            _ctx_menu.begin("Options", 1);
+            _ctx_menu.addItem("Reply");
+          }
+        }
+        return true;
+      }
+      if (_ctx_menu.active) {
+        auto res = _ctx_menu.handleInput(c);
+        if (res == PopupMenu::SELECTED) {
+          startReply(false);
+        } else if (res != PopupMenu::NONE) {
+          _ctx_menu.active = false;
         }
         return true;
       }
@@ -977,10 +1039,29 @@ public:
         }
         return true;
       }
+      if (c == KEY_CONTEXT_MENU && _dm_hist_sel >= 0) {
+        int ring_pos = dmHistEntryForContact(_sel_contact.id.pub_key, _dm_hist_sel);
+        if (ring_pos >= 0 && !_dm_hist[ring_pos].outgoing) {
+          snprintf(_reply_prefix, sizeof(_reply_prefix), "@[%.31s] ", _sel_contact.name);
+          _ctx_menu.begin("Options", 1);
+          _ctx_menu.addItem("Reply");
+        }
+        return true;
+      }
 
     } else if (_phase == CHANNEL_HIST) {
       int ch_hist_count = histCountForChannel(_sel_channel_idx);
       if (_fs.active) {
+        if (_ctx_menu.active) {
+          auto res = _ctx_menu.handleInput(c);
+          if (res == PopupMenu::SELECTED) {
+            _fs.active = false;
+            startReply(true);
+          } else if (res != PopupMenu::NONE) {
+            _ctx_menu.active = false;
+          }
+          return true;
+        }
         auto res = _fs.handleInput(c);
         if (res == FullscreenMsgView::PREV) {
           if (_hist_sel < ch_hist_count - 1) { _hist_sel++; _fs.scroll = 0; updateChannelUnread(); }
@@ -988,6 +1069,21 @@ public:
           if (_hist_sel > 0) { _hist_sel--; _fs.scroll = 0; updateChannelUnread(); }
         } else if (res == FullscreenMsgView::CLOSE) {
           _fs.active = false;
+        } else if (res == FullscreenMsgView::REPLY) {
+          int ring_pos = histEntryForChannel(_sel_channel_idx, _hist_sel);
+          if (ring_pos >= 0 && buildChannelReplyPrefix(_hist[ring_pos].text)) {
+            _ctx_menu.begin("Options", 1);
+            _ctx_menu.addItem("Reply");
+          }
+        }
+        return true;
+      }
+      if (_ctx_menu.active) {
+        auto res = _ctx_menu.handleInput(c);
+        if (res == PopupMenu::SELECTED) {
+          startReply(true);
+        } else if (res != PopupMenu::NONE) {
+          _ctx_menu.active = false;
         }
         return true;
       }
@@ -1018,13 +1114,22 @@ public:
         }
         return true;
       }
+      if (c == KEY_CONTEXT_MENU && _hist_sel >= 0) {
+        int ring_pos = histEntryForChannel(_sel_channel_idx, _hist_sel);
+        if (ring_pos >= 0 && buildChannelReplyPrefix(_hist[ring_pos].text)) {
+          _ctx_menu.begin("Options", 1);
+          _ctx_menu.addItem("Reply");
+        }
+        return true;
+      }
 
     } else if (_phase == KEYBOARD) {
       auto res = _kb.handleInput(c);
       if (res == KeyboardWidget::CANCELLED) {
         _phase = MSG_PICK;
       } else if (res == KeyboardWidget::DONE) {
-        if (_kb.len > 0) {
+        int min_len = _reply_mode ? (int)strlen(_reply_prefix) : 0;
+        if (_kb.len > min_len) {
           char expanded[KB_MAX_LEN + 1];
           expandMsg(_kb.buf, expanded, sizeof(expanded));
           bool ok = sendText(expanded);
@@ -1036,6 +1141,7 @@ public:
     } else { // MSG_PICK
       int total_msg_items = 1 + _active_msg_count;
       if (c == KEY_CANCEL) {
+        _reply_mode = false;
         _phase = _sending_to_channel ? CHANNEL_HIST : DM_HIST;
         return true;
       }
@@ -1051,7 +1157,7 @@ public:
       }
       if (c == KEY_ENTER) {
         if (_msg_sel == 0) {
-          _kb.begin();
+          _kb.begin(_reply_mode ? _reply_prefix : "");
           kbAddSensorPlaceholders(_kb, &sensors);
           _phase = KEYBOARD;
           return true;
@@ -1060,7 +1166,13 @@ public:
         int slot = _active_msgs[_msg_sel - 1];
         const char* tmpl = p ? p->custom_msgs[slot] : "OK";
         char msg[140];
-        expandMsg(tmpl, msg, sizeof(msg));
+        if (_reply_mode) {
+          char body[140];
+          expandMsg(tmpl, body, sizeof(body));
+          snprintf(msg, sizeof(msg), "%s%s", _reply_prefix, body);
+        } else {
+          expandMsg(tmpl, msg, sizeof(msg));
+        }
         bool ok = sendText(msg);
         afterSend(ok, msg);
         return true;

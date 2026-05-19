@@ -10,9 +10,9 @@ Join the discussion on offical MeshCore discord: https://discord.gg/sdhYArU2jr
 
 View and send messages using the on-screen keyboard or predefined quick replies. The keyboard supports placeholders that insert live sensor data — `{time}` and `{loc}` are always available; additional placeholders (`{temp}`, `{hum}`, `{pres}`, `{batt}`, `{alt}`, `{lux}`, `{co2}`) appear automatically for sensors that are connected and returning data.
 
-Press Enter on a message to open it in fullscreen. Navigate between messages with left (newer) and right (older).
+Press Enter on a message to open it in fullscreen. Navigate between messages with left (newer) and right (older). If the message is a reply addressed to someone (`@[nick]`), a **To: nick** bar is shown below the sender name and the body is displayed without the address prefix.
 
-Hold Enter on a message or channel to open a context menu: change per-channel notification settings (mute, follow global, or force-on) and per-channel melody override (follow global, Melody 1, or Melody 2), or mark messages as read.
+Hold Enter on a message to open a context menu. From the list or fullscreen view, select **Reply** to pre-fill the keyboard or a quick message with `@[nick]` so the recipient is clearly addressed. On channel or contact list entries, the context menu also lets you change per-channel notification settings (mute, follow global, or force-on), per-channel melody override (follow global, Melody 1, or Melody 2), or mark messages as read.
 
 ### Settings Screen
 
@@ -34,6 +34,7 @@ All settings are saved to flash and restored on next boot.
 - **System**
   - Timezone (UTC offset in hours)
   - Low battery shutdown threshold
+  - Auto-lock — automatically locks the device when the display turns off
 - **GPS**
   - Position broadcast interval
 - **Contacts**
@@ -47,6 +48,15 @@ All settings are saved to flash and restored on next boot.
 A dedicated clock page on the home screen shows the current time and date, synchronized from GPS or via Bluetooth. Timezone offset is applied from Settings.
 
 Up to three configurable data fields are displayed below the clock. Available fields: battery voltage, temperature, humidity, pressure, GPS coordinates, altitude, luminosity, CO₂, contact count, and total unread message count.
+
+### Screen Lock
+
+Hold **Back** and press **Enter** three times to lock or unlock the device. While locked:
+
+- The display turns off and ignores incoming keypresses
+- A brief button press shows the lock screen: current time, date, and up to two sensor values (reuses the Dashboard Config fields)
+- A hint popup guides through the unlock sequence
+- **Auto-lock** (configurable in Settings → System) locks automatically when the display turns off
 
 ### Nearby Nodes
 

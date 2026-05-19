@@ -12,7 +12,7 @@ struct FullscreenMsgView {
 
   FullscreenMsgView() : scroll(0), active(false) {}
 
-  enum Result { NONE, PREV, NEXT, CLOSE };
+  enum Result { NONE, PREV, NEXT, CLOSE, REPLY };
 
   void begin() { scroll = 0; active = true; }
 
@@ -74,37 +74,60 @@ struct FullscreenMsgView {
     display.setTextSize(1);
     const int lineH   = display.getLineHeight();
     const int max_px  = display.width() - 6;
-    const int visible = (display.height() - FS_START_Y - lineH) / lineH;
+
+    // detect @recipient at start of message
+    char to_nick[32] = "";
+    const char* body = text;
+    if (text[0] == '@' && text[1] == '[') {
+      const char* close = strchr(text + 2, ']');
+      if (close && close[1] == ' ' && close[2]) {
+        int len = (int)(close - text) - 2;
+        if (len >= (int)sizeof(to_nick)) len = sizeof(to_nick) - 1;
+        memcpy(to_nick, text + 2, len);
+        to_nick[len] = '\0';
+        body = close + 2;
+      }
+    }
+
+    const int header_h = to_nick[0] ? 20 : 10;
+    const int startY   = header_h + 2;
+    const int visible  = (display.height() - startY - lineH) / lineH;
 
     display.setColor(DisplayDriver::LIGHT);
-    display.fillRect(0, 0, display.width(), 10);
+    display.fillRect(0, 0, display.width(), header_h);
     display.setColor(DisplayDriver::DARK);
     display.drawTextEllipsized(2, 1, display.width() - 4, sender);
+    if (to_nick[0]) {
+      char trans_nick[32], to_label[36];
+      display.translateUTF8ToBlocks(trans_nick, to_nick, sizeof(trans_nick));
+      snprintf(to_label, sizeof(to_label), "To: %s", trans_nick);
+      display.drawTextEllipsized(2, 11, display.width() - 4, to_label);
+    }
     display.setColor(DisplayDriver::LIGHT);
 
     char trans_text[512];
-    display.translateUTF8ToBlocks(trans_text, text, sizeof(trans_text));
+    display.translateUTF8ToBlocks(trans_text, body, sizeof(trans_text));
     char lines[12][FS_CHARS_MAX];
     int lcount = wrapLines(display, trans_text, max_px, lines, 12);
     int max_scroll = lcount > visible ? lcount - visible : 0;
     if (scroll > max_scroll) scroll = max_scroll;
 
     for (int i = 0; i < visible && (scroll + i) < lcount; i++) {
-      display.setCursor(0, FS_START_Y + i * lineH);
+      display.setCursor(0, startY + i * lineH);
       display.print(lines[scroll + i]);
     }
     if (scroll > 0) {
       display.setColor(DisplayDriver::DARK);
-      display.fillRect(display.width() - 6, FS_START_Y, 6, lineH);
+      display.fillRect(display.width() - 6, startY, 6, lineH);
       display.setColor(DisplayDriver::LIGHT);
-      display.setCursor(display.width() - 6, FS_START_Y);
+      display.setCursor(display.width() - 6, startY);
       display.print("^");
     }
     if (scroll < max_scroll) {
       display.setColor(DisplayDriver::DARK);
-      display.fillRect(display.width() - 6, FS_START_Y + (visible - 1) * lineH, 6, lineH);
+      display.fillRect(display.width() - 6, startY + (visible - 1) * lineH, 6, lineH);
       display.setColor(DisplayDriver::LIGHT);
-      display.setCursor(display.width() - 6, FS_START_Y + (visible - 1) * lineH);
+      display.setCursor(display.width() - 6, startY + (visible - 1) * lineH);
       display.print("v");
     }
     const int nav_y = display.height() - lineH;
@@ -120,10 +143,11 @@ struct FullscreenMsgView {
   }
 
   Result handleInput(char c) {
-    if (c == KEY_UP)     { if (scroll > 0) scroll--; return NONE; }
-    if (c == KEY_DOWN)   { scroll++; return NONE; }
-    if (c == KEY_LEFT)   return NEXT;
-    if (c == KEY_RIGHT)  return PREV;
+    if (c == KEY_UP)          { if (scroll > 0) scroll--; return NONE; }
+    if (c == KEY_DOWN)        { scroll++; return NONE; }
+    if (c == KEY_LEFT)        return NEXT;
+    if (c == KEY_RIGHT)       return PREV;
+    if (c == KEY_CONTEXT_MENU) return REPLY;
     if (c == KEY_ENTER || c == KEY_CANCEL) return CLOSE;
     return NONE;
   }
