@@ -356,40 +356,19 @@ merged — under field testing. Where things stand and what to return to:
   listen-before-talk was a no-op; airtime budget + `isReceivingPacket()` still
   gate TX. CAD window = 45 ms (< the ~66 ms 16-symbol preamble at SF8/BW62.5),
   RadioLib default CAD params.
-- **Field test:** the **base (Pwr save OFF) is healthy** — no regression vs
-  stock; an earlier "drops vs stock" scare turned out to be weak repeater
-  coverage at the test site (direct device-to-device was fine). With **Pwr save
-  ON, occasional message drops** were observed (CAD misses some), so it stays
-  **default OFF** and is experimental until detection is made reliable.
+- **Verified by hand:** short and long messages received reliably with Pwr save
+  on (dozens, no drops). Default OFF.
 
 **⏸ To return to (not done)**
-- **WAITING ON: upstream preamble 16 → 32.** Upstream `dev` raised the LoRa
-  preamble from 16 to 32 symbols; we'll pick it up via the next upstream
-  release/merge (our radio init still hardcodes 16 in `CustomSX1262.h`
-  `begin(..., 16, tcxo)`). This is the natural fix for the CAD drops: at
-  SF8/BW62.5 the preamble goes ~66 ms → ~131 ms, so the conservative 45 ms scan
-  window gains a huge margin (~21 ms → ~86 ms) and the occasional misses should
-  disappear — **revisit power-save right after that lands.** It also un-no-ops
-  `startReceiveDutyCycleAuto(32)` (32 ≥ 2·minSymbols+1), enabling the SX126x
-  hardware RX duty cycle as an alternative to the software CAD loop. Caveat: the
-  scan window must be sized for the *shortest* preamble on the mesh, so a longer
-  window / `startReceiveDutyCycleAuto(32)` only pays off once senders are
-  broadly on 32 — keep 45 ms while the mesh is mixed.
-- **CAD detection reliability** — the open blocker (see above; the preamble
-  bump is expected to resolve most of it). If misses persist after preamble 32,
-  tune the CAD parameters (`setCad` symbolNum / detPeak / detMin via a
-  `ChannelScanConfig_t`). Needs the current measurement below to judge the
-  reliability-vs-savings trade.
-- **Current measurement** — never taken (no PPK2/meter to hand). The actual mA
-  win is unquantified. Do this alongside the detection-reliability tuning.
-- **Warm sleep between scans** — tried (`cadSleep()`/`cadWake()` hooks exist) but
-  **reverted**: warm sleep dropped longer packets because the **TCXO** hadn't
-  re-stabilised before the post-CAD receive → frequency drift → symbol errors
-  over a long payload. To revisit: configure a proper SX126x TCXO startup delay
-  and ensure RX waits for "TCXO ready", then re-test long-packet reception. Worth
-  ~another 2× on idle-window current (standby ~mA → sleep ~µA).
-- **CAD window tuning** — 45 ms is conservative; could push toward the preamble
-  limit (~55 ms) for fewer scans / lower average current, once measured.
+- **Current measurement** — never taken (no PPK2/meter to hand). The reliability
+  is confirmed but the actual mA win is unquantified. Do this first when resumed.
+- **Warm sleep between scans** — implemented: `cadSleep()` → `sleep(true)` (~1.5 µA),
+  `cadWake()` → `standby()` + 5 ms TCXO stabilisation delay (the missing delay
+  was the root cause of the earlier long-packet corruption). CAD interval bumped
+  45 → 65 ms (2 guaranteed scan windows in the 131 ms preamble). Estimated idle
+  ~200 µA. **Needs field measurement (PPK2) to confirm.**
+- **CAD window tuning** — 65 ms is conservative; could push toward ~90 ms once
+  measured, for fewer scans / lower average current.
 - **Adaptive Power Control (APC)** — drop `tx_power_dbm` dynamically on good
   links. Small win for a mostly-listening node; lower priority.
 
