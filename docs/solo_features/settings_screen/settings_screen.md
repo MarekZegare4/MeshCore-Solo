@@ -63,9 +63,10 @@ Lists all available home screen pages. For each entry:
 
 ### Radio
 
-| Setting  | Options  | Notes      |
-| -------- | -------- | ---------- |
-| TX power | 2–22 dBm | LEFT/RIGHT |
+| Setting   | Options    | Notes                                                                                                                                                              |
+| --------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| TX power  | 2–22 dBm   | LEFT/RIGHT                                                                                                                                                          |
+| Pwr save  | ON / OFF   | **Battery saver (experimental).** CAD-windowed receive: the radio samples for activity and idles between scans instead of listening continuously, cutting average RX current. Trades a little receive latency; leave OFF if you need lowest-latency / most reliable reception. |
 
 ---
 
