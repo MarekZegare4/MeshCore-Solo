@@ -19,10 +19,25 @@ protected:
   virtual bool isReceivingPacket() =0;
   virtual void doResetAGC();
 
+  // Power-save (CAD-windowed RX): instead of continuous receive, periodically
+  // run a Channel Activity Detection scan and sit in standby between scans; on
+  // detected activity switch to a full receive to catch the packet. Cuts the
+  // average RX current several-fold. Driven from loop() (which runs before
+  // recvRaw each cycle); falls back to continuous RX if CAD is unsupported.
+  bool     _power_save = false;
+  uint8_t  _ps_phase = 0;        // PS_* (see .cpp): scanning / sleeping / rxing
+  uint32_t _ps_timer = 0;        // next-scan time, or RX false-detect deadline
+  void armRecv();                // arm RX honouring power-save (CAD) or continuous
+  void powerSaveLoop();
+  void enterCadSleep();
+
 public:
   RadioLibWrapper(PhysicalLayer& radio, mesh::MainBoard& board) : _radio(&radio), _board(&board), _preamble_sf(0) { n_recv = n_sent = 0; }
 
   void begin() override;
+  // Enable/disable CAD-windowed receive. Takes effect on the next RX re-arm.
+  void setPowerSaving(bool en) { _power_save = en; }
+  bool getPowerSaving() const { return _power_save; }
   virtual void powerOff() { _radio->sleep(); }
   int recvRaw(uint8_t* bytes, int sz) override;
   uint32_t getEstAirtimeFor(int len_bytes) override;

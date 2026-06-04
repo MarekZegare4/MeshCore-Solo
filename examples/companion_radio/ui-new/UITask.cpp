@@ -2066,6 +2066,11 @@ void UITask::applyTxPower() {
   radio_driver.setTxPower(_node_prefs->tx_power_dbm);
 }
 
+void UITask::applyPowerSave() {
+  if (_node_prefs == NULL) return;
+  radio_driver.setPowerSaving(_node_prefs->rx_powersave);
+}
+
 void UITask::applyBrightness() {
   if (_display != NULL && _node_prefs != NULL) {
     _display->setBrightness(_node_prefs->display_brightness);

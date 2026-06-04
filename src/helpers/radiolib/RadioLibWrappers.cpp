@@ -11,6 +11,22 @@
 #define NUM_NOISE_FLOOR_SAMPLES  64
 #define SAMPLING_THRESHOLD  14
 
+// Power-save CAD-windowing sub-states (tracked in _ps_phase; `state` stays
+// STATE_RX throughout so isInRecvMode() reports "receiving" and the dispatcher
+// never trips its 8 s not-in-RX watchdog while we sit in standby between scans).
+#define PS_OFF       0
+#define PS_SCANNING  1   // CAD armed, waiting for the CAD-done interrupt
+#define PS_SLEEPING  2   // standby between scans, waiting for _ps_timer
+#define PS_RXING     3   // CAD hit → full receive armed, waiting for the packet
+
+// Time between CAD scans. Must be shorter than the on-air preamble so a scan
+// always lands inside it (16-symbol preamble ≈ 66 ms at SF8/BW62.5). Tuned for
+// this firmware's fixed LoRa params — revisit if SF/BW change.
+#define PS_CAD_INTERVAL_MS  45
+// If CAD detects activity but no packet actually lands, fall back to scanning
+// instead of sitting in continuous RX forever.
+#define PS_RX_TIMEOUT_MS    1500
+
 static volatile uint8_t state = STATE_IDLE;
 
 // this function is called when a complete packet
@@ -26,6 +42,8 @@ void setFlag(void) {
 
 void RadioLibWrapper::begin() {
   _radio->setPacketReceivedAction(setFlag);  // this is also SentComplete interrupt
+  _radio->setChannelScanAction(setFlag);      // CAD-done shares the same DIO1 flag
+  _ps_phase = PS_OFF;
   _preamble_sf = getSpreadingFactor();
   _radio->setPreambleLength(preambleLengthForSF(_preamble_sf)); // longer preamble for lower SF improves reliability
   state = STATE_IDLE;
@@ -84,6 +102,20 @@ void RadioLibWrapper::resetAGC() {
 }
 
 void RadioLibWrapper::loop() {
+  if (_power_save) {
+    // Just enabled while in continuous RX: drop into the CAD window once idle
+    // (don't interrupt an in-flight packet or an unread RX-done).
+    if (_ps_phase == PS_OFF) {
+      if (!(state & STATE_INT_READY) && !isReceivingPacket()) armRecv();
+      return;
+    }
+    powerSaveLoop();   // CAD windowing replaces continuous-RX noise sampling
+    return;
+  }
+  // Just disabled while in a CAD phase: return to continuous RX immediately
+  // (otherwise the radio would stay parked in standby between scans).
+  if (_ps_phase != PS_OFF) { armRecv(); return; }
+
   if (state == STATE_RX && _num_floor_samples < NUM_NOISE_FLOOR_SAMPLES) {
     if (!isReceivingPacket()) {
       int rssi = getCurrentRSSI();
@@ -104,11 +136,76 @@ void RadioLibWrapper::loop() {
 }
 
 void RadioLibWrapper::startRecv() {
+  armRecv();
+}
+
+// Arm the receiver. In power-save mode this starts a CAD scan (and the CAD
+// state machine in powerSaveLoop() takes over); otherwise a continuous RX.
+// If CAD isn't supported by the module, permanently fall back to continuous RX.
+void RadioLibWrapper::armRecv() {
+  if (_power_save) {
+    int16_t e = _radio->startChannelScan();
+    if (e == RADIOLIB_ERR_NONE) { _ps_phase = PS_SCANNING; state = STATE_RX; return; }
+    MESH_DEBUG_PRINTLN("RadioLibWrapper: CAD unsupported (%d) — power-save off", (int)e);
+    _power_save = false;
+  }
+  _ps_phase = PS_OFF;
   int err = _radio->startReceive();
   if (err == RADIOLIB_ERR_NONE) {
     state = STATE_RX;
   } else {
     MESH_DEBUG_PRINTLN("RadioLibWrapper: error: startReceive(%d)", err);
+  }
+}
+
+void RadioLibWrapper::enterCadSleep() {
+  _radio->standby();              // low-power between scans (TODO: warm sleep for more savings)
+  _ps_phase = PS_SLEEPING;
+  _ps_timer = millis() + PS_CAD_INTERVAL_MS;
+  state = STATE_RX;               // keep isInRecvMode() true so the dispatcher doesn't flag a stuck radio
+}
+
+// CAD-windowed receive state machine. Runs each loop() (before recvRaw):
+//  SLEEPING : wait out the inter-scan window, then re-arm a CAD scan.
+//  SCANNING : on CAD-done, either drop into full RX (activity) or sleep (free).
+//  RXING    : a real RX-done is consumed by recvRaw; here we only guard against
+//             a false CAD that never yields a packet.
+void RadioLibWrapper::powerSaveLoop() {
+  if (state == STATE_TX_WAIT) return;   // never touch the radio mid-transmit
+
+  switch (_ps_phase) {
+    case PS_SLEEPING:
+      if ((int32_t)(millis() - _ps_timer) >= 0) armRecv();   // → PS_SCANNING
+      break;
+
+    case PS_SCANNING:
+      if (state & STATE_INT_READY) {
+        state &= ~STATE_INT_READY;                            // consume CAD-done
+        int16_t r = _radio->getChannelScanResult();
+        if (r == RADIOLIB_LORA_DETECTED || r == RADIOLIB_PREAMBLE_DETECTED) {
+          if (_radio->startReceive() == RADIOLIB_ERR_NONE) {
+            _ps_phase = PS_RXING; state = STATE_RX;
+            _ps_timer = millis() + PS_RX_TIMEOUT_MS;
+          } else {
+            enterCadSleep();
+          }
+        } else {
+          enterCadSleep();                                    // channel free → sleep window
+        }
+      }
+      break;
+
+    case PS_RXING:
+      // The packet (RX-done → STATE_INT_READY) is read by recvRaw, which then
+      // re-arms via armRecv(). If nothing arrives, the CAD was a false hit:
+      // return to scanning rather than burning current in continuous RX.
+      if (!(state & STATE_INT_READY) && (int32_t)(millis() - _ps_timer) >= 0) {
+        enterCadSleep();
+      }
+      break;
+
+    default:
+      break;
   }
 }
 
@@ -136,12 +233,7 @@ int RadioLibWrapper::recvRaw(uint8_t* bytes, int sz) {
   }
 
   if (state != STATE_RX) {
-    int err = _radio->startReceive();
-    if (err == RADIOLIB_ERR_NONE) {
-      state = STATE_RX;
-    } else {
-      MESH_DEBUG_PRINTLN("RadioLibWrapper: error: startReceive(%d)", err);
-    }
+    armRecv();   // continuous RX, or re-arm the CAD window in power-save mode
   }
   return len;
 }

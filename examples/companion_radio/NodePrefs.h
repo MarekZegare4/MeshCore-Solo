@@ -120,6 +120,11 @@ struct NodePrefs {  // persisted to file
   // Trail Summary readout: 0=speed (km/h or mph), 1=pace (min/km or min/mi).
   // The km-vs-mi choice now comes from units_imperial, so this is just the mode.
   uint8_t  trail_show_pace;
+  // CAD-windowed receive (battery saver): 0=continuous RX (default), 1=on.
+  // Periodically scans for activity and idles between scans instead of
+  // listening continuously — cuts average RX current at the cost of a little
+  // receive latency. See RadioLibWrapper power-save.
+  uint8_t  rx_powersave;
 
   // Tail sentinel written at the end of /new_prefs. Bump the low byte when
   // adding/removing/reordering fields in DataStore::savePrefs/loadPrefsInt so

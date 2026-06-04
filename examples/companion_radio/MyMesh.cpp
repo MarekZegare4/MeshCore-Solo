@@ -1203,6 +1203,7 @@ void MyMesh::begin(bool has_display) {
   radio_driver.setParams(_prefs.freq, _prefs.bw, _prefs.sf, _prefs.cr);
   radio_driver.setTxPower(_prefs.tx_power_dbm);
   radio_driver.setRxBoostedGainMode(_prefs.rx_boosted_gain);
+  radio_driver.setPowerSaving(_prefs.rx_powersave);   // CAD-windowed RX (battery saver)
   MESH_DEBUG_PRINTLN("RX Boosted Gain Mode: %s",
                      radio_driver.getRxBoostedGainMode() ? "Enabled" : "Disabled");
 }

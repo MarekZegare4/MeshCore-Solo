@@ -54,6 +54,7 @@ class SettingsScreen : public UIScreen {
     // Radio section
     SECTION_RADIO,
     TX_POWER,
+    POWER_SAVE,
     // System section
     SECTION_SYSTEM,
     TIMEZONE,
@@ -479,6 +480,10 @@ class SettingsScreen : public UIScreen {
       snprintf(buf, sizeof(buf),"%ddBm", p ? p->tx_power_dbm : 0);
       display.setCursor(display.valCol(), y);
       display.print(buf);
+    } else if (item == POWER_SAVE) {
+      display.print("Pwr save");
+      display.setCursor(display.valCol(), y);
+      display.print((p && p->rx_powersave) ? "ON" : "OFF");
 #if AUTO_OFF_MILLIS > 0
     } else if (item == AUTO_OFF) {
       display.print("AutoOff");
@@ -735,6 +740,12 @@ public:
     if (_selected == TX_POWER && p) {
       if (right && p->tx_power_dbm < 22) { p->tx_power_dbm++; _task->applyTxPower(); _dirty = true; return true; }
       if (left  && p->tx_power_dbm > 2)  { p->tx_power_dbm--; _task->applyTxPower(); _dirty = true; return true; }
+    }
+    if (_selected == POWER_SAVE && p && (left || right || enter)) {
+      p->rx_powersave ^= 1;
+      _task->applyPowerSave();
+      _dirty = true;
+      return true;
     }
 #if AUTO_OFF_MILLIS > 0
     if (_selected == AUTO_OFF && p) {
