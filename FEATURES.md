@@ -356,8 +356,11 @@ merged — under field testing. Where things stand and what to return to:
   listen-before-talk was a no-op; airtime budget + `isReceivingPacket()` still
   gate TX. CAD window = 45 ms (< the ~66 ms 16-symbol preamble at SF8/BW62.5),
   RadioLib default CAD params.
-- **Verified by hand:** short and long messages received reliably with Pwr save
-  on (dozens, no drops). Default OFF.
+- **Field test:** the **base (Pwr save OFF) is healthy** — no regression vs
+  stock; an earlier "drops vs stock" scare turned out to be weak repeater
+  coverage at the test site (direct device-to-device was fine). With **Pwr save
+  ON, occasional message drops** were observed (CAD misses some), so it stays
+  **default OFF** and is experimental until detection is made reliable.
 
 **⏸ To return to (not done)**
 - **Current measurement** — never taken (no PPK2/meter to hand). The reliability
