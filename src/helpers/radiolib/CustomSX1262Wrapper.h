@@ -41,14 +41,15 @@ public:
   void doResetAGC() override { sx126xResetAGC((SX126x *)_radio); }
 
   // Warm sleep between CAD scans: ~1.5 µA vs ~600 µA in standby-RC.
-  // cadWake() delays 5 ms so the TCXO fully re-stabilises before the next scan
-  // (previous attempt without the delay corrupted long packets via freq drift).
+  // cadWake() sets standbyXOSC=true so every subsequent internal standby() call
+  // keeps the TCXO powered — no gap between CAD and startReceive, no freq drift.
+  // The chip's programmed TCXO timeout (set by begin()) handles stabilisation.
   void cadSleep() override {
     ((CustomSX1262 *)_radio)->sleep(true);  // warm sleep — config retained
   }
   void cadWake() override {
-    _radio->standby();
-    delayMicroseconds(5000);  // TCXO stabilisation after warm sleep
+    ((SX126x *)_radio)->standbyXOSC = true;  // all subsequent standby() → XOSC
+    _radio->standby();                         // wake into standby-XOSC, TCXO on
   }
 
   void setRxBoostedGainMode(bool en) override {

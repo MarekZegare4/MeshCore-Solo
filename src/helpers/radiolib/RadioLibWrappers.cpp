@@ -24,8 +24,13 @@
 // → 65 ms gives 2 guaranteed windows with margin. Revisit if SF/BW change.
 #define PS_CAD_INTERVAL_MS  65
 // If CAD detects activity but no packet actually lands, fall back to scanning
-// instead of sitting in continuous RX forever.
-#define PS_RX_TIMEOUT_MS    1500
+// instead of sitting in continuous RX forever. Must exceed the longest possible
+// packet air-time: 256 B at SF8/BW62.5/CR5 ≈ 1925 ms from preamble start, so
+// 3000 ms gives ~1 s margin for a false-detect case.
+#define PS_RX_TIMEOUT_MS    3000
+// After a successful receive, skip inter-scan sleep for this long so back-to-back
+// messages are caught without waiting out the 65 ms window each time.
+#define PS_BURST_WINDOW_MS  500
 
 static volatile uint8_t state = STATE_IDLE;
 
@@ -160,6 +165,10 @@ void RadioLibWrapper::armRecv() {
 }
 
 void RadioLibWrapper::enterCadSleep() {
+  if ((int32_t)(millis() - _ps_burst_until) < 0) {
+    armRecv();   // burst window: skip sleep, scan again immediately
+    return;
+  }
   cadSleep();                     // warm sleep (SX126x) or standby fallback between scans
   _ps_phase = PS_SLEEPING;
   _ps_timer = millis() + PS_CAD_INTERVAL_MS;
@@ -228,6 +237,7 @@ int RadioLibWrapper::recvRaw(uint8_t* bytes, int sz) {
       } else {
       //  Serial.print("  readData() -> "); Serial.println(len);
         n_recv++;
+        _ps_burst_until = millis() + PS_BURST_WINDOW_MS;
       }
     }
     state = STATE_IDLE;   // need another startReceive()

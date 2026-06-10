@@ -27,6 +27,7 @@ protected:
   bool     _power_save = false;
   uint8_t  _ps_phase = 0;        // PS_* (see .cpp): scanning / sleeping / rxing
   uint32_t _ps_timer = 0;        // next-scan time, or RX false-detect deadline
+  uint32_t _ps_burst_until = 0;  // scan continuously until this time after RX
   void armRecv();                // arm RX honouring power-save (CAD) or continuous
   void powerSaveLoop();
   void enterCadSleep();
