@@ -339,7 +339,61 @@ A fuller position-centred navigator (you fixed at screen centre, fixed/preset
 zoom, pan) is a larger separate feature; start with the rotate-the-fit version
 if pursued.
 
-### 📋 Battery / power optimization (CAD RX windowing + APC) — after trail polish
+### 🚧 Battery / power optimization (CAD RX windowing + APC)
+
+**Phase 1 shipped on branch `feat/power-saving`** (CAD-windowed receive). Not yet
+merged — under field testing. Where things stand and what to return to:
+
+**✅ Done (phase 1) — CAD-windowed RX, behind a setting**
+- `RadioLibWrapper` gained a CAD state machine (scan → standby window → on
+  detect, full RX), driven from `loop()` (runs before `recvRaw`). `state` stays
+  `STATE_RX` through all phases so the dispatcher's not-in-RX watchdog never
+  trips; re-arm routes through `armRecv()`; falls back to continuous RX if CAD
+  is unsupported. `setPowerSaving()`/`getPowerSaving()`.
+- Companion: `rx_powersave` pref (schema `0xC0DE0008`), **Settings › Radio ›
+  "Pwr save"** toggle, applied at boot (MyMesh) and on change (UITask).
+- CSMA unaffected: this firmware's interference threshold is already 0, so
+  listen-before-talk was a no-op; airtime budget + `isReceivingPacket()` still
+  gate TX. CAD window = 45 ms (< the ~66 ms 16-symbol preamble at SF8/BW62.5),
+  RadioLib default CAD params.
+- **Field test:** the **base (Pwr save OFF) is healthy** — no regression vs
+  stock; an earlier "drops vs stock" scare turned out to be weak repeater
+  coverage at the test site (direct device-to-device was fine). With **Pwr save
+  ON, occasional message drops** were observed (CAD misses some), so it stays
+  **default OFF** and is experimental until detection is made reliable.
+
+**⏸ To return to (not done)**
+- **WAITING ON: upstream preamble 16 → 32.** Upstream `dev` raised the LoRa
+  preamble from 16 to 32 symbols; we'll pick it up via the next upstream
+  release/merge (our radio init still hardcodes 16 in `CustomSX1262.h`
+  `begin(..., 16, tcxo)`). This is the natural fix for the CAD drops: at
+  SF8/BW62.5 the preamble goes ~66 ms → ~131 ms, so the conservative 45 ms scan
+  window gains a huge margin (~21 ms → ~86 ms) and the occasional misses should
+  disappear — **revisit power-save right after that lands.** It also un-no-ops
+  `startReceiveDutyCycleAuto(32)` (32 ≥ 2·minSymbols+1), enabling the SX126x
+  hardware RX duty cycle as an alternative to the software CAD loop. Caveat: the
+  scan window must be sized for the *shortest* preamble on the mesh, so a longer
+  window / `startReceiveDutyCycleAuto(32)` only pays off once senders are
+  broadly on 32 — keep 45 ms while the mesh is mixed.
+- **CAD detection reliability** — the open blocker (see above; the preamble
+  bump is expected to resolve most of it). If misses persist after preamble 32,
+  tune the CAD parameters (`setCad` symbolNum / detPeak / detMin via a
+  `ChannelScanConfig_t`). Needs the current measurement below to judge the
+  reliability-vs-savings trade.
+- **Current measurement** — never taken (no PPK2/meter to hand). The actual mA
+  win is unquantified. Do this alongside the detection-reliability tuning.
+- **Warm sleep between scans** — tried (`cadSleep()`/`cadWake()` hooks exist) but
+  **reverted**: warm sleep dropped longer packets because the **TCXO** hadn't
+  re-stabilised before the post-CAD receive → frequency drift → symbol errors
+  over a long payload. To revisit: configure a proper SX126x TCXO startup delay
+  and ensure RX waits for "TCXO ready", then re-test long-packet reception. Worth
+  ~another 2× on idle-window current (standby ~mA → sleep ~µA).
+- **CAD window tuning** — 45 ms is conservative; could push toward the preamble
+  limit (~55 ms) for fewer scans / lower average current, once measured.
+- **Adaptive Power Control (APC)** — drop `tx_power_dbm` dynamically on good
+  links. Small win for a mostly-listening node; lower priority.
+
+**Original analysis (kept for context):**
 
 Goal: multiply battery life **without losing functionality**. The dominant
 draw on this node is the radio in **continuous RX** (always-on `startReceive()`
@@ -379,12 +433,9 @@ at preamble 16). Prefer adopting/extending upstream work over a parallel
 implementation. Note ZephCore's licence before copying any code verbatim
 (architecture inspiration is fine).
 
-Sequencing: **deferred until the trail/waypoints/nav polishing is finished.**
-The radio-side CAD windowing lives on the `feat/power-saving` branch and is now
-**unblocked** by the preamble fix. First step when picked up: rebase it onto the
-v1.16 merge (it will hit the removed `radio_set_tx_power()`/`radio_set_params()`
-globals — replace with `radio_driver.*` like the merge did), then re-test whether
-long messages still drop at preamble 32, ideally profiling with a PPK2/meter.
+Sequencing: phase 1 (CAD windowing) is done and in field test on
+`feat/power-saving`; see the status block at the top of this entry for what's
+left (measurement, warm sleep, window tuning, APC).
 
 ### SOS broadcast
 

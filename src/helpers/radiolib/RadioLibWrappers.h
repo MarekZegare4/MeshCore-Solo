@@ -30,6 +30,11 @@ protected:
   void armRecv();                // arm RX honouring power-save (CAD) or continuous
   void powerSaveLoop();
   void enterCadSleep();
+  // Low-power state between CAD scans. Default = standby; SX126x overrides with
+  // a warm (config-retained) sleep for ~µA idle. cadWake() brings it back to a
+  // responsive standby before the next scan.
+  virtual void cadSleep() { _radio->standby(); }
+  virtual void cadWake()  { _radio->standby(); }
 
 public:
   RadioLibWrapper(PhysicalLayer& radio, mesh::MainBoard& board) : _radio(&radio), _board(&board), _preamble_sf(0) { n_recv = n_sent = 0; }

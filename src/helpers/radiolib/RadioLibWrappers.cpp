@@ -19,10 +19,10 @@
 #define PS_SLEEPING  2   // standby between scans, waiting for _ps_timer
 #define PS_RXING     3   // CAD hit → full receive armed, waiting for the packet
 
-// Time between CAD scans. Must be shorter than the on-air preamble so a scan
-// always lands inside it (16-symbol preamble ≈ 66 ms at SF8/BW62.5). Tuned for
-// this firmware's fixed LoRa params — revisit if SF/BW change.
-#define PS_CAD_INTERVAL_MS  45
+// Time between CAD scans. Must be shorter than half the on-air preamble so at
+// least two scans land inside it. 32-symbol preamble ≈ 131 ms at SF8/BW62.5
+// → 65 ms gives 2 guaranteed windows with margin. Revisit if SF/BW change.
+#define PS_CAD_INTERVAL_MS  65
 // If CAD detects activity but no packet actually lands, fall back to scanning
 // instead of sitting in continuous RX forever.
 #define PS_RX_TIMEOUT_MS    1500
@@ -144,6 +144,7 @@ void RadioLibWrapper::startRecv() {
 // If CAD isn't supported by the module, permanently fall back to continuous RX.
 void RadioLibWrapper::armRecv() {
   if (_power_save) {
+    cadWake();                              // bring the radio out of warm sleep first
     int16_t e = _radio->startChannelScan();
     if (e == RADIOLIB_ERR_NONE) { _ps_phase = PS_SCANNING; state = STATE_RX; return; }
     MESH_DEBUG_PRINTLN("RadioLibWrapper: CAD unsupported (%d) — power-save off", (int)e);
@@ -159,7 +160,7 @@ void RadioLibWrapper::armRecv() {
 }
 
 void RadioLibWrapper::enterCadSleep() {
-  _radio->standby();              // low-power between scans (TODO: warm sleep for more savings)
+  cadSleep();                     // warm sleep (SX126x) or standby fallback between scans
   _ps_phase = PS_SLEEPING;
   _ps_timer = millis() + PS_CAD_INTERVAL_MS;
   state = STATE_RX;               // keep isInRecvMode() true so the dispatcher doesn't flag a stuck radio
