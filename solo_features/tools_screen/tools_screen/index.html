@@ -1,0 +1,2007 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the open source MeshCore firmware">
+      
+      
+      
+        <link rel="canonical" href="https://meshcore-dev.github.io/meshcore/solo_features/tools_screen/tools_screen/">
+      
+      
+        <link rel="prev" href="../../settings_screen/settings_screen/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Tools screen - MeshCore Docs</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../_stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#tools-screen" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="MeshCore Docs" class="md-header__button md-logo" aria-label="MeshCore Docs" data-md-component="logo">
+      
+  <img src="../../../_assets/meshcore.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            MeshCore Docs
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Tools screen
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/meshcore-dev/meshcore/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    meshcore-dev/meshcore
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="MeshCore Docs" class="md-nav__button md-logo" aria-label="MeshCore Docs" data-md-component="logo">
+      
+  <img src="../../../_assets/meshcore.svg" alt="logo">
+
+    </a>
+    MeshCore Docs
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/meshcore-dev/meshcore/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    meshcore-dev/meshcore
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Introduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../cli_commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../companion_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Companion Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../docs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local Documentation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Frequently Asked Questions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../kiss_modem_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MeshCore KISS Modem Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../nrf52_power_management/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF52 Power Management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../number_allocations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Number Allocations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../packet_format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Packet Format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../payloads/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Payload Format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../qr_codes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    QR Codes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../stats_binary_frames/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stats Binary Frame Structures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../terminal_chat_cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terminal Chat CLI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solo features
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Solo features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_1" id="__nav_14_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Clock screen
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Clock screen
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../clock_screen/clock_screen/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Clock screen
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_2" id="__nav_14_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Favourites dial
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Favourites dial
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../favourites_dial/favourites_dial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Favourites dial
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_3" id="__nav_14_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Message screen
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Message screen
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../message_screen/message_screen/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Message screen
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_4" id="__nav_14_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Screen lock
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Screen lock
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../screen_lock/screen_lock/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Screen lock
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_5" id="__nav_14_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settings screen
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Settings screen
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../settings_screen/settings_screen/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settings screen
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_14_6" id="__nav_14_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tools screen
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_14_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tools screen
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tools screen
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tools screen
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#tools-screen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tools Screen
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tools Screen">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nearby-nodes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nearby Nodes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Nearby Nodes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#active-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Active Discovery
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gps-trail" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GPS Trail
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GPS Trail">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#waypoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Waypoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#downloading-gpx" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Downloading GPX
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#auto-advert" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Auto-Advert
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compass" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compass
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ringtone-editor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ringtone Editor
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#auto-reply-bot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Auto-Reply Bot
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#tools-screen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tools Screen
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tools Screen">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nearby-nodes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nearby Nodes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Nearby Nodes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#active-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Active Discovery
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gps-trail" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GPS Trail
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GPS Trail">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#waypoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Waypoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#downloading-gpx" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Downloading GPX
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#auto-advert" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Auto-Advert
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compass" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compass
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ringtone-editor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ringtone Editor
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#auto-reply-bot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Auto-Reply Bot
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/meshcore-dev/meshcore/edit/main/docs/solo_features/tools_screen/tools_screen.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+  <h1>Tools screen</h1>
+
+<h2 id="tools-screen">Tools Screen</h2>
+<p><a href="../../../README.md">Go back</a></p>
+<h3 id="overview">Overview</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">OLED</th>
+<th style="text-align: center;">E-Ink</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;"><img alt="" src="../tls_scr_1_oled.png" /></td>
+<td style="text-align: center;"><img alt="" src="../tls_scr_1_eink.png" /></td>
+</tr>
+</tbody>
+</table>
+<p>The Tools screen is a hub for GPS trail recording, nearby node browsing, ringtone editing, auto-reply bot, and auto-advert. Navigate the tool list with <strong>UP/DOWN</strong> and press <strong>Enter</strong> to open a tool.</p>
+<hr />
+<h2 id="nearby-nodes">Nearby Nodes</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">OLED</th>
+<th style="text-align: center;">E-Ink</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;"><img alt="" src="../tls_scr_2_oled.png" /></td>
+<td style="text-align: center;"><img alt="" src="../tls_scr_2_eink.png" /></td>
+</tr>
+</tbody>
+</table>
+<p>Browse nodes that have recently advertised on the mesh. Filter by category with <strong>LEFT/RIGHT</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Filter</th>
+<th>Shows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Fav</td>
+<td>Upstream-starred contacts only</td>
+</tr>
+<tr>
+<td>ALL</td>
+<td>All known nodes</td>
+</tr>
+<tr>
+<td>Comp</td>
+<td>Companion (chat) nodes</td>
+</tr>
+<tr>
+<td>Rpt</td>
+<td>Repeaters</td>
+</tr>
+<tr>
+<td>Room</td>
+<td>Room servers</td>
+</tr>
+<tr>
+<td>Snsr</td>
+<td>Sensors</td>
+</tr>
+</tbody>
+</table>
+<p>Select a node to see its coordinates, distance, bearing with cardinal direction, type, and last-heard time.</p>
+<p>From the list view, <strong>Hold Enter</strong> opens the context menu, where <strong>Discover nearby</strong> sends a live <code>NODE_DISCOVER_REQ</code> scan.</p>
+<p>From either node detail view, <strong>Hold Enter</strong> opens the Ping popup:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">OLED</th>
+<th style="text-align: center;">E-Ink</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;"><img alt="" src="../tls_scr_2_ping_oled.png" /></td>
+<td style="text-align: center;"><img alt="" src="../tls_scr_2_ping_eink.png" /></td>
+</tr>
+</tbody>
+</table>
+<p>Use <strong>Enter</strong> on the popup’s <code>Ping</code> row to send a direct mesh ping to that node. The popup then shows the RTT and SNR values on the next lines, and can be used again immediately for another ping.</p>
+<blockquote>
+<p>[!TIP]
+Combined with <strong>Auto-Advert</strong> on the other device, Nearby Nodes becomes a passive location tracker — as long as the tracked device periodically broadcasts its GPS position, you can see its current distance and bearing without any manual interaction on either end.</p>
+</blockquote>
+<hr />
+<h3 id="active-discovery">Active Discovery</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">OLED</th>
+<th style="text-align: center;">E-Ink</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;"><img alt="" src="../tls_scr_3_oled.png" /></td>
+<td style="text-align: center;"><img alt="" src="../tls_scr_3_eink.png" /></td>
+</tr>
+</tbody>
+</table>
+<p>Sends a <code>NODE_DISCOVER_REQ</code> ping. Repeaters, sensors and room servers within zero-hop range respond immediately with name, type and signal data.</p>
+<p>Results show as 2-line cards: node name + type, then RSSI / SNR / remote SNR.</p>
+<ul>
+<li><strong>UP/DOWN</strong> — navigate results</li>
+<li><strong>Enter</strong> — open full-screen detail (public key, signal data, contact status)</li>
+<li><strong>Hold Enter</strong> — rescan</li>
+<li><strong>Hold Enter</strong> in full-screen detail — open the Ping popup for the selected node</li>
+<li><strong>Cancel / Back</strong> — return to nearby list</li>
+</ul>
+<hr />
+<h2 id="gps-trail">GPS Trail</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">OLED</th>
+<th style="text-align: center;">E-Ink</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;"><img alt="" src="../tls_scr_4_oled.png" /></td>
+<td style="text-align: center;"><img alt="" src="../tls_scr_4_eink.png" /></td>
+</tr>
+</tbody>
+</table>
+<p>Records your route in a RAM ring buffer (up to 512 points, sampled every 1 s). Tracking runs in the background — a blinking <strong>G</strong> appears in the status bar. The trail survives display auto-off but is lost on reboot unless saved to flash first.</p>
+<p>Cycle views with <strong>LEFT / RIGHT</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>View</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Summary</strong></td>
+<td>Distance, elapsed time, avg speed or pace, point count, tracking status</td>
+</tr>
+<tr>
+<td><strong>Map</strong></td>
+<td>Auto-fit dot-and-line plot with cos(lat) aspect correction; segment breaks marked; north arrow; scale grid (toggle with <strong>LEFT/RIGHT</strong> on the Grid row in the menu). Your <strong>current GPS position</strong> and all <strong>waypoints</strong> are always drawn — even with no trail recording — so the map is useful standalone</td>
+</tr>
+<tr>
+<td><strong>List</strong></td>
+<td>Per-point rows showing local time (HH:MM) and delta distance from the previous point; segment-start rows show <code>start</code>; scroll with <strong>UP/DOWN</strong></td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">OLED</th>
+<th style="text-align: center;">E-Ink</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;"><img alt="" src="../tls_scr_5_oled.png" /></td>
+<td style="text-align: center;"><img alt="" src="../tls_scr_5_eink.png" /></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Hold Enter</strong> opens the action menu:</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Interaction</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Min dist</td>
+<td>LEFT/RIGHT</td>
+<td>Sample gate, 4 levels — metric: 5/10/25/100 m, imperial: 15/30/75/300 ft</td>
+</tr>
+<tr>
+<td>Readout</td>
+<td>LEFT/RIGHT or Enter</td>
+<td>Summary shows Speed or Pace (in the global unit system)</td>
+</tr>
+<tr>
+<td>Grid</td>
+<td>LEFT/RIGHT or Enter</td>
+<td>Toggle scale grid on the map</td>
+</tr>
+<tr>
+<td>Mark here</td>
+<td>Enter</td>
+<td>Drop a waypoint at the current GPS fix (see below)</td>
+</tr>
+<tr>
+<td>Waypoints</td>
+<td>Enter</td>
+<td>Open the waypoint list / navigation / add-by-coords</td>
+</tr>
+<tr>
+<td>Start / Stop tracking</td>
+<td>Enter</td>
+<td>Begin or end a recording session</td>
+</tr>
+<tr>
+<td>Save trail</td>
+<td>Enter</td>
+<td>Write RAM ring to flash (<code>/trail</code>)</td>
+</tr>
+<tr>
+<td>Load trail</td>
+<td>Enter</td>
+<td>Restore flash trail into RAM</td>
+</tr>
+<tr>
+<td>Export (live)</td>
+<td>Enter</td>
+<td>Stream live RAM trail as GPX 1.1 over USB Serial</td>
+</tr>
+<tr>
+<td>Export (saved)</td>
+<td>Enter</td>
+<td>Stream saved flash trail as GPX 1.1 over USB Serial</td>
+</tr>
+<tr>
+<td>Clear waypoints</td>
+<td>Enter</td>
+<td>Delete all saved waypoints (trail untouched)</td>
+</tr>
+<tr>
+<td>Reset trail</td>
+<td>Enter</td>
+<td>Clear RAM ring and elapsed time</td>
+</tr>
+</tbody>
+</table>
+<p>(Clear waypoints appears only once at least one waypoint exists. Mark here needs a GPS fix; Waypoints is always available.)</p>
+<h3 id="waypoints">Waypoints</h3>
+<p>A waypoint is a saved spot — your car, camp, a water source — that you can navigate back to later. Waypoints are <strong>independent of the trail</strong>: they live in their own flash file (<code>/waypoints</code>), survive a reboot, and are <strong>not</strong> cleared by <em>Reset trail</em>. Up to 16 can be stored — the Waypoints list header shows how many are in use (e.g. <code>WAYPOINTS 3/16</code>).</p>
+<p><strong>Dropping a waypoint</strong> — <strong>Hold Enter → Mark here</strong>. This captures the current GPS fix and opens the on-screen keyboard for a short label (up to 11 characters — e.g. <code>CAR</code>, <code>CAMP</code>, <code>H2O</code>). Leaving it blank auto-names it <code>WP1</code>, <code>WP2</code>, … Marking works whether or not the trail is being recorded; it needs a GPS fix (otherwise it reports <em>No GPS fix</em>).</p>
+<p><strong>Adding by coordinates</strong> — open <strong>Hold Enter → Waypoints</strong> and select the <strong>+ Add by coords</strong> row (always the last entry in the list). This creates a waypoint without being there — no GPS fix required (handy for a meeting point or a spot read off a map). It opens a small form with three editable rows plus <strong>Save</strong>:</p>
+<ul>
+<li><strong>Lat</strong> / <strong>Lon</strong> — <strong>Enter</strong> opens the keyboard to type the value in decimal degrees (magnitude only; the keyboard has no minus sign), and <strong>LEFT/RIGHT</strong> toggles the hemisphere — N/S for latitude, E/W for longitude.</li>
+<li><strong>Label</strong> — <strong>Enter</strong> to type a name (blank → auto <code>WP&lt;n&gt;</code>).</li>
+<li><strong>Save</strong> — validates the range and stores the waypoint. Missing or out-of-range values report a brief error.</li>
+</ul>
+<p><strong>On the map</strong> — saved waypoints show on the Trail Map view as a hollow diamond with the label's first two characters beside it (enough to tell nearby waypoints apart). Waypoints and your current GPS position are drawn continuously — even with no trail recording in progress — so the Map view doubles as a live "you + your marks" view, not just a recorded-track plot. With <strong>no trail</strong>, the view auto-fits to your waypoints and position. <strong>While a trail exists</strong>, the view frames the recorded route instead, and any waypoint that falls outside it is clamped to the nearest map edge — a distant mark can't blow up the scale and squash the trail.</p>
+<p><strong>Navigating</strong> — <strong>Hold Enter → Waypoints</strong> opens the list (each row shows the label and live distance). The list always begins with a synthetic <strong>Trail start</strong> row whenever a trail exists, so you can backtrack to where you began without having marked it. Select a row and press <strong>Enter</strong> to open the navigation view:</p>
+<pre><code>   CAMP            ← target label
+   1.4 km          ← distance to target
+   To:  145° SE    ← absolute bearing to the target
+   Hdg: 090° E     ← your current course over ground (-- when stationary)
+</code></pre>
+<p>There is no magnetometer, so the screen shows two <em>absolute</em> bearings and you compare them: target at 145°, travelling at 90° → bear right. The <strong>Hdg</strong> line is derived from GPS movement (see Compass) and reads <code>--</code> until you move.</p>
+<p><strong>Managing</strong> — <strong>Hold Enter</strong> on a waypoint row offers <strong>Rename</strong> / <strong>Delete</strong> / <strong>Send</strong> (the <em>Trail start</em> row is navigate-only). <strong>Hold Enter → Clear waypoints</strong> on the Trail screen wipes them all at once.</p>
+<p><strong>Sharing</strong> — <strong>Send</strong> hands the waypoint to the Messages screen: pick a contact or channel, and the message is pre-filled as <code>[WAY]&lt;lat&gt;,&lt;lon&gt; &lt;label&gt;</code> (e.g. <code>[WAY]37.42123,-122.08456 CAR</code>) for you to confirm or edit before sending. On the receiving device, opening that message and <strong>Hold Enter → Navigate / Save waypoint</strong> turns it back into a navigable point (see <em>Messages › Fullscreen message view</em>). The format is plain text, so it stays readable on other firmware and the phone app.</p>
+<h3 id="downloading-gpx">Downloading GPX</h3>
+<p><strong>Easiest — <a href="https://marekzegare4.github.io/solo-tools/">Solo GPX Downloader</a></strong> (browser-based, no install):</p>
+<ol>
+<li>Open the link in <strong>Chrome</strong> or <strong>Edge</strong> (Web Serial API required).</li>
+<li>Click <strong>Connect device</strong> and select the USB serial port.</li>
+<li>On the device: <strong>Tools › Trail</strong> → <strong>Hold Enter</strong> → <strong>Export (live)</strong> or <strong>Export (saved)</strong>.</li>
+<li>The browser captures the stream automatically — set a filename and click <strong>Download</strong>.</li>
+</ol>
+<p><strong>Script — <code>tools/trail_export.py</code></strong> (auto-detects the port, captures from <code>&lt;?xml</code> to <code>&lt;/gpx&gt;</code>, writes a timestamped file under <code>tools/gpx/</code>):</p>
+<pre><code class="language-sh">uv run tools/trail_export.py
+</code></pre>
+<p>Then on the device: <strong>Tools › Trail</strong> → <strong>Hold Enter</strong> → <strong>Export (live)</strong> or <strong>Export (saved)</strong>.</p>
+<p><strong>Manual fallback</strong> — open a serial terminal at <strong>115200 baud</strong> and capture the stream by hand:</p>
+<ul>
+<li><strong>macOS/Linux</strong> — <code>cat /dev/tty.usbmodem* &gt; track.gpx</code> (stop with Ctrl-C after the dump finishes)</li>
+<li><strong>Windows</strong> — PuTTY (Serial, 115200) or Arduino IDE Serial Monitor with no line ending; copy the text from <code>&lt;?xml</code> to <code>&lt;/gpx&gt;</code> into a <code>.gpx</code> file</li>
+</ul>
+<p>Saved <strong>waypoints are included</strong> in the export as GPX <code>&lt;wpt&gt;</code> elements (with their label as <code>&lt;name&gt;</code>), alongside the track — so they show as pins in OsmAnd, Garmin BaseCamp, GPX Studio, Google Earth, etc. Either way, the resulting file imports into all of those.</p>
+<blockquote>
+<p>[!NOTE]
+If the companion app is connected via <strong>BLE</strong>, the export is safe — BLE and USB operate independently. If connected via <strong>USB</strong>, disconnect the app before exporting.</p>
+</blockquote>
+<hr />
+<h2 id="auto-advert">Auto-Advert</h2>
+<p>Periodically broadcasts a 0-hop advert with your GPS position. Configurable interval: off / 30 s / 1 min / 2 min / 5 min / 10 min / 30 min / 1 h. A blinking <strong>A</strong> appears in the status bar while active.</p>
+<blockquote>
+<p>[!TIP]
+<strong>Audible connection heartbeat</strong> — the device chirps each time it <em>receives</em> an advert from any node (sound chosen in <strong>Settings › Sound › AD sound</strong>). With Auto-Advert running on both ends (e.g. two people on a hike), each hearing the other's periodic advert becomes a hands-free "in range" beep — no need to look at the screen. It fires for <strong>every</strong> received advert, so in a busy mesh it can get chatty; choose <code>None</code> in <strong>Settings › Sound › AD sound</strong> to silence just this event, or set <strong>Settings › Sound › Advert scope</strong> to <code>Zero-hop</code> to limit it to local adverts only. You can also set <strong>Settings › Sound › Buzzer</strong> to <em>Off</em> (or <em>Auto</em>, which mutes while a companion app is connected) to silence all buzzer output.</p>
+</blockquote>
+<hr />
+<h2 id="compass">Compass</h2>
+<p>A heads-up GPS compass. The L1 has no magnetometer, so the heading is the <strong>course over ground</strong> — derived from how your GPS position moves over the last few seconds. The display is a horizontal <strong>heading tape</strong>: a fixed travel-direction pointer sits at the centre and the N..E..S..W scale scrolls underneath it as you turn, so whatever is under the pointer is your current course. A large numeric readout below shows that course in degrees and cardinal (e.g. <code>145° SE</code>).</p>
+<p>Because the heading comes from movement, it only updates while you are actually moving: standing still shows <em>move to set heading</em> (and navigation's <strong>Hdg</strong> line reads <code>--</code>). Gross GPS jumps are rejected so a single bad fix can't swing the heading. The heading source runs whenever there's a GPS fix — recording a trail is <strong>not</strong> required.</p>
+<hr />
+<h2 id="ringtone-editor">Ringtone Editor</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">OLED</th>
+<th style="text-align: center;">E-Ink</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;"><img alt="" src="../tls_scr_6_oled.png" /></td>
+<td style="text-align: center;"><img alt="" src="../tls_scr_6_eink.png" /></td>
+</tr>
+</tbody>
+</table>
+<p>A step sequencer for composing custom notification melodies. Two slots — <strong>Melody 1</strong> and <strong>Melody 2</strong> — switchable from within the editor.</p>
+<p>Each melody supports up to 32 notes:</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Options</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pitch</td>
+<td>C / D / E / F / G / A / B / pause</td>
+</tr>
+<tr>
+<td>Octave</td>
+<td>4 – 7</td>
+</tr>
+<tr>
+<td>Duration</td>
+<td>1/4 / 1/8 / 1/16 / 1/32</td>
+</tr>
+<tr>
+<td>BPM</td>
+<td>60 / 90 / 120 / 150 / 180</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Navigation in the editor:</strong></p>
+<ul>
+<li><strong>LEFT/RIGHT</strong> — move between notes</li>
+<li><strong>UP/DOWN</strong> — change pitch of selected note</li>
+<li><strong>Enter</strong> — cycle octave of selected note</li>
+<li><strong>Hold Enter</strong> (or context menu) — open options menu</li>
+</ul>
+<p><strong>Options menu:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Interaction</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Play / Stop</td>
+<td>Enter</td>
+<td>Preview the melody</td>
+</tr>
+<tr>
+<td>Melody 1 / 2</td>
+<td>Enter</td>
+<td>Switch to the other slot</td>
+</tr>
+<tr>
+<td>Duration</td>
+<td>LEFT/RIGHT</td>
+<td>Cycle duration for selected note</td>
+</tr>
+<tr>
+<td>BPM</td>
+<td>LEFT/RIGHT</td>
+<td>Cycle tempo</td>
+</tr>
+<tr>
+<td>Insert</td>
+<td>Enter</td>
+<td>Insert a new note after the cursor</td>
+</tr>
+<tr>
+<td>Delete</td>
+<td>Enter</td>
+<td>Delete the note at cursor</td>
+</tr>
+<tr>
+<td>Save &amp; Exit</td>
+<td>Enter</td>
+<td>Persist the melody and return to Tools</td>
+</tr>
+<tr>
+<td>Discard</td>
+<td>Enter</td>
+<td>Return to Tools without saving</td>
+</tr>
+</tbody>
+</table>
+<p>Melodies can be assigned in <strong>Settings › Sound</strong> (global default) or overridden per contact or channel from the Messages screen context menu.</p>
+<hr />
+<h2 id="auto-reply-bot">Auto-Reply Bot</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">OLED</th>
+<th style="text-align: center;">E-Ink</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;"><img alt="" src="../tls_scr_7_oled.png" /></td>
+<td style="text-align: center;"><img alt="" src="../tls_scr_7_eink.png" /></td>
+</tr>
+</tbody>
+</table>
+<p>Automatically replies to incoming messages that contain a configured trigger word (case-insensitive, contains match).</p>
+<p>When the bot is enabled it listens to DMs by default. Channel monitoring is an optional addition — select a channel separately to activate it alongside DM mode.</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Bot</td>
+<td>ON / OFF — enables DM listening</td>
+</tr>
+<tr>
+<td>Channel mode</td>
+<td>ON / OFF — additionally monitors a selected channel</td>
+</tr>
+<tr>
+<td>Channel</td>
+<td>Which channel to monitor (only relevant when channel mode is ON)</td>
+</tr>
+<tr>
+<td>Trigger</td>
+<td>Word or phrase that activates the reply (shared by both modes, case-insensitive)</td>
+</tr>
+<tr>
+<td>DM reply</td>
+<td>Reply text for DMs; supports <code>{time}</code> and <code>{loc}</code> placeholders</td>
+</tr>
+<tr>
+<td>Channel reply</td>
+<td>Reply text for channel messages; supports <code>{time}</code> and <code>{loc}</code> placeholders</td>
+</tr>
+</tbody>
+</table>
+<p>A 10-second cooldown prevents repeated replies in quick succession.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["content.action.edit", "content.code.copy", "search.highlight", "search.suggest"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
