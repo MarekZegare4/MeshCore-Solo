@@ -1,306 +1,2478 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MeshCore GPX Downloader</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>Trail Export | Web Serial GPX Capture</title>
   <style>
     :root {
-      --bg:     #12121e;
-      --card:   #1a1a2e;
-      --green:  #4ecca3;
-      --yellow: #f6c90e;
-      --text:   #e8e8f0;
-      --muted:  #6a6a88;
-      --err:    #e05c5c;
+      --bg: #07111a;
+      --bg-2: #0c1c28;
+      --panel: rgba(10, 22, 32, 0.8);
+      --panel-strong: rgba(13, 28, 42, 0.94);
+      --stroke: rgba(148, 216, 255, 0.16);
+      --stroke-strong: rgba(148, 216, 255, 0.3);
+      --text: #e9f6ff;
+      --muted: #90a9bc;
+      --accent: #4bd7ff;
+      --accent-2: #8cffc1;
+      --warn: #ffca78;
+      --danger: #ff758b;
+      --shadow: 0 28px 80px rgba(0, 0, 0, 0.42);
+      --radius-xl: 28px;
+      --radius-lg: 20px;
+      --radius-md: 14px;
+      --radius-sm: 10px;
+      --maxw: 1180px;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      min-height: 100%;
+    }
+
     body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: var(--bg);
+      margin: 0;
       color: var(--text);
-      min-height: 100svh;
+      background:
+        radial-gradient(circle at top left, rgba(75, 215, 255, 0.18), transparent 32%),
+        radial-gradient(circle at 80% 10%, rgba(140, 255, 193, 0.12), transparent 30%),
+        radial-gradient(circle at bottom right, rgba(91, 130, 255, 0.14), transparent 35%),
+        linear-gradient(160deg, #050b12 0%, #0a1420 48%, #050b12 100%);
+      font-family: "Segoe UI Variable", "Avenir Next", "Inter", "Trebuchet MS", system-ui, sans-serif;
+      letter-spacing: 0.01em;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
+      opacity: 0.22;
+    }
+
+    .wrap {
+      width: min(var(--maxw), calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 28px 0 40px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 20px;
+      align-items: stretch;
+    }
+
+    .hero-card, .panel {
+      background: linear-gradient(180deg, rgba(18, 34, 48, 0.88), rgba(9, 19, 29, 0.88));
+      border: 1px solid var(--stroke);
+      box-shadow: var(--shadow);
+      border-radius: var(--radius-xl);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+    }
+
+    .hero-card {
+      padding: 30px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-card::after {
+      content: "";
+      position: absolute;
+      right: -48px;
+      top: -60px;
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(75, 215, 255, 0.22), transparent 68%);
+      filter: blur(10px);
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--stroke);
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--muted);
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+    }
+
+    .eyebrow .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 6px rgba(75, 215, 255, 0.14);
+    }
+
+    h1 {
+      margin: 16px 0 12px;
+      font-size: clamp(2.2rem, 4vw, 4.3rem);
+      line-height: 0.95;
+      letter-spacing: -0.04em;
+    }
+
+    .lede {
+      margin: 0;
+      max-width: 62ch;
+      color: #b8ccda;
+      font-size: 1.02rem;
+      line-height: 1.65;
+    }
+
+    .hero-actions {
       display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 22px;
+    }
+
+    button, .link-btn {
+      appearance: none;
+      border: 0;
+      border-radius: 14px;
+      padding: 14px 18px;
+      font: inherit;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      cursor: pointer;
+      transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease, opacity 160ms ease;
+      display: inline-flex;
       align-items: center;
       justify-content: center;
-      padding: 1.25rem;
-    }
-    .card {
-      background: var(--card);
-      border-radius: 14px;
-      padding: 2rem 2.25rem;
-      width: 100%;
-      max-width: 460px;
-      box-shadow: 0 12px 40px rgba(0,0,0,0.5);
-    }
-    h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.01em; }
-    .subtitle { color: var(--muted); font-size: 0.82rem; margin-top: 0.2rem; margin-bottom: 2rem; }
-
-    .step { margin-bottom: 1.6rem; }
-    .step-label {
-      font-size: 0.7rem;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: var(--muted);
-      margin-bottom: 0.55rem;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--text);
+      user-select: none;
     }
 
-    /* ---- buttons ---- */
-    button {
-      background: var(--green);
-      color: #0d1a14;
-      border: none;
-      border-radius: 8px;
-      padding: 0.55rem 1.25rem;
-      font-size: 0.9rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity 0.12s;
-      white-space: nowrap;
+    button:hover, .link-btn:hover {
+      transform: translateY(-1px);
     }
-    button:disabled { opacity: 0.3; cursor: default; }
-    button:not(:disabled):hover { opacity: 0.82; }
-    button.ghost {
+
+    button:disabled, .link-btn.disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .primary {
+      background: linear-gradient(135deg, var(--accent), #6ef3ff 35%, #8cffc1 100%);
+      color: #05111a;
+      box-shadow: 0 18px 36px rgba(75, 215, 255, 0.22);
+    }
+
+    .secondary {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--stroke);
+    }
+
+    .ghost {
       background: transparent;
-      color: var(--green);
-      border: 1.5px solid var(--green);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #cde7f6;
     }
 
-    /* ---- connection row ---- */
-    .conn-row { display: flex; align-items: center; gap: 0.75rem; }
-    .dot {
-      width: 9px; height: 9px;
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 22px;
+    }
+
+    .stat {
+      padding: 16px;
+      border-radius: var(--radius-lg);
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .stat .label {
+      color: var(--muted);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      margin-bottom: 8px;
+    }
+
+    .stat .value {
+      font-size: 1.1rem;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+
+    .panel {
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .panel h2 {
+      margin: 0;
+      font-size: 1.05rem;
+      letter-spacing: 0.02em;
+    }
+
+    .hint {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: 0.95rem;
+    }
+
+    .status-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.045);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #dff4ff;
+      font-size: 0.9rem;
+    }
+
+    .pill .dot {
+      width: 9px;
+      height: 9px;
       border-radius: 50%;
-      background: var(--muted);
-      flex-shrink: 0;
-      transition: background 0.2s;
+      background: var(--warn);
+      box-shadow: 0 0 0 5px rgba(255, 202, 120, 0.13);
     }
-    .dot.on        { background: var(--green); }
-    .dot.receiving { background: var(--yellow); animation: blink 0.9s infinite; }
-    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.25} }
-    .conn-label { font-size: 0.82rem; color: var(--muted); }
 
-    /* ---- progress box ---- */
-    .hint { font-size: 0.82rem; color: var(--muted); margin-bottom: 0.5rem; }
-    .hint kbd {
-      background: #2a2a44;
-      border-radius: 4px;
-      padding: 0.05em 0.35em;
-      font-size: 0.78rem;
-      color: var(--text);
-    }
-    .progress-box {
-      background: #0a0a14;
-      border: 1px solid #252535;
-      border-radius: 8px;
-      padding: 0.7rem 0.9rem;
-      font-family: ui-monospace, monospace;
-      font-size: 0.78rem;
-      color: var(--green);
-      min-height: 2.6rem;
-      line-height: 1.5;
-    }
-    .progress-box.error { color: var(--err); }
+    .pill.ok .dot { background: var(--accent-2); box-shadow: 0 0 0 5px rgba(140, 255, 193, 0.14); }
+    .pill.live .dot { background: var(--accent); box-shadow: 0 0 0 5px rgba(75, 215, 255, 0.14); }
+    .pill.bad .dot { background: var(--danger); box-shadow: 0 0 0 5px rgba(255, 117, 139, 0.14); }
 
-    /* ---- download row ---- */
-    .dl-row { display: flex; gap: 0.5rem; }
-    input[type="text"] {
-      flex: 1;
-      min-width: 0;
-      background: #0a0a14;
-      border: 1px solid #252535;
-      border-radius: 8px;
-      padding: 0.52rem 0.8rem;
-      color: var(--text);
+    .progress-wrap {
+      display: grid;
+      gap: 8px;
+    }
+
+    .progress-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--muted);
       font-size: 0.88rem;
     }
-    input[type="text"]:focus { outline: none; border-color: var(--green); }
 
-    /* ---- warning banner ---- */
-    .warn {
-      background: #1e1400;
-      border: 1px solid #6a3800;
-      border-radius: 8px;
-      padding: 0.7rem 0.9rem;
-      font-size: 0.8rem;
-      color: var(--yellow);
-      margin-bottom: 1.5rem;
+    .progress {
+      height: 12px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
     }
-    .hidden { display: none !important; }
+
+    .bar {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      box-shadow: 0 0 30px rgba(75, 215, 255, 0.3);
+      transition: width 160ms ease;
+    }
+
+    .terminal {
+      min-height: 246px;
+      max-height: 360px;
+      overflow: auto;
+      padding: 16px;
+      border-radius: var(--radius-lg);
+      background:
+        linear-gradient(180deg, rgba(4, 12, 19, 0.86), rgba(7, 16, 24, 0.96)),
+        rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #d6f0ff;
+      font: 500 0.9rem/1.55 "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .terminal .dim { color: #7f95a8; }
+    .terminal .good { color: #8cffc1; }
+    .terminal .warn { color: #ffca78; }
+    .terminal .bad { color: #ff758b; }
+
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin: 0 0 16px;
+      flex-wrap: wrap;
+    }
+
+    .tab-btn {
+      appearance: none;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.04);
+      color: #d9edf9;
+      border-radius: 999px;
+      padding: 10px 16px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 160ms ease, background 160ms ease, border-color 160ms ease, opacity 160ms ease;
+    }
+
+    .tab-btn:hover {
+      transform: translateY(-1px);
+    }
+
+    .tab-btn.active {
+      color: #04111a;
+      background: linear-gradient(135deg, var(--accent), #8cffc1);
+      border-color: transparent;
+    }
+
+    .tab-panel.hidden {
+      display: none !important;
+    }
+
+    .download-box {
+      display: grid;
+      gap: 12px;
+      padding: 16px;
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(75, 215, 255, 0.18);
+      background: linear-gradient(180deg, rgba(16, 33, 45, 0.8), rgba(8, 18, 27, 0.8));
+    }
+
+    .download-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .preview-box {
+      display: grid;
+      gap: 12px;
+      padding: 16px;
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(140, 255, 193, 0.16);
+      background: linear-gradient(180deg, rgba(12, 28, 23, 0.82), rgba(8, 18, 17, 0.82));
+    }
+
+    .preview-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .preview-header h3 {
+      margin: 0;
+      font-size: 1rem;
+    }
+
+    .preview-header p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 0.9rem;
+    }
+
+    .preview-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: rgba(140, 255, 193, 0.1);
+      border: 1px solid rgba(140, 255, 193, 0.18);
+      color: #ccffe0;
+      font-size: 0.85rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .preview-frame {
+      display: grid;
+      gap: 10px;
+    }
+
+    .preview-map {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(circle at top left, rgba(140, 255, 193, 0.11), transparent 35%),
+        radial-gradient(circle at bottom right, rgba(75, 215, 255, 0.08), transparent 30%),
+        rgba(3, 10, 14, 0.92);
+      overflow: hidden;
+    }
+
+    .preview-map svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .preview-empty {
+      display: grid;
+      place-items: center;
+      min-height: 180px;
+      color: var(--muted);
+      text-align: center;
+      padding: 18px;
+      border-radius: 18px;
+      border: 1px dashed rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.02);
+      line-height: 1.5;
+    }
+
+    .preview-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .preview-meta span {
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .filename {
+      color: #c7ddeb;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .gallery-wrap {
+      display: grid;
+      gap: 14px;
+    }
+
+    .gallery-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .screenshot-actions {
+      margin-bottom: 18px;
+    }
+
+    .scale-control {
+      display: grid;
+      gap: 8px;
+      padding: 14px 16px;
+      margin-top: 18px;
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .scale-control-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      font-size: 0.9rem;
+    }
+
+    .scale-control-top .label {
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      font-size: 0.76rem;
+    }
+
+    .scale-value {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 3.6rem;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(75, 215, 255, 0.14);
+      border: 1px solid rgba(75, 215, 255, 0.22);
+      color: #c7f1ff;
+      font-weight: 800;
+    }
+
+    .scale-track {
+      appearance: none;
+      width: 100%;
+      height: 12px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(75, 215, 255, 0.28), rgba(140, 255, 193, 0.28));
+      outline: none;
+    }
+
+    .scale-track::-webkit-slider-thumb {
+      appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 2px solid #04111a;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      box-shadow: 0 6px 18px rgba(75, 215, 255, 0.28);
+      cursor: pointer;
+    }
+
+    .scale-track::-moz-range-thumb {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 2px solid #04111a;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      box-shadow: 0 6px 18px rgba(75, 215, 255, 0.28);
+      cursor: pointer;
+    }
+
+    .scale-legend {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+
+    .gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 12px;
+    }
+
+    .gallery-empty {
+      padding: 14px;
+      border-radius: var(--radius-lg);
+      border: 1px dashed rgba(255, 255, 255, 0.14);
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .shot-card {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .shot-thumb {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      object-fit: contain;
+      border-radius: 14px;
+      background: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .shot-meta {
+      display: grid;
+      gap: 4px;
+      font-size: 0.86rem;
+      color: #dbe9f4;
+      word-break: break-word;
+    }
+
+    .shot-meta .dim {
+      color: var(--muted);
+    }
+
+    .shot-rename {
+      display: grid;
+      gap: 8px;
+    }
+
+    .shot-name-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .shot-name-text {
+      min-width: 0;
+      flex: 1;
+      color: #fff;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .shot-name-edit {
+      flex: 1;
+      min-width: 0;
+      background: rgba(3, 10, 16, 0.72);
+      color: var(--text);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font: inherit;
+      font-size: 0.88rem;
+    }
+
+    .shot-rename-input:focus,
+    .shot-name-edit:focus {
+      outline: none;
+      border-color: rgba(75, 215, 255, 0.55);
+      box-shadow: 0 0 0 3px rgba(75, 215, 255, 0.12);
+    }
+
+    .shot-edit-btn {
+      width: 32px;
+      height: 32px;
+      flex: 0 0 32px;
+      padding: 0;
+      border-radius: 10px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .shot-edit-btn svg {
+      width: 15px;
+      height: 15px;
+      fill: currentColor;
+    }
+
+    .shot-name-display[hidden],
+    .shot-name-edit[hidden] {
+      display: none !important;
+    }
+
+    .shot-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .step {
+      padding: 14px;
+      border-radius: var(--radius-lg);
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .step .num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      background: rgba(75, 215, 255, 0.14);
+      border: 1px solid rgba(75, 215, 255, 0.24);
+      color: #bdf1ff;
+      font-weight: 800;
+      margin-bottom: 10px;
+    }
+
+    .step h3 {
+      margin: 0 0 6px;
+      font-size: 0.98rem;
+    }
+
+    .step p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 0.92rem;
+    }
+
+    .footer-note {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .status-banner {
+      padding: 14px 16px;
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.04);
+      color: #d4eaf8;
+    }
+
+    .status-banner strong {
+      color: #fff;
+    }
+
+    .secure-warning {
+      border-color: rgba(255, 202, 120, 0.25);
+      background: rgba(255, 202, 120, 0.06);
+    }
+
+    @media (max-width: 960px) {
+      .hero {
+        grid-template-columns: 1fr;
+      }
+
+      .steps {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .wrap {
+        width: min(var(--maxw), calc(100vw - 20px));
+        padding-top: 14px;
+      }
+
+      .hero-card, .panel {
+        border-radius: 20px;
+      }
+
+      .hero-card {
+        padding: 22px;
+      }
+
+      .panel {
+        padding: 18px;
+      }
+
+      .info-grid {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
-<div class="card">
-  <h1>Solo GPX Downloader</h1>
-  <p class="subtitle">Receive trail data from device over USB serial</p>
-
-  <div id="noSerialWarn" class="warn hidden">
-    Web Serial API is not supported in this browser.<br>
-    Please use <strong>Chrome</strong> or <strong>Edge</strong> (desktop).
-  </div>
-
-  <!-- Step 1 -->
-  <div class="step">
-    <div class="step-label">Step 1 — Connect</div>
-    <div class="conn-row">
-      <button id="connectBtn">Connect device</button>
-      <span class="dot" id="dot"></span>
-      <span class="conn-label" id="connLabel">Disconnected</span>
+  <main class="wrap">
+    <div class="tabs" role="tablist" aria-label="Capture modes">
+      <button id="trailTabBtn" class="tab-btn active" type="button" role="tab" aria-selected="true" aria-controls="trailPane">Trail GPX</button>
+      <button id="shotTabBtn" class="tab-btn" type="button" role="tab" aria-selected="false" aria-controls="screenshotPane">Screenshots</button>
     </div>
-  </div>
 
-  <!-- Step 2 -->
-  <div class="step" id="step2">
-    <div class="step-label">Step 2 — Export from device</div>
-    <p class="hint">On device: <kbd>Trail</kbd> → <kbd>⋮</kbd> → <kbd>Export GPX</kbd></p>
-    <div class="progress-box" id="progressBox">Waiting for data…</div>
-  </div>
+    <section id="trailPane" class="tab-panel">
+      <section class="hero">
+      <article class="hero-card">
+        <div class="eyebrow"><span class="dot"></span> Web Serial GPX capture</div>
+        <h1>Export trail data from your device without installing anything.</h1>
+        <p class="lede">
+          Connect to the tracker over USB, trigger <strong>Tools &rsaquo; Trail &rsaquo; Hold Enter &rsaquo; Export (live)</strong>
+          or <strong>Export (saved)</strong> on the device, and this page will capture the raw GPX stream and turn it into a downloadable file.
+        </p>
 
-  <!-- Step 3 -->
-  <div class="step hidden" id="step3">
-    <div class="step-label">Step 3 — Save file</div>
-    <div class="dl-row">
-      <input type="text" id="filename" spellcheck="false" autocomplete="off">
-      <button id="downloadBtn">Download</button>
-    </div>
-  </div>
-</div>
+        <div class="hero-actions">
+          <button id="connectBtn" class="primary">Connect device</button>
+          <button id="disconnectBtn" class="secondary" disabled>Disconnect</button>
+          <button id="clearBtn" class="ghost" disabled>Clear capture</button>
+        </div>
 
-<script>
-"use strict";
+        <div class="info-grid">
+          <div class="stat">
+            <div class="label">Connection</div>
+            <div class="value" id="connectionValue">Not connected</div>
+          </div>
+          <div class="stat">
+            <div class="label">Captured</div>
+            <div class="value" id="bytesValue">0 bytes</div>
+          </div>
+          <div class="stat">
+            <div class="label">GPX state</div>
+            <div class="value" id="captureValue">Waiting for data</div>
+          </div>
+          <div class="stat">
+            <div class="label">Download</div>
+            <div class="value" id="downloadValue">No file yet</div>
+          </div>
+        </div>
 
-const $id = id => document.getElementById(id);
+        <div class="steps">
+          <div class="step">
+            <div class="num">1</div>
+            <h3>Connect</h3>
+            <p>Open this page, then click Connect and pick the tracker in the browser prompt.</p>
+          </div>
+          <div class="step">
+            <div class="num">2</div>
+            <h3>Export on device</h3>
+            <p>On the tracker, open <strong>Tools &rsaquo; Trail</strong> and start either live or saved export.</p>
+          </div>
+          <div class="step">
+            <div class="num">3</div>
+            <h3>Download GPX</h3>
+            <p>When the capture is finalized, you'll get a download link plus an automatic file download.</p>
+          </div>
+        </div>
+      </article>
 
-let port       = null;
-let reader     = null;
-let gpxBuffer  = '';
-let capturing  = false;
-let captured   = false;
+      <aside class="panel">
+        <h2>Capture status</h2>
+        <div id="environmentBanner" class="status-banner"></div>
 
-// ---- initial state ----
-if (!('serial' in navigator)) {
-  $id('noSerialWarn').classList.remove('hidden');
-  $id('connectBtn').disabled = true;
-}
+        <div class="status-row">
+          <div id="serialSupportPill" class="pill"><span class="dot"></span><span>Web Serial</span></div>
+          <div id="secureContextPill" class="pill"><span class="dot"></span><span>Secure context</span></div>
+        </div>
 
-resetFilename();
+        <div class="progress-wrap">
+          <div class="progress-meta">
+            <span id="progressLeft">Idle</span>
+            <span id="progressRight">0%</span>
+          </div>
+          <div class="progress"><div id="progressBar" class="bar"></div></div>
+        </div>
 
-// ---- connect / disconnect ----
-$id('connectBtn').addEventListener('click', async () => {
-  if (port) { await doDisconnect(); return; }
-  try {
-    port = await navigator.serial.requestPort();
-    await port.open({ baudRate: 115200 });
-    setConn(true);
-    readLoop();
-  } catch (e) {
-    if (e.name !== 'NotFoundError') showError('Connect failed: ' + e.message);
-  }
-});
+        <div class="terminal" id="log" aria-live="polite"></div>
 
-async function doDisconnect() {
-  if (reader) { try { await reader.cancel(); } catch {} reader = null; }
-  if (port)   { try { await port.close();    } catch {} port   = null; }
-  setConn(false);
-  if (!captured) resetProgress();
-}
+        <div class="download-box">
+          <div class="download-row">
+            <button id="downloadBtn" class="primary" disabled>Download GPX</button>
+          </div>
+          <a id="downloadLink" hidden></a>
+          <div class="hint">Filename:</div>
+          <div class="shot-rename" aria-label="GPX filename editor">
+            <div class="shot-name-row">
+              <span id="filenameValue" class="shot-name-text shot-name-display filename">trail_yyyy-mm-dd_hh-mm-ss.gpx</span>
+              <button id="filenameEditBtn" type="button" class="secondary shot-edit-btn" disabled aria-label="Edit GPX filename">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M3 17.25V21h3.75L18.81 8.94l-3.75-3.75L3 17.25zm2.92 2.33H5v-.92l9.06-9.06.92.92L5.92 19.58zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                </svg>
+              </button>
+            </div>
+            <input id="filenameEditField" type="text" class="shot-name-edit" hidden aria-label="Rename GPX filename" spellcheck="false" autocomplete="off" inputmode="text">
+          </div>
+        </div>
 
-// ---- read loop ----
-async function readLoop() {
-  const dec = new TextDecoder();
-  try {
-    while (port?.readable) {
-      reader = port.readable.getReader();
-      try {
-        for (;;) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          processChunk(dec.decode(value, { stream: true }));
-        }
-      } finally {
-        reader.releaseLock();
-        reader = null;
+        <div class="preview-box">
+          <div class="preview-header">
+            <div>
+              <h3>Trail preview</h3>
+              <p>Rendered directly from the captured GPX track so you can verify the route before saving it.</p>
+            </div>
+            <div id="previewBadge" class="preview-badge">No trail loaded</div>
+          </div>
+          <div class="preview-frame">
+            <div id="previewMap" class="preview-map">
+              <div id="previewEmpty" class="preview-empty">
+                The preview will appear here after a GPX export completes.
+              </div>
+            </div>
+            <div id="previewMeta" class="preview-meta" aria-live="polite"></div>
+          </div>
+        </div>
+
+        <p class="footer-note">
+          If the browser says Web Serial is unavailable, use a Chromium-based browser or a Firefox build with the API enabled.
+        </p>
+      </aside>
+    </section>
+    </section>
+
+    <section id="screenshotPane" class="tab-panel hidden" aria-label="Screenshot capture">
+      <section class="hero">
+        <article class="hero-card">
+          <div class="eyebrow"><span class="dot"></span> Mesh screenshot capture</div>
+          <h1>Capture the live display as PNG files in the browser.</h1>
+          <p class="lede">
+            Connect directly to the device over USB, request screenshots from the firmware, and collect them in a gallery
+            before downloading individual files or the whole set.
+          </p>
+
+          <div class="hero-actions">
+            <button id="shotConnectBtn" class="primary">Connect device</button>
+            <button id="shotDisconnectBtn" class="secondary" disabled>Disconnect</button>
+            <button id="shotCaptureBtn" class="secondary" disabled>Capture screenshot</button>
+          </div>
+
+          <div class="hero-actions screenshot-actions">
+            <button id="shotDownloadAllBtn" class="primary" disabled>Download all</button>
+            <button id="shotClearBtn" class="ghost" disabled>Clear gallery</button>
+          </div>
+
+          <div class="scale-control" aria-label="Screenshot scale">
+            <div class="scale-control-top">
+              <span class="label">Scale</span>
+              <span id="shotScaleValue" class="scale-value">1x</span>
+            </div>
+            <input id="shotScaleRange" class="scale-track" type="range" min="1" max="6" step="1" value="1" list="shotScaleMarks" aria-describedby="shotScaleHelp">
+            <div class="scale-legend" id="shotScaleHelp">
+              <span>1x</span>
+              <span>6x</span>
+            </div>
+            <datalist id="shotScaleMarks">
+              <option value="1"></option>
+              <option value="2"></option>
+              <option value="3"></option>
+              <option value="4"></option>
+              <option value="5"></option>
+              <option value="6"></option>
+            </datalist>
+          </div>
+
+          <div class="info-grid">
+            <div class="stat">
+              <div class="label">Connection</div>
+              <div class="value" id="shotConnectionValue">Not connected</div>
+            </div>
+            <div class="stat">
+              <div class="label">Gallery</div>
+              <div class="value" id="shotCountValue">0 screenshots</div>
+            </div>
+            <div class="stat">
+              <div class="label">Latest</div>
+              <div class="value" id="shotLatestValue">No capture yet</div>
+            </div>
+            <div class="stat">
+              <div class="label">Download</div>
+              <div class="value" id="shotDownloadValue">Ready to capture</div>
+            </div>
+          </div>
+
+          <div class="steps">
+            <div class="step">
+              <div class="num">1</div>
+              <h3>Connect</h3>
+              <p>Open this page, then connect to the tracker over USB.</p>
+            </div>
+            <div class="step">
+              <div class="num">2</div>
+              <h3>Capture screenshots</h3>
+              <p>Use the firmware screenshot feature. Each capture is decoded in the browser and added to the gallery.</p>
+            </div>
+            <div class="step">
+              <div class="num">3</div>
+              <h3>Download later</h3>
+              <p>Review the thumbnails, then download items individually or save the whole batch in one go.</p>
+            </div>
+          </div>
+        </article>
+
+        <aside class="panel">
+          <h2>Screenshot status</h2>
+          <p class="hint">
+            The firmware must be built with <code>ENABLE_SCREENSHOT</code>. This mode speaks the mesh screenshot protocol,
+            not the GPX stream used by the Trail tab.
+          </p>
+
+          <div id="shotEnvironmentBanner" class="status-banner"></div>
+
+          <div class="status-row">
+            <div id="shotSerialPill" class="pill"><span class="dot"></span><span>Web Serial</span></div>
+            <div id="shotSecurePill" class="pill"><span class="dot"></span><span>Secure context</span></div>
+          </div>
+
+          <div class="progress-wrap">
+            <div class="progress-meta">
+              <span id="shotProgressLeft">Idle</span>
+              <span id="shotProgressRight">0%</span>
+            </div>
+            <div class="progress"><div id="shotProgressBar" class="bar"></div></div>
+          </div>
+
+          <div class="terminal" id="shotLog" aria-live="polite"></div>
+
+          <div class="download-box">
+            <div class="gallery-toolbar">
+              <button id="shotDownloadAllBtnInline" class="primary" disabled>Download all</button>
+              <button id="shotClearBtnInline" class="secondary" disabled>Clear gallery</button>
+            </div>
+            <div id="shotGallery" class="gallery-wrap">
+              <div id="shotGalleryEmpty" class="gallery-empty">No screenshots yet. Capture one to build the gallery.</div>
+              <div id="shotGalleryGrid" class="gallery"></div>
+            </div>
+          </div>
+
+          <p class="footer-note">
+            If the browser says Web Serial is unavailable, use a Chromium-based browser or a Firefox build with the API enabled.
+          </p>
+        </aside>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const trailTabBtn = document.getElementById("trailTabBtn");
+    const shotTabBtn = document.getElementById("shotTabBtn");
+    const trailPane = document.getElementById("trailPane");
+    const screenshotPane = document.getElementById("screenshotPane");
+    window.meshcoreDisconnectCurrent = null;
+    let activeTab = "trail";
+
+    async function switchTab(nextTab) {
+      if (nextTab === activeTab) {
+        return;
       }
+
+      if (typeof window.meshcoreDisconnectCurrent === "function") {
+        try {
+          await window.meshcoreDisconnectCurrent("Disconnected before switching tabs.");
+        } catch (_) {}
+      }
+
+      const trailActive = nextTab === "trail";
+      trailTabBtn.classList.toggle("active", trailActive);
+      shotTabBtn.classList.toggle("active", !trailActive);
+      trailTabBtn.setAttribute("aria-selected", String(trailActive));
+      shotTabBtn.setAttribute("aria-selected", String(!trailActive));
+      trailPane.classList.toggle("hidden", !trailActive);
+      screenshotPane.classList.toggle("hidden", trailActive ? true : false);
+      activeTab = nextTab;
     }
-  } catch (_) {}
-  if (port) await doDisconnect();
-}
 
-// ---- GPX detection ----
-function processChunk(chunk) {
-  if (captured) return;
+    trailTabBtn.addEventListener("click", () => switchTab("trail"));
+    shotTabBtn.addEventListener("click", () => switchTab("screenshot"));
 
-  if (!capturing) {
-    const start = chunk.indexOf('<?xml');
-    if (start === -1) return;
-    capturing  = true;
-    gpxBuffer  = chunk.slice(start);
-    setDot('receiving');
-    $id('progressBox').textContent = `Receiving… ${gpxBuffer.length} B`;
-  } else {
-    gpxBuffer += chunk;
-    $id('progressBox').textContent = `Receiving… ${gpxBuffer.length} B`;
-  }
+    (() => {
+      const START_MARKER = "<?xml";
+      const END_MARKER = "</gpx>";
+      const BAUD_RATE = 115200;
 
-  const end = gpxBuffer.indexOf('</gpx>');
-  if (end !== -1) {
-    gpxBuffer  = gpxBuffer.slice(0, end + 6);
-    capturing  = false;
-    captured   = true;
-    setDot(port ? 'on' : '');
-    $id('progressBox').textContent = `Done — ${gpxBuffer.length} B`;
-    $id('step3').classList.remove('hidden');
-  }
-}
+      const connectBtn = document.getElementById("connectBtn");
+      const disconnectBtn = document.getElementById("disconnectBtn");
+      const clearBtn = document.getElementById("clearBtn");
+      const downloadBtn = document.getElementById("downloadBtn");
+      const downloadLink = document.getElementById("downloadLink");
+      const filenameValue = document.getElementById("filenameValue");
+      const connectionValue = document.getElementById("connectionValue");
+      const bytesValue = document.getElementById("bytesValue");
+      const captureValue = document.getElementById("captureValue");
+      const downloadValue = document.getElementById("downloadValue");
+      const progressBar = document.getElementById("progressBar");
+      const progressLeft = document.getElementById("progressLeft");
+      const progressRight = document.getElementById("progressRight");
+      const log = document.getElementById("log");
+      const previewBadge = document.getElementById("previewBadge");
+      const previewMap = document.getElementById("previewMap");
+      const previewMeta = document.getElementById("previewMeta");
+      const filenameEditBtn = document.getElementById("filenameEditBtn");
+      const filenameEditField = document.getElementById("filenameEditField");
+      const environmentBanner = document.getElementById("environmentBanner");
+      const serialSupportPill = document.getElementById("serialSupportPill");
+      const secureContextPill = document.getElementById("secureContextPill");
 
-// ---- download ----
-$id('downloadBtn').addEventListener('click', () => {
-  if (!gpxBuffer) return;
-  const blob = new Blob([gpxBuffer], { type: 'application/gpx+xml' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
-  a.download = $id('filename').value.trim() || 'trail.gpx';
-  a.click();
-  URL.revokeObjectURL(url);
+      let port = null;
+      let reader = null;
+      let captureActive = false;
+      let captureText = "";
+      let totalBytes = 0;
+      let capturedBytes = 0;
+      let downloadUrl = "";
+      let downloadFileName = "";
+      let currentBlob = null;
+      let reading = false;
+      let cancelRequested = false;
+      let decoder = new TextDecoder();
+      let filenameEditing = false;
+      let filenameSuppressNextBlur = false;
 
-  // Reset for next export
-  setTimeout(() => {
-    gpxBuffer = '';
-    captured  = false;
-    $id('step3').classList.add('hidden');
-    resetProgress();
-    resetFilename();
-  }, 400);
-});
+      const supportsSerial = "serial" in navigator;
+      const secureContext = window.isSecureContext;
 
-// ---- helpers ----
-function setConn(ok) {
-  setDot(ok ? 'on' : '');
-  $id('connLabel').textContent  = ok ? 'Connected' : 'Disconnected';
-  $id('connectBtn').textContent = ok ? 'Disconnect' : 'Connect device';
-}
+      function nowStamp() {
+        const d = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        return `trail_${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}.gpx`;
+      }
 
-function setDot(cls) {
-  $id('dot').className = 'dot' + (cls ? ' ' + cls : '');
-}
+      function escapeHtml(text) {
+        return text
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;");
+      }
 
-function resetProgress() {
-  $id('progressBox').className = 'progress-box';
-  $id('progressBox').textContent = 'Waiting for data…';
-  capturing = false;
-  gpxBuffer = '';
-}
+      function appendLog(text, cls = "dim") {
+        const line = document.createElement("div");
+        line.className = cls;
+        line.innerHTML = escapeHtml(text);
+        log.appendChild(line);
+        log.scrollTop = log.scrollHeight;
+      }
 
-function resetFilename() {
-  const d = new Date().toISOString().slice(0, 10);
-  $id('filename').value = `trail_${d}.gpx`;
-}
+      function setStatus(text, kind = "default") {
+        const map = {
+          default: "",
+          ok: "ok",
+          live: "live",
+          bad: "bad",
+        };
+        captureValue.textContent = text;
+        captureValue.dataset.kind = kind;
+      }
 
-function showError(msg) {
-  $id('progressBox').className = 'progress-box error';
-  $id('progressBox').textContent = msg;
-}
-</script>
+      function setPill(pill, text, kind) {
+        pill.className = `pill ${kind || ""}`.trim();
+        const span = pill.querySelector("span:last-child");
+        span.textContent = text;
+      }
+
+      function updateButtons() {
+        connectBtn.disabled = !supportsSerial || !secureContext || Boolean(port);
+        disconnectBtn.disabled = !port;
+        clearBtn.disabled = reading || (!captureText && !downloadUrl);
+        downloadBtn.disabled = !currentBlob;
+        filenameEditBtn.disabled = !downloadFileName || filenameEditing;
+        downloadLink.hidden = true;
+      }
+
+      function updateMetrics() {
+        bytesValue.textContent = `${capturedBytes.toLocaleString()} bytes`;
+        downloadValue.textContent = downloadFileName || "No file yet";
+        filenameValue.textContent = downloadFileName || "trail_yyyy-mm-dd_hh-mm-ss.gpx";
+        if (!filenameEditing) {
+          filenameEditField.value = downloadFileName || "";
+        }
+      }
+
+      function resetPreview() {
+        previewBadge.textContent = "No trail loaded";
+        previewMap.innerHTML = `<div id="previewEmpty" class="preview-empty">The preview will appear here after a GPX export completes.</div>`;
+        previewMeta.textContent = "";
+      }
+
+      function setPreviewMessage(message) {
+        previewBadge.textContent = message;
+        previewMap.innerHTML = `<div class="preview-empty">${escapeHtml(message)}</div>`;
+        previewMeta.textContent = "";
+      }
+
+      function sanitizeGpxFileName(name, fallback) {
+        const base = String(name || "").trim().replace(/[\\/:*?"<>|]+/g, "_").replace(/\s+/g, " ");
+        if (!base) {
+          return fallback;
+        }
+        return /\.gpx$/i.test(base) ? base : `${base}.gpx`;
+      }
+
+      function openFilenameEdit() {
+        if (filenameEditing || !downloadFileName) {
+          return;
+        }
+
+        filenameEditing = true;
+        filenameEditBtn.hidden = true;
+        filenameValue.hidden = true;
+        filenameEditField.value = downloadFileName;
+        filenameEditField.hidden = false;
+        filenameEditField.focus();
+        filenameEditField.select();
+        updateButtons();
+      }
+
+      function closeFilenameEdit(commit) {
+        if (!filenameEditing) {
+          return;
+        }
+
+        filenameEditing = false;
+
+        if (commit) {
+          const fallback = downloadFileName || "trail_yyyy-mm-dd_hh-mm-ss.gpx";
+          const cleanName = sanitizeGpxFileName(filenameEditField.value, fallback);
+          const oldName = downloadFileName;
+          downloadFileName = cleanName;
+          if (downloadLink) {
+            downloadLink.download = cleanName;
+          }
+          if (cleanName === oldName) {
+            appendLog(`${cleanName} unchanged.`, "dim");
+          } else {
+            appendLog(`Renamed ${oldName} to ${cleanName}`, "good");
+          }
+        }
+
+        filenameEditField.hidden = true;
+        filenameValue.hidden = false;
+        filenameEditBtn.hidden = false;
+        updateMetrics();
+        updateButtons();
+      }
+
+      function parseTrackSegments(xmlText) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(xmlText, "application/xml");
+        if (doc.querySelector("parsererror")) {
+          return { error: "GPX parse error", segments: [] };
+        }
+
+        const segmentNodes = Array.from(doc.getElementsByTagNameNS("*", "trkseg"));
+        const pointNodes = segmentNodes.length
+          ? segmentNodes.map((segment) => Array.from(segment.getElementsByTagNameNS("*", "trkpt")))
+          : [Array.from(doc.getElementsByTagNameNS("*", "trkpt"))];
+
+        const segments = [];
+        for (const nodes of pointNodes) {
+          const points = [];
+          for (const node of nodes) {
+            const lat = Number.parseFloat(node.getAttribute("lat"));
+            const lon = Number.parseFloat(node.getAttribute("lon"));
+            if (Number.isFinite(lat) && Number.isFinite(lon)) {
+              points.push({ lat, lon });
+            }
+          }
+          if (points.length) {
+            segments.push(points);
+          }
+        }
+
+        return { error: null, segments };
+      }
+
+      function renderTrailPreview(xmlText) {
+        const { error, segments } = parseTrackSegments(xmlText);
+        if (error) {
+          setPreviewMessage(error);
+          return;
+        }
+
+        const allPoints = segments.flat();
+        if (!allPoints.length) {
+          setPreviewMessage("No track points found in this GPX file.");
+          return;
+        }
+
+        const bounds = allPoints.reduce((acc, point) => ({
+          minLat: Math.min(acc.minLat, point.lat),
+          maxLat: Math.max(acc.maxLat, point.lat),
+          minLon: Math.min(acc.minLon, point.lon),
+          maxLon: Math.max(acc.maxLon, point.lon),
+        }), {
+          minLat: Infinity,
+          maxLat: -Infinity,
+          minLon: Infinity,
+          maxLon: -Infinity,
+        });
+
+        const width = 960;
+        const height = 540;
+        const pad = 32;
+        const lonSpan = Math.max(bounds.maxLon - bounds.minLon, 1e-9);
+        const latSpan = Math.max(bounds.maxLat - bounds.minLat, 1e-9);
+        const scale = Math.min((width - pad * 2) / lonSpan, (height - pad * 2) / latSpan);
+        const mapPoint = (point) => {
+          const x = pad + (point.lon - bounds.minLon) * scale;
+          const y = height - pad - (point.lat - bounds.minLat) * scale;
+          return `${x.toFixed(2)},${y.toFixed(2)}`;
+        };
+
+        const polylines = segments.map((segment) => `<polyline points="${segment.map(mapPoint).join(" ")}" />`).join("");
+        const start = allPoints[0];
+        const end = allPoints[allPoints.length - 1];
+        const [startX, startY] = mapPoint(start).split(",");
+        const [endX, endY] = mapPoint(end).split(",");
+
+        previewBadge.textContent = `${allPoints.length.toLocaleString()} points`;
+        previewMap.innerHTML = `
+          <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Trail preview map">
+            <defs>
+              <linearGradient id="trailStroke" x1="0%" x2="100%" y1="0%" y2="0%">
+                <stop offset="0%" stop-color="#4bd7ff"></stop>
+                <stop offset="100%" stop-color="#8cffc1"></stop>
+              </linearGradient>
+            </defs>
+            <rect x="0" y="0" width="${width}" height="${height}" fill="transparent"></rect>
+            <g fill="none" stroke="url(#trailStroke)" stroke-linecap="round" stroke-linejoin="round" stroke-width="5">
+              ${polylines}
+            </g>
+            <circle cx="${startX}" cy="${startY}" r="9" fill="#8cffc1" stroke="#04111a" stroke-width="4"></circle>
+            <circle cx="${endX}" cy="${endY}" r="9" fill="#ffca78" stroke="#04111a" stroke-width="4"></circle>
+          </svg>
+        `;
+        previewMeta.innerHTML = [
+          `<span>Segments: ${segments.length.toLocaleString()}</span>`,
+          `<span>Start: ${start.lat.toFixed(5)}, ${start.lon.toFixed(5)}</span>`,
+          `<span>End: ${end.lat.toFixed(5)}, ${end.lon.toFixed(5)}</span>`,
+        ].join("");
+      }
+
+      function updateProgress() {
+        if (!captureText) {
+          progressBar.style.width = "0%";
+          progressLeft.textContent = reading ? "Waiting for GPX start" : "Idle";
+          progressRight.textContent = "0%";
+          return;
+        }
+
+        const endIndex = captureText.indexOf(END_MARKER);
+        const totalHint = Math.max(captureText.length, 1);
+        const percent = endIndex >= 0
+          ? 100
+          : Math.min(99, Math.max(4, Math.round((captureText.length / Math.max(totalHint, 4096)) * 100)));
+        progressBar.style.width = `${percent}%`;
+        progressLeft.textContent = endIndex >= 0 ? "GPX footer found" : "Receiving GPX";
+        progressRight.textContent = `${percent}%`;
+      }
+
+      function resetCaptureState(keepPort = true) {
+        captureActive = false;
+        captureText = "";
+        totalBytes = 0;
+        capturedBytes = 0;
+        cancelRequested = false;
+        decoder = new TextDecoder();
+        progressBar.style.width = "0%";
+        progressLeft.textContent = "Idle";
+        progressRight.textContent = "0%";
+        captureValue.textContent = "Waiting for data";
+        downloadValue.textContent = "No file yet";
+        if (!keepPort) {
+          connectionValue.textContent = "Not connected";
+        }
+        if (downloadUrl) {
+          URL.revokeObjectURL(downloadUrl);
+          downloadUrl = "";
+        }
+        currentBlob = null;
+        downloadFileName = "";
+        filenameEditing = false;
+        filenameSuppressNextBlur = false;
+        filenameEditField.hidden = true;
+        filenameValue.hidden = false;
+        filenameEditBtn.hidden = false;
+        log.textContent = "";
+        resetPreview();
+        appendLog("Ready. Connect, then start the GPX export on the tracker.", "dim");
+        updateButtons();
+        updateMetrics();
+      }
+
+      function resetStreamState(keepDownload = false) {
+        captureActive = false;
+        captureText = "";
+        totalBytes = 0;
+        capturedBytes = 0;
+        cancelRequested = false;
+        decoder = new TextDecoder();
+        progressBar.style.width = "0%";
+        progressLeft.textContent = "Idle";
+        progressRight.textContent = "0%";
+
+        if (keepDownload && currentBlob) {
+          captureValue.textContent = "GPX ready for download";
+        } else {
+          if (downloadUrl) {
+            URL.revokeObjectURL(downloadUrl);
+            downloadUrl = "";
+          }
+          currentBlob = null;
+          downloadFileName = "";
+          filenameEditing = false;
+          filenameSuppressNextBlur = false;
+          filenameEditField.hidden = true;
+          filenameValue.hidden = false;
+          filenameEditBtn.hidden = false;
+          captureValue.textContent = "Waiting for data";
+          downloadValue.textContent = "No file yet";
+          resetPreview();
+        }
+
+        updateMetrics();
+        updateButtons();
+      }
+
+      function finalizeDownload(text) {
+        if (downloadUrl) {
+          URL.revokeObjectURL(downloadUrl);
+          downloadUrl = "";
+        }
+        const cleaned = text.slice(0, text.indexOf(END_MARKER) + END_MARKER.length);
+        currentBlob = new Blob([cleaned], { type: "application/gpx+xml;charset=utf-8" });
+        downloadFileName = nowStamp();
+        downloadUrl = URL.createObjectURL(currentBlob);
+        downloadLink.href = downloadUrl;
+        downloadLink.download = downloadFileName;
+        filenameEditing = false;
+        filenameSuppressNextBlur = false;
+        filenameEditField.hidden = true;
+        filenameValue.hidden = false;
+        filenameEditBtn.hidden = false;
+        renderTrailPreview(cleaned);
+        updateButtons();
+        updateMetrics();
+        setPill(serialSupportPill, "Capture complete", "ok");
+        setStatus("GPX ready for download", "ok");
+        appendLog(`GPX complete: ${downloadFileName}`, "good");
+        appendLog("Click Download GPX to save the file.", "dim");
+      }
+
+      async function saveBlob(blob, filename) {
+        if ("showSaveFilePicker" in window) {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: filename,
+            types: [{
+              description: "GPX track",
+              accept: { "application/gpx+xml": [".gpx"], "application/xml": [".gpx"], "text/xml": [".gpx"] },
+            }],
+          });
+          const writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          return;
+        }
+
+        const url = URL.createObjectURL(blob);
+        const a = downloadLink;
+        a.href = url;
+        a.download = filename;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      async function disconnect(reason = "Disconnected") {
+        const keepDownload = Boolean(currentBlob);
+        cancelRequested = true;
+        reading = false;
+        if (reader) {
+          try {
+            await reader.cancel();
+          } catch (_) {}
+          try {
+            reader.releaseLock();
+          } catch (_) {}
+          reader = null;
+        }
+        if (port) {
+          try {
+            if (typeof port.setSignals === "function") {
+              await port.setSignals({ dataTerminalReady: false, requestToSend: false });
+            }
+          } catch (_) {}
+          try {
+            await port.close();
+          } catch (_) {}
+          port = null;
+        }
+        connectionValue.textContent = "Not connected";
+        setPill(serialSupportPill, "Web Serial", supportsSerial ? "ok" : "bad");
+        resetStreamState(keepDownload);
+        if (window.meshcoreDisconnectCurrent === disconnect) {
+          window.meshcoreDisconnectCurrent = null;
+        }
+        if (reason) {
+          appendLog(reason, "warn");
+        }
+      }
+
+      async function readLoop() {
+        if (!port?.readable) {
+          appendLog("No readable stream available from the selected port.", "bad");
+          await disconnect("Port closed before reading started.");
+          return;
+        }
+
+        reader = port.readable.getReader();
+        reading = true;
+        updateButtons();
+        setPill(serialSupportPill, "Listening for GPX stream", "live");
+        setStatus("Waiting for device export", "live");
+        appendLog("Listening. Trigger export on the tracker now.", "dim");
+
+        let prefixTail = "";
+
+        try {
+          while (!cancelRequested) {
+            const { value, done } = await reader.read();
+            if (done) {
+              appendLog("Serial stream ended.", "warn");
+              break;
+            }
+            if (!value || !value.byteLength) {
+              continue;
+            }
+
+            totalBytes += value.byteLength;
+            const text = decoder.decode(value, { stream: true });
+
+            if (!captureActive) {
+              prefixTail += text;
+              const startIndex = prefixTail.indexOf(START_MARKER);
+              if (startIndex >= 0) {
+                captureActive = true;
+                captureText = prefixTail.slice(startIndex);
+                capturedBytes = captureText.length;
+                appendLog("Found GPX header <?xml", "good");
+                setStatus("GPX stream detected", "live");
+              } else {
+                prefixTail = prefixTail.slice(-START_MARKER.length);
+              }
+            } else {
+              captureText += text;
+              capturedBytes = captureText.length;
+            }
+
+            updateMetrics();
+            updateProgress();
+
+            if (captureActive && captureText.includes(END_MARKER)) {
+              finalizeDownload(captureText);
+              break;
+            }
+          }
+        } catch (error) {
+          if (!cancelRequested) {
+            appendLog(`Read error: ${error?.message || error}`, "bad");
+            setStatus("Read error", "bad");
+          }
+        } finally {
+          reading = false;
+          try {
+            reader?.releaseLock();
+          } catch (_) {}
+          reader = null;
+          updateButtons();
+        }
+
+        if (!cancelRequested && !captureText.includes(END_MARKER)) {
+          setStatus(captureActive ? "Partial GPX captured" : "No GPX header seen", captureActive ? "bad" : "default");
+          appendLog(captureActive ? "The stream stopped before </gpx>. Partial capture was cleared." : "No GPX payload was detected.", "warn");
+        }
+
+        if (port) {
+          await disconnect("Disconnected from device.");
+        }
+      }
+
+      async function connect() {
+        if (!supportsSerial) {
+          appendLog("Web Serial is not available in this browser.", "bad");
+          return;
+        }
+        if (port) {
+          return;
+        }
+
+        try {
+          appendLog("Opening browser serial port picker...", "dim");
+          port = await navigator.serial.requestPort();
+          await port.open({ baudRate: BAUD_RATE });
+          if (typeof port.setSignals === "function") {
+            try {
+              await port.setSignals({ dataTerminalReady: true, requestToSend: true });
+              appendLog("USB control lines asserted.", "dim");
+            } catch (signalError) {
+              appendLog(`Could not set USB control lines: ${signalError?.message || signalError}`, "warn");
+            }
+          }
+          connectionValue.textContent = "Connected at 115200 baud";
+          setPill(serialSupportPill, "Connected", "ok");
+          setStatus("Connected. Waiting for export.", "ok");
+          appendLog("Connected. Use the device menu to start Export (live) or Export (saved).", "good");
+          window.meshcoreDisconnectCurrent = disconnect;
+          await readLoop();
+        } catch (error) {
+          const message = error?.name === "NotFoundError"
+            ? "No port selected."
+            : error?.message || String(error);
+          appendLog(`Connect failed: ${message}`, "bad");
+          setStatus("Connection failed", "bad");
+          if (port) {
+            try {
+              await port.close();
+            } catch (_) {}
+            port = null;
+          }
+          updateButtons();
+        }
+      }
+
+      connectBtn.addEventListener("click", connect);
+      disconnectBtn.addEventListener("click", () => disconnect("Disconnected by user."));
+      clearBtn.addEventListener("click", () => resetCaptureState(Boolean(port)));
+      filenameEditBtn.addEventListener("click", openFilenameEdit);
+      filenameEditField.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          filenameSuppressNextBlur = true;
+          closeFilenameEdit(true);
+        } else if (event.key === "Escape") {
+          event.preventDefault();
+          filenameSuppressNextBlur = true;
+          closeFilenameEdit(false);
+        }
+      });
+      filenameEditField.addEventListener("blur", () => {
+        if (filenameSuppressNextBlur) {
+          filenameSuppressNextBlur = false;
+          return;
+        }
+        closeFilenameEdit(true);
+      });
+      downloadBtn.addEventListener("click", async () => {
+        if (!currentBlob || !downloadFileName) {
+          return;
+        }
+        try {
+          appendLog("Saving GPX file...", "dim");
+          await saveBlob(currentBlob, downloadFileName);
+          appendLog(`Saved ${downloadFileName}`, "good");
+        } catch (error) {
+          appendLog(`Save failed: ${error?.message || error}`, "bad");
+        }
+      });
+
+      downloadLink.addEventListener("click", () => {
+        appendLog(`Downloading ${downloadFileName}`, "good");
+      });
+
+      window.addEventListener("beforeunload", () => {
+        if (downloadUrl) {
+          URL.revokeObjectURL(downloadUrl);
+        }
+      });
+
+      function initEnvironment() {
+        if (supportsSerial) {
+          setPill(serialSupportPill, "Web Serial available", "ok");
+        } else {
+          setPill(serialSupportPill, "Web Serial unavailable", "bad");
+        }
+
+        if (secureContext) {
+          setPill(secureContextPill, "Secure context", "ok");
+        } else {
+          setPill(secureContextPill, "Not secure", "bad");
+        }
+
+        if (!secureContext) {
+          environmentBanner.className = "status-banner secure-warning";
+          environmentBanner.innerHTML = "<strong>Secure context required.</strong> Open this page from <code>http://localhost</code> or <code>https://</code>. Web Serial will not work from a plain <code>file://</code> URL.";
+        } else if (!supportsSerial) {
+          environmentBanner.className = "status-banner secure-warning";
+          environmentBanner.innerHTML = "<strong>Web Serial is unavailable here.</strong> Use Chrome/Edge or a Firefox build with Web Serial enabled.";
+        } else {
+          environmentBanner.className = "status-banner";
+          environmentBanner.innerHTML = "<strong>Ready.</strong> Connect the tracker, press Connect, then start the GPX export from the device menu.";
+        }
+      }
+
+      initEnvironment();
+      resetCaptureState(false);
+    })();
+
+    (() => {
+      const FRAME_START_OUT = 0x3C;
+      const FRAME_START_IN = 0x3E;
+      const CMD_GET_SCREENSHOT = 66;
+      const RESP_CODE_SCREENSHOT = 29;
+      const RESP_CODE_ERR = 1;
+      const HEADER_SIZE = 11;
+      const DISPLAY_TYPE_OLED = 0;
+      const DISPLAY_TYPE_EINK = 1;
+      const BAUD_RATE = 115200;
+
+      const connectBtn = document.getElementById("shotConnectBtn");
+      const disconnectBtn = document.getElementById("shotDisconnectBtn");
+      const captureBtn = document.getElementById("shotCaptureBtn");
+      const downloadAllBtn = document.getElementById("shotDownloadAllBtn");
+      const downloadAllBtnInline = document.getElementById("shotDownloadAllBtnInline");
+      const clearBtn = document.getElementById("shotClearBtn");
+      const clearBtnInline = document.getElementById("shotClearBtnInline");
+      const scaleRange = document.getElementById("shotScaleRange");
+      const scaleValue = document.getElementById("shotScaleValue");
+      const shotConnectionValue = document.getElementById("shotConnectionValue");
+      const shotCountValue = document.getElementById("shotCountValue");
+      const shotLatestValue = document.getElementById("shotLatestValue");
+      const shotDownloadValue = document.getElementById("shotDownloadValue");
+      const shotProgressBar = document.getElementById("shotProgressBar");
+      const shotProgressLeft = document.getElementById("shotProgressLeft");
+      const shotProgressRight = document.getElementById("shotProgressRight");
+      const shotLog = document.getElementById("shotLog");
+      const shotEnvironmentBanner = document.getElementById("shotEnvironmentBanner");
+      const shotSerialPill = document.getElementById("shotSerialPill");
+      const shotSecurePill = document.getElementById("shotSecurePill");
+      const shotGalleryEmpty = document.getElementById("shotGalleryEmpty");
+      const shotGalleryGrid = document.getElementById("shotGalleryGrid");
+
+      let port = null;
+      let reader = null;
+      let pendingBytes = new Uint8Array(0);
+      let gallery = [];
+      let captureBusy = false;
+      let captureCounter = 0;
+      let screenshotScale = 1;
+
+      const supportsSerial = "serial" in navigator;
+      const secureContext = window.isSecureContext;
+
+      function shotStamp() {
+        const d = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        return `screenshot_${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}.png`;
+      }
+
+      function shotEscapeHtml(text) {
+        return String(text)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;");
+      }
+
+      function shotAppendLog(text, cls = "dim") {
+        const line = document.createElement("div");
+        line.className = cls;
+        line.innerHTML = shotEscapeHtml(text);
+        shotLog.appendChild(line);
+        shotLog.scrollTop = shotLog.scrollHeight;
+      }
+
+      function shotSetStatus(text, kind = "default") {
+        shotConnectionValue.textContent = text;
+        shotConnectionValue.dataset.kind = kind;
+      }
+
+      function shotSetPill(pill, text, kind) {
+        pill.className = `pill ${kind || ""}`.trim();
+        const span = pill.querySelector("span:last-child");
+        span.textContent = text;
+      }
+
+      function shotUpdateButtons() {
+        connectBtn.disabled = !supportsSerial || !secureContext || Boolean(port);
+        disconnectBtn.disabled = !port;
+        captureBtn.disabled = !port || captureBusy;
+        const hasItems = gallery.length > 0;
+        downloadAllBtn.disabled = !hasItems;
+        downloadAllBtnInline.disabled = !hasItems;
+        clearBtn.disabled = !hasItems || captureBusy;
+        clearBtnInline.disabled = !hasItems || captureBusy;
+      }
+
+      function shotUpdateScale() {
+        screenshotScale = Math.min(6, Math.max(1, Number(scaleRange.value) || 1));
+        scaleRange.value = String(screenshotScale);
+        scaleValue.textContent = `${screenshotScale}x`;
+      }
+
+      function shotUpdateMetrics() {
+        shotCountValue.textContent = `${gallery.length.toLocaleString()} screenshot${gallery.length === 1 ? "" : "s"}`;
+        if (gallery.length > 0) {
+          const latest = gallery[0];
+          shotLatestValue.textContent = `${latest.width}x${latest.height} ${latest.typeLabel}`;
+          shotDownloadValue.textContent = latest.fileName;
+        } else {
+          shotLatestValue.textContent = "No capture yet";
+          shotDownloadValue.textContent = `Ready to capture at ${screenshotScale}x`;
+        }
+      }
+
+      function shotUpdateGallery() {
+        shotGalleryGrid.textContent = "";
+        shotGalleryEmpty.hidden = gallery.length > 0;
+        for (const item of gallery) {
+          const card = document.createElement("article");
+          card.className = "shot-card";
+
+          const imageLink = document.createElement("a");
+          imageLink.href = item.url;
+          imageLink.target = "_blank";
+          imageLink.rel = "noreferrer";
+
+          const img = document.createElement("img");
+          img.className = "shot-thumb";
+          img.src = item.url;
+          img.alt = item.fileName;
+          imageLink.appendChild(img);
+          card.appendChild(imageLink);
+
+          const meta = document.createElement("div");
+          meta.className = "shot-meta";
+          meta.innerHTML = `
+            <span class="dim">${shotEscapeHtml(item.width)} x ${shotEscapeHtml(item.height)} | ${shotEscapeHtml(item.typeLabel)} | rot ${shotEscapeHtml(item.rotation)} | ${shotEscapeHtml(item.bytes.toLocaleString())} bytes</span>
+          `;
+          card.appendChild(meta);
+
+          const renameBox = document.createElement("div");
+          renameBox.className = "shot-rename";
+
+          const displayRow = document.createElement("div");
+          displayRow.className = "shot-name-row";
+
+          const nameDisplay = document.createElement("span");
+          nameDisplay.className = "shot-name-text shot-name-display";
+          nameDisplay.textContent = item.fileName;
+
+          const editBtn = document.createElement("button");
+          editBtn.type = "button";
+          editBtn.className = "secondary shot-edit-btn";
+          editBtn.setAttribute("aria-label", `Edit ${item.fileName}`);
+          editBtn.innerHTML = `
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M3 17.25V21h3.75L18.81 8.94l-3.75-3.75L3 17.25zm2.92 2.33H5v-.92l9.06-9.06.92.92L5.92 19.58zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+            </svg>
+          `;
+
+          const editField = document.createElement("input");
+          editField.type = "text";
+          editField.className = "shot-name-edit";
+          editField.value = item.fileName;
+          editField.spellcheck = false;
+          editField.autocomplete = "off";
+          editField.inputMode = "text";
+          editField.hidden = true;
+          editField.setAttribute("aria-label", `Rename ${item.fileName}`);
+
+          let editing = false;
+          let suppressNextBlur = false;
+
+          const openEdit = () => {
+            if (editing) {
+              return;
+            }
+            editing = true;
+            editField.value = item.fileName;
+            nameDisplay.hidden = true;
+            editBtn.hidden = true;
+            editField.hidden = false;
+            editField.focus();
+            editField.select();
+          };
+
+          const closeEdit = (commit) => {
+            if (!editing) {
+              return;
+            }
+            editing = false;
+
+            if (commit) {
+              shotRenameItem(item.id, editField.value);
+            }
+
+            editField.hidden = true;
+            nameDisplay.hidden = false;
+            editBtn.hidden = false;
+          };
+
+          editBtn.addEventListener("click", openEdit);
+          editField.addEventListener("keydown", (event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              suppressNextBlur = true;
+              closeEdit(true);
+            } else if (event.key === "Escape") {
+              event.preventDefault();
+              suppressNextBlur = true;
+              closeEdit(false);
+            }
+          });
+          editField.addEventListener("blur", () => {
+            if (suppressNextBlur) {
+              suppressNextBlur = false;
+              return;
+            }
+            closeEdit(true);
+          });
+
+          displayRow.append(nameDisplay, editBtn);
+          renameBox.append(displayRow, editField);
+          card.appendChild(renameBox);
+
+          const actions = document.createElement("div");
+          actions.className = "shot-actions";
+
+          const download = document.createElement("button");
+          download.type = "button";
+          download.className = "secondary";
+          download.textContent = "Download";
+          download.addEventListener("click", () => {
+            saveBlob(item.blob, item.fileName).catch((error) => {
+              shotAppendLog(`Save failed: ${error?.message || error}`, "bad");
+            });
+          });
+
+          const remove = document.createElement("button");
+          remove.type = "button";
+          remove.className = "ghost";
+          remove.textContent = "Remove";
+          remove.addEventListener("click", () => {
+            shotRemoveItem(item.id);
+          });
+
+          actions.append(download, remove);
+          card.appendChild(actions);
+          shotGalleryGrid.appendChild(card);
+        }
+        shotUpdateMetrics();
+        shotUpdateButtons();
+      }
+
+      function sanitizeShotFileName(name, fallback) {
+        const base = String(name || "").trim().replace(/[\\/:*?"<>|]+/g, "_");
+        const compact = base.replace(/\s+/g, " ");
+        if (!compact) {
+          return fallback;
+        }
+        return compact.toLowerCase().endsWith(".png") ? compact : `${compact}.png`;
+      }
+
+      function shotRenameItem(id, nextName) {
+        const item = gallery.find((entry) => entry.id === id);
+        if (!item) {
+          return;
+        }
+
+        const fallback = item.fileName;
+        const cleanName = sanitizeShotFileName(nextName, fallback);
+        if (cleanName === item.fileName) {
+          shotAppendLog(`${item.fileName} unchanged.`, "dim");
+          return;
+        }
+
+        const oldName = item.fileName;
+        item.fileName = cleanName;
+        shotUpdateGallery();
+        shotAppendLog(`Renamed ${oldName} to ${cleanName}`, "good");
+      }
+
+      function shotRemoveItem(id) {
+        const index = gallery.findIndex((item) => item.id === id);
+        if (index === -1) {
+          return;
+        }
+        const [removed] = gallery.splice(index, 1);
+        URL.revokeObjectURL(removed.url);
+        shotUpdateGallery();
+        shotAppendLog(`Removed ${removed.fileName}`, "warn");
+      }
+
+      function shotClearGallery() {
+        for (const item of gallery) {
+          URL.revokeObjectURL(item.url);
+        }
+        gallery = [];
+        shotUpdateGallery();
+        shotAppendLog("Gallery cleared.", "warn");
+      }
+
+      function concatBytes(left, right) {
+        if (!left.length) return right;
+        if (!right.length) return left;
+        const out = new Uint8Array(left.length + right.length);
+        out.set(left, 0);
+        out.set(right, left.length);
+        return out;
+      }
+
+      function expectedBufferSize(width, height, displayType) {
+        if (displayType === DISPLAY_TYPE_EINK) {
+          const visibleShort = Math.min(width, height);
+          const physStride = Math.ceil(visibleShort / 8);
+          const physHeight = Math.max(width, height);
+          return physStride * physHeight;
+        }
+        return Math.floor((width * height) / 8);
+      }
+
+      function bufferToCanvas(buffer, width, height, displayType, rotation) {
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d", { alpha: false });
+        const imageData = ctx.createImageData(width, height);
+        const data = imageData.data;
+        data.fill(255);
+
+        if (displayType === DISPLAY_TYPE_EINK) {
+          const physHeight = Math.max(width, height);
+          const physStride = Math.floor(buffer.length / physHeight);
+          const visW = rotation & 1 ? height : width;
+          const visH = rotation & 1 ? width : height;
+
+          for (let ly = 0; ly < height; ly++) {
+            for (let lx = 0; lx < width; lx++) {
+              let physX;
+              let physY;
+              if (rotation === 0) {
+                physX = lx;
+                physY = ly;
+              } else if (rotation === 1) {
+                physX = visW - 1 - ly;
+                physY = lx;
+              } else if (rotation === 2) {
+                physX = visW - 1 - lx;
+                physY = visH - 1 - ly;
+              } else {
+                physX = ly;
+                physY = visH - 1 - lx;
+              }
+
+              const byteIdx = Math.floor(physX / 8) + physY * physStride;
+              const bit = 7 - (physX % 8);
+              if (byteIdx < buffer.length) {
+                const raw = (buffer[byteIdx] >> bit) & 1;
+                if (!raw) {
+                  const idx = (ly * width + lx) * 4;
+                  data[idx] = 0;
+                  data[idx + 1] = 0;
+                  data[idx + 2] = 0;
+                  data[idx + 3] = 255;
+                }
+              }
+            }
+          }
+        } else {
+          const bytesPerPage = width;
+          for (let page = 0; page < height; page += 8) {
+            const pageStart = (page / 8) * bytesPerPage;
+            for (let col = 0; col < width; col++) {
+              const byteIdx = pageStart + col;
+              if (byteIdx >= buffer.length) {
+                continue;
+              }
+              const byteVal = buffer[byteIdx];
+              for (let bit = 0; bit < 8 && page + bit < height; bit++) {
+                if (byteVal & (1 << bit)) {
+                  const idx = ((page + bit) * width + col) * 4;
+                  data[idx] = 0;
+                  data[idx + 1] = 0;
+                  data[idx + 2] = 0;
+                  data[idx + 3] = 255;
+                }
+              }
+            }
+          }
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+        return canvas;
+      }
+
+      function scaleCanvas(canvas, scale) {
+        if (scale <= 1) {
+          return canvas;
+        }
+
+        const scaled = document.createElement("canvas");
+        scaled.width = canvas.width * scale;
+        scaled.height = canvas.height * scale;
+        const ctx = scaled.getContext("2d", { alpha: false });
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(canvas, 0, 0, scaled.width, scaled.height);
+        return scaled;
+      }
+
+      async function canvasToBlob(canvas) {
+        return await new Promise((resolve, reject) => {
+          canvas.toBlob((blob) => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error("Could not encode PNG"));
+            }
+          }, "image/png");
+        });
+      }
+
+      async function screenshotToBlob(buffer, width, height, displayType, rotation, scale = 1) {
+        const baseCanvas = bufferToCanvas(buffer, width, height, displayType, rotation);
+        const canvas = scaleCanvas(baseCanvas, scale);
+        return await canvasToBlob(canvas);
+      }
+
+      async function saveBlob(blob, filename) {
+        if ("showSaveFilePicker" in window) {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: filename,
+            types: [{
+              description: "PNG screenshot",
+              accept: { "image/png": [".png"] },
+            }],
+          });
+          const writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          return;
+        }
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      async function saveAllShots() {
+        if (!gallery.length) {
+          return;
+        }
+
+        if ("showDirectoryPicker" in window) {
+          const dir = await window.showDirectoryPicker({ mode: "readwrite" });
+          for (const item of gallery) {
+            const handle = await dir.getFileHandle(item.fileName, { create: true });
+            const writable = await handle.createWritable();
+            await writable.write(item.blob);
+            await writable.close();
+          }
+          shotAppendLog(`Saved ${gallery.length} screenshots to the selected folder.`, "good");
+          return;
+        }
+
+        shotAppendLog("This browser cannot save the whole gallery into one folder automatically, so screenshots will download one by one.", "warn");
+        for (const item of gallery) {
+          await saveBlob(item.blob, item.fileName);
+          await new Promise((resolve) => setTimeout(resolve, 150));
+        }
+      }
+
+      async function writeCommand(command, data = new Uint8Array(0)) {
+        if (!port?.writable) {
+          throw new Error("Port is not writable");
+        }
+        const frameLen = data.length + 1;
+        const frame = new Uint8Array(frameLen + 3);
+        frame[0] = FRAME_START_OUT;
+        frame[1] = frameLen & 0xFF;
+        frame[2] = (frameLen >> 8) & 0xFF;
+        frame[3] = command;
+        frame.set(data, 4);
+        const writer = port.writable.getWriter();
+        try {
+          await writer.write(frame);
+          await writer.ready;
+        } finally {
+          writer.releaseLock();
+        }
+      }
+
+      function readWithTimeout(timeoutMs) {
+        return Promise.race([
+          reader.read(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout waiting for screenshot data")), timeoutMs)),
+        ]);
+      }
+
+      async function readBytes(count, timeoutMs) {
+        const deadline = performance.now() + timeoutMs;
+        while (pendingBytes.length < count) {
+          const remaining = deadline - performance.now();
+          if (remaining <= 0) {
+            throw new Error("Timeout waiting for screenshot data");
+          }
+          const { value, done } = await readWithTimeout(remaining);
+          if (done) {
+            throw new Error("Serial stream ended unexpectedly");
+          }
+          if (value && value.byteLength) {
+            pendingBytes = concatBytes(pendingBytes, value);
+          }
+        }
+
+        const out = pendingBytes.slice(0, count);
+        pendingBytes = pendingBytes.slice(count);
+        return out;
+      }
+
+      async function readFrame(timeoutMs = 5000) {
+        const header = await readBytes(3, timeoutMs);
+        if (header[0] !== FRAME_START_IN) {
+          throw new Error(`Invalid frame start byte 0x${header[0].toString(16)}`);
+        }
+        const frameLen = header[1] | (header[2] << 8);
+        return frameLen > 0 ? await readBytes(frameLen, timeoutMs) : new Uint8Array(0);
+      }
+
+      function parseExpectedPayload(frame) {
+        if (frame.length < HEADER_SIZE) {
+          throw new Error(`Screenshot frame too short: ${frame.length} bytes`);
+        }
+
+        const dispType = frame[1];
+        const rotation = frame[2];
+        const width = frame[3] | (frame[4] << 8);
+        const height = frame[5] | (frame[6] << 8);
+        const chunkIdx = frame[7] | (frame[8] << 8);
+        const totalChunks = frame[9] | (frame[10] << 8);
+        const chunkData = frame.slice(HEADER_SIZE);
+        return { dispType, rotation, width, height, chunkIdx, totalChunks, chunkData };
+      }
+
+      async function receiveScreenshot(timeoutMs = 5000) {
+        const deadline = performance.now() + timeoutMs;
+        let bufferParts = [];
+        let totalBytes = 0;
+        let width = null;
+        let height = null;
+        let displayType = null;
+        let rotation = 0;
+        let totalChunks = null;
+        let receivedChunks = 0;
+
+        while (performance.now() < deadline) {
+          const remaining = deadline - performance.now();
+          const frame = await readFrame(remaining);
+          if (!frame.length) {
+            continue;
+          }
+
+          const respCode = frame[0];
+          if (respCode === RESP_CODE_ERR) {
+            const err = frame.length > 1 ? frame[1] : 0xFF;
+            throw new Error(`Device returned error code 0x${err.toString(16).padStart(2, "0")}`);
+          }
+          if (respCode !== RESP_CODE_SCREENSHOT) {
+            continue;
+          }
+
+          const parsed = parseExpectedPayload(frame);
+          if (parsed.chunkIdx === 0) {
+            width = parsed.width;
+            height = parsed.height;
+            displayType = parsed.dispType;
+            rotation = parsed.rotation;
+            totalChunks = parsed.totalChunks;
+            bufferParts = [];
+            totalBytes = 0;
+            receivedChunks = 0;
+          }
+
+          if (width === null) {
+            throw new Error("Missed screenshot chunk 0");
+          }
+          if (width !== parsed.width || height !== parsed.height) {
+            throw new Error(`Inconsistent screenshot dimensions in chunk ${parsed.chunkIdx}`);
+          }
+          if (totalChunks !== parsed.totalChunks) {
+            throw new Error(`Inconsistent chunk count in chunk ${parsed.chunkIdx}`);
+          }
+
+          bufferParts.push(parsed.chunkData);
+          totalBytes += parsed.chunkData.length;
+          receivedChunks += 1;
+
+          if (receivedChunks >= totalChunks) {
+            const expected = expectedBufferSize(width, height, displayType);
+            if (totalBytes !== expected) {
+              throw new Error(`Expected ${expected} bytes, got ${totalBytes}`);
+            }
+            const buffer = new Uint8Array(totalBytes);
+            let offset = 0;
+            for (const part of bufferParts) {
+              buffer.set(part, offset);
+              offset += part.length;
+            }
+            return { buffer, width, height, displayType, rotation };
+          }
+        }
+
+        throw new Error(`Timeout waiting for screenshot (${receivedChunks}/${totalChunks || "?"} chunks)`);
+      }
+
+      function shotTypeLabel(displayType) {
+        return displayType === DISPLAY_TYPE_EINK ? "e-ink" : "OLED";
+      }
+
+      function addGalleryItem(blob, width, height, displayType, rotation) {
+        const fileName = shotStamp();
+        const url = URL.createObjectURL(blob);
+        gallery.unshift({
+          id: ++captureCounter,
+          blob,
+          url,
+          fileName,
+          width,
+          height,
+          displayType,
+          typeLabel: shotTypeLabel(displayType),
+          rotation,
+          bytes: blob.size,
+        });
+        shotUpdateGallery();
+        shotAppendLog(`Captured ${fileName} (${width}x${height} ${shotTypeLabel(displayType)} rot=${rotation})`, "good");
+      }
+
+      async function captureScreenshot() {
+        if (!port || captureBusy) {
+          return;
+        }
+
+        captureBusy = true;
+        pendingBytes = new Uint8Array(0);
+        shotUpdateButtons();
+        shotSetStatus("Capturing screenshot...", "live");
+        shotAppendLog("Requesting screenshot from the device...", "dim");
+
+        reader = port.readable.getReader();
+        try {
+          await writeCommand(CMD_GET_SCREENSHOT);
+          const result = await receiveScreenshot(6000);
+          const pngBlob = await screenshotToBlob(
+            result.buffer,
+            result.width,
+            result.height,
+            result.displayType,
+            result.rotation,
+            screenshotScale,
+          );
+          addGalleryItem(pngBlob, result.width, result.height, result.displayType, result.rotation);
+          shotSetStatus("Screenshot captured", "ok");
+        } catch (error) {
+          shotAppendLog(`Capture failed: ${error?.message || error}`, "bad");
+          shotSetStatus("Capture failed", "bad");
+        } finally {
+          captureBusy = false;
+          try {
+            await reader.cancel();
+          } catch (_) {}
+          try {
+            reader.releaseLock();
+          } catch (_) {}
+          reader = null;
+          shotUpdateButtons();
+        }
+      }
+
+      async function disconnect(reason = "Disconnected") {
+        captureBusy = false;
+        if (reader) {
+          try {
+            await reader.cancel();
+          } catch (_) {}
+          try {
+            reader.releaseLock();
+          } catch (_) {}
+          reader = null;
+        }
+        if (port) {
+          try {
+            if (typeof port.setSignals === "function") {
+              await port.setSignals({ dataTerminalReady: false, requestToSend: false });
+            }
+          } catch (_) {}
+          try {
+            await port.close();
+          } catch (_) {}
+          port = null;
+        }
+        pendingBytes = new Uint8Array(0);
+        shotSetStatus("Not connected", "default");
+        shotSetPill(shotSerialPill, "Web Serial", supportsSerial ? "ok" : "bad");
+        if (window.meshcoreDisconnectCurrent === disconnect) {
+          window.meshcoreDisconnectCurrent = null;
+        }
+        if (reason) {
+          shotAppendLog(reason, "warn");
+        }
+        shotUpdateButtons();
+      }
+
+      async function connect() {
+        if (!supportsSerial) {
+          shotAppendLog("Web Serial is not available in this browser.", "bad");
+          return;
+        }
+        if (port) {
+          return;
+        }
+
+        try {
+          shotAppendLog("Opening browser serial port picker...", "dim");
+          port = await navigator.serial.requestPort();
+          await port.open({ baudRate: BAUD_RATE });
+          if (typeof port.setSignals === "function") {
+            try {
+              await port.setSignals({ dataTerminalReady: true, requestToSend: true });
+              shotAppendLog("USB control lines asserted.", "dim");
+            } catch (signalError) {
+              shotAppendLog(`Could not set USB control lines: ${signalError?.message || signalError}`, "warn");
+            }
+          }
+          shotSetStatus("Connected at 115200 baud", "ok");
+          shotSetPill(shotSerialPill, "Connected", "ok");
+          shotAppendLog("Connected. Trigger the firmware screenshot command from the device.", "good");
+          window.meshcoreDisconnectCurrent = disconnect;
+          shotUpdateButtons();
+        } catch (error) {
+          const message = error?.name === "NotFoundError"
+            ? "No port selected."
+            : error?.message || String(error);
+          shotAppendLog(`Connect failed: ${message}`, "bad");
+          shotSetStatus("Connection failed", "bad");
+          if (port) {
+            try {
+              await port.close();
+            } catch (_) {}
+            port = null;
+          }
+          shotUpdateButtons();
+        }
+      }
+
+      function initEnvironment() {
+        if (supportsSerial) {
+          shotSetPill(shotSerialPill, "Web Serial available", "ok");
+        } else {
+          shotSetPill(shotSerialPill, "Web Serial unavailable", "bad");
+        }
+
+        if (secureContext) {
+          shotSetPill(shotSecurePill, "Secure context", "ok");
+        } else {
+          shotSetPill(shotSecurePill, "Not secure", "bad");
+        }
+
+        if (!secureContext) {
+          shotEnvironmentBanner.className = "status-banner secure-warning";
+          shotEnvironmentBanner.innerHTML = "<strong>Secure context required.</strong> Open this page from <code>http://localhost</code> or <code>https://</code>. Web Serial will not work from a plain <code>file://</code> URL.";
+        } else if (!supportsSerial) {
+          shotEnvironmentBanner.className = "status-banner secure-warning";
+          shotEnvironmentBanner.innerHTML = "<strong>Web Serial is unavailable here.</strong> Use Chrome/Edge or a Firefox build with the API enabled.";
+        } else {
+          shotEnvironmentBanner.className = "status-banner";
+          shotEnvironmentBanner.innerHTML = "<strong>Ready.</strong> Connect the tracker, then capture screenshots from the device's screenshot command.";
+        }
+      }
+
+      connectBtn.addEventListener("click", connect);
+      disconnectBtn.addEventListener("click", () => disconnect("Disconnected by user."));
+      captureBtn.addEventListener("click", captureScreenshot);
+      scaleRange.addEventListener("input", shotUpdateScale);
+      downloadAllBtn.addEventListener("click", () => saveAllShots().catch((error) => shotAppendLog(`Save failed: ${error?.message || error}`, "bad")));
+      downloadAllBtnInline.addEventListener("click", () => saveAllShots().catch((error) => shotAppendLog(`Save failed: ${error?.message || error}`, "bad")));
+      clearBtn.addEventListener("click", shotClearGallery);
+      clearBtnInline.addEventListener("click", shotClearGallery);
+      window.addEventListener("beforeunload", () => {
+        for (const item of gallery) {
+          URL.revokeObjectURL(item.url);
+        }
+      });
+
+      initEnvironment();
+      shotUpdateScale();
+      shotSetStatus("Not connected", "default");
+      shotUpdateGallery();
+      shotUpdateButtons();
+      shotAppendLog("Ready. Connect, then capture screenshots from the firmware.", "dim");
+    })();
+  </script>
 </body>
 </html>
