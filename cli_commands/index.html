@@ -347,6 +347,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#power-off-the-node" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Power-off the node
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#reset-the-clock-and-reboot" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1054,6 +1065,17 @@
     <span class="md-ellipsis">
       
         Limit the number of hops for an unscoped flood message
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#limit-the-number-of-hops-for-an-advert-flood-message" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limit the number of hops for an advert flood message
       
     </span>
   </a>
@@ -2447,6 +2469,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#power-off-the-node" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Power-off the node
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#reset-the-clock-and-reboot" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3160,6 +3193,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#limit-the-number-of-hops-for-an-advert-flood-message" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limit the number of hops for an advert flood message
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3681,10 +3725,18 @@
 <h3 id="reboot-the-node">Reboot the node</h3>
 <p><strong>Usage:</strong> 
 - <code>reboot</code></p>
+<p><strong>Note:</strong> No reply is sent.</p>
+<hr />
+<h3 id="power-off-the-node">Power-off the node</h3>
+<p><strong>Usage:</strong>
+- <code>poweroff</code>, or
+- <code>shutdown</code></p>
+<p><strong>Note:</strong> No reply is sent.</p>
 <hr />
 <h3 id="reset-the-clock-and-reboot">Reset the clock and reboot</h3>
 <p><strong>Usage:</strong>
 - <code>clkreboot</code></p>
+<p><strong>Note:</strong> No reply is sent.</p>
 <hr />
 <h3 id="sync-the-clock-with-the-remote-device">Sync the clock with the remote device</h3>
 <p><strong>Usage:</strong> 
@@ -4077,8 +4129,16 @@
 - <code>set flood.max.unscoped &lt;value&gt;</code></p>
 <p><strong>Parameters:</strong>
 - <code>value</code>: Maximum flood hop count (0-64) for a packet without a scope (no region set)</p>
-<p><strong>Default:</strong> <code>0xFF</code> - indicates it hasn't been set, will track flood.max until it is.</p>
+<p><strong>Default:</strong> <code>64</code> - (<code>0xFF</code> indicates it hasn't been set, will track flood.max until it is.)</p>
 <p><strong>Note:</strong> An alternative to <code>region denyf *</code>, setting <code>flood.max.unscoped</code> to a lower value such as <code>3</code> would allow for local unscoped messages to propagate, while preventing noisy neighbors from flooding a local region.</p>
+<hr />
+<h4 id="limit-the-number-of-hops-for-an-advert-flood-message">Limit the number of hops for an advert flood message</h4>
+<p><strong>Usage:</strong>
+- <code>get flood.max.advert</code>
+- <code>set flood.max.advert &lt;value&gt;</code></p>
+<p><strong>Parameters:</strong>
+- <code>value</code>: Maximum flood hop count (0-64) for an advert packet</p>
+<p><strong>Default:</strong> <code>8</code></p>
 <hr />
 <h3 id="acl">ACL</h3>
 <h4 id="add-update-or-remove-permissions-for-a-companion">Add, update or remove permissions for a companion</h4>
