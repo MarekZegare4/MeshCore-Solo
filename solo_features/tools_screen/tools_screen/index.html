@@ -1677,7 +1677,7 @@
 </tbody>
 </table>
 <p>Select a node to see its coordinates, distance, bearing with cardinal direction, type, and last-heard time.</p>
-<p><strong>Hold Enter</strong> opens the same <strong>Options</strong> menu everywhere (list and detail), with a fixed set of actions — only the unavailable ones are omitted:</p>
+<p><strong>Hold Enter</strong> opens the same <strong>Options</strong> menu everywhere (list and detail), in a fixed order — only the actions that apply appear:</p>
 <table>
 <thead>
 <tr>
@@ -1699,20 +1699,16 @@
 <td>selected node has GPS</td>
 </tr>
 <tr>
-<td>Filter…</td>
-<td>always (full filter list in one popup)</td>
-</tr>
-<tr>
 <td>Sort: Dist/Recent</td>
-<td>always (toggles distance ↔ last-heard)</td>
+<td>browsing stored nodes — <strong>LEFT/RIGHT</strong> on the row flips distance ↔ last-heard in place</td>
 </tr>
 <tr>
-<td>Discover scan</td>
+<td>Discover scan / Rescan</td>
 <td>always (live <code>NODE_DISCOVER_REQ</code> scan)</td>
 </tr>
 </tbody>
 </table>
-<p>The sort toggle switches the list (and the right-hand column) between <strong>distance</strong> and <strong>last-heard</strong>, independent of the active filter.</p>
+<p>Filtering stays on the list itself (<strong>LEFT/RIGHT</strong> cycles the type), so there is no separate Filter action in the menu. <strong>Sort</strong> is adjusted in place: highlight the <strong>Sort</strong> row and tap <strong>LEFT/RIGHT</strong> to flip the list (and its right-hand column) between <strong>distance</strong> and <strong>last-heard</strong> without closing the menu — the same in-popup pattern as Trail's settings. The row appears only while browsing stored nodes (live-scan rows carry signal, not distance). Filter and sort are independent and <strong>persist</strong> across re-entry to the screen.</p>
 <p>Selecting <strong>Ping</strong> opens the Ping popup:</p>
 <table>
 <thead>

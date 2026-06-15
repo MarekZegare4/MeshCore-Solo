@@ -1644,9 +1644,16 @@
 
 <h1 id="nearby-nodes-analiza-i-propozycja-uporzadkowania">Nearby Nodes — analiza i propozycja uporządkowania</h1>
 <blockquote>
-<p>Branch: <code>refactor/nearby-nodes</code>
+<p>Branch: <code>refactor/nearby-nodes</code> (zmergowany do <code>main</code>)
 Plik źródłowy: <a href="../../examples/companion_radio/ui-new/NearbyScreen.h">NearbyScreen.h</a>
-Status: <strong>propozycja</strong> (do akceptacji przed implementacją)</p>
+Status: <strong>zaimplementowane</strong> — dokument zachowany jako zapis analizy/decyzji.</p>
+<p><strong>Odchylenia od propozycji (stan faktyczny):</strong>
+- Akcji <strong>Filter…</strong> w menu nie ma — duplikowała cykl <code>LEFT/RIGHT</code> po typie, więc
+  filtr został wyłącznie na liście (sekcja 3.1 zakładała Filter… też w menu).
+- <strong>Sort</strong> nie jest togglem przez Enter, lecz zmienia się <strong>in-place przez
+  <code>LEFT/RIGHT</code> na podświetlonym wierszu</strong> w popupie (wzorzec ustawień Trail),
+  a wiersz pojawia się tylko dla źródła Zapisane (skan nie ma dystansu).
+- Filtr i sort <strong>utrzymują się</strong> między wejściami na ekran (nie są resetowane).</p>
 </blockquote>
 <hr />
 <h2 id="1-jak-narzedzie-jest-zbudowane-dzisiaj">1. Jak narzędzie jest zbudowane dzisiaj</h2>
