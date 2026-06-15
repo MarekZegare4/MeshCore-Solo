@@ -622,6 +622,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../../design/nearby_redesign/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nearby Nodes — analiza i propozycja uporządkowania
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../../design/trail_redesign/" class="md-nav__link">
         
   
@@ -1266,10 +1294,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#active-discovery" class="md-nav__link">
+  <a href="#active-discovery-live-scan" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Active Discovery
+        Active Discovery (live scan)
       
     </span>
   </a>
@@ -1453,10 +1481,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#active-discovery" class="md-nav__link">
+  <a href="#active-discovery-live-scan" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Active Discovery
+        Active Discovery (live scan)
       
     </span>
   </a>
@@ -1612,7 +1640,8 @@
 </tr>
 </tbody>
 </table>
-<p>Browse nodes that have recently advertised on the mesh. Filter by category with <strong>LEFT/RIGHT</strong>:</p>
+<p>Browse nodes that have recently advertised on the mesh. <strong>Filter</strong> (which nodes) and <strong>sort</strong> (in what order) are independent axes and combine freely.</p>
+<p>Filter by category with <strong>LEFT/RIGHT</strong> (one coherent axis — type only):</p>
 <table>
 <thead>
 <tr>
@@ -1622,12 +1651,12 @@
 </thead>
 <tbody>
 <tr>
-<td>Fav</td>
-<td>Upstream-starred contacts only</td>
+<td>All</td>
+<td>All known nodes</td>
 </tr>
 <tr>
-<td>ALL</td>
-<td>All known nodes</td>
+<td>Fav</td>
+<td>Upstream-starred contacts only</td>
 </tr>
 <tr>
 <td>Comp</td>
@@ -1648,8 +1677,43 @@
 </tbody>
 </table>
 <p>Select a node to see its coordinates, distance, bearing with cardinal direction, type, and last-heard time.</p>
-<p>From the list view, <strong>Hold Enter</strong> opens the context menu, where <strong>Discover nearby</strong> sends a live <code>NODE_DISCOVER_REQ</code> scan.</p>
-<p>From either node detail view, <strong>Hold Enter</strong> opens the Ping popup:</p>
+<p><strong>Hold Enter</strong> opens the same <strong>Options</strong> menu everywhere (list and detail), with a fixed set of actions — only the unavailable ones are omitted:</p>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Available when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Navigate</td>
+<td>selected node has GPS</td>
+</tr>
+<tr>
+<td>Ping</td>
+<td>a public key is known for the node</td>
+</tr>
+<tr>
+<td>Save waypoint</td>
+<td>selected node has GPS</td>
+</tr>
+<tr>
+<td>Filter…</td>
+<td>always (full filter list in one popup)</td>
+</tr>
+<tr>
+<td>Sort: Dist/Recent</td>
+<td>always (toggles distance ↔ last-heard)</td>
+</tr>
+<tr>
+<td>Discover scan</td>
+<td>always (live <code>NODE_DISCOVER_REQ</code> scan)</td>
+</tr>
+</tbody>
+</table>
+<p>The sort toggle switches the list (and the right-hand column) between <strong>distance</strong> and <strong>last-heard</strong>, independent of the active filter.</p>
+<p>Selecting <strong>Ping</strong> opens the Ping popup:</p>
 <table>
 <thead>
 <tr>
@@ -1670,7 +1734,7 @@
 Combined with <strong>Auto-Advert</strong> on the other device, Nearby Nodes becomes a passive location tracker — as long as the tracked device periodically broadcasts its GPS position, you can see its current distance and bearing without any manual interaction on either end.</p>
 </blockquote>
 <hr />
-<h3 id="active-discovery">Active Discovery</h3>
+<h3 id="active-discovery-live-scan">Active Discovery (live scan)</h3>
 <table>
 <thead>
 <tr>
@@ -1685,14 +1749,10 @@ Combined with <strong>Auto-Advert</strong> on the other device, Nearby Nodes bec
 </tr>
 </tbody>
 </table>
-<p>Sends a <code>NODE_DISCOVER_REQ</code> ping. Repeaters, sensors and room servers within zero-hop range respond immediately with name, type and signal data.</p>
-<p>Results show as 2-line cards: node name + type, then RSSI / SNR / remote SNR.</p>
+<p><strong>Options → Discover scan</strong> sends a <code>NODE_DISCOVER_REQ</code>. Repeaters, sensors and room servers within zero-hop range respond immediately with name, type and signal data. This is not a separate screen — it is the <strong>same list switched to a live-scan source</strong>: the right-hand column shows <strong>RSSI</strong> instead of distance, and node detail shows the public key, signal data and contact status.</p>
+<p>Because it is the same list, all the same keys apply — <strong>UP/DOWN</strong> to navigate, <strong>Enter</strong> for detail, <strong>Hold Enter</strong> for the Options menu (where <strong>Rescan</strong> repeats the scan and <strong>Ping</strong> works exactly as on stored nodes).</p>
 <ul>
-<li><strong>UP/DOWN</strong> — navigate results</li>
-<li><strong>Enter</strong> — open full-screen detail (public key, signal data, contact status)</li>
-<li><strong>Hold Enter</strong> — rescan</li>
-<li><strong>Hold Enter</strong> in full-screen detail — open the Ping popup for the selected node</li>
-<li><strong>Cancel / Back</strong> — return to nearby list</li>
+<li><strong>Cancel / Back</strong> — return to the stored-nodes list</li>
 </ul>
 <hr />
 <h2 id="gps-trail">GPS Trail</h2>
