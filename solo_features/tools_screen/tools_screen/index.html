@@ -1390,6 +1390,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Auto-Reply Bot">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Commands
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -1576,6 +1593,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Auto-Reply Bot">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Commands
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2078,32 +2112,89 @@ If the companion app is connected via <strong>BLE</strong>, the export is safe �
 </thead>
 <tbody>
 <tr>
-<td>Bot</td>
+<td>Enable</td>
 <td>ON / OFF — enables DM listening</td>
 </tr>
 <tr>
-<td>Channel mode</td>
-<td>ON / OFF — additionally monitors a selected channel</td>
-</tr>
-<tr>
 <td>Channel</td>
-<td>Which channel to monitor (only relevant when channel mode is ON)</td>
+<td>OFF, or which channel to additionally monitor (cycles through your channels)</td>
 </tr>
 <tr>
-<td>Trigger</td>
-<td>Word or phrase that activates the reply (shared by both modes, case-insensitive)</td>
+<td>Trigger DM</td>
+<td>Word or phrase that activates the DM reply (case-insensitive). A lone <code>*</code> means <strong>reply to every DM</strong> (away mode) and is shown as <code>(any msg)</code>.</td>
 </tr>
 <tr>
-<td>DM reply</td>
-<td>Reply text for DMs; supports <code>{time}</code> and <code>{loc}</code> placeholders</td>
+<td>Reply DM</td>
+<td>Reply text for DMs; supports <code>{time}</code>, <code>{loc}</code> and sensor placeholders</td>
 </tr>
 <tr>
-<td>Channel reply</td>
-<td>Reply text for channel messages; supports <code>{time}</code> and <code>{loc}</code> placeholders</td>
+<td>Trigger Ch</td>
+<td>Independent trigger for the monitored channel. <code>*</code> means <strong>reply to every channel message</strong> — bounded by the per-channel cooldown, but use sparingly on a busy channel.</td>
+</tr>
+<tr>
+<td>Reply Ch</td>
+<td>Reply text for channel messages; supports the same placeholders</td>
+</tr>
+<tr>
+<td>Commands</td>
+<td>ON / OFF — answer <code>!</code> query commands (see below)</td>
+</tr>
+<tr>
+<td>Quiet from/to</td>
+<td>Local-time window during which auto-replies stay silent; set both equal (<code>OFF</code>) to disable</td>
 </tr>
 </tbody>
 </table>
-<p>A 10-second cooldown prevents repeated replies in quick succession.</p>
+<p>The DM and channel triggers are independent, so you can run e.g. an away-message (<code>*</code>) in DMs while the channel reacts only to a specific keyword (or vice-versa).</p>
+<p>The header shows a running count of auto-replies sent since boot.</p>
+<p><strong>Throttle.</strong> Auto-replies are rate-limited <strong>per contact</strong> (10 s), so a second sender is never starved while one contact is on cooldown. The channel bot keeps a single 10 s cooldown and won't echo a message identical to its own reply (so two bots running the same reply text on one channel can't ping-pong); the cooldown caps any residual back-and-forth.</p>
+<p><strong>Quiet hours</strong> suppress the push (trigger) replies between the configured local hours; a window where <em>from</em> is later than <em>to</em> wraps past midnight. Commands are a pull (explicitly requested), so they answer even during quiet hours.</p>
+<h3 id="commands">Commands</h3>
+<p>With <strong>Commands</strong> ON, a DM beginning with <code>!</code> is answered with live node data, independent of the trigger:</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Reply</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>!ping</code></td>
+<td><code>pong</code></td>
+</tr>
+<tr>
+<td><code>!batt</code></td>
+<td>battery voltage</td>
+</tr>
+<tr>
+<td><code>!loc</code></td>
+<td>GPS coordinates (or <code>no GPS</code>)</td>
+</tr>
+<tr>
+<td><code>!time</code></td>
+<td>local time <code>HH:MM</code></td>
+</tr>
+<tr>
+<td><code>!temp</code></td>
+<td>temperature (or <code>n/a</code> if no sensor)</td>
+</tr>
+<tr>
+<td><code>!hops</code></td>
+<td>how many hops the command message took to reach the node (<code>direct</code> if heard directly)</td>
+</tr>
+<tr>
+<td><code>!status</code></td>
+<td>combined battery / location / time</td>
+</tr>
+<tr>
+<td><code>!help</code></td>
+<td>list of available commands</td>
+</tr>
+</tbody>
+</table>
+<p>Several commands can be combined in one message — <code>!batt !time !hops</code> is answered with a single <code>4.10V | 14:30 | 3 hops</code> reply (one transmission). A message with no recognised command falls through to the trigger bot.</p>
+<p>Commands also work on the <strong>monitored channel</strong> (the one selected for channel mode) — anyone there can query the node. Channel replies are broadcast to everyone, so unlike DM commands they respect quiet hours and use the shared per-channel cooldown. DM commands use the per-contact throttle.</p>
 
 
 
