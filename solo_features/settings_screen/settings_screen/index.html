@@ -1700,22 +1700,48 @@
 </thead>
 <tbody>
 <tr>
-<td>TX power</td>
+<td>TX Pwr</td>
 <td>2–22 dBm</td>
 <td>LEFT/RIGHT. With <strong>Auto pwr</strong> on this is the <em>ceiling</em> — the radio may transmit lower.</td>
 </tr>
 <tr>
+<td>Preset</td>
+<td>named presets</td>
+<td>LEFT/RIGHT cycles community RF presets (region frequency + bandwidth/SF/CR). <strong>Enter</strong> opens a popup to pick one, save the current settings as a named preset, or delete a saved one. Applies frequency, bandwidth, SF and CR together.</td>
+</tr>
+<tr>
+<td>Freq</td>
+<td>chip range</td>
+<td><strong>Enter</strong> opens a digit-by-digit editor: LEFT/RIGHT moves between decimal places, UP/DOWN steps that digit. Bounds come from the radio chip's own validated range, so a value the radio would reject can't be entered.</td>
+</tr>
+<tr>
+<td>SF</td>
+<td>5–12</td>
+<td>LEFT/RIGHT. Spreading factor.</td>
+</tr>
+<tr>
+<td>BW</td>
+<td>7.8–500 kHz</td>
+<td>LEFT/RIGHT cycles the standard LoRa bandwidths.</td>
+</tr>
+<tr>
+<td>CR</td>
+<td>5–8</td>
+<td>LEFT/RIGHT. Coding rate (4/5–4/8).</td>
+</tr>
+<tr>
 <td>Pwr save</td>
 <td>ON / OFF</td>
-<td><strong>Battery saver.</strong> Hardware duty-cycle receive: the SX126x cycles RX↔sleep on its own and wakes on a preamble, cutting average RX current. Trades a little receive latency; leave OFF for lowest-latency reception. Requires an SX126x radio (otherwise stays on continuous RX).</td>
+<td><strong>Battery saver.</strong> Hardware duty-cycle receive: the SX126x cycles RX↔sleep on its own and wakes on a preamble, cutting average RX current. Trades a little receive latency; leave OFF for lowest-latency reception. Requires an SX126x radio (otherwise stays on continuous RX). <strong>Forced off (shown as <code>--</code>) while the repeater is on</strong> — a repeater must listen continuously; your setting is restored when the repeater is switched off.</td>
 </tr>
 <tr>
 <td>Auto pwr</td>
 <td>ON / OFF</td>
-<td><strong>Adaptive Power Control.</strong> Lowers actual TX power on strong links to save energy, ramping back up — to the <strong>TX power</strong> ceiling — on weak or lost links. Link quality comes from direct-message ACK SNR and, for channel messages (no ACK), from hearing a repeater rebroadcast your packet. The radio page / name bar shows the live power. Default OFF (fixed TX power).</td>
+<td><strong>Adaptive Power Control.</strong> Lowers actual TX power on strong links to save energy, ramping back up — to the <strong>TX Pwr</strong> ceiling — on weak or lost links. Link quality comes from direct-message ACK SNR and, for channel messages (no ACK), from hearing a repeater rebroadcast your packet. The radio page / name bar shows the live power. Default OFF (fixed TX power). <strong>Suppressed (shown as <code>--</code>) while the repeater is on</strong> — a repeater holds full TX power for consistent relay reach; your setting is restored when the repeater is switched off.</td>
 </tr>
 </tbody>
 </table>
+<p>The <strong>repeater</strong> mode and its flood filters live on their own screen — see <strong>Tools › Repeater</strong>.</p>
 <hr />
 <h3 id="system">System</h3>
 <table>
