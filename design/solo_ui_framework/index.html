@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://meshcore-dev.github.io/meshcore/design/nearby_redesign/">
+        <link rel="canonical" href="https://meshcore-dev.github.io/meshcore/design/solo_ui_framework/">
       
       
-        <link rel="prev" href="../../terminal_chat_cli/">
+        <link rel="prev" href="../nearby_redesign/">
       
       
-        <link rel="next" href="../solo_ui_framework/">
+        <link rel="next" href="../trail_redesign/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Nearby Nodes — analiza i propozycja uporządkowania - MeshCore Docs</title>
+        <title>Solo UI framework — a guide for adding features - MeshCore Docs</title>
       
     
     
@@ -70,7 +70,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#nearby-nodes-analiza-i-propozycja-uporzadkowania" class="md-skip">
+        <a href="#solo-ui-framework-a-guide-for-adding-features" class="md-skip">
           Skip to content
         </a>
       
@@ -105,7 +105,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Nearby Nodes — analiza i propozycja uporządkowania
+              Solo UI framework — a guide for adding features
             
           </span>
         </div>
@@ -623,6 +623,34 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../nearby_redesign/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nearby Nodes — analiza i propozycja uporządkowania
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -642,7 +670,7 @@
   <span class="md-ellipsis">
     
   
-    Nearby Nodes — analiza i propozycja uporządkowania
+    Solo UI framework — a guide for adding features
   
 
     
@@ -660,7 +688,7 @@
   <span class="md-ellipsis">
     
   
-    Nearby Nodes — analiza i propozycja uporządkowania
+    Solo UI framework — a guide for adding features
   
 
     
@@ -686,77 +714,22 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-jak-narzedzie-jest-zbudowane-dzisiaj" class="md-nav__link">
+  <a href="#1-the-screen-model" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Jak narzędzie jest zbudowane dzisiaj
+        1. The screen model
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#2-co-konkretnie-jest-nieuporzadkowane" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2. Co konkretnie jest nieuporządkowane
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="2. Co konkretnie jest nieuporządkowane">
+    <nav class="md-nav" aria-label="1. The screen model">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#21-jeden-cykl-filtra-miesza-trzy-rozne-osie" class="md-nav__link">
+  <a href="#wiring-a-screen-into-uitask" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2.1 Jeden cykl filtra miesza trzy różne osie
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#22-te-same-akcje-rozne-menu-w-zaleznosci-od-miejsca" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.2 Te same akcje, różne menu w zależności od miejsca
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#23-hold-enter-znaczy-co-innego-na-kazdym-ekranie" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.3 „Hold Enter” znaczy co innego na każdym ekranie
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#24-_ping_menu-to-bespoke-widget" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.4 _ping_menu to bespoke widget
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#25-duplikacja-listdetailping" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.5 Duplikacja list/detail/ping
+        Wiring a screen into UITask
       
     </span>
   </a>
@@ -769,60 +742,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-propozycja-uporzadkowania" class="md-nav__link">
+  <a href="#2-layout-metrics-text-displaydriver" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Propozycja uporządkowania
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="3. Propozycja uporządkowania">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#31-rozdziel-filtr-od-sortowania" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3.1 Rozdziel filtr od sortowania
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#32-jedno-spojne-menu-akcji-hold-enter-wszedzie" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3.2 Jedno spójne menu akcji (Hold Enter wszędzie)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#33-jedna-lista-dwa-zroda-zapisane-skan-na-zywo" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3.3 Jedna lista, dwa źródła (Zapisane / Skan na żywo)
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#4-proponowany-zakres-etapami" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Proponowany zakres (etapami)
+        2. Layout metrics &amp; text (DisplayDriver)
       
     </span>
   </a>
@@ -830,10 +753,87 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#5-decyzje-zatwierdzone-2026-06-14" class="md-nav__link">
+  <a href="#3-lists-drawlist" class="md-nav__link">
     <span class="md-ellipsis">
       
-        5. Decyzje (zatwierdzone 2026-06-14)
+        3. Lists — drawList
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-reusable-components" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Reusable components
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-domain-helpers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Domain helpers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-mini-icons-the-status-bar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Mini-icons &amp; the status bar
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-input" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Input
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-persistence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Persistence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-conventions-gotchas" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Conventions &amp; gotchas
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-worked-example-a-new-tools-screen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Worked example — a new Tools screen
       
     </span>
   </a>
@@ -844,34 +844,6 @@
   
 </nav>
       
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../solo_ui_framework/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Solo UI framework — a guide for adding features
-  
-
-    
-  </span>
-  
-  
-
-      </a>
     </li>
   
 
@@ -1491,77 +1463,22 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-jak-narzedzie-jest-zbudowane-dzisiaj" class="md-nav__link">
+  <a href="#1-the-screen-model" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Jak narzędzie jest zbudowane dzisiaj
+        1. The screen model
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#2-co-konkretnie-jest-nieuporzadkowane" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2. Co konkretnie jest nieuporządkowane
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="2. Co konkretnie jest nieuporządkowane">
+    <nav class="md-nav" aria-label="1. The screen model">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#21-jeden-cykl-filtra-miesza-trzy-rozne-osie" class="md-nav__link">
+  <a href="#wiring-a-screen-into-uitask" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2.1 Jeden cykl filtra miesza trzy różne osie
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#22-te-same-akcje-rozne-menu-w-zaleznosci-od-miejsca" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.2 Te same akcje, różne menu w zależności od miejsca
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#23-hold-enter-znaczy-co-innego-na-kazdym-ekranie" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.3 „Hold Enter” znaczy co innego na każdym ekranie
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#24-_ping_menu-to-bespoke-widget" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.4 _ping_menu to bespoke widget
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#25-duplikacja-listdetailping" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.5 Duplikacja list/detail/ping
+        Wiring a screen into UITask
       
     </span>
   </a>
@@ -1574,60 +1491,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-propozycja-uporzadkowania" class="md-nav__link">
+  <a href="#2-layout-metrics-text-displaydriver" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Propozycja uporządkowania
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="3. Propozycja uporządkowania">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#31-rozdziel-filtr-od-sortowania" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3.1 Rozdziel filtr od sortowania
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#32-jedno-spojne-menu-akcji-hold-enter-wszedzie" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3.2 Jedno spójne menu akcji (Hold Enter wszędzie)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#33-jedna-lista-dwa-zroda-zapisane-skan-na-zywo" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3.3 Jedna lista, dwa źródła (Zapisane / Skan na żywo)
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#4-proponowany-zakres-etapami" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Proponowany zakres (etapami)
+        2. Layout metrics &amp; text (DisplayDriver)
       
     </span>
   </a>
@@ -1635,10 +1502,87 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#5-decyzje-zatwierdzone-2026-06-14" class="md-nav__link">
+  <a href="#3-lists-drawlist" class="md-nav__link">
     <span class="md-ellipsis">
       
-        5. Decyzje (zatwierdzone 2026-06-14)
+        3. Lists — drawList
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-reusable-components" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Reusable components
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-domain-helpers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Domain helpers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-mini-icons-the-status-bar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Mini-icons &amp; the status bar
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-input" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Input
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-persistence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Persistence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-conventions-gotchas" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Conventions &amp; gotchas
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-worked-example-a-new-tools-screen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Worked example — a new Tools screen
       
     </span>
   </a>
@@ -1662,7 +1606,7 @@
 
 
   
-    <a href="https://github.com/meshcore-dev/meshcore/edit/main/docs/design/nearby_redesign.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/meshcore-dev/meshcore/edit/main/docs/design/solo_ui_framework.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
     </a>
@@ -1670,268 +1614,337 @@
   
 
 
-<h1 id="nearby-nodes-analiza-i-propozycja-uporzadkowania">Nearby Nodes — analiza i propozycja uporządkowania</h1>
-<blockquote>
-<p>Branch: <code>refactor/nearby-nodes</code> (zmergowany do <code>main</code>)
-Plik źródłowy: <a href="../../examples/companion_radio/ui-new/NearbyScreen.h">NearbyScreen.h</a>
-Status: <strong>zaimplementowane</strong> — dokument zachowany jako zapis analizy/decyzji.</p>
-<p><strong>Odchylenia od propozycji (stan faktyczny):</strong>
-- Akcji <strong>Filter…</strong> w menu nie ma — duplikowała cykl <code>LEFT/RIGHT</code> po typie, więc
-  filtr został wyłącznie na liście (sekcja 3.1 zakładała Filter… też w menu).
-- <strong>Sort</strong> nie jest togglem przez Enter, lecz zmienia się <strong>in-place przez
-  <code>LEFT/RIGHT</code> na podświetlonym wierszu</strong> w popupie (wzorzec ustawień Trail),
-  a wiersz pojawia się tylko dla źródła Zapisane (skan nie ma dystansu).
-- Filtr i sort <strong>utrzymują się</strong> między wejściami na ekran (nie są resetowane).</p>
-</blockquote>
+<h1 id="solo-ui-framework-a-guide-for-adding-features">Solo UI framework — a guide for adding features</h1>
+<p><a href="../../README.md">Go back</a></p>
+<p>This is a developer guide to the reusable building blocks behind the
+<code>companion_radio</code> <strong>solo</strong> firmware UI (the <code>ui-new</code> screens). It is not a
+user manual — for what each screen <em>does</em>, see <a href="../solo_features/">solo_features</a>.
+The goal here is so that adding a new screen or feature means <em>wiring together
+existing helpers</em>, not reinventing list scrolling, text wrapping, or persistence.</p>
+<p>Everything below lives under <code>examples/companion_radio/</code> unless a path says
+otherwise. The screen fragments (<code>ui-new/*.h</code>) are all <code>#include</code>d, in order,
+into one translation unit (<code>ui-new/UITask.cpp</code>) — so a <code>static inline</code> helper in
+an earlier header is visible to later ones. Header-include order in <code>UITask.cpp</code>
+therefore matters; new screens go near the others.</p>
 <hr />
-<h2 id="1-jak-narzedzie-jest-zbudowane-dzisiaj">1. Jak narzędzie jest zbudowane dzisiaj</h2>
-<p>Ekran łączy w sobie <strong>trzy osobne tryby</strong> o własnych listach, widokach
-szczegółów i popupach:</p>
-<pre><code>NearbyScreen
-├── LIST (kontakty zapisane w mesh)        ← tryb domyślny
-│   ├── filtr cyklowany LEFT/RIGHT (7 stanów)
-│   ├── DETAIL  (Enter)  → Lat/Lon/Dist/Type/Seen
-│   │   └── _opts popup (Hold Enter): Navigate / Ping / Save waypoint
-│   │       └── _ping_menu popup
-│   ├── NAV view (pełnoekranowa nawigacja)
-│   └── _ctx_menu popup (Hold Enter): Discover / Navigate / Save waypoint
-│
-└── DISCOVER (skan na żywo NODE_DISCOVER_REQ) ← osobny pod-ekran
-    ├── lista wyników (karty 2-liniowe)
-    │   Hold Enter = ponowny skan (brak menu!)
-    └── DETAIL (Enter) → pubkey / RSSI / SNR / status
-        └── _ping_menu popup (Hold Enter = od razu ping, bez Options)
+<h2 id="1-the-screen-model">1. The screen model</h2>
+<p>Every screen implements <code>UIScreen</code> (<code>src/helpers/ui/UIScreen.h</code>):</p>
+<pre><code class="language-cpp">class UIScreen {
+public:
+  virtual int  render(DisplayDriver&amp; display) = 0;  // returns ms until the next render
+  virtual bool handleInput(char c) { return false; }
+  virtual void poll() { }
+};
 </code></pre>
-<p>Stan ekranu trzyma <strong>15+ pól</strong> (<code>_detail</code>, <code>_nav</code>, <code>_discover_mode</code>,
-<code>_ddetail</code>, <code>_pinging</code>, <code>_filter</code>, dwa komplety <code>_sel/_scroll</code>, trzy
-bufory wyników ping…) i <strong>trzy</strong> instancje <code>PopupMenu</code> (<code>_ctx_menu</code>,
-<code>_opts</code>, <code>_ping_menu</code>).</p>
-<hr />
-<h2 id="2-co-konkretnie-jest-nieuporzadkowane">2. Co konkretnie jest nieuporządkowane</h2>
-<h3 id="21-jeden-cykl-filtra-miesza-trzy-rozne-osie">2.1 Jeden cykl filtra miesza trzy różne osie</h3>
-<p><code>LEFT/RIGHT</code> przewija 7 stanów:</p>
-<pre><code>Fav · ALL · Comp · Rpt · Room · Snsr · TIME
-</code></pre>
-<p>Ale to nie jest jedna oś — to <strong>trzy</strong> wciśnięte w jeden liniowy cykl:</p>
-<table>
-<thead>
-<tr>
-<th>Stan</th>
-<th>Czym naprawdę jest</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>Fav</code></td>
-<td>filtr <strong>ulubionych</strong> (flaga <code>ci.flags &amp; 1</code>)</td>
-</tr>
-<tr>
-<td><code>ALL/Comp/Rpt/Room/Snsr</code></td>
-<td>filtr <strong>po typie</strong> węzła</td>
-</tr>
-<tr>
-<td><code>TIME</code></td>
-<td><strong>sortowanie</strong> (po <code>lastmod</code> zamiast po dystansie)</td>
-</tr>
-</tbody>
-</table>
-<p>Konsekwencje:
-- użytkownik „scrolluje po kategoriach” na ślepo — nie widzi wszystkich
-  naraz, musi cyklować, by trafić w to, czego szuka;
-- <strong>kombinacje są niemożliwe</strong>: nie da się zobaczyć „ulubionych
-  repeaterów posortowanych po dystansie" ani „repeaterów posortowanych
-  po czasie” — model wymusza dokładnie jeden stan z siedmiu;
-- <code>TIME</code> jako „filtr" jest mylące — zmienia kolejność, nie zawartość;
-- etykieta w nagłówku (<code>NEARBY[TIME]</code>) nie mówi, że to sort.</p>
-<h3 id="22-te-same-akcje-rozne-menu-w-zaleznosci-od-miejsca">2.2 Te same akcje, różne menu w zależności od miejsca</h3>
-<table>
-<thead>
-<tr>
-<th>Akcja</th>
-<th style="text-align: center;">Lista (<code>_ctx_menu</code>)</th>
-<th style="text-align: center;">Detail kontaktu (<code>_opts</code>)</th>
-<th style="text-align: center;">Detail discover</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Navigate</td>
-<td style="text-align: center;">✓</td>
-<td style="text-align: center;">✓</td>
-<td style="text-align: center;">—</td>
-</tr>
-<tr>
-<td>Save waypoint</td>
-<td style="text-align: center;">✓</td>
-<td style="text-align: center;">✓</td>
-<td style="text-align: center;">—</td>
-</tr>
-<tr>
-<td>Ping</td>
-<td style="text-align: center;">—</td>
-<td style="text-align: center;">✓</td>
-<td style="text-align: center;">✓</td>
-</tr>
-<tr>
-<td>Discover</td>
-<td style="text-align: center;">✓</td>
-<td style="text-align: center;">—</td>
-<td style="text-align: center;">—</td>
-</tr>
-</tbody>
-</table>
-<p>Ten sam węzeł oferuje inny zestaw akcji w zależności od tego, gdzie na
-niego patrzysz. Ping jest osiągalny tylko ze szczegółów, Discover tylko
-z listy.</p>
-<h3 id="23-hold-enter-znaczy-co-innego-na-kazdym-ekranie">2.3 „Hold Enter” znaczy co innego na każdym ekranie</h3>
-<table>
-<thead>
-<tr>
-<th>Ekran</th>
-<th>Hold Enter (<code>KEY_CONTEXT_MENU</code>)</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Lista nearby</td>
-<td>otwiera menu kontekstowe</td>
-</tr>
-<tr>
-<td>Detail kontaktu</td>
-<td>otwiera menu Options</td>
-</tr>
-<tr>
-<td>Lista discover</td>
-<td><strong>ponowny skan</strong> (żadnego menu)</td>
-</tr>
-<tr>
-<td>Detail discover</td>
-<td><strong>od razu Ping</strong> (pomija Options)</td>
-</tr>
-</tbody>
-</table>
-<p>Brak spójnego modelu „przytrzymaj = menu akcji”.</p>
-<h3 id="24-_ping_menu-to-bespoke-widget">2.4 <code>_ping_menu</code> to bespoke widget</h3>
-<p>W przeciwieństwie do reszty popupów, ping-menu:
-- ma wiersze tylko-do-odczytu (RTT / SNR), więc połyka <code>UP/DOWN</code>;
-- przebudowuje się w trakcie (<code>rebuildPingMenu</code>) gdy przychodzą wyniki;
-- zostaje otwarte po <code>SELECTED</code> (reszta popupów się zamyka);
-- ma własny <code>handlePingMenuInput</code> z trybem <code>allow_enter_to_open</code>.</p>
-<p>To działa, ale jest to czwarty, niestandardowy wzorzec interakcji w
-jednym narzędziu.</p>
-<h3 id="25-duplikacja-listdetailping">2.5 Duplikacja list/detail/ping</h3>
-<p><code>renderDiscover</code>/<code>handleInputDiscover</code>/<code>renderDiscoverDetail</code> to niemal
-równoległa kopia logiki listy i szczegółów nearby (osobne <code>_dsel</code>,
-<code>_dscroll</code>, <code>_d_visible</code>, własne rysowanie kart). Discover i Nearby
-robią to samo — pokazują listę węzłów z możliwością wejścia w szczegóły
-i pingowania — ale dwoma osobnymi ścieżkami kodu.</p>
-<hr />
-<h2 id="3-propozycja-uporzadkowania">3. Propozycja uporządkowania</h2>
-<p>Trzy zasady przewodnie: <strong>(a) jedno menu akcji wszędzie</strong>, <strong>(b) filtr
-i sortowanie jako osobne, jawne osie</strong>, <strong>(c) jeden wzorzec listy</strong>.</p>
-<h3 id="31-rozdziel-filtr-od-sortowania">3.1 Rozdziel filtr od sortowania</h3>
-<p>Zamiast jednego cyklu 7-stanowego — dwie niezależne osie wybierane z
-menu (nie przez ślepe cyklowanie):</p>
-<p><strong>Filtr</strong> (oś „co pokazujemy") i <strong>sort</strong> (oś „w jakiej kolejności") są
-od siebie niezależne i <strong>łączą się dowolnie</strong>:</p>
-<pre><code>FILTR (jedna oś — typ węzła, z Ulubionymi)      SORT (przełącznik)
-  • Wszystkie                                      • Dystans (domyślnie)
-  • Ulubione                                       • Ostatnio słyszane
-  • Companion
-  • Repeater
-  • Room
-  • Sensor
-</code></pre>
-<p><strong>Sterowanie (zatwierdzone):</strong>
-- <code>LEFT/RIGHT</code> = szybki cykl <strong>tylko po filtrze-typie</strong> (jedna spójna oś,
-  znany gest; bez „TIME" zanieczyszczającego cykl);
-- <strong>Sort</strong> = przełącznik w menu akcji (<code>Dystans ↔ Ostatnio słyszane</code>),
-  trzymany niezależnie od filtra;
-- <strong>Filter…</strong> dostępny też w menu akcji (odkrywalność — cała lista
-  widoczna naraz, nie tylko cyklowanie).</p>
-<p>Dzięki temu „ulubione repeatery po dystansie" staje się możliwe, a w
-nagłówku widać oba wymiary, np. <code>NEARBY · Rpt · ↓dist</code>.</p>
-<h3 id="32-jedno-spojne-menu-akcji-hold-enter-wszedzie">3.2 Jedno spójne menu akcji (Hold Enter wszędzie)</h3>
-<p>Jeden <code>PopupMenu</code> (zamiast <code>_ctx_menu</code> + <code>_opts</code>), pozycje zależne od
-kontekstu, ale <strong>kolejność i nazwy stałe</strong>:</p>
-<pre><code>Hold Enter →  Options
-  • Navigate        (gdy węzeł ma GPS)
-  • Ping            (gdy znamy pubkey)
-  • Save waypoint   (gdy węzeł ma GPS)
-  ──────────────
-  • Filter…         (podmenu z 3.1)
-  • Sort…           (toggle z 3.1)
-  • Discover scan   (uruchamia skan na żywo = przełącza źródło)
-</code></pre>
-<p>To samo menu na liście i w szczegółach, w obu źródłach (Zapisane /
-Skan). Pozycje niedostępne są pomijane (jak już teraz robi <code>has_node</code>),
-ale nigdy nie zmieniają kolejności ani nazw. „Hold Enter = menu akcji" —
-bez wyjątków. Ping zawsze przez Options (znika „od razu Ping" z detalu
-Discover); rescan to pozycja menu, nie ukryty Hold Enter.</p>
-<h3 id="33-jedna-lista-dwa-zroda-zapisane-skan-na-zywo">3.3 Jedna lista, dwa źródła (Zapisane / Skan na żywo)</h3>
-<p><strong>Zatwierdzone:</strong> zamiast osobnego pod-ekranu Discover — <strong>jeden
-komponent</strong> listy/szczegółów/menu/ping napędzany przełącznikiem
-<strong>źródła</strong>:</p>
 <ul>
-<li>ta sama nawigacja, to samo menu akcji, ten sam wzorzec szczegółów i
-  pingu (znika duplikacja <code>renderDiscover*</code>, niespójne Hold Enter i
-  połowa pól stanu);</li>
-<li>różni się tylko <strong>prawa kolumna</strong> wiersza i pola w detalu:</li>
-<li>źródło <strong>Zapisane</strong> → dystans / azymut / lastmod (jak dziś),</li>
-<li>źródło <strong>Skan na żywo</strong> → RSSI / SNR (dane z <code>DiscoverResult</code>).</li>
+<li><strong><code>render()</code></strong> draws one frame and returns <em>how long until it wants to be
+  drawn again</em>, in milliseconds. Return a big number (<code>2000</code>) for a static
+  screen, a small one (<code>50</code>–<code>200</code>) while something animates or a popup is open.
+  This return value is the main lever for the e-ink cost/latency trade-off — see
+  §9. <code>UITask</code> owns <code>startFrame()</code>/<code>endFrame()</code>; <strong><code>render()</code> must not call them.</strong></li>
+<li><strong><code>handleInput(c)</code></strong> gets one key (<code>KEY_*</code>, see §7). Return <code>true</code> if consumed.</li>
+<li><strong><code>poll()</code></strong> runs every loop tick regardless of focus — rare, for background
+  housekeeping (e.g. the shutdown button).</li>
 </ul>
-<p>To nie jest dosłowne zlanie dwóch list w jedną tablicę (dane mają różny
-kształt — kontakt ma GPS, wynik skanu ma sygnał), tylko <strong>jedna ścieżka
-interakcji nad dwoma źródłami</strong>. Wybór źródła = „Discover scan" w menu
-(uruchamia <code>NODE_DISCOVER_REQ</code> i przełącza widok na wyniki) oraz powrót
-do Zapisanych przez Cancel.</p>
+<p>Most screens also define a non-virtual <strong><code>enter()</code></strong> that resets per-visit state
+(<code>_sel = 0</code>, <code>_dirty = false</code>, …). It is called by the screen's <code>goto…()</code> wrapper,
+not by the base class.</p>
+<h3 id="wiring-a-screen-into-uitask">Wiring a screen into UITask</h3>
+<ol>
+<li>Add a <code>UIScreen* my_screen;</code> member in <code>UITask.h</code> (near the others).</li>
+<li>Construct it in <code>UITask::begin()</code> (<code>UITask.cpp</code>):
+   <code>my_screen = new MyScreen(this, …);</code></li>
+<li>Add a navigator:
+   <code>cpp
+   void UITask::gotoMyScreen() {
+     ((MyScreen*)my_screen)-&gt;enter();
+     setCurrScreen(my_screen);   // sets curr + schedules an immediate redraw
+   }</code></li>
+<li>Reach it from somewhere — usually a row in <code>ToolsScreen.h</code> (add an <code>Action</code>
+   enum value, a row in the right section table, and a <code>dispatch()</code> case).</li>
+</ol>
+<p>That's the whole contract. The constructor takes <code>UITask* task</code> plus whatever
+it needs (<code>NodePrefs*</code>, <code>KeyboardWidget*</code>, …); the task back-pointer is how a
+screen calls shared services (<code>_task-&gt;showAlert(...)</code>, <code>_task-&gt;waypoints()</code>, …).</p>
 <hr />
-<h2 id="4-proponowany-zakres-etapami">4. Proponowany zakres (etapami)</h2>
+<h2 id="2-layout-metrics-text-displaydriver">2. Layout metrics &amp; text (DisplayDriver)</h2>
+<p><code>DisplayDriver</code> (<code>src/helpers/ui/DisplayDriver.h</code>) abstracts OLED vs e-ink and,
+crucially, font scale: landscape e-ink renders text at 2×, so <strong>never hard-code
+pixel sizes</strong> — derive everything from these:</p>
 <table>
 <thead>
 <tr>
-<th>Etap</th>
-<th>Zmiana</th>
-<th style="text-align: center;">Ryzyko</th>
+<th>Call</th>
+<th>Meaning</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>1</td>
-<td>Rozdziel sort od filtra: <code>TIME</code> znika z cyklu; <code>LEFT/RIGHT</code> cyklują tylko typ+Fav; sort jako stan + toggle</td>
-<td style="text-align: center;">niskie</td>
+<td><code>getLineHeight()</code></td>
+<td>pixel rows per text line (8 at 1×, 16 at 2×)</td>
 </tr>
 <tr>
-<td>2</td>
-<td>Scal <code>_ctx_menu</code> i <code>_opts</code> w jedno menu akcji o stałej kolejności; dodaj Filter…/Sort…</td>
-<td style="text-align: center;">niskie</td>
+<td><code>lineStep()</code></td>
+<td>row pitch = line height + gap; use for row <code>y</code> stepping</td>
 </tr>
 <tr>
-<td>3</td>
-<td>Ujednolić Hold Enter w Discover (menu zamiast bezpośredniego rescan/ping; Ping zawsze przez Options)</td>
-<td style="text-align: center;">średnie</td>
+<td><code>getCharWidth()</code> / <code>getTextWidth(s)</code></td>
+<td>advance width; <code>getTextWidth</code> is font-accurate</td>
 </tr>
 <tr>
-<td>4</td>
-<td>Scal listę Discover z listą Nearby w jeden komponent z przełącznikiem źródła</td>
-<td style="text-align: center;">wyższe</td>
+<td><code>headerH()</code> / <code>listStart()</code></td>
+<td>title-bar height / first content row <code>y</code></td>
+</tr>
+<tr>
+<td><code>listVisible(itemH)</code></td>
+<td>how many rows fit below the header</td>
+</tr>
+<tr>
+<td><code>valCol()</code></td>
+<td>conventional x for a right-hand value column</td>
+</tr>
+<tr>
+<td><code>width()</code> / <code>height()</code></td>
+<td>panel size in px</td>
+</tr>
+<tr>
+<td><code>isEink()</code></td>
+<td>true only on landscape e-ink; branch on this, not on pixel counts</td>
 </tr>
 </tbody>
 </table>
-<p>Kolejność implementacji: 1 → 2 → 3 → 4. Etapy 1–2 dają największą
-poprawę „uporządkowania" przy najmniejszym ryzyku; 3–4 domykają
-spójność (jedna lista, jedno menu wszędzie).</p>
+<p>Drawing helpers (all clip/measure for you):</p>
+<ul>
+<li><code>drawCenteredHeader(title)</code> — plain centered title + separator.</li>
+<li><code>drawInvertedHeader(label)</code> — filled title bar (used by detail views).</li>
+<li><code>drawSelectionRow(x, y, w, h, sel)</code> — the highlight bar behind a list row.</li>
+<li><code>drawTextEllipsized(x, y, max_w, str)</code> — truncates with <code>…</code>; <strong>use this for
+  any user string</strong> (names, labels) so long/UTF-8 text can't overrun.</li>
+<li><code>drawTextCentered(mid_x, y, str)</code>.</li>
+<li><code>translateUTF8ToBlocks(dst, src, n)</code> — map UTF-8 to the panel's glyph set for
+  <em>display only</em>. Never run text through it before sending it over the air or
+  storing it (it is lossy) — see the reply-prefix note in §5.</li>
+</ul>
 <hr />
-<h2 id="5-decyzje-zatwierdzone-2026-06-14">5. Decyzje (zatwierdzone 2026-06-14)</h2>
-<ol>
-<li><strong>Filtr i sort — pełne rozdzielenie osi.</strong> <code>LEFT/RIGHT</code> = szybki cykl
-   filtra-typu; Sort jako toggle w menu; Filter… też w menu dla
-   odkrywalności. (Nie chowamy wszystkiego do menu — zachowujemy szybki
-   gest.)</li>
-<li><strong>Discover — jedna lista, dwa źródła.</strong> Wspólny komponent
-   interakcji; różni się tylko prawa kolumna/pola detalu (dystans vs
-   sygnał).</li>
-</ol>
+<h2 id="3-lists-drawlist">3. Lists — <code>drawList</code></h2>
+<p><code>drawList</code> (<code>ui-new/icons.h</code>) is the workhorse for any scrolling list. It
+computes the visible window from font metrics, keeps <code>sel</code> in view, reserves the
+scrollbar column, draws each visible row through your callback, and draws the
+indicator:</p>
+<pre><code class="language-cpp">drawList(display, count, _sel, _scroll, [&amp;](int idx, int y, bool sel, int reserve) {
+  display.drawSelectionRow(0, y - 1, display.width() - reserve, display.lineStep() - 1, sel);
+  display.drawTextEllipsized(2, y, display.width() - reserve - 4, items[idx].name);
+});
+</code></pre>
+<p><code>reserve</code> is the width the scrollbar took (0 when the list fits) — subtract it
+from any right-aligned content so nothing slides under the indicator. The row
+callback owns its own selection bar (so a screen can style it). For the
+fold-in-place pattern (sections that expand/collapse) use <code>AccordionList</code>
+instead (<code>ui-new/AccordionList.h</code>) — same idea, two callbacks (header + item).</p>
+<p>Standalone scroll indicators (<code>drawScrollIndicator</code>, <code>…Px</code>) and the reserve
+calculator (<code>scrollIndicatorReserve</code>) are exposed for hand-laid lists.</p>
+<hr />
+<h2 id="4-reusable-components">4. Reusable components</h2>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Header</th>
+<th>Use for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PopupMenu</code></td>
+<td><code>PopupMenu.h</code></td>
+<td>a modal action menu over any screen</td>
+</tr>
+<tr>
+<td><code>AccordionList</code></td>
+<td><code>AccordionList.h</code></td>
+<td>collapsible sectioned lists (Tools, Settings)</td>
+</tr>
+<tr>
+<td><code>KeyboardWidget</code></td>
+<td><code>KeyboardWidget.h</code></td>
+<td>on-screen text entry</td>
+</tr>
+<tr>
+<td><code>DigitEditor</code></td>
+<td><code>DigitEditor.h</code></td>
+<td>scroll-edit one number, digit by digit</td>
+</tr>
+<tr>
+<td><code>FullscreenMsgView</code></td>
+<td><code>FullscreenMsgView.h</code></td>
+<td>scrollable full-message reader + word wrap</td>
+</tr>
+<tr>
+<td><code>NavView</code></td>
+<td><code>NavView.h</code></td>
+<td>bearing/distance/ETA "navigate to a point" view</td>
+</tr>
+</tbody>
+</table>
+<p>All follow the same shape: a <code>begin(...)</code> to open, an <code>active</code> flag, a
+<code>handleInput(c)</code> returning a small <code>Result</code> enum, and a <code>render()</code>/<code>draw()</code>.
+Typical embedding:</p>
+<pre><code class="language-cpp">if (_menu.active) {                       // popup eats input while open
+  auto r = _menu.handleInput(c);
+  if (r == PopupMenu::SELECTED) runAction(_menu.selectedIndex());
+  return true;
+}
+...
+_menu.begin(&quot;Options&quot;, 6);                // open it
+_menu.addItem(&quot;Navigate&quot;); _menu.addItem(&quot;Ping&quot;);
+_menu.active = true;
+</code></pre>
+<p><code>KeyboardWidget</code> additionally supports <strong>placeholders</strong> (<code>{loc}</code>, <code>{time}</code>,
+sensor tokens) via <code>addPlaceholder()</code> / <code>clearPlaceholders()</code>; the shared
+<code>kbAddSensorPlaceholders()</code> (<code>ui-new/SensorPlaceholders.h</code>) adds only the tokens
+the board's sensors actually provide. Expand them with <code>expandMsg()</code> at send time.</p>
+<p><code>FullscreenMsgView::wrapLines()</code> is a standalone pixel-accurate word-wrapper
+(O(n), variable-width-font aware) reusable by any multi-line layout; it writes
+into the shared <code>s_wrap_trans</code> / <code>s_wrap_lines</code> scratch (single-threaded render,
+never held across a yield — see §9).</p>
+<hr />
+<h2 id="5-domain-helpers">5. Domain helpers</h2>
+<p><strong>Geo (<code>GeoUtils.h</code>, namespace <code>geo</code>, all pure/header-inline):</strong></p>
+<ul>
+<li><code>haversineKm(lat1,lon1,lat2,lon2)</code>, <code>bearingDeg(...)</code>, <code>bearingCardinal(deg)</code>.</li>
+<li><code>fmtDist(buf,n,km,imperial)</code> — "850m"/"2.3km" or feet/miles.</li>
+<li><code>fmtAgeShort(buf,n,now,ts)</code> — compact "12s"/"5m"/"3h"/"2d" tag, "" for unknown.
+  <strong>This is the one age formatter</strong> — don't reimplement the s/m/h ladder.</li>
+<li><code>parseLatLon(text, lat, lon, label?, n?)</code> — pull a <code>lat,lon</code> out of message
+  text; reads the <code>[WAY]</code> label if tagged.</li>
+<li><code>parseLocShare(text, lat, lon)</code> — true only for an explicit <code>[LOC]</code> share.</li>
+</ul>
+<p>Coordinates are <strong>int32 degrees × 1e6</strong> everywhere (GPS, contacts, trail,
+prefs). The message tags are <code>LOCATION_MSG_TAG</code> (<code>[LOC]</code>, the sender's own live
+position) and <code>WAYPOINT_MSG_TAG</code> (<code>[WAY]</code>, a saved point to share); both stay
+human-readable on clients that don't know them.</p>
+<p><strong>State stores:</strong> <code>TrailStore</code> (<code>Trail.h</code>, GPS breadcrumb ring + GPX export),
+<code>LiveTrackStore</code> (<code>LiveTrack.h</code>, RAM table of others' <code>[LOC]</code> positions, expiring),
+<code>WaypointStore</code> (<code>Waypoint.h</code>, persisted saved points). Reach them via the task
+(<code>_task-&gt;trail()</code>, <code>_task-&gt;liveTrack()</code>, <code>_task-&gt;waypoints()</code>).</p>
+<p><strong>Message reply prefix:</strong> <code>msgReplyBody(text, nick?, n?)</code> (<code>FullscreenMsgView.h</code>)
+parses a leading <code>@[nick]</code> reply marker, returning the body and optionally the
+addressee. Use it instead of re-scanning for <code>@[</code>. The stored/sent prefix is raw
+UTF-8 (it goes over the air) — never transliterate it.</p>
+<hr />
+<h2 id="6-mini-icons-the-status-bar">6. Mini-icons &amp; the status bar</h2>
+<p>Small glyphs are authored as ASCII art and packed at compile time
+(<code>ui-new/icons.h</code>):</p>
+<pre><code class="language-cpp">MINI_ICON(ICON_FOO, 5,
+  packRow(&quot;..#..&quot;),
+  packRow(&quot;.###.&quot;),
+  packRow(&quot;#####&quot;));
+</code></pre>
+<p>Draw with <code>miniIconDraw(display, x, topY, ICON_FOO)</code> (auto-scaled &amp; centered),
+<code>miniIconDrawTop</code> (exact placement), or the boxed/slot variants
+(<code>drawBoxedIcon</code> = lit when active, <code>drawSlotIcon</code> = plain). Bigger page glyphs
+use <code>BIG_ICON</code> / <code>bigIconDraw</code>. The home status bar composes these right-to-left
+with a <code>blinkOn()</code> cadence for "leave it on and forget" broadcasts (auto-advert,
+Live Share, trail, repeater) — follow that pattern when adding an indicator:
+always shown on e-ink, blinking on OLED.</p>
+<hr />
+<h2 id="7-input">7. Input</h2>
+<p>Keys arrive as the <code>KEY_*</code> codes in <code>UIScreen.h</code>: <code>KEY_UP/DOWN/LEFT/RIGHT</code>,
+<code>KEY_ENTER</code>, <code>KEY_CANCEL</code>, <code>KEY_CONTEXT_MENU</code> (the "Hold Enter" menu key).</p>
+<p>Use the <strong>prev/next convention</strong> for value changes so the rotary encoder and the
+D-pad agree: <code>keyIsPrev(c)</code> (LEFT or encoder-prev) and <code>keyIsNext(c)</code> (RIGHT or
+encoder-next). <code>KEY_CANCEL</code> and <code>KEY_CONTEXT_MENU</code> stay screen-specific. Joystick
+rotation is handled upstream (<code>rotateJoystickKey</code>) — screens see already-rotated
+keys.</p>
+<hr />
+<h2 id="8-persistence">8. Persistence</h2>
+<p>Device settings live in one <code>NodePrefs</code> struct (<code>NodePrefs.h</code>), saved via
+<code>the_mesh.savePrefs()</code> and loaded by <code>DataStore.cpp</code>. Rules when adding a field:</p>
+<ul>
+<li><strong>Append only</strong>, and bump <code>NodePrefs::SCHEMA_SENTINEL</code>. Serialization is
+  binary-positional, so order is the on-disk format; never insert in the middle.</li>
+<li>Add a matching <code>rd(...)</code> in <code>DataStore::loadPrefsInt()</code> and a <code>file.write(...)</code>
+  in <code>savePrefs()</code>, in the same position, and <strong>clamp on load</strong> (an upgrader's
+  file lacks the field and reads stray bytes — clamp to a sane default). Saves
+  are atomic (temp-file + rename), so a crash mid-save can't corrupt settings.</li>
+</ul>
+<p><strong>The <code>_dirty</code> convention:</strong> a multi-field editor screen mutates <code>_node_prefs</code>
+live for instant feedback but only calls <code>savePrefs()</code> once, on exit, gated by a
+<code>_dirty</code> flag — so LEFT/RIGHT value-cycling doesn't thrash flash. A one-shot
+action from a popup (no exit hook) saves immediately. Follow whichever matches
+your screen.</p>
+<p><strong>The shared "active target"</strong> (Locator/Nav destination) is set through
+<code>UITask::setTarget()</code> (defines it), <code>setTargetNow()</code> (defines + saves + toast),
+or <code>clearTarget()</code> — one definition used by the Locator screen, the map, and the
+Nearby/Waypoints "Set as target" actions. Resolve a person's current position
+with <code>resolvePersonPos()</code> (live <code>[LOC]</code> share, else last-advertised fix).</p>
+<hr />
+<h2 id="9-conventions-gotchas">9. Conventions &amp; gotchas</h2>
+<ul>
+<li><strong>Single-threaded render.</strong> Rendering and input run on one thread, so shared
+  static scratch (<code>s_wrap_*</code>) is safe <em>as long as it's never held across a
+  yield</em>. Don't add scratch that outlives one <code>render()</code>.</li>
+<li><strong>e-ink blocks.</strong> <code>endFrame()</code> on e-ink stalls the main loop for hundreds of
+  ms. Keep <code>render()</code>'s return value honest so the panel isn't redrawn more than
+  needed, and don't depend on <code>loop()</code> cadence for timing that must be exact
+  (the ringtone player moved to a hardware timer for this reason).</li>
+<li><strong>Reference cleanup.</strong> Anything that remembers a contact by pubkey (favourite
+  slot, Locator/Live-Share target, per-contact mute/melody) or a channel by
+  index must drop that reference when the entity goes away — hook
+  <code>UITask::onContactRemoved()</code> / <code>onChannelRemoved()</code>. New per-contact or
+  per-channel state should clear there too.</li>
+<li><strong>Toasts:</strong> <code>_task-&gt;showAlert("msg", duration_ms)</code> overlays a transient banner
+  over any screen; no redraw plumbing needed.</li>
+<li><strong>Strings:</strong> always <code>strncpy</code>+NUL or <code>snprintf</code>; treat every name/label as
+  untrusted-length and render through <code>drawTextEllipsized</code>.</li>
+</ul>
+<hr />
+<h2 id="10-worked-example-a-new-tools-screen">10. Worked example — a new Tools screen</h2>
+<pre><code class="language-cpp">// ui-new/MyToolScreen.h  — included by UITask.cpp near the other screens
+#pragma once
+#include &quot;icons.h&quot;          // drawList + mini-icons
+#include &quot;../NodePrefs.h&quot;
+
+class MyToolScreen : public UIScreen {
+  UITask*    _task;
+  NodePrefs* _prefs;
+  int        _sel = 0, _scroll = 0;
+  bool       _dirty = false;
+  static const int ROWS = 3;
+public:
+  MyToolScreen(UITask* t, NodePrefs* p) : _task(t), _prefs(p) {}
+  void enter() { _sel = 0; _scroll = 0; _dirty = false; }
+
+  int render(DisplayDriver&amp; d) override {
+    d.setTextSize(1);
+    d.drawCenteredHeader(&quot;MY TOOL&quot;);
+    drawList(d, ROWS, _sel, _scroll, [&amp;](int i, int y, bool sel, int reserve) {
+      d.drawSelectionRow(0, y - 1, d.width() - reserve, d.lineStep() - 1, sel);
+      d.setCursor(4, y);
+      d.print(i == 0 ? &quot;Alpha&quot; : i == 1 ? &quot;Bravo&quot; : &quot;Charlie&quot;);
+    });
+    return 500;
+  }
+
+  bool handleInput(char c) override {
+    if (c == KEY_CANCEL) {
+      if (_dirty) { the_mesh.savePrefs(); _dirty = false; }
+      _task-&gt;gotoToolsScreen();
+      return true;
+    }
+    if (c == KEY_UP)   { _sel = (_sel + ROWS - 1) % ROWS; return true; }
+    if (c == KEY_DOWN) { _sel = (_sel + 1) % ROWS;        return true; }
+    if (keyIsPrev(c) || keyIsNext(c) || c == KEY_ENTER) {
+      /* mutate _prefs…, set _dirty = true */ return true;
+    }
+    return false;
+  }
+};
+</code></pre>
+<p>Then: <code>#include "MyToolScreen.h"</code> in <code>UITask.cpp</code>, add the member + constructor +
+<code>gotoMyToolScreen()</code> (§1), and add a row in <code>ToolsScreen.h</code>. Done — scrolling,
+the scrollbar, font scaling, e-ink pacing and persistence batching all come from
+the framework.</p>
 
 
 
