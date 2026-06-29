@@ -1350,6 +1350,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#track-back" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Track back
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#waypoints" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1596,6 +1607,17 @@
   
     <nav class="md-nav" aria-label="GPS Trail">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#track-back" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Track back
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#waypoints" class="md-nav__link">
@@ -1986,6 +2008,10 @@ The <strong>Map</strong> view is also reachable directly from the home carousel 
 <td>Open the waypoint list / navigation / add-by-coords</td>
 </tr>
 <tr>
+<td>Track back</td>
+<td>Retrace the recorded route back to its start (needs ≥2 points; see below)</td>
+</tr>
+<tr>
 <td>Share my pos</td>
 <td>Send your current position as a one-shot <code>[LOC]</code> message — pick a contact or channel (see <strong>Live Share</strong>)</td>
 </tr>
@@ -2051,6 +2077,11 @@ The <strong>Map</strong> view is also reachable directly from the home carousel 
 <td>Off / 1 / 2 / 5 min — auto-freeze the trail after a stop, resume on movement (see below)</td>
 </tr>
 <tr>
+<td>Mark avg</td>
+<td>always</td>
+<td>Off / 5 / 10 / 30 s — GPS averaging for <strong>Mark here</strong> (see Waypoints below)</td>
+</tr>
+<tr>
 <td>Readout</td>
 <td>Summary view</td>
 <td>Summary shows Speed or Pace (in the global unit system)</td>
@@ -2064,9 +2095,12 @@ The <strong>Map</strong> view is also reachable directly from the home carousel 
 </table>
 <p>(Trail file… appears only when a live or saved trail exists. Mark here needs a GPS fix; Waypoints is always available.)</p>
 <p><strong>Auto-pause</strong> — when set, a recording trail automatically <strong>pauses</strong> after the device has stayed within ~15 m of one spot for the chosen delay: the elapsed timer and point sampling both freeze, and the map line breaks across the idle gap. It <strong>resumes on its own</strong> as soon as you move again. This keeps a stop (a break, a meal, parking) out of your distance and average-speed stats without you having to remember to stop and restart tracking. A paused trail is still "on" (the <strong>G</strong> marker keeps blinking) — the Summary <strong>Status</strong> row shows <code>paused</code>. The stop is detected with its own coarse movement gate, independent of <strong>Min dist</strong>, so GPS jitter while you're parked doesn't keep it awake.</p>
+<h3 id="track-back">Track back</h3>
+<p><strong>Hold Enter → Track back</strong> retraces the trail you just recorded, back to where you started — useful for returning the same way in poor visibility or unfamiliar ground. It reuses the navigation view (distance + two absolute bearings; see <em>Waypoints › Navigating</em>), but instead of a single fixed target it walks the recorded breadcrumbs in reverse: it snaps onto the route at the <strong>nearest recorded point</strong>, guides you to it, then automatically advances to the next earlier point as you reach each one (within ~20 m). The header shows how many points remain (<code>Back: 12 pt</code>), reading <code>Trail start</code> on the final leg; arriving there shows <code>Back at start</code> and exits. <strong>Cancel</strong> leaves track-back at any time. It needs a trail with at least two points and a GPS fix; it doesn't require tracking to still be running.</p>
 <h3 id="waypoints">Waypoints</h3>
 <p>A waypoint is a saved spot — your car, camp, a water source — that you can navigate back to later. Waypoints are <strong>independent of the trail</strong>: they live in their own flash file (<code>/waypoints</code>), survive a reboot, and are <strong>not</strong> cleared by <em>Reset trail</em>. Up to 16 can be stored — the Waypoints list header shows how many are in use (e.g. <code>WAYPOINTS 3/16</code>).</p>
 <p><strong>Dropping a waypoint</strong> — <strong>Hold Enter → Mark here</strong>. This captures the current GPS fix and opens the on-screen keyboard for a short label (up to 11 characters — e.g. <code>CAR</code>, <code>CAMP</code>, <code>H2O</code>). Leaving it blank auto-names it <code>WP1</code>, <code>WP2</code>, … Marking works whether or not the trail is being recorded; it needs a GPS fix (otherwise it reports <em>No GPS fix</em>).</p>
+<p><strong>GPS averaging</strong> — with <strong>Settings → Mark avg</strong> set (5 / 10 / 30 s), <em>Mark here</em> doesn't snapshot a single fix; it samples the GPS once a second for that window and stores the <strong>mean</strong> position, for a steadier mark than one instantaneous reading (handy for a precise spot — a cache, a car, a trailhead). A short screen shows the time left and the sample count while it runs; <strong>Cancel</strong> aborts. When the window closes it opens the label keyboard as usual. With <strong>Mark avg = Off</strong> (the default) marking is instant.</p>
 <p><strong>Adding by coordinates</strong> — open <strong>Hold Enter → Waypoints</strong> and select the <strong>+ Add by coords</strong> row (always the last entry in the list). This creates a waypoint without being there — no GPS fix required (handy for a meeting point or a spot read off a map). It opens a small form with three editable rows plus <strong>Save</strong>:</p>
 <table>
 <thead>
