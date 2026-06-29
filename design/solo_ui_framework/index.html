@@ -1626,6 +1626,14 @@ otherwise. The screen fragments (<code>ui-new/*.h</code>) are all <code>#include
 into one translation unit (<code>ui-new/UITask.cpp</code>) — so a <code>static inline</code> helper in
 an earlier header is visible to later ones. Header-include order in <code>UITask.cpp</code>
 therefore matters; new screens go near the others.</p>
+<blockquote>
+<p><strong>Single-TU only.</strong> These fragments compile <em>only</em> as part of <code>UITask.cpp</code>.
+Some define external-linkage symbols at file scope (e.g.
+<code>NearbyScreen::FILTER_LABELS</code>), so including a fragment from a second <code>.cpp</code>
+is a duplicate-symbol link error. Anything genuinely shared across TUs must
+live in a real header (<code>icons.h</code>, <code>GeoUtils.h</code>, <code>DisplayDriver.h</code>), not a
+screen fragment.</p>
+</blockquote>
 <hr />
 <h2 id="1-the-screen-model">1. The screen model</h2>
 <p>Every screen implements <code>UIScreen</code> (<code>src/helpers/ui/UIScreen.h</code>):</p>
@@ -1634,6 +1642,7 @@ public:
   virtual int  render(DisplayDriver&amp; display) = 0;  // returns ms until the next render
   virtual bool handleInput(char c) { return false; }
   virtual void poll() { }
+  virtual void onShow() { }                         // reset per-visit state
 };
 </code></pre>
 <ul>
@@ -1645,27 +1654,32 @@ public:
 <li><strong><code>handleInput(c)</code></strong> gets one key (<code>KEY_*</code>, see §7). Return <code>true</code> if consumed.</li>
 <li><strong><code>poll()</code></strong> runs every loop tick regardless of focus — rare, for background
   housekeeping (e.g. the shutdown button).</li>
+<li><strong><code>onShow()</code></strong> is called by <code>setCurrScreen()</code> every time the screen becomes
+  current — override it to reset per-visit state (<code>_sel = 0</code>, <code>_dirty = false</code>,
+  sub-views). Default no-op for screens that keep state across visits. Because
+  it's invoked centrally, a navigator can't forget to reset on show.</li>
 </ul>
-<p>Most screens also define a non-virtual <strong><code>enter()</code></strong> that resets per-visit state
-(<code>_sel = 0</code>, <code>_dirty = false</code>, …). It is called by the screen's <code>goto…()</code> wrapper,
-not by the base class.</p>
 <h3 id="wiring-a-screen-into-uitask">Wiring a screen into UITask</h3>
 <ol>
 <li>Add a <code>UIScreen* my_screen;</code> member in <code>UITask.h</code> (near the others).</li>
 <li>Construct it in <code>UITask::begin()</code> (<code>UITask.cpp</code>):
    <code>my_screen = new MyScreen(this, …);</code></li>
-<li>Add a navigator:
+<li>Add a navigator — usually just the one line (the cast-free <code>onShow()</code> runs
+   inside <code>setCurrScreen</code>):
    <code>cpp
-   void UITask::gotoMyScreen() {
-     ((MyScreen*)my_screen)-&gt;enter();
-     setCurrScreen(my_screen);   // sets curr + schedules an immediate redraw
-   }</code></li>
+   void UITask::gotoMyScreen() { setCurrScreen(my_screen); }</code>
+   Only screens needing a <em>parameter</em> at entry add a typed call after it (e.g.
+   <code>gotoRingtoneEditor</code> → <code>selectSlot(slot)</code>, <code>gotoMapScreen</code> → <code>showMapView()</code>).</li>
 <li>Reach it from somewhere — usually a row in <code>ToolsScreen.h</code> (add an <code>Action</code>
    enum value, a row in the right section table, and a <code>dispatch()</code> case).</li>
 </ol>
-<p>That's the whole contract. The constructor takes <code>UITask* task</code> plus whatever
-it needs (<code>NodePrefs*</code>, <code>KeyboardWidget*</code>, …); the task back-pointer is how a
-screen calls shared services (<code>_task-&gt;showAlert(...)</code>, <code>_task-&gt;waypoints()</code>, …).</p>
+<p>That's the whole contract. Steps 1, 3 and 4 are compiler-checked (a mismatch
+won't link); only a forgotten step 2 can slip through — every screen pointer is
+nullptr-initialised in <code>UITask.h</code> and <code>setCurrScreen()</code> bails on null, so a
+missed <code>new</code> is an inert no-op rather than a null deref.</p>
+<p>The constructor takes <code>UITask* task</code> plus whatever it needs (<code>NodePrefs*</code>,
+<code>KeyboardWidget*</code>, …); the task back-pointer is how a screen calls shared
+services (<code>_task-&gt;showAlert(...)</code>, <code>_task-&gt;waypoints()</code>, …).</p>
 <hr />
 <h2 id="2-layout-metrics-text-displaydriver">2. Layout metrics &amp; text (DisplayDriver)</h2>
 <p><code>DisplayDriver</code> (<code>src/helpers/ui/DisplayDriver.h</code>) abstracts OLED vs e-ink and,
@@ -1732,13 +1746,16 @@ computes the visible window from font metrics, keeps <code>sel</code> in view, r
 scrollbar column, draws each visible row through your callback, and draws the
 indicator:</p>
 <pre><code class="language-cpp">drawList(display, count, _sel, _scroll, [&amp;](int idx, int y, bool sel, int reserve) {
-  display.drawSelectionRow(0, y - 1, display.width() - reserve, display.lineStep() - 1, sel);
+  drawRowSelection(display, y, sel, reserve);   // canonical highlight bar
   display.drawTextEllipsized(2, y, display.width() - reserve - 4, items[idx].name);
 });
 </code></pre>
 <p><code>reserve</code> is the width the scrollbar took (0 when the list fits) — subtract it
 from any right-aligned content so nothing slides under the indicator. The row
-callback owns its own selection bar (so a screen can style it). For the
+callback owns its own selection bar: <code>drawRowSelection(d, y, sel, reserve)</code>
+(<code>ui-new/icons.h</code>) draws the standard one (full row minus reserve, one pixel
+short); call <code>display.drawSelectionRow()</code> directly only when a row needs a
+non-standard geometry (full-width, custom height). For the
 fold-in-place pattern (sections that expand/collapse) use <code>AccordionList</code>
 instead (<code>ui-new/AccordionList.h</code>) — same idea, two callbacks (header + item).</p>
 <p>Standalone scroll indicators (<code>drawScrollIndicator</code>, <code>…Px</code>) and the reserve
@@ -1869,10 +1886,13 @@ keys.</p>
   are atomic (temp-file + rename), so a crash mid-save can't corrupt settings.</li>
 </ul>
 <p><strong>The <code>_dirty</code> convention:</strong> a multi-field editor screen mutates <code>_node_prefs</code>
-live for instant feedback but only calls <code>savePrefs()</code> once, on exit, gated by a
-<code>_dirty</code> flag — so LEFT/RIGHT value-cycling doesn't thrash flash. A one-shot
-action from a popup (no exit hook) saves immediately. Follow whichever matches
-your screen.</p>
+live for instant feedback but only persists once, on exit, gated by a <code>_dirty</code>
+flag — so LEFT/RIGHT value-cycling doesn't thrash flash. Set <code>_dirty = true</code> at
+each edit site, then on the exit path call <code>_task-&gt;savePrefsIfDirty(_dirty)</code>
+(<code>UITask</code>) — it saves once <em>iff</em> dirty and clears the flag, so every screen's
+save-on-exit reads the same and the "did we touch flash?" decision lives in one
+place. A one-shot action from a popup (no exit hook) calls <code>the_mesh.savePrefs()</code>
+immediately. Follow whichever matches your screen.</p>
 <p><strong>The shared "active target"</strong> (Locator/Nav destination) is set through
 <code>UITask::setTarget()</code> (defines it), <code>setTargetNow()</code> (defines + saves + toast),
 or <code>clearTarget()</code> — one definition used by the Locator screen, the map, and the
@@ -1913,13 +1933,13 @@ class MyToolScreen : public UIScreen {
   static const int ROWS = 3;
 public:
   MyToolScreen(UITask* t, NodePrefs* p) : _task(t), _prefs(p) {}
-  void enter() { _sel = 0; _scroll = 0; _dirty = false; }
+  void onShow() override { _sel = 0; _scroll = 0; _dirty = false; }
 
   int render(DisplayDriver&amp; d) override {
     d.setTextSize(1);
     d.drawCenteredHeader(&quot;MY TOOL&quot;);
     drawList(d, ROWS, _sel, _scroll, [&amp;](int i, int y, bool sel, int reserve) {
-      d.drawSelectionRow(0, y - 1, d.width() - reserve, d.lineStep() - 1, sel);
+      drawRowSelection(d, y, sel, reserve);
       d.setCursor(4, y);
       d.print(i == 0 ? &quot;Alpha&quot; : i == 1 ? &quot;Bravo&quot; : &quot;Charlie&quot;);
     });
@@ -1928,7 +1948,7 @@ public:
 
   bool handleInput(char c) override {
     if (c == KEY_CANCEL) {
-      if (_dirty) { the_mesh.savePrefs(); _dirty = false; }
+      _task-&gt;savePrefsIfDirty(_dirty);   // saves once iff dirty, then clears
       _task-&gt;gotoToolsScreen();
       return true;
     }
