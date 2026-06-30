@@ -805,6 +805,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="7. Input">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#from-hardware-to-handleinput" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From hardware to handleInput
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1554,6 +1571,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="7. Input">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#from-hardware-to-handleinput" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From hardware to handleInput
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1873,6 +1907,29 @@ D-pad agree: <code>keyIsPrev(c)</code> (LEFT or encoder-prev) and <code>keyIsNex
 encoder-next). <code>KEY_CANCEL</code> and <code>KEY_CONTEXT_MENU</code> stay screen-specific. Joystick
 rotation is handled upstream (<code>rotateJoystickKey</code>) — screens see already-rotated
 keys.</p>
+<h3 id="from-hardware-to-handleinput">From hardware to <code>handleInput</code></h3>
+<p>Each physical button is a <code>MomentaryButton</code> (<code>src/helpers/ui/MomentaryButton.h</code>);
+<code>UITask::begin()</code> must call <code>begin()</code> on <strong>every</strong> one (the joystick directions
+and Back included, not just the user button) — that sets <code>pinMode</code> and, where
+enabled, claims the interrupt. <code>UITask::loop()</code> polls each button, maps its event
+to a <code>KEY_*</code> code, and dispatches it to the current screen.</p>
+<p>Two mechanisms keep input responsive when <strong><code>endFrame()</code> blocks the loop</strong> for a
+slow e-ink refresh:</p>
+<ul>
+<li><strong>IRQ edge capture</strong> (<code>-D BUTTON_USE_INTERRUPTS</code>, e-ink boards). A GPIO
+  interrupt latches each press/release edge into a per-button ring buffer with
+  its own timestamp, so taps that land <em>during</em> a refresh aren't lost; <code>check()</code>
+  replays them afterwards. The nRF52 has only 8 GPIOTE channels (the radio takes
+  one) — if none is free a button silently falls back to polling, so it still
+  works, just without mid-refresh capture.</li>
+<li><strong>Key queue + coalesced redraw.</strong> <code>loop()</code> drains <em>all</em> pending events from the
+  buttons into a small key FIFO, applies the whole burst (<code>handleInput</code> per key),
+  then redraws <strong>once</strong>. So three joystick flicks captured during one refresh move
+  the selection three steps for the cost of a single panel update, instead of
+  collapsing into an ignored multi-click or one-step-per-refresh. Buttons created
+  with <code>multiclick=false</code> therefore emit one discrete <code>CLICK</code> per release;
+  <code>multiclick=true</code> buttons still report double/triple-click.</li>
+</ul>
 <hr />
 <h2 id="8-persistence">8. Persistence</h2>
 <p>Device settings live in one <code>NodePrefs</code> struct (<code>NodePrefs.h</code>), saved via
