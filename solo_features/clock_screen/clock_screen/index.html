@@ -924,6 +924,67 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#clock-tools-alarm-timer-stopwatch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clock tools — Alarm, Timer, Stopwatch
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Clock tools — Alarm, Timer, Stopwatch">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#alarm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Alarm
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#timer-countdown" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Timer (countdown)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stopwatch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stopwatch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ringing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ringing
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1448,6 +1509,67 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#clock-tools-alarm-timer-stopwatch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clock tools — Alarm, Timer, Stopwatch
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Clock tools — Alarm, Timer, Stopwatch">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#alarm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Alarm
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#timer-countdown" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Timer (countdown)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stopwatch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stopwatch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ringing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ringing
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1614,6 +1736,23 @@
 <!-- screenshot pending: Dashboard Config — three field slots cycled with LEFT/RIGHT -->
 
 <p><strong>Hold Enter</strong> (or press the <strong>Context menu</strong> key) on the Clock page to open the Dashboard Config screen, where each of the three field slots can be cycled with <strong>LEFT/RIGHT</strong>.</p>
+<hr />
+<h3 id="clock-tools-alarm-timer-stopwatch">Clock tools — Alarm, Timer, Stopwatch</h3>
+<p><strong>Press Enter</strong> (short press) on the Clock page to open <strong>Clock Tools</strong>, a small menu with three time utilities. <strong>Cancel</strong> backs out one level (tool → menu → home).</p>
+<h4 id="alarm">Alarm</h4>
+<p>A single one-shot wake alarm. Rows: <strong>Hour</strong>, <strong>Minute</strong> and <strong>Armed</strong>. <strong>Enter</strong> on Hour or Minute opens the digit editor (LEFT/RIGHT moves between the tens/units, UP/DOWN changes the digit); <strong>Enter</strong> on Armed toggles ON/OFF. The configured time is shown next to the <strong>Alarm</strong> menu row when armed, and the setting persists across reboots.</p>
+<p>While an alarm is armed a bell icon signals it in two places: the top-left corner of the <strong>Clock page</strong> itself, and the <strong>top status bar</strong> of the other home pages (the status bar is hidden on the Clock page, which is why the clock face carries its own indicator). The bell is icon-only — the exact alarm time is on the <strong>Alarm</strong> row inside Clock Tools.</p>
+<p>The alarm is scheduled as an absolute fire instant, so it is <strong>robust to clock re-syncs</strong> — the mesh (every inbound packet), the companion app, GPS and the CLI can all jump the device clock at any moment. A correction that moves the clock a little still fires at the right wall-clock time; a jump that skips over the alarm time still fires (late). After firing once, the alarm disarms itself.</p>
+<p>The alarm only fires while the device is <strong>awake</strong> (it keeps running with the display off or locked). It cannot wake the device from a full <strong>Shutdown</strong> (the CPU and RAM are powered down), and needs a valid time source — it stays pending until the clock is synced.</p>
+<h4 id="timer-countdown">Timer (countdown)</h4>
+<p>A large <strong>HH:MM:SS</strong> readout with one digit underlined. <strong>LEFT/RIGHT</strong> moves the cursor one digit at a time, <strong>Up/Down</strong> changes the digit under it (minute/second tens cap at 5, hours at 23), and <strong>Enter</strong> starts the countdown. While running it shows <strong>H:MM:SS</strong> — <strong>Enter</strong> stops it, <strong>Cancel</strong> returns to the menu and leaves it counting. When it reaches zero the device rings, even if you have navigated to another screen.</p>
+<h4 id="stopwatch">Stopwatch</h4>
+<p><strong>Enter</strong> starts/stops; <strong>Up/Down</strong> resets when stopped; <strong>Cancel</strong> returns to the menu and leaves it running.</p>
+<h4 id="ringing">Ringing</h4>
+<p>When the alarm or timer fires the device plays a melody (overriding mute) and shows an alert. <strong>Any key</strong> silences it; otherwise it stops on its own after a minute.</p>
+<blockquote>
+<p><strong>E-ink note:</strong> the live timer/stopwatch readouts would thrash a slow e-paper panel if redrawn every second, so on e-ink they refresh only coarsely (and immediately on any key press). The underlying timing is exact regardless, and the countdown's buzzer always fires on time.</p>
+</blockquote>
 
 
 
