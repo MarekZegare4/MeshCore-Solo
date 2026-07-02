@@ -1,7 +1,7 @@
 #pragma once
-// Clock tools — Alarm, Countdown timer (minutnik) and Stopwatch (stoper).
-// Entered with Enter on the home CLOCK page. A small top menu picks one of the
-// three tools; Cancel backs out a level (tool → menu → home).
+// Clock tools — Alarm, Countdown timer (minutnik), Stopwatch (stoper) and
+// Pomodoro. Entered with Enter on the home CLOCK page. A small top menu picks
+// one of the four tools; Cancel backs out a level (tool → menu → home).
 //
 // This screen is pure UI. The time-critical machinery lives in UITask, which
 // drives it every loop regardless of the current screen:
@@ -12,6 +12,13 @@
 //     isTimerRunning / timerRemainingMs). It rings even when off-screen.
 //   • Stopwatch — purely a display utility with no background action, so its
 //     millis() state lives here; it keeps counting while you're elsewhere.
+//   • Pomodoro — UITask owns the running Work/Short-Break/Long-Break cycle
+//     (startPomodoro / stopPomodoro / pausePomodoro / resumePomodoro /
+//     isPomodoroRunning / isPomodoroPaused / pomodoroPhase / pomodoroCycle /
+//     pomodoroRemainingMs) and auto-advances phases with a short tone.
+//     Pausing just freezes the deadline check; it doesn't touch phase/cycle.
+//     Here we edit the persisted durations (NodePrefs pomodoro_*)
+//     when idle, or just show the running phase + countdown.
 //
 // Numeric fields (alarm hour/minute, timer h/m/s) are edited with the shared
 // framework DigitEditor (digit-by-digit: LEFT/RIGHT cursor, UP/DOWN +/- the
@@ -31,10 +38,11 @@ class ClockToolsScreen : public UIScreen {
   UITask*    _task;
   NodePrefs* _prefs;
 
-  enum View : uint8_t { V_MENU, V_ALARM, V_TIMER, V_STOPWATCH };
+  enum View : uint8_t { V_MENU, V_ALARM, V_TIMER, V_STOPWATCH, V_POMODORO };
   uint8_t _view = V_MENU;
   int     _sel = 0, _scroll = 0;       // shared list cursor
   bool    _alarm_dirty = false;        // unsaved edits to alarm_* (persist on exit)
+  bool    _pomo_dirty = false;         // unsaved edits to pomodoro_* (persist on exit)
 
   // Countdown config (the duration to start; the running countdown lives in UITask).
   uint8_t _timer_h = 0, _timer_m = 5, _timer_s = 0;
@@ -48,7 +56,8 @@ class ClockToolsScreen : public UIScreen {
   // Shared numeric editor (alarm hour/minute) + which field it targets. The
   // timer uses its own continuous digit cursor (per-place caps a single
   // DigitEditor can't express), so it isn't listed here.
-  enum EditKind : uint8_t { EK_NONE, EK_A_HOUR, EK_A_MIN };
+  enum EditKind : uint8_t { EK_NONE, EK_A_HOUR, EK_A_MIN,
+                             EK_P_WORK, EK_P_SHORT, EK_P_LONG, EK_P_CYCLES };
   DigitEditor _editor;
   EditKind    _edit_kind = EK_NONE;
 
@@ -97,9 +106,11 @@ class ClockToolsScreen : public UIScreen {
   }
 
   // Open the DigitEditor on a numeric field (2 integer digits, no decimals).
-  void editField(EditKind kind, uint8_t value, uint8_t vmax) {
+  // vmin defaults to 0 (Alarm hour/minute); Pomodoro durations/cycles pass 1 —
+  // a phase edited down to 0 would re-fire every tick of tickClockTools().
+  void editField(EditKind kind, uint8_t value, uint8_t vmax, uint8_t vmin = 0) {
     _edit_kind = kind;
-    _editor.begin((float)value, 0.0f, (float)vmax, 2, 0);
+    _editor.begin((float)value, (float)vmin, (float)vmax, 2, 0);
   }
 
   // Feed a key to the open editor, write the (live) value back to its field, and
@@ -108,8 +119,12 @@ class ClockToolsScreen : public UIScreen {
     DigitEditor::Result r = _editor.handleInput(c);
     uint8_t v = (uint8_t)(_editor.value + 0.5f);
     switch (_edit_kind) {
-      case EK_A_HOUR: _prefs->alarm_hour = v; _alarm_dirty = true; _task->onAlarmChanged(); break;
-      case EK_A_MIN:  _prefs->alarm_min  = v; _alarm_dirty = true; _task->onAlarmChanged(); break;
+      case EK_A_HOUR:   _prefs->alarm_hour = v; _alarm_dirty = true; _task->onAlarmChanged(); break;
+      case EK_A_MIN:    _prefs->alarm_min  = v; _alarm_dirty = true; _task->onAlarmChanged(); break;
+      case EK_P_WORK:   _prefs->pomodoro_work_min        = v; _pomo_dirty = true; break;
+      case EK_P_SHORT:  _prefs->pomodoro_short_break_min = v; _pomo_dirty = true; break;
+      case EK_P_LONG:   _prefs->pomodoro_long_break_min  = v; _pomo_dirty = true; break;
+      case EK_P_CYCLES: _prefs->pomodoro_cycles           = v; _pomo_dirty = true; break;
       default: break;
     }
     if (r != DigitEditor::NONE) _edit_kind = EK_NONE;   // editor closed
@@ -127,9 +142,9 @@ class ClockToolsScreen : public UIScreen {
   // ── Sub-renders ───────────────────────────────────────────────────────────
   int renderMenu(DisplayDriver& d) {
     d.drawCenteredHeader("CLOCK TOOLS");
-    static const char* items[3] = { "Alarm", "Timer", "Stopwatch" };
-    if (_sel > 2) _sel = 2;
-    drawList(d, 3, _sel, _scroll, [&](int i, int y, bool sel, int reserve) {
+    static const char* items[4] = { "Alarm", "Timer", "Stopwatch", "Pomodoro" };
+    if (_sel > 3) _sel = 3;
+    drawList(d, 4, _sel, _scroll, [&](int i, int y, bool sel, int reserve) {
       drawRowSelection(d, y, sel, reserve);
       d.setCursor(4, y);
       d.print(items[i]);
@@ -137,6 +152,12 @@ class ClockToolsScreen : public UIScreen {
         char b[8]; fmtClock(b, sizeof(b), _prefs->alarm_hour, _prefs->alarm_min);
         int vx = d.width() - d.getTextWidth(b) - reserve - 2;
         d.setCursor(vx, y); d.print(b);
+      } else if (i == 3 && _task->isPomodoroRunning()) {   // show the active phase
+        static const char* PHASE_TAG[3] = { "WORK", "BRK", "LONG" };
+        uint8_t phase = _task->pomodoroPhase();
+        const char* tag = PHASE_TAG[phase < 3 ? phase : 0];
+        int vx = d.width() - d.getTextWidth(tag) - reserve - 2;
+        d.setCursor(vx, y); d.print(tag);
       }
     });
     return 60000;
@@ -204,13 +225,60 @@ class ClockToolsScreen : public UIScreen {
     return _sw_running ? liveTickMs(d, 100) : 60000;
   }
 
+  int renderPomodoro(DisplayDriver& d) {
+    d.drawCenteredHeader("POMODORO");
+    const int cx = d.width() / 2;
+    if (_task->isPomodoroRunning()) {
+      static const char* PHASE_LABEL[3] = { "WORK", "SHORT BREAK", "LONG BREAK" };
+      bool paused = _task->isPomodoroPaused();
+      uint8_t phase = _task->pomodoroPhase();
+      const int ly = d.listStart();
+      d.drawTextCentered(cx, ly, PHASE_LABEL[phase < 3 ? phase : 0]);
+      char buf[16];
+      fmtHMS(buf, sizeof(buf), _task->pomodoroRemainingMs());
+      d.setTextSize(2);
+      d.drawTextCentered(cx, ly + d.getLineHeight() + 2, buf);
+      d.setTextSize(1);
+      // Status line (cycle count + PAUSED, when paused) sits just above the
+      // key-hint line, which itself flips between Pause/Resume.
+      char status[16];
+      if (_prefs) snprintf(status, sizeof(status), paused ? "%u/%u PAUSED" : "%u/%u",
+                            _task->pomodoroCycle(), _prefs->pomodoro_cycles);
+      else        snprintf(status, sizeof(status), "%s", paused ? "PAUSED" : "");
+      if (status[0]) d.drawTextCentered(cx, d.height() - 2 * d.getLineHeight() - 3, status);
+      d.drawTextCentered(cx, d.height() - d.getLineHeight() - 1,
+                          paused ? "Ent=Resume Dn=Stop" : "Ent=Pause Dn=Stop");
+      return liveTickMs(d, paused ? 60000 : 1000);
+    }
+    // Idle: durations list (Work/Short Break/Long Break/Cycles) + Start.
+    if (!_prefs) return 60000;
+    const char* rows[5] = { "Start", "Work", "Short Break", "Long Break", "Cycles" };
+    if (_sel > 4) _sel = 4;
+    const int valx = d.width() / 2 + 6;
+    drawList(d, 5, _sel, _scroll, [&](int i, int y, bool sel, int reserve) {
+      drawRowSelection(d, y, sel, reserve);
+      d.setCursor(4, y); d.print(rows[i]);
+      if (i == 0) return;   // Start has no value column
+      char b[8];
+      EditKind k;
+      switch (i) {
+        case 1: snprintf(b, sizeof(b), "%um", _prefs->pomodoro_work_min);        k = EK_P_WORK;   break;
+        case 2: snprintf(b, sizeof(b), "%um", _prefs->pomodoro_short_break_min); k = EK_P_SHORT;  break;
+        case 3: snprintf(b, sizeof(b), "%um", _prefs->pomodoro_long_break_min);  k = EK_P_LONG;   break;
+        default: snprintf(b, sizeof(b), "%u", _prefs->pomodoro_cycles);          k = EK_P_CYCLES; break;
+      }
+      drawValue(d, y, valx, reserve, sel, k, b);
+    });
+    return _editor.active ? 50 : 60000;
+  }
+
   // ── Input per view ────────────────────────────────────────────────────────
   bool inputMenu(char c) {
     if (c == KEY_CANCEL) { _task->gotoHomeScreen(); return true; }
-    if (c == KEY_UP)   { _sel = (_sel > 0) ? _sel - 1 : 2; return true; }
-    if (c == KEY_DOWN) { _sel = (_sel < 2) ? _sel + 1 : 0; return true; }
+    if (c == KEY_UP)   { _sel = (_sel > 0) ? _sel - 1 : 3; return true; }
+    if (c == KEY_DOWN) { _sel = (_sel < 3) ? _sel + 1 : 0; return true; }
     if (c == KEY_ENTER) {
-      _view = (_sel == 0) ? V_ALARM : (_sel == 1) ? V_TIMER : V_STOPWATCH;
+      _view = (_sel == 0) ? V_ALARM : (_sel == 1) ? V_TIMER : (_sel == 2) ? V_STOPWATCH : V_POMODORO;
       _sel = 0; _scroll = 0;
       return true;
     }
@@ -267,6 +335,39 @@ class ClockToolsScreen : public UIScreen {
     return true;   // other keys just refresh the readout
   }
 
+  bool inputPomodoro(char c) {
+    if (_task->isPomodoroRunning()) {
+      if (c == KEY_ENTER) {   // toggle pause/resume; phase/cycle/deadline untouched
+        if (_task->isPomodoroPaused()) _task->resumePomodoro();
+        else                           _task->pausePomodoro();
+        return true;
+      }
+      if (c == KEY_DOWN)    { _task->stopPomodoro(); return true; }     // cancel the whole cycle
+      if (c == KEY_CANCEL)  { _view = V_MENU; _sel = 0; return true; }  // keeps running/paused in background
+      return true;   // any other key just forces a refresh (e-ink)
+    }
+    if (!_prefs) { if (c == KEY_CANCEL) { _view = V_MENU; _sel = 0; } return true; }
+    if (_editor.active) return feedEditor(c);
+    if (c == KEY_CANCEL) {
+      _task->savePrefsIfDirty(_pomo_dirty);
+      _view = V_MENU; _sel = 0; _scroll = 0;
+      return true;
+    }
+    if (c == KEY_UP)   { _sel = (_sel > 0) ? _sel - 1 : 4; return true; }
+    if (c == KEY_DOWN) { _sel = (_sel < 4) ? _sel + 1 : 0; return true; }
+    if (c == KEY_ENTER) {
+      switch (_sel) {
+        case 0: _task->startPomodoro(); break;
+        case 1: editField(EK_P_WORK,   _prefs->pomodoro_work_min,        99, 1); break;
+        case 2: editField(EK_P_SHORT,  _prefs->pomodoro_short_break_min, 99, 1); break;
+        case 3: editField(EK_P_LONG,   _prefs->pomodoro_long_break_min,  99, 1); break;
+        case 4: editField(EK_P_CYCLES, _prefs->pomodoro_cycles,           9, 1); break;
+      }
+      return true;
+    }
+    return true;
+  }
+
 public:
   ClockToolsScreen(UITask* task, NodePrefs* prefs) : _task(task), _prefs(prefs) {}
 
@@ -283,6 +384,7 @@ public:
       case V_ALARM:     return renderAlarm(display);
       case V_TIMER:     return renderTimer(display);
       case V_STOPWATCH: return renderStopwatch(display);
+      case V_POMODORO:  return renderPomodoro(display);
       default:          return renderMenu(display);
     }
   }
@@ -292,6 +394,7 @@ public:
       case V_ALARM:     return inputAlarm(c);
       case V_TIMER:     return inputTimer(c);
       case V_STOPWATCH: return inputStopwatch(c);
+      case V_POMODORO:  return inputPomodoro(c);
       default:          return inputMenu(c);
     }
   }

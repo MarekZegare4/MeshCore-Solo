@@ -472,6 +472,18 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
     if (_prefs.page_order[i] > NodePrefs::HPB_COUNT) _prefs.page_order[i] = 0;
   }
 
+  // → 0xC0DE001A: Pomodoro work/break durations + cycle count (Clock page ›
+  // Pomodoro). 0 or out-of-range — a never-configured device, or a pre-0x1A
+  // file leaving stray sentinel bytes here — falls back to the defaults.
+  rd(&_prefs.pomodoro_work_min,        sizeof(_prefs.pomodoro_work_min));
+  rd(&_prefs.pomodoro_short_break_min, sizeof(_prefs.pomodoro_short_break_min));
+  rd(&_prefs.pomodoro_long_break_min,  sizeof(_prefs.pomodoro_long_break_min));
+  rd(&_prefs.pomodoro_cycles,          sizeof(_prefs.pomodoro_cycles));
+  if (_prefs.pomodoro_work_min == 0        || _prefs.pomodoro_work_min > 99)        _prefs.pomodoro_work_min = 25;
+  if (_prefs.pomodoro_short_break_min == 0 || _prefs.pomodoro_short_break_min > 99) _prefs.pomodoro_short_break_min = 5;
+  if (_prefs.pomodoro_long_break_min == 0  || _prefs.pomodoro_long_break_min > 99)  _prefs.pomodoro_long_break_min = 15;
+  if (_prefs.pomodoro_cycles == 0          || _prefs.pomodoro_cycles > 9)           _prefs.pomodoro_cycles = 4;
+
   // Schema sentinel: bumped on layout changes. Mismatch means an older file
   // (or a different schema); rd() already zero-inits any fields not present,
   // so we just log it — next savePrefs writes the current sentinel.
@@ -656,6 +668,10 @@ void DataStore::savePrefs(const NodePrefs& _prefs, double node_lat, double node_
     // appended here so the on-disk head stays the original 11 bytes.
     file.write((uint8_t *)&_prefs.page_order[NodePrefs::PAGE_ORDER_LEN_V1],
                NodePrefs::PAGE_ORDER_LEN - NodePrefs::PAGE_ORDER_LEN_V1);
+    file.write((uint8_t *)&_prefs.pomodoro_work_min,        sizeof(_prefs.pomodoro_work_min));
+    file.write((uint8_t *)&_prefs.pomodoro_short_break_min, sizeof(_prefs.pomodoro_short_break_min));
+    file.write((uint8_t *)&_prefs.pomodoro_long_break_min,  sizeof(_prefs.pomodoro_long_break_min));
+    file.write((uint8_t *)&_prefs.pomodoro_cycles,          sizeof(_prefs.pomodoro_cycles));
 
     // Tail sentinel — must be last. See NodePrefs::SCHEMA_SENTINEL. Its write is
     // the one we check: once the flash fills, writes return 0, so a good

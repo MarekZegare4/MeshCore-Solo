@@ -158,6 +158,14 @@ MINI_ICON(ICON_ALARM, 5,   // bell — an alarm is armed
   packRow("#####"),
   packRow("..#.."));
 
+MINI_ICON(ICON_TOMATO, 5,   // tomato (leaf + round body) — a Pomodoro is running/paused
+  packRow(".#.#."),
+  packRow("..#.."),
+  packRow(".###."),
+  packRow("#####"),
+  packRow("#####"),
+  packRow(".###."));
+
 MINI_ICON(ICON_TRAIL, 6,   // map pin / location marker (GPS trail logging)
   packRow(".####."),
   packRow("######"),
