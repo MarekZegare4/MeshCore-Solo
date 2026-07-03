@@ -67,6 +67,9 @@ class SettingsScreen : public UIScreen {
     TIMEZONE,
     LOW_BAT,
     UNITS,
+    // Keyboard section
+    SECTION_KEYBOARD,
+    KEYBOARD_TYPE,
     // Contacts section
     SECTION_CONTACTS, DM_FILTER, CH_FILTER, ROOM_FILTER,
     // Messages section
@@ -85,7 +88,7 @@ class SettingsScreen : public UIScreen {
   bool _dirty = false;
 
   AccordionList _acc;
-  static const int NUM_SECTIONS = 7;
+  static const int NUM_SECTIONS = 8;
   static const int MAX_PER_SEC  = 16;
   uint8_t _sec_items[NUM_SECTIONS][MAX_PER_SEC]; // SettingItem per (section, row)
   uint8_t _sec_count[NUM_SECTIONS];
@@ -168,6 +171,7 @@ class SettingsScreen : public UIScreen {
     return item == SECTION_DISPLAY || item == SECTION_SOUND ||
            item == SECTION_HOME_PAGES ||
            item == SECTION_RADIO   || item == SECTION_SYSTEM ||
+           item == SECTION_KEYBOARD ||
            item == SECTION_CONTACTS || item == SECTION_MESSAGES;
   }
 
@@ -177,6 +181,7 @@ class SettingsScreen : public UIScreen {
     if (item == SECTION_HOME_PAGES) return "Home Pages";
     if (item == SECTION_RADIO)      return "Radio";
     if (item == SECTION_SYSTEM)     return "System";
+    if (item == SECTION_KEYBOARD)   return "Keyboard";
     if (item == SECTION_CONTACTS)   return "Contacts";
     if (item == SECTION_MESSAGES)   return "Messages";
     return "";
@@ -549,6 +554,10 @@ class SettingsScreen : public UIScreen {
       display.print("Units");
       display.setCursor(valCol(display), y);
       display.print((p && p->units_imperial) ? "Imperial" : "Metric");
+    } else if (item == KEYBOARD_TYPE) {
+      display.print("Type");
+      display.setCursor(valCol(display), y);
+      display.print((p && p->keyboard_type) ? "T9" : "ABC");
     } else if (item == BATT_DISPLAY) {
       display.print("BattDisp");
       display.setCursor(valCol(display), y);
@@ -869,6 +878,11 @@ public:
     }
     if (_selected == UNITS && p && (left || right || enter)) {
       p->units_imperial ^= 1;
+      _dirty = true;
+      return true;
+    }
+    if (_selected == KEYBOARD_TYPE && p && (left || right || enter)) {
+      p->keyboard_type ^= 1;
       _dirty = true;
       return true;
     }

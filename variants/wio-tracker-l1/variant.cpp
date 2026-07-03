@@ -67,9 +67,11 @@ void initVariant() {
     pinMode(PIN_QSPI_CS, OUTPUT);
     digitalWrite(PIN_QSPI_CS, HIGH);
 
-    // VBAT_ENABLE: keep LOW by default, WioTrackerL1Board::getBattMilliVolts() toggles it
+    // VBAT_ENABLE: hold HIGH so the battery voltage divider is always on and its
+    // node stays settled for the ADC read (getBattMilliVolts). Per-read gating
+    // left it unsettled at sample time -> high/jittery readings.
     pinMode(VBAT_ENABLE, OUTPUT);
-    digitalWrite(VBAT_ENABLE, LOW);
+    digitalWrite(VBAT_ENABLE, HIGH);
 
     // set LED pin as output and set it low
     pinMode(PIN_LED, OUTPUT);

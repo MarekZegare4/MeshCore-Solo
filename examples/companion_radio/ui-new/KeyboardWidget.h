@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include "PopupMenu.h"
 #include "icons.h"   // mini-icons for the special-key row (⇧ ⌫ ⎵ ✓)
+#include "../NodePrefs.h"
 
 // Layout constants shared by all keyboard users.
 // Two pages: letters (page 0) and symbols (page 1), toggled by the "#@"/"abc"
@@ -27,6 +28,20 @@ static const char KB_CHARS[KB_PAGES][4][10] = {
 static const int KB_ROWS_CHAR  = 4;
 static const int KB_COLS_CHAR  = 10;
 static const int KB_SPECIAL    = 6;   // ⇧ ⎵ ⌫ {} #@/abc ✓
+
+// T9 multi-tap layout (Settings › Keyboard). A classic phone keypad: 9 cells (keys
+// 1-9) laid out 3x3, each holding a handful of letters/symbols. Repeated Enter
+// presses on the same cell within KB_T9_TIMEOUT_MS cycle through the group, ending
+// on the cell's own digit (computed as '1'+cell, not stored here) before wrapping.
+// Keys 0/*/# aren't part of the grid — space/backspace/etc. already live on the
+// special row below, shared with the ABC layout.
+static const int KB_T9_ROWS = 3;
+static const int KB_T9_COLS = 3;
+static const uint32_t KB_T9_TIMEOUT_MS = 800;
+static const char* const KB_T9_GROUPS[KB_PAGES][9] = {
+  { ".,!?'-", "abc", "def", "ghi", "jkl", "mno", "pqrs", "tuv", "wxyz" },   // page 0 — letters
+  { "@#&", "*()", "-_+", "=/\\", ":;'\"", "<>[]", "{}|~", "^$%`", ",." },  // page 1 — symbols
+};
 // Buffer cap for typed text, in bytes. Matches MeshCore's MAX_TEXT_LEN
 // (10*CIPHER_BLOCK_SIZE = 160) so a full-length message can be composed; each
 // field passes its own smaller max to begin() where its store is smaller.
@@ -51,6 +66,21 @@ struct KeyboardWidget {
   int  _ph_count;
   PopupMenu _ph_menu;
 
+  // Live setting lookup — set once by UITask::begin(). NULL only in tests/tools
+  // that construct a KeyboardWidget standalone, in which case isT9() defaults
+  // to ABC.
+  NodePrefs* prefs = nullptr;
+  bool isT9() const { return prefs && prefs->keyboard_type == 1; }
+
+  // T9 multi-tap state: which grid cell is mid-cycle (-1 = none), its cycle
+  // position, and when the last Enter landed on it (for the timeout).
+  int      t9_cell = -1;
+  int      t9_cycle = 0;
+  uint32_t t9_last_ms = 0;
+
+  int gridRows() const { return isT9() ? KB_T9_ROWS : KB_ROWS_CHAR; }
+  int gridCols() const { return isT9() ? KB_T9_COLS : KB_COLS_CHAR; }
+
   enum Result { NONE, DONE, CANCELLED };
 
   void begin(const char* initial = "", int max = KB_MAX_LEN) {
@@ -61,6 +91,8 @@ struct KeyboardWidget {
     row = col = 0;
     page = 0;
     caps = false;
+    t9_cell = -1;
+    t9_cycle = 0;
     _ph_menu.active = false;
     // default placeholders — always available
     _ph_count = 0;
@@ -79,20 +111,27 @@ struct KeyboardWidget {
   }
 
   int render(DisplayDriver& display) {
+    // A stale mid-cycle T9 press (no further input since) finalizes on its own —
+    // the character is already committed to buf, this just stops a later Enter
+    // on the same cell from being treated as a continued cycle.
+    if (t9_cell >= 0 && millis() - t9_last_ms > KB_T9_TIMEOUT_MS) t9_cell = -1;
+
     display.setTextSize(1);
     display.setColor(DisplayDriver::LIGHT);
 
+    const int rows = gridRows();
+    const int cols = gridCols();
     const int lh      = display.getLineHeight();
     const int cw      = display.getCharWidth();
-    const int cell_w  = display.width() / KB_COLS_CHAR;
+    const int cell_w  = display.width() / cols;
     // compact: don't stretch cells beyond lh; freed vertical space goes to preview lines
-    const int kb_h      = (KB_ROWS_CHAR + 1) * lh;
+    const int kb_h      = (rows + 1) * lh;
     const int preview_h = display.height() - kb_h - display.sepH();
     const int prev_lines = (preview_h / lh) > 1 ? (preview_h / lh) : 1;
     const int sep_y   = prev_lines * lh;
     const int chars_y = sep_y + display.sepH();
-    const int cell_h  = (display.height() - chars_y) / (KB_ROWS_CHAR + 1);
-    const int spec_y  = chars_y + KB_ROWS_CHAR * cell_h;
+    const int cell_h  = (display.height() - chars_y) / (rows + 1);
+    const int spec_y  = chars_y + rows * cell_h;
     const int spec_w  = display.width() / KB_SPECIAL;
 
     // multi-line text preview: cursor always on last preview line
@@ -124,17 +163,36 @@ struct KeyboardWidget {
     display.fillRect(0, sep_y, display.width(), display.sepH());
 
     // character grid
-    for (int r = 0; r < KB_ROWS_CHAR; r++) {
-      int y = chars_y + r * cell_h;
-      for (int c = 0; c < KB_COLS_CHAR; c++) {
-        bool sel = (row == r && col == c);
-        char ch = KB_CHARS[page][r][c];
-        if (caps && ch >= 'a' && ch <= 'z') ch = ch - 'a' + 'A';
-        char ch_buf[2] = { ch == ' ' ? '_' : ch, '\0' };
-        int cx = c * cell_w;
-        display.drawSelectionRow(cx, y - 1, cell_w - 1, cell_h, sel);
-        display.setCursor(cx + (cell_w - cw) / 2, y);
-        display.print(ch_buf);
+    if (isT9()) {
+      for (int r = 0; r < rows; r++) {
+        int y = chars_y + r * cell_h;
+        for (int c = 0; c < cols; c++) {
+          bool sel = (row == r && col == c);
+          int cell = r * cols + c;
+          char group[10];
+          strncpy(group, KB_T9_GROUPS[page][cell], sizeof(group) - 1);
+          group[sizeof(group) - 1] = '\0';
+          if (caps) for (char* p = group; *p; p++) if (*p >= 'a' && *p <= 'z') *p = *p - 'a' + 'A';
+          int cx = c * cell_w;
+          display.drawSelectionRow(cx, y - 1, cell_w - 1, cell_h, sel);
+          int tw = display.getTextWidth(group);
+          display.setCursor(cx + (cell_w - tw) / 2, y);
+          display.print(group);
+        }
+      }
+    } else {
+      for (int r = 0; r < rows; r++) {
+        int y = chars_y + r * cell_h;
+        for (int c = 0; c < cols; c++) {
+          bool sel = (row == r && col == c);
+          char ch = KB_CHARS[page][r][c];
+          if (caps && ch >= 'a' && ch <= 'z') ch = ch - 'a' + 'A';
+          char ch_buf[2] = { ch == ' ' ? '_' : ch, '\0' };
+          int cx = c * cell_w;
+          display.drawSelectionRow(cx, y - 1, cell_w - 1, cell_h, sel);
+          display.setCursor(cx + (cell_w - cw) / 2, y);
+          display.print(ch_buf);
+        }
       }
     }
 
@@ -142,7 +200,7 @@ struct KeyboardWidget {
     const int s   = miniIconScale(display);
     const int icy = spec_y + (cell_h - lh) / 2;   // centre icons within the cell
     for (int i = 0; i < KB_SPECIAL; i++) {
-      bool sel    = (row == KB_ROWS_CHAR && col == i);
+      bool sel    = (row == rows && col == i);
       bool active = (i == 0 && caps);
       int sx = i * spec_w;
       display.drawSelectionRow(sx, spec_y - 1, spec_w - 1, cell_h, sel || active);
@@ -191,40 +249,69 @@ struct KeyboardWidget {
 
     if (c == KEY_CANCEL || c == KEY_CONTEXT_MENU) return CANCELLED;
 
+    const int rows = gridRows();
+    const int cols = gridCols();
+
     if (c == KEY_UP) {
       if (row > 0) {
         row--;
-        if (row == KB_ROWS_CHAR - 1)  // leaving special row upward
-          col = col * KB_COLS_CHAR / KB_SPECIAL;
+        if (row == rows - 1)  // leaving special row upward
+          col = col * cols / KB_SPECIAL;
       } else {
-        row = KB_ROWS_CHAR;             // wrap up onto the special row
-        col = col * KB_SPECIAL / KB_COLS_CHAR;
+        row = rows;             // wrap up onto the special row
+        col = col * KB_SPECIAL / cols;
       }
+      t9_cell = -1;   // navigating away finalizes any pending multi-tap cycle
       return NONE;
     }
     if (c == KEY_DOWN) {
-      if (row < KB_ROWS_CHAR) {
+      if (row < rows) {
         row++;
-        if (row == KB_ROWS_CHAR)  // entering special row
-          col = col * KB_SPECIAL / KB_COLS_CHAR;
+        if (row == rows)  // entering special row
+          col = col * KB_SPECIAL / cols;
       } else {
         row = 0;                        // wrap down onto the first char row
-        col = col * KB_COLS_CHAR / KB_SPECIAL;
+        col = col * cols / KB_SPECIAL;
       }
+      t9_cell = -1;
       return NONE;
     }
     if (c == KEY_LEFT) {
-      int max_col = (row == KB_ROWS_CHAR) ? KB_SPECIAL - 1 : KB_COLS_CHAR - 1;
+      int max_col = (row == rows) ? KB_SPECIAL - 1 : cols - 1;
       col = (col > 0) ? col - 1 : max_col;
+      t9_cell = -1;
       return NONE;
     }
     if (c == KEY_RIGHT) {
-      int max_col = (row == KB_ROWS_CHAR) ? KB_SPECIAL - 1 : KB_COLS_CHAR - 1;
+      int max_col = (row == rows) ? KB_SPECIAL - 1 : cols - 1;
       col = (col < max_col) ? col + 1 : 0;
+      t9_cell = -1;
       return NONE;
     }
     if (c == KEY_ENTER) {
-      if (row < KB_ROWS_CHAR) {
+      if (row < rows && isT9()) {
+        int cell = row * cols + col;
+        const char* group = KB_T9_GROUPS[page][cell];
+        int glen = (int)strlen(group);
+        int total = glen + 1;   // + the cell's own digit, at the end of the cycle
+        bool cycling = (t9_cell == cell) && (millis() - t9_last_ms < KB_T9_TIMEOUT_MS);
+        if (cycling) {
+          t9_cycle = (t9_cycle + 1) % total;
+          if (len > 0) {
+            char ch = (t9_cycle < glen) ? group[t9_cycle] : (char)('1' + cell);
+            if (caps && ch >= 'a' && ch <= 'z') ch = ch - 'a' + 'A';
+            buf[len - 1] = ch;
+          }
+        } else if (len < max_len) {
+          char ch = group[0];
+          if (caps && ch >= 'a' && ch <= 'z') ch = ch - 'a' + 'A';
+          buf[len++] = ch;
+          buf[len] = '\0';
+          t9_cell = cell;
+          t9_cycle = 0;
+        }
+        t9_last_ms = millis();
+      } else if (row < rows) {
         if (len < max_len) {
           char ch = KB_CHARS[page][row][col];
           if (caps && ch >= 'a' && ch <= 'z') ch = ch - 'a' + 'A';
@@ -232,6 +319,7 @@ struct KeyboardWidget {
           buf[len] = '\0';
         }
       } else {
+        t9_cell = -1;   // any special-row action finalizes a pending multi-tap cycle
         switch (col) {
           case 0: caps = !caps; break;
           case 1:

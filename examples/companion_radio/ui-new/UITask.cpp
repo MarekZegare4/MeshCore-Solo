@@ -1434,6 +1434,7 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
   _display = display;
   _sensors = sensors;
   _node_prefs = node_prefs;
+  _kb.prefs = node_prefs;
   uint32_t aoff = autoOffMillis();
   _auto_off = millis() + (aoff > 0 ? aoff : AUTO_OFF_MILLIS);
 

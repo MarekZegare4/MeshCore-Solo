@@ -293,6 +293,10 @@ struct NodePrefs {  // persisted to file
   uint8_t  pomodoro_short_break_min; // 1-99, default 5
   uint8_t  pomodoro_long_break_min;  // 1-99, default 15
   uint8_t  pomodoro_cycles;          // work sessions before a long break, 1-9, default 4
+  // On-screen keyboard layout, shared across every text-entry screen (Settings >
+  // Keyboard). 0=ABC grid, alphabetical order (default), 1=T9 multi-tap
+  // (phone-keypad groups, cycled with repeated Enter presses — see KeyboardWidget.h).
+  uint8_t  keyboard_type;
 
   // Single source of truth for the live-share option tables (shared by the Map
   // UI labels and the auto-send engine in UITask).
