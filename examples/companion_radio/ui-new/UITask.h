@@ -146,6 +146,23 @@ class UITask : public AbstractUITask {
   void     fireClockAlert(const char* label);  // wake + alert + melody + start ring
   void     tickClockTools();                   // driven from loop(): ring + timer + alarm
 
+  // Pomodoro engine — cycles Work → Short Break → ... → Long Break, ticked
+  // from tickClockTools() (same millis-based convention as the countdown
+  // Timer) so it keeps running regardless of the current screen. Each phase
+  // change is a short tone + banner (firePomodoroAlert), not the persistent
+  // ring used for Alarm/Timer, since the next phase starts automatically
+  // rather than waiting to be dismissed. Durations come from NodePrefs
+  // pomodoro_*; the phase/cycle/deadline themselves are runtime-only.
+  enum PomodoroPhase : uint8_t { POMO_WORK, POMO_SHORT_BREAK, POMO_LONG_BREAK };
+  bool     _pomo_running = false;
+  bool     _pomo_paused = false;
+  uint8_t  _pomo_phase = POMO_WORK;
+  uint8_t  _pomo_cycle = 0;          // completed work sessions since the last long break
+  uint32_t _pomo_deadline_ms = 0;
+  uint32_t _pomo_paused_remaining_ms = 0;  // snapshot of the countdown while paused
+  void     firePomodoroAlert(const char* label);  // wake + brief alert + tone
+  void     advancePomodoro();                     // phase ended: alert + move to the next phase
+
   // Course-over-ground ring — a heading source independent of trail recording.
   // Filled from the same periodic GPS poll regardless of _trail.isActive().
   // Heading = bearing across the window (oldest→newest) once the cumulative
@@ -291,6 +308,30 @@ public:
     if (!_timer_running) return 0;
     uint32_t now = millis();
     return (now >= _timer_deadline_ms) ? 0 : (_timer_deadline_ms - now);
+  }
+  // Pomodoro engine API — ClockToolsScreen drives these; the engine itself
+  // runs in tickClockTools() from loop() so it fires regardless of the screen.
+  void startPomodoro();                  // (re)start from Work, cycle 0
+  void stopPomodoro() { _pomo_running = false; _pomo_paused = false; }
+  void pausePomodoro() {                 // freeze the countdown; phase/cycle unchanged
+    if (!_pomo_running || _pomo_paused) return;
+    _pomo_paused_remaining_ms = pomodoroRemainingMs();
+    _pomo_paused = true;
+  }
+  void resumePomodoro() {                // re-arm the deadline from where it was paused
+    if (!_pomo_running || !_pomo_paused) return;
+    _pomo_deadline_ms = millis() + _pomo_paused_remaining_ms;
+    _pomo_paused = false;
+  }
+  bool isPomodoroRunning() const { return _pomo_running; }
+  bool isPomodoroPaused() const { return _pomo_paused; }
+  uint8_t pomodoroPhase() const { return _pomo_phase; }  // a PomodoroPhase value
+  uint8_t pomodoroCycle() const { return _pomo_cycle; }  // completed work sessions in the current set
+  uint32_t pomodoroRemainingMs() const {
+    if (!_pomo_running) return 0;
+    if (_pomo_paused) return _pomo_paused_remaining_ms;
+    uint32_t now = millis();
+    return (now >= _pomo_deadline_ms) ? 0 : (_pomo_deadline_ms - now);
   }
   bool isRinging() const { return _ringing; }
   void dismissRing() { stopMelody(); _ringing = false; clearAlert(); }

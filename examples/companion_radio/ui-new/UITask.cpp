@@ -822,6 +822,15 @@ public:
           display.setColor(DisplayDriver::LIGHT);
           miniIconDrawTop(display, 0, 0, ICON_ALARM);
         }
+        // Pomodoro running or paused: same corner-glyph treatment as the alarm
+        // bell above, mirrored to the top-right so the two can't collide.
+        // isPomodoroRunning() stays true while paused — only stopPomodoro()
+        // clears it — so this alone covers "active, not stopped".
+        if (_task->isPomodoroRunning()) {
+          display.setColor(DisplayDriver::LIGHT);
+          int icon_w = ICON_TOMATO.w * miniIconScale(display);
+          miniIconDrawTop(display, display.width() - icon_w, 0, ICON_TOMATO);
+        }
 
         int sep_y  = date_y + lh + 1;
         int dash0  = sep_y + display.sepH() + 2;
@@ -1531,6 +1540,14 @@ void UITask::gotoLiveShareScreen() { setCurrScreen(live_share_screen); }
 void UITask::wakeForAlarm() {
   if (_display != NULL) _display->turnOn();
   _next_refresh = 0;   // draw the alert overlay immediately
+  // Push out the auto-off deadline so the very next loop() iteration's
+  // auto-off check doesn't immediately re-sleep the display we just turned
+  // on. fireClockAlert() (Alarm/Timer) also sets _ringing, which the auto-off
+  // check exempts on its own, but firePomodoroAlert()'s shorter banner
+  // doesn't — without this, a Pomodoro phase change woke the display for
+  // exactly one loop iteration before it went straight back off.
+  uint32_t aoff = autoOffMillis();
+  if (aoff > 0) _auto_off = millis() + aoff;
 }
 
 // ── Clock tools engine (alarm / countdown / ring) ───────────────────────────
@@ -1599,8 +1616,51 @@ void UITask::tickClockTools() {
     _timer_running = false;
     fireClockAlert("Timer done");
   }
+  // Pomodoro (millis-based, same convention as the countdown Timer above).
+  // Paused just freezes the deadline check — resumePomodoro() re-arms it.
+  if (_pomo_running && !_pomo_paused && now_ms >= _pomo_deadline_ms) advancePomodoro();
   // Alarm (wall clock — absolute schedule for sync robustness).
   evaluateAlarm();
+}
+
+// A phase change auto-advances rather than waiting to be dismissed, so it
+// gets a short tone + banner instead of fireClockAlert()'s persistent ring.
+static const uint32_t POMO_ALERT_MS = 4000;
+
+void UITask::firePomodoroAlert(const char* label) {
+  wakeForAlarm();
+  showAlert(label, POMO_ALERT_MS);
+  playMelody(CLOCK_ALARM_MELODY);
+}
+
+void UITask::startPomodoro() {
+  if (!_node_prefs) return;
+  _pomo_running = true;
+  _pomo_paused = false;
+  _pomo_phase = POMO_WORK;
+  _pomo_cycle = 0;
+  _pomo_deadline_ms = millis() + (uint32_t)_node_prefs->pomodoro_work_min * 60000UL;
+}
+
+void UITask::advancePomodoro() {
+  if (!_node_prefs) { _pomo_running = false; return; }
+  if (_pomo_phase == POMO_WORK) {
+    _pomo_cycle++;
+    if (_pomo_cycle >= _node_prefs->pomodoro_cycles) {
+      _pomo_phase = POMO_LONG_BREAK;
+      _pomo_cycle = 0;
+      firePomodoroAlert("Long break");
+      _pomo_deadline_ms = millis() + (uint32_t)_node_prefs->pomodoro_long_break_min * 60000UL;
+    } else {
+      _pomo_phase = POMO_SHORT_BREAK;
+      firePomodoroAlert("Break time");
+      _pomo_deadline_ms = millis() + (uint32_t)_node_prefs->pomodoro_short_break_min * 60000UL;
+    }
+  } else {
+    _pomo_phase = POMO_WORK;
+    firePomodoroAlert("Back to work");
+    _pomo_deadline_ms = millis() + (uint32_t)_node_prefs->pomodoro_work_min * 60000UL;
+  }
 }
 
 // Ringtone takes a slot argument that onShow() can't carry — pass it after the

@@ -284,6 +284,15 @@ struct NodePrefs {  // persisted to file
   uint8_t  alarm_hour;  // 0-23, local time
   uint8_t  alarm_min;   // 0-59
 
+  // Pomodoro timer — Work/Short-Break/Long-Break cycle, configured and driven
+  // from the Clock page (Enter › Pomodoro). Only the durations are persisted;
+  // the running phase/cycle/deadline are runtime-only, same as the countdown
+  // Timer. loadPrefsInt() clamps 0/out-of-range (never configured, or a
+  // pre-0x1A file) back to these defaults.
+  uint8_t  pomodoro_work_min;        // 1-99, default 25
+  uint8_t  pomodoro_short_break_min; // 1-99, default 5
+  uint8_t  pomodoro_long_break_min;  // 1-99, default 15
+  uint8_t  pomodoro_cycles;          // work sessions before a long break, 1-9, default 4
   // On-screen keyboard layout, shared across every text-entry screen (Settings >
   // Keyboard). 0=ABC grid, alphabetical order (default), 1=T9 multi-tap
   // (phone-keypad groups, cycled with repeated Enter presses — see KeyboardWidget.h).
@@ -441,7 +450,7 @@ struct NodePrefs {  // persisted to file
 //   3. clamp it on load (an upgrader's file lacks it → stray bytes)
 //   4. bump SCHEMA_SENTINEL's low byte
 // (Padding can also shift sizeof; a "false" trip just means re-check + rebump.)
-static_assert(sizeof(NodePrefs) == 2496,
+static_assert(sizeof(NodePrefs) == 2504,
               "NodePrefs layout changed — sync DataStore save/load + clamp, bump "
               "SCHEMA_SENTINEL, then update this size (see steps above).");
 
