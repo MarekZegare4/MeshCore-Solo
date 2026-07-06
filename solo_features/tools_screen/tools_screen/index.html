@@ -1795,7 +1795,7 @@
 </tr>
 </tbody>
 </table>
-<p>The Tools screen is a hub for GPS trail recording, nearby node browsing, ringtone editing, auto-reply bot, auto-advert, live location sharing, locator, compass, device diagnostics, and repeater mode. Tools are grouped into collapsible <strong>Location</strong> / <strong>Comms</strong> / <strong>System</strong> sections — the same fold-in-place model as Settings; Tools always opens folded back to the section list. Navigate with <strong>UP/DOWN</strong>, press <strong>Enter</strong> on a section header to expand or collapse it, or on a tool to open it.</p>
+<p>The Tools screen is a hub for GPS trail recording, nearby node browsing, ringtone editing, auto-reply bot, auto-advert, live location sharing, locator, compass, clock tools (alarm / timer / stopwatch), device diagnostics, and repeater mode. Tools are grouped into collapsible <strong>Location</strong> / <strong>Comms</strong> / <strong>System</strong> sections — the same fold-in-place model as Settings; Tools always opens folded back to the section list. Navigate with <strong>UP/DOWN</strong>, press <strong>Enter</strong> on a section header to expand or collapse it, or on a tool to open it.</p>
 <hr />
 <h2 id="nearby-nodes">Nearby Nodes</h2>
 <table>
@@ -2082,6 +2082,11 @@ The <strong>Map</strong> view is also reachable directly from the home carousel 
 <td>Off / 5 / 10 / 30 s — GPS averaging for <strong>Mark here</strong> (see Waypoints below)</td>
 </tr>
 <tr>
+<td>Auto-save</td>
+<td>always</td>
+<td>Off / On — auto-write the live trail to flash on shutdown, so a <strong>low-battery auto-shutdown</strong> doesn't lose the route (see below)</td>
+</tr>
+<tr>
 <td>Readout</td>
 <td>Summary view</td>
 <td>Summary shows Speed or Pace (in the global unit system)</td>
@@ -2095,6 +2100,7 @@ The <strong>Map</strong> view is also reachable directly from the home carousel 
 </table>
 <p>(Trail file… appears only when a live or saved trail exists. Mark here needs a GPS fix; Waypoints is always available.)</p>
 <p><strong>Auto-pause</strong> — when set, a recording trail automatically <strong>pauses</strong> after the device has stayed within ~15 m of one spot for the chosen delay: the elapsed timer and point sampling both freeze, and the map line breaks across the idle gap. It <strong>resumes on its own</strong> as soon as you move again. This keeps a stop (a break, a meal, parking) out of your distance and average-speed stats without you having to remember to stop and restart tracking. A paused trail is still "on" (the <strong>G</strong> marker keeps blinking) — the Summary <strong>Status</strong> row shows <code>paused</code>. The stop is detected with its own coarse movement gate, independent of <strong>Min dist</strong>, so GPS jitter while you're parked doesn't keep it awake.</p>
+<p><strong>Auto-save</strong> — with this on (default off), the live trail is written to flash automatically when the device powers off, so a <strong>low-battery auto-shutdown</strong> no longer discards the whole route. It saves to the same <code>/trail</code> file as the manual <strong>Trail file… → Save</strong>, and only writes when the trail actually has points — an empty trail can't overwrite a previously saved one. Off by default so a normal shutdown doesn't silently overwrite a saved trail you meant to keep.</p>
 <h3 id="track-back">Track back</h3>
 <p><strong>Hold Enter → Track back</strong> retraces the trail you just recorded, back to where you started — useful for returning the same way in poor visibility or unfamiliar ground. It reuses the navigation view (distance + two absolute bearings; see <em>Waypoints › Navigating</em>), but instead of a single fixed target it walks the recorded breadcrumbs in reverse: it snaps onto the route at the <strong>nearest recorded point</strong>, guides you to it, then automatically advances to the next earlier point as you reach each one (within ~20 m). The header shows how many points remain (<code>Back: 12 pt</code>), reading <code>Trail start</code> on the final leg; arriving there shows <code>Back at start</code> and exits. <strong>Cancel</strong> leaves track-back at any time. It needs a trail with at least two points and a GPS fix; it doesn't require tracking to still be running.</p>
 <h3 id="waypoints">Waypoints</h3>
