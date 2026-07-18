@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -29,7 +29,7 @@
       
     
     
-      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
       
       
 
@@ -1455,6 +1455,50 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#channel-tab" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Channel tab
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#room-tab" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Room tab
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#direct-tab" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Direct tab
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#other-tab" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other tab
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#commands" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1489,6 +1533,34 @@
       
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#admin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Admin
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Admin">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#this-device" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        This device
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1714,6 +1786,50 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#channel-tab" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Channel tab
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#room-tab" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Room tab
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#direct-tab" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Direct tab
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#other-tab" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other tab
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#commands" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1748,6 +1864,34 @@
       
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#admin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Admin
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Admin">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#this-device" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        This device
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1795,7 +1939,7 @@
 </tr>
 </tbody>
 </table>
-<p>The Tools screen is a hub for GPS trail recording, nearby node browsing, ringtone editing, auto-reply bot, auto-advert, live location sharing, locator, compass, clock tools (alarm / timer / stopwatch), device diagnostics, and repeater mode. Tools are grouped into collapsible <strong>Location</strong> / <strong>Comms</strong> / <strong>System</strong> sections — the same fold-in-place model as Settings; Tools always opens folded back to the section list. Navigate with <strong>UP/DOWN</strong>, press <strong>Enter</strong> on a section header to expand or collapse it, or on a tool to open it.</p>
+<p>The Tools screen is a hub for GPS trail recording, nearby node browsing, ringtone editing, auto-reply bot, auto-advert, live location sharing, locator, compass, clock tools (alarm / timer / stopwatch), device diagnostics, repeater mode, and remote admin. Tools are grouped into collapsible <strong>Location</strong> / <strong>Comms</strong> / <strong>System</strong> sections — the same fold-in-place model as Settings; Tools always opens folded back to the section list. Navigate with <strong>UP/DOWN</strong>, press <strong>Enter</strong> on a section header to expand or collapse it, or on a tool to open it.</p>
 <hr />
 <h2 id="nearby-nodes">Nearby Nodes</h2>
 <table>
@@ -1873,6 +2017,10 @@
 <tr>
 <td>Set as target</td>
 <td>selected node has GPS <strong>and</strong> a public key — pins it as the active <strong>Locator/Nav target</strong> right away (see <strong>Locator</strong>)</td>
+</tr>
+<tr>
+<td>Admin</td>
+<td>selected node is a saved <strong>repeater or room server</strong> contact — opens <strong>Tools › Admin</strong> for it directly (see <strong>Admin</strong>)</td>
 </tr>
 <tr>
 <td>Sort: Dist/Recent</td>
@@ -2486,8 +2634,13 @@ Mark the spot first with <strong>Tools › Trail → Hold Enter → Mark here</s
 </tr>
 </tbody>
 </table>
-<p>Automatically replies to incoming messages that contain a configured trigger word (case-insensitive, contains match).</p>
-<p>When the bot is enabled it listens to DMs by default. Channel monitoring is an optional addition — select a channel separately to activate it alongside DM mode.</p>
+<!-- screenshots pending: these predate the tab-carousel layout below (still show the old flat grouped list) -->
+
+<p>Automatically replies to incoming messages that contain a configured trigger word (case-insensitive, contains match). The bot has three independent targets — <strong>DM</strong>, a monitored <strong>Channel</strong>, and a monitored <strong>Room</strong> — each with its own trigger/reply pair.</p>
+<p>The screen is a <strong>circular tab carousel</strong>, the same style as Tools › Nearby Nodes' filter tabs: <strong>LEFT/RIGHT</strong> switches between the <strong>Channel</strong> / <strong>Room</strong> / <strong>Direct</strong> / <strong>Other</strong> tabs (opens on Channel), <strong>UP/DOWN</strong> moves between the rows within the active tab, and <strong>Enter</strong> acts on the selected row (LEFT/RIGHT is reserved entirely for tab-switching, so every row's value is changed via Enter, not by cycling it in place).</p>
+<p>Each target has its own <strong>Enable</strong> toggle on its own tab, and they're fully independent — you can run only a channel bot, only a room bot, only DM, or any combination, with no need to also switch on the others.</p>
+<p>Each target also has its own <strong>Commands</strong> toggle (see below) — DM, channel and room can each independently answer <code>!</code> queries or stay quiet, same as Enable.</p>
+<h4 id="channel-tab">Channel tab</h4>
 <table>
 <thead>
 <tr>
@@ -2498,44 +2651,115 @@ Mark the spot first with <strong>Tools › Trail → Hold Enter → Mark here</s
 <tbody>
 <tr>
 <td>Enable</td>
-<td>ON / OFF — enables DM listening</td>
+<td>ON / OFF — <strong>Enter</strong> toggles. Independent of which channel is picked below, so switching it off and back on remembers the last channel.</td>
 </tr>
 <tr>
 <td>Channel</td>
-<td>OFF, or which channel to additionally monitor (cycles through your channels)</td>
-</tr>
-<tr>
-<td>Trigger DM</td>
-<td>Word or phrase that activates the DM reply (case-insensitive). A lone <code>*</code> means <strong>reply to every DM</strong> (away mode) and is shown as <code>(any msg)</code>.</td>
-</tr>
-<tr>
-<td>Reply DM</td>
-<td>Reply text for DMs; supports <code>{time}</code>, <code>{loc}</code> and sensor placeholders</td>
-</tr>
-<tr>
-<td>Trigger Ch</td>
-<td>Independent trigger for the monitored channel. <code>*</code> means <strong>reply to every channel message</strong> — bounded by the per-channel cooldown, but use sparingly on a busy channel.</td>
-</tr>
-<tr>
-<td>Reply Ch</td>
-<td>Reply text for channel messages; supports the same placeholders</td>
+<td>Which channel the bot monitors — always shows the last-picked channel (or <code>(none)</code> if none exist yet), regardless of Enable. <strong>Enter</strong> opens the full channel picker (the same one Live Share's <strong>To</strong> row uses).</td>
 </tr>
 <tr>
 <td>Commands</td>
-<td>ON / OFF — answer <code>!</code> query commands (see below)</td>
+<td>ON / OFF — <strong>Enter</strong> toggles. Answer <code>!</code> query commands on the monitored channel, independent of the other two tabs' Commands settings.</td>
 </tr>
 <tr>
-<td>Quiet from/to</td>
-<td>Local-time window during which auto-replies stay silent; set both equal (<code>OFF</code>) to disable</td>
+<td>Trigger</td>
+<td>Independent trigger for the monitored channel. <code>*</code> means <strong>reply to every channel message</strong> — bounded by the per-channel cooldown, but use sparingly on a busy channel.</td>
+</tr>
+<tr>
+<td>Reply</td>
+<td>Reply text for channel messages; supports the same placeholders as Direct's Reply.</td>
 </tr>
 </tbody>
 </table>
-<p>The DM and channel triggers are independent, so you can run e.g. an away-message (<code>*</code>) in DMs while the channel reacts only to a specific keyword (or vice-versa).</p>
-<p>The header shows a running count of auto-replies sent since boot.</p>
-<p><strong>Throttle.</strong> Auto-replies are rate-limited <strong>per contact</strong> (10 s), so a second sender is never starved while one contact is on cooldown. The channel bot keeps a single 10 s cooldown and won't echo a message identical to its own reply (so two bots running the same reply text on one channel can't ping-pong); the cooldown caps any residual back-and-forth.</p>
+<h4 id="room-tab">Room tab</h4>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Enable</td>
+<td>ON / OFF — <strong>Enter</strong> toggles. Independent of which room is picked below.</td>
+</tr>
+<tr>
+<td>Room</td>
+<td>Which room server the bot posts to — always shows the last-picked room (or <code>(none)</code> if you have none yet), regardless of Enable. <strong>Enter</strong> opens the full room picker. Picking a room you've never logged into prompts for its password right there — the bot can't post to a room it has no working login for, so this is the moment to set one up.</td>
+</tr>
+<tr>
+<td>Commands</td>
+<td>ON / OFF — <strong>Enter</strong> toggles. Answer <code>!</code> query commands on the monitored room, independent of the other two tabs' Commands settings.</td>
+</tr>
+<tr>
+<td>Trigger</td>
+<td>Independent trigger for the monitored room. <code>*</code> means <strong>reply to every post in the room</strong>.</td>
+</tr>
+<tr>
+<td>Reply</td>
+<td>Reply text for room posts; supports the same placeholders as Direct's Reply.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="direct-tab">Direct tab</h4>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Enable</td>
+<td>ON / OFF — <strong>Enter</strong> toggles. Enables DM listening.</td>
+</tr>
+<tr>
+<td>DM allow</td>
+<td><strong>All</strong> / <strong>Fav</strong> — <strong>Enter</strong> toggles. Who the DM bot (trigger-reply and commands) responds to. All (default): any DM sender. Fav: only contacts you've starred (the same star Settings › Contacts filters on) — use this to keep a public bot from being spammed by strangers while it still answers people you trust.</td>
+</tr>
+<tr>
+<td>Commands</td>
+<td>ON / OFF — <strong>Enter</strong> toggles. Answer <code>!</code> query commands (see below) in DMs.</td>
+</tr>
+<tr>
+<td>Trigger</td>
+<td>Word or phrase that activates the DM reply (case-insensitive). A lone <code>*</code> means <strong>reply to every DM</strong> (away mode) and is shown as <code>(any msg)</code>. <strong>Enter</strong> opens the keyboard.</td>
+</tr>
+<tr>
+<td>Reply</td>
+<td>Reply text for DMs; supports <code>{time}</code>, <code>{loc}</code>, <code>{name}</code>, <code>{hops}</code> and sensor placeholders. <strong>Enter</strong> opens the keyboard.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="other-tab">Other tab</h4>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Quiet from</td>
+<td><strong>Enter</strong> opens a stepper (value shown bracketed, e.g. <code>[14:00]</code>) — <strong>UP/DOWN</strong> steps the hour, <strong>Enter</strong>/<strong>Cancel</strong> confirms. Local-time window start; set from = to (<code>OFF</code>) to disable quiet hours entirely. Applies to all three targets' trigger-replies.</td>
+</tr>
+<tr>
+<td>Quiet to</td>
+<td>Same stepper; window end.</td>
+</tr>
+</tbody>
+</table>
+<p>The DM, channel and room triggers are independent, so you can run e.g. an away-message (<code>*</code>) in DMs while the channel or room reacts only to a specific keyword (or vice-versa).</p>
+<p><code>{name}</code> (the triggering sender's name) and <code>{hops}</code> (<code>direct</code> or <code>N hops</code>) are only meaningful when replying to an actual incoming message, so — unlike <code>{time}</code>/<code>{loc}</code>/the sensor placeholders — they're offered only while editing a <strong>Reply</strong> field here, not on the general message-compose keyboard.</p>
+<p>The header shows a running count of auto-replies sent since boot, alongside the tab bar.</p>
+<p><strong>Room posting requires a login.</strong> The room bot reuses whatever session the device already has with that room server (Messages › Rooms › <strong>Login…</strong>, or a password saved from an earlier login/the phone app) — it has no way to prompt for a password itself in the background. If the saved password stops working, the room bot just silently stops posting there, the same as a manual post would; log back in from Messages to fix it.</p>
+<p><strong>Throttle.</strong> DM auto-replies are rate-limited <strong>per contact</strong> (10 s), so a second sender is never starved while one contact is on cooldown. The channel and room bots each keep their own single 10 s cooldown and won't echo a message identical to their own reply (so two bots running the same reply text on one channel/room can't ping-pong); the cooldown caps any residual back-and-forth.</p>
 <p><strong>Quiet hours</strong> suppress the push (trigger) replies between the configured local hours; a window where <em>from</em> is later than <em>to</em> wraps past midnight. Commands are a pull (explicitly requested), so they answer even during quiet hours.</p>
 <h3 id="commands">Commands</h3>
-<p>With <strong>Commands</strong> ON, a DM beginning with <code>!</code> is answered with live node data, independent of the trigger:</p>
+<p>With a tab's <strong>Commands</strong> ON, a message beginning with <code>!</code> on that target is answered with live node data, independent of the trigger:</p>
 <table>
 <thead>
 <tr>
@@ -2579,7 +2803,7 @@ Mark the spot first with <strong>Tools › Trail → Hold Enter → Mark here</s
 </tbody>
 </table>
 <p>Several commands can be combined in one message — <code>!batt !time !hops</code> is answered with a single <code>4.10V | 14:30 | 3 hops</code> reply (one transmission). A message with no recognised command falls through to the trigger bot.</p>
-<p>Commands also work on the <strong>monitored channel</strong> (the one selected for channel mode) — anyone there can query the node. Channel replies are broadcast to everyone, so unlike DM commands they respect quiet hours and use the shared per-channel cooldown. DM commands use the per-contact throttle.</p>
+<p>Each target's Commands toggle is independent — e.g. answer <code>!ping</code> in DMs but stay quiet on a busy public channel. Channel and room replies are broadcast/posted to everyone there, so unlike DM commands they respect quiet hours and use their own shared cooldown. DM commands use the per-contact throttle and the <strong>DM allow</strong> scope above.</p>
 <hr />
 <h2 id="diagnostics">Diagnostics</h2>
 <table>
@@ -2598,7 +2822,30 @@ Mark the spot first with <strong>Tools › Trail → Hold Enter → Mark here</s
 </table>
 <!-- screenshot pending: Diagnostics — live device/mesh stats rows (uptime, rx/tx counters, heap, RSSI/SNR, queue, errors) -->
 
-<p>A single read-only screen of live device and mesh stats, refreshed once a second. On a small OLED the rows scroll with <strong>UP/DOWN</strong>; on a larger e-ink display they all fit at once.</p>
+<p>A circular tab carousel of live device and mesh stats, refreshed once a second (same tab idiom as Auto-Reply Bot / Nodes). <strong>LEFT/RIGHT</strong> switches tab; <strong>UP/DOWN</strong> scrolls within it on a small OLED — on a larger e-ink display a tab's rows all fit at once.</p>
+<table>
+<thead>
+<tr>
+<th>Tab</th>
+<th>Shows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Live</strong></td>
+<td>Live counters — see table below.</td>
+</tr>
+<tr>
+<td><strong>System</strong></td>
+<td>Static device identity: firmware version + build date, device model, node name, and the active radio parameters.</td>
+</tr>
+<tr>
+<td><strong>Font</strong></td>
+<td>A rendering test card — one sample line per script the on-device font claims to cover (Latin, diacritics, Greek, Cyrillic, digits, symbols), so its coverage can be eyeballed directly.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Live</strong> tab rows:</p>
 <table>
 <thead>
 <tr>
@@ -2665,7 +2912,7 @@ Mark the spot first with <strong>Tools › Trail → Hold Enter → Mark here</s
 </tr>
 </tbody>
 </table>
-<p>The packet counters, <strong>Forwarded</strong> and <strong>Errors</strong> are cumulative since boot. <strong>Hold Enter</strong> opens a one-item <em>Reset counters</em> menu (Back dismisses it); the live readings (noise, RSSI/SNR, pool, queue, uptime) are not affected. <strong>Cancel/Back</strong> returns to the Tools list.</p>
+<p>The packet counters, <strong>Forwarded</strong> and <strong>Errors</strong> are cumulative since boot. On the <strong>Live</strong> tab, <strong>Hold Enter</strong> opens a one-item <em>Reset counters</em> menu (Back dismisses it); the live readings (noise, RSSI/SNR, pool, queue, uptime) are not affected. <strong>Cancel/Back</strong> returns to the Tools list.</p>
 <p>The counters make the repeater behaviour observable: <strong>Forwarded</strong> confirms the node is actually relaying (not just configured to), and <strong>Pool free</strong> / <strong>Queue</strong> show whether forwarding is exhausting the packet pool. See <strong>Tools › Repeater</strong> for the relaying options.</p>
 <hr />
 <h2 id="repeater">Repeater</h2>
@@ -2752,6 +2999,56 @@ Mark the spot first with <strong>Tools › Trail → Hold Enter → Mark here</s
 <p><strong>Same network vs. separate network.</strong> With <strong>Network = Current</strong> (or a Custom profile set equal to your companion settings) the repeater stays on your own network — you keep messaging while relaying. With a <em>different</em> Custom profile the device moves entirely onto that network while relaying (a single radio can't be on two at once) and returns to your companion network when the repeater is switched off. The profile also re-applies after a reboot if the repeater was left on.</p>
 <p>While the repeater is on, a <strong>»</strong> indicator appears in the status bar (same blink convention as the auto-advert and trail markers) so you can tell it's relaying at a glance. Two radio settings are also overridden while relaying and restored afterwards: <strong>Settings › Radio › Pwr save</strong> is forced off (a repeater must listen continuously) and <strong>Auto pwr</strong> is forced off (a repeater holds full TX power for consistent relay reach). Both show <code>--</code> in Settings while the repeater is on.</p>
 <p>Live forwarding stats — <strong>Forwarded</strong>, <strong>Pool free</strong>, <strong>Queue</strong> — are shown on <strong>Tools › Diagnostics</strong> (this screen is config-only).</p>
+<hr />
+<h2 id="admin">Admin</h2>
+<!-- screenshot pending: Admin — target picker, command entry, reply view -->
+
+<p>Send commands to a <strong>repeater/room server you have admin permission on</strong> — the on-device equivalent of the companion app's repeater-admin feature. See <a href="../../../cli_commands/">CLI Commands</a> for the full command grammar. (Admin only manages <em>remote</em> nodes; this device's own name, radio, TX power and reboot live in <strong>Settings</strong> — see below.)</p>
+<ol>
+<li><strong>Select a node</strong> — opening <strong>Tools › Admin</strong> goes straight to <strong>Tools › Nodes</strong> (the same screen, filters, sort and live scan as browsing it normally) so picking a node for Admin looks exactly like using Nodes for anything else; <strong>Enter</strong> on a repeater/room row hands it to Admin, <strong>Cancel</strong> returns to Tools. Admin is also reachable directly from a node's own <strong>Hold Enter</strong> menu in Nodes.</li>
+<li><strong>Log in</strong> — type the node's <strong>admin password</strong> (the same login handshake Messages uses for room servers; a repeater's admin password is set with the <code>password</code> CLI command). If a password was already saved for this node from an earlier successful login, it retries silently instead of prompting. Only a login that comes back with <strong>admin</strong>-level permission unlocks the next step — anything less shows "Not admin on this node".</li>
+<li><strong>Pick a category and a field</strong> — a tab carousel (<strong>LEFT/RIGHT</strong> to switch category, <strong>UP/DOWN</strong> to move within it, same as Auto-Reply Bot's tabs), so common settings don't need the CLI grammar memorised:</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>Tab</th>
+<th>Rows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>System</strong></td>
+<td>Name, Owner info, Admin password</td>
+</tr>
+<tr>
+<td><strong>Radio</strong></td>
+<td>Frequency, Bandwidth, Spreading factor, Coding rate, TX power</td>
+</tr>
+<tr>
+<td><strong>Routing</strong></td>
+<td>Repeat, Advert interval, Flood advert interval, Max hops</td>
+</tr>
+<tr>
+<td><strong>Actions</strong></td>
+<td>Send advert, Send zero-hop advert, Sync clock, Reboot, <strong>Custom command...</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Enter</strong> on a row does one of four things, depending on the field:
+   - <strong>Name / Owner info</strong> first <strong>fetch</strong> the node's current value, then open the keyboard <strong>pre-filled</strong> with it to edit — submitting sends the change. If the fetch fails or times out, the keyboard still opens (blank), so the value can be set blind.
+   - <strong>Radio and Routing rows</strong> are typed, not free text: <strong>Repeat</strong> is an ON/OFF toggle; <strong>Advert interval / Flood advert interval / Max hops / TX power</strong> are number steppers (<strong>LEFT/RIGHT</strong> to adjust, within that field's valid range); <strong>Frequency</strong> uses the same digit-by-digit cursor editor as Settings' own Radio screen (<strong>LEFT/RIGHT</strong> moves between digits, <strong>UP/DOWN</strong> changes the selected one); <strong>Bandwidth / Spreading factor / Coding rate</strong> step through their valid discrete LoRa values with <strong>LEFT/RIGHT</strong>. All four Radio-tuple fields (Frequency/Bandwidth/SF/Coding rate) fetch and re-send the same underlying <code>radio</code> value together — editing any one of them still only overwrites that one, the other three round-trip unchanged. <strong>Enter</strong> sends the change; <strong>Cancel</strong> discards it and returns to the row list without sending anything.
+   - <strong>Admin password</strong> has no fetch (there's no way to read a password back) — it opens straight to a blank keyboard.
+   - <strong>Actions</strong> (Reboot, Send advert, …) send immediately, no editing step.
+   - <strong>Custom command...</strong> (last row of Actions) opens the same free-text entry for anything not covered above — up to 160 characters, see the linked reference for the full grammar. The keyboard's <strong>{}</strong> key doubles as command completion here: it lists commands matching whatever's typed since the last space (narrowing as you type), and picking one completes that word instead of just inserting after it.
+4. <strong>Read the reply</strong> — the text reply opens in a scrollable view (<strong>UP/DOWN</strong> to scroll, <strong>Cancel/Enter</strong> to go back to the category tabs).</p>
+<blockquote>
+<p>[!WARNING]
+This screen can run <strong>destructive</strong> commands on the <em>remote</em> node — <code>reboot</code>, <code>erase</code>, a new admin password, and others. That's the same capability the phone app's repeater-admin feature already exposes, not a new risk, but double-check the value and the target before sending.</p>
+</blockquote>
+<p><strong>Passwords are remembered across reboots</strong>, the same self-healing behaviour as room logins in Messages: after a successful admin login the password is saved on the device, so picking that node again — even after a power cycle — logs back in silently. If a saved password stops working (e.g. it was changed on the node), the failed login forgets it, so the next pick prompts for a new one. A correct password that just lacks admin permission is left alone — retyping the same one wouldn't change the outcome. Some commands are marked <strong>Serial Only</strong> in the CLI reference — those reject a remote CLI request and only work over that node's own USB serial connection.</p>
+<h3 id="this-device">This device</h3>
+<p>Admin doesn't manage the companion itself — its own settings live in <strong>Settings</strong>: <strong>Radio</strong> (preset / freq / SF / BW / CR) and <strong>TX power</strong> in the Radio section, and <strong>Name</strong> and <strong>Reboot</strong> in the System section. <strong>Send advert</strong> is the home <strong>ADVERT</strong> page.</p>
 
 
 
@@ -2804,7 +3101,7 @@ Mark the spot first with <strong>Tools › Trail → Hold Enter → Mark here</s
       <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["content.action.edit", "content.code.copy", "search.highlight", "search.suggest"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

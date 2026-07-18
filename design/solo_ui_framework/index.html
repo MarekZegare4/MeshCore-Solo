@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
       
 
@@ -1763,8 +1763,14 @@ pixel sizes</strong> — derive everything from these:</p>
 </table>
 <p>Drawing helpers (all clip/measure for you):</p>
 <ul>
-<li><code>drawCenteredHeader(title)</code> — plain centered title + separator.</li>
-<li><code>drawInvertedHeader(label)</code> — filled title bar (used by detail views).</li>
+<li><code>drawCenteredHeader(title, menu_hint=false, menu_open=false)</code> — plain centered
+  title + separator.</li>
+<li><code>drawInvertedHeader(label, menu_hint=false, menu_open=false)</code> — filled title
+  bar (used by detail views).</li>
+<li>Both take an optional <code>menu_hint</code>: pass <code>true</code> on a screen with a Hold-Enter
+  context menu to reserve a <code>≡</code> glyph (<code>menuHintWidth()</code>/<code>drawContextMenuHint()</code>)
+  in the header, so the menu is discoverable without already knowing the
+  shortcut; <code>menu_open</code> highlights it while the menu is actually up.</li>
 <li><code>drawSelectionRow(x, y, w, h, sel)</code> — the highlight bar behind a list row.</li>
 <li><code>drawTextEllipsized(x, y, max_w, str)</code> — truncates with <code>…</code>; <strong>use this for
   any user string</strong> (names, labels) so long/UTF-8 text can't overrun.</li>
@@ -1854,6 +1860,34 @@ _menu.active = true;
 sensor tokens) via <code>addPlaceholder()</code> / <code>clearPlaceholders()</code>; the shared
 <code>kbAddSensorPlaceholders()</code> (<code>ui-new/SensorPlaceholders.h</code>) adds only the tokens
 the board's sensors actually provide. Expand them with <code>expandMsg()</code> at send time.</p>
+<p>Two layouts share every grid: <strong>ABC</strong> (one key per letter) and <strong>T9</strong>
+(phone-keypad multi-tap — repeated Enter within <code>KB_T9_TIMEOUT_MS</code> cycles a
+cell's letter group, then its digit). Page 0 is no longer hardcoded to Latin:
+<code>NodePrefs::keyboard_main_alphabet</code>/<code>keyboard_alt_alphabet</code> (Settings &gt;
+Keyboard's Main/Additional rows) each pick a script — Latin, Cyrillic, or
+Greek — for page 0 and page 1 respectively (<code>KeyboardWidget::mainScript()</code>/
+<code>altScript()</code>); equal values collapse to a single script + Symbols (2 pages
+instead of 3, see <code>hasAltAlphabet()</code>). <code>scriptCellStr()</code>/<code>scriptT9GroupStr()</code>
+dispatch each script to its own ABC grid (<code>KB_CHARS</code>/<code>KB_CYRILLIC_CHARS</code>/
+<code>KB_GREEK_CHARS</code>) and T9 group table (<code>KB_T9_GROUPS</code>/<code>KB_T9_GROUPS_CYRILLIC</code>/
+<code>_GREEK</code>) so the two layouts always offer the same letters regardless of which
+page they're on. Latin-diacritic letters (Polish, Czech, German, etc.) aren't
+alt-alphabet pages — they're reached by Hold-Enter on whichever page currently
+shows Latin instead (see <code>KB_ACCENT_VARIANTS</code> below).
+Shift is one-shot by default (capitalises the next letter, including whichever
+candidate a T9 multi-tap cycle settles on) or Hold-Enter to toggle caps-lock;
+Hold-Clear erases the whole field. <strong>UP from the top letter row</strong> enters
+<strong>cursor mode</strong> (LEFT/RIGHT move the insertion point; UP/DOWN jump to
+start/end, then — pressed again once already at that boundary — continue on
+to the special row / letter grid, the same destinations the plain grid wrap
+used to reach directly) so edits/inserts can target any point in the typed
+text, not just the end; Enter/Cancel exit immediately from anywhere.
+Hold-Enter on a Latin-page letter cell with accented variants instead opens
+the <strong>accent popup</strong>: one horizontal row of <code>KB_ACCENT_VARIANTS[group]</code>
+(a UTF-8 string per base letter, same shape as a T9 group string), LEFT/RIGHT
+to pick, Enter to insert via the shared <code>insertGlyph()</code> helper, Cancel to
+dismiss. Holding a letter with no variants, or any T9/alt-alphabet/symbols
+cell, is a no-op.</p>
 <p><code>FullscreenMsgView::wrapLines()</code> is a standalone pixel-accurate word-wrapper
 (O(n), variable-width-font aware) reusable by any multi-line layout; it writes
 into the shared <code>s_wrap_trans</code> / <code>s_wrap_lines</code> scratch (single-threaded render,
@@ -1898,6 +1932,15 @@ use <code>BIG_ICON</code> / <code>bigIconDraw</code>. The home status bar compos
 with a <code>blinkOn()</code> cadence for "leave it on and forget" broadcasts (auto-advert,
 Live Share, trail, repeater) — follow that pattern when adding an indicator:
 always shown on e-ink, blinking on OLED.</p>
+<p>Icons are drawn from a fixed priority-ordered table (<code>HomeScreen::renderBatteryIndicator()</code>,
+<code>UITask.cpp</code>); once the row runs out of horizontal space the loop just stops,
+so the lowest-priority icons silently drop first rather than the whole bar
+crushing the node name. A blinking icon still reserves its width on the
+off-phase of its blink, so the row's layout can't visibly shift width as icons
+blink in and out.</p>
+<p>Screens with a Hold-Enter context menu (Nodes, Bot, Admin, Diagnostics, …) pass
+<code>menu_hint=true</code> to their header call (see §2) so a <code>≡</code> glyph advertises the
+menu; <code>KEY_CONTEXT_MENU</code> (Hold-Enter) opens it.</p>
 <hr />
 <h2 id="7-input">7. Input</h2>
 <p>Keys arrive as the <code>KEY_*</code> codes in <code>UIScreen.h</code>: <code>KEY_UP/DOWN/LEFT/RIGHT</code>,
@@ -2074,7 +2117,7 @@ the framework.</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.action.edit", "content.code.copy", "search.highlight", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

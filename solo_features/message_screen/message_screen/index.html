@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
       
       
 
@@ -1124,6 +1124,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#adding-editing-a-channel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding / editing a channel
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#mark-all-read" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1526,6 +1537,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#adding-editing-a-channel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding / editing a channel
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#mark-all-read" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1602,11 +1624,12 @@
 </tr>
 </tbody>
 </table>
-<p>Press <strong>Enter</strong> on a contact or channel to open its history, then press <strong>Enter</strong> again (or select an empty send row) to compose a message. Choose between:</p>
+<p>Press <strong>Enter</strong> on a contact or channel to open its history, then press <strong>Enter</strong> again (or select the <strong>[+ send]</strong> button, anchored at the right edge of the history) to compose a message. Choose between:</p>
 <ul>
 <li><strong>Custom message</strong> — opens the on-screen keyboard</li>
 <li><strong>Q1–Q10</strong> — quick reply templates editable in Settings › Messages</li>
 </ul>
+<p>While typing, <strong>UP</strong> from the top letter row enters cursor mode (LEFT/RIGHT move the insertion point; UP/DOWN jump to start/end, then continue on to the special row / letter grid if pressed again once already there; Enter/Cancel exit immediately from anywhere) so you can edit or insert in the middle of what you've typed instead of only at the end. <strong>Hold Enter</strong> on a Latin letter with accented variants (e.g. a, e, c, n, o, s, z…) instead opens a one-row popup of that letter's accents — LEFT/RIGHT to pick, Enter to insert, Cancel to dismiss. See the on-screen keyboard section of the <a href="../../../design/solo_ui_framework/">UI framework guide</a> for the full key set (Shift, T9 multi-tap, Cyrillic/Greek).</p>
 <p>The keyboard supports placeholders that insert live data at send time:</p>
 <table>
 <thead>
@@ -1667,10 +1690,11 @@
 <li><strong>Passwords are remembered across reboots.</strong> After a successful login the password is saved on the device, so picking that room again — even after a power cycle — logs back in silently and drops you straight into the chat.</li>
 <li><strong>A wrong or changed password self-heals.</strong> If a saved password stops working (e.g. the server's password was changed), the failed login forgets it, so the next <strong>Enter</strong> prompts you to type a new one.</li>
 <li><strong>Re-login any time</strong> with <strong>Hold Enter</strong> on the room → <strong>Login…</strong> (see the room context menu below) — useful to switch to a new password without waiting for a failure.</li>
+<li><strong>Log out</strong> with <strong>Hold Enter</strong> on a room you're currently logged into → <strong>Logout</strong> (only offered once logged in). Forgets the saved password on the device, so the next time you open that room it prompts for one again instead of silently reusing the old one.</li>
 <li>Passwords set from the <strong>phone app</strong> are saved on the device too, so it can post to that room standalone after a reboot.</li>
 </ul>
 <blockquote>
-<p>The on-screen keyboard is limited to ASCII (letters, digits and common symbols); accented characters such as <code>ą</code>/<code>ę</code> can't be typed on the device. A password containing them can still be set from the phone app — the device stores and replays it byte-for-byte.</p>
+<p>The on-screen keyboard's default (Latin) page is ASCII only. Typing accented or non-Latin characters — Polish, Czech, Slovak, German, French, Spanish, Portuguese or Nordic diacritics, Cyrillic, or Greek — needs Settings › Keyboard › Alphabet set to the matching language first; the keyboard's <strong>#@/abc</strong> key then cycles Latin → that alphabet → Symbols → Latin. A password containing characters outside whatever's currently enabled can still be set from the phone app — the device stores and replays it byte-for-byte.</p>
 </blockquote>
 <hr />
 <h3 id="message-history">Message history</h3>
@@ -1688,7 +1712,7 @@
 </tr>
 </tbody>
 </table>
-<p>Each entry in the history list shows the sender name and a compact age indicator (<code>3m</code>, <code>2h</code>, <code>&gt;1d</code>) in the top-right corner.</p>
+<p>Messages are drawn as chat bubbles sized to fit their content, anchored <strong>right</strong> for your own outgoing messages and <strong>left</strong> for incoming ones (like a typical messenger), with the sender name and a compact age indicator (<code>3m</code>, <code>2h</code>, <code>&gt;1d</code>) in the top-right corner of each bubble. The list runs <strong>newest at the bottom</strong> — opening a history starts you at the latest message, and scrolling <strong>up</strong> goes further into the past.</p>
 <p><strong>Short Enter</strong> on a message opens it in fullscreen. <strong>Hold Enter</strong> — on a history row or in fullscreen — opens the same options menu: Reply, plus <strong>Navigate</strong> / <strong>Save waypoint</strong> when the message contains a location (see Fullscreen message view). You don't need to open the message first.</p>
 <hr />
 <h3 id="fullscreen-message-view">Fullscreen message view</h3>
@@ -1772,7 +1796,7 @@
 </tbody>
 </table>
 <p>When <strong>Pin to dial</strong> is selected, a slot picker opens (Slot 1–6 showing current occupant name or "empty"). Choosing a slot that already holds another contact moves the new contact there.</p>
-<p>In the <strong>Rooms</strong> list the context menu instead offers a single item:</p>
+<p>In the <strong>Rooms</strong> list the context menu instead offers:</p>
 <table>
 <thead>
 <tr>
@@ -1784,6 +1808,10 @@
 <tr>
 <td>Login…</td>
 <td>Opens the password prompt to (re-)log in to this room (see Rooms — logging in)</td>
+</tr>
+<tr>
+<td>Logout</td>
+<td>Only shown once logged in. Forgets the saved password so the next open prompts for one again</td>
 </tr>
 </tbody>
 </table>
@@ -1828,8 +1856,48 @@
 <td>Fav: yes / no</td>
 <td>Add or remove this channel from favourites — <strong>LEFT/RIGHT</strong> to toggle</td>
 </tr>
+<tr>
+<td>Edit</td>
+<td>Opens the Add/Edit form below, pre-filled with the channel's name</td>
+</tr>
+<tr>
+<td>Delete</td>
+<td>Removes the channel immediately (no confirm prompt)</td>
+</tr>
 </tbody>
 </table>
+<hr />
+<h3 id="adding-editing-a-channel">Adding / editing a channel</h3>
+<p>Joining a new community channel, or creating one to share with others, no longer needs the phone app. The <strong>Channels</strong> list ends with a <strong>"+ Add channel"</strong> row — press <strong>Enter</strong> on it to pick a channel type, or use <strong>Edit</strong> from the context menu above to change an existing channel's name or secret (Edit skips the type picker and opens the Name/Secret form directly).</p>
+<p><strong>+ Add channel</strong> first asks which type of channel to create — the same three types the phone app offers:</p>
+<ul>
+<li><strong>Public</strong> — instantly re-adds the well-known default public channel (no fields to fill in). Useful if it was deleted and you want it back without remembering its key.</li>
+<li><strong>Hashtag</strong> — type a topic name (e.g. <code>test</code>); the channel's name and secret are both derived from it (name becomes <code>#test</code>, secret is the first 16 bytes of <code>sha256("#test")</code>). A topic-based public group chat — anyone who types the same topic elsewhere ends up on the same channel — separate from the default Public channel.</li>
+<li><strong>Private</strong> — the manual Name + Secret form:</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Name</td>
+<td>Up to 31 characters</td>
+</tr>
+<tr>
+<td>Secret</td>
+<td><strong>LEFT/RIGHT</strong> toggles between two entry modes; <strong>Enter</strong> opens the keyboard for whichever is selected</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Passphrase</strong> (default) — type any text; the device hashes it down to the channel's 16-byte secret. Easiest to agree on verbally, the same idea as a room password — two people who type the same passphrase end up on the same channel.</li>
+<li><strong>Hex key</strong> — type the exact 32-hex-character secret (the format used by channel QR codes, see <a href="../../../qr_codes/">QR Codes</a>), for joining a channel whose precise secret you were given rather than agreeing on a new passphrase. An all-zero secret (<code>00…0</code>) is rejected ("Invalid secret") — that value is reserved internally to mark an empty channel slot.</li>
+</ul>
+<p>Select <strong>[Save]</strong> to commit. The secret can't be redisplayed once saved (only the derived key is kept) — editing it later means typing a new passphrase or hex key, the same as re-logging into a room with a new password.</p>
 <hr />
 <h3 id="mark-all-read">Mark all read</h3>
 <p><strong>Hold Enter</strong> on the DM / Channels / Rooms mode-select screen to clear all unread counters for the highlighted category at once.</p>
@@ -1885,7 +1953,7 @@
       <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["content.action.edit", "content.code.copy", "search.highlight", "search.suggest"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

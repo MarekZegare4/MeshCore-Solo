@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
       
       
 
@@ -1740,9 +1740,9 @@
 <h3 id="clock-tools-alarm-timer-stopwatch">Clock tools — Alarm, Timer, Stopwatch</h3>
 <p><strong>Press Enter</strong> (short press) on the Clock page to open <strong>Clock Tools</strong>, a small menu with three time utilities. <strong>Cancel</strong> backs out one level (tool → menu → home). The same menu also has an entry under <strong>Tools › System</strong>, so it's reachable without the Clock page.</p>
 <h4 id="alarm">Alarm</h4>
-<p>A single one-shot wake alarm. Rows: <strong>Hour</strong>, <strong>Minute</strong> and <strong>Armed</strong>. <strong>Enter</strong> on Hour or Minute opens the digit editor (LEFT/RIGHT moves between the tens/units, UP/DOWN changes the digit); <strong>Enter</strong> on Armed toggles ON/OFF. The configured time is shown next to the <strong>Alarm</strong> menu row when armed, and the setting persists across reboots.</p>
+<p>A wake alarm with an optional repeat. Rows: <strong>Hour</strong>, <strong>Minute</strong>, <strong>Repeat</strong> and <strong>Armed</strong>. <strong>Enter</strong> on Hour or Minute opens the digit editor (LEFT/RIGHT moves between the tens/units, UP/DOWN changes the digit); <strong>Enter</strong> on Repeat cycles <strong>Off → Daily → Weekdays → Weekends → Off</strong>; <strong>Enter</strong> on Armed toggles ON/OFF. The configured time is shown next to the <strong>Alarm</strong> menu row when armed, and the setting persists across reboots.</p>
 <p>While an alarm is armed a bell icon signals it in two places: the top-left corner of the <strong>Clock page</strong> itself, and the <strong>top status bar</strong> of the other home pages (the status bar is hidden on the Clock page, which is why the clock face carries its own indicator). The bell is icon-only — the exact alarm time is on the <strong>Alarm</strong> row inside Clock Tools.</p>
-<p>The alarm is scheduled as an absolute fire instant, so it is <strong>robust to clock re-syncs</strong> — the mesh (every inbound packet), the companion app, GPS and the CLI can all jump the device clock at any moment. A correction that moves the clock a little still fires at the right wall-clock time; a jump that skips over the alarm time still fires (late). After firing once, the alarm disarms itself.</p>
+<p>The alarm is scheduled as an absolute fire instant, so it is <strong>robust to clock re-syncs</strong> — the mesh (every inbound packet), the companion app, GPS and the CLI can all jump the device clock at any moment. A correction that moves the clock a little still fires at the right wall-clock time; a jump that skips over the alarm time still fires (late). With <strong>Repeat</strong> set to Off (the default) the alarm disarms itself after firing once, same as before; with a repeat pattern set, it stays armed and re-schedules itself for the next matching day instead.</p>
 <p>The alarm only fires while the device is <strong>awake</strong> (it keeps running with the display off or locked). It cannot wake the device from a full <strong>Shutdown</strong> (the CPU and RAM are powered down), and needs a valid time source — it stays pending until the clock is synced.</p>
 <h4 id="timer-countdown">Timer (countdown)</h4>
 <p>A large <strong>HH:MM:SS</strong> readout with one digit underlined. <strong>LEFT/RIGHT</strong> moves the cursor one digit at a time, <strong>Up/Down</strong> changes the digit under it (minute/second tens cap at 5, hours at 23), and <strong>Enter</strong> starts the countdown. While running it shows <strong>H:MM:SS</strong> — <strong>Enter</strong> stops it, <strong>Cancel</strong> returns to the menu and leaves it counting. When it reaches zero the device rings, even if you have navigated to another screen.</p>
@@ -1805,7 +1805,7 @@
       <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["content.action.edit", "content.code.copy", "search.highlight", "search.suggest"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

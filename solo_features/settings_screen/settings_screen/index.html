@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
       
       
 
@@ -1651,11 +1651,6 @@
 <td>12 h appends AM/PM</td>
 </tr>
 <tr>
-<td>Font</td>
-<td>Default / Lemon</td>
-<td>Default: 5×7 Adafruit with ASCII transliteration; Lemon: native Unicode with pixel-accurate line wrap</td>
-</tr>
-<tr>
 <td>Display rotation <em>(e-ink only)</em></td>
 <td>0° / 90° / 180° / 270°</td>
 <td>Applied immediately</td>
@@ -1820,6 +1815,11 @@
 </thead>
 <tbody>
 <tr>
+<td>Name</td>
+<td>keyboard entry (up to 31 chars)</td>
+<td>This device's node name, shown to others and in every advert. <strong>Enter</strong> opens the keyboard pre-filled with the current name; applied and saved on submit</td>
+</tr>
+<tr>
 <td>Timezone</td>
 <td>−12 h … +14 h</td>
 <td>UTC offset in whole hours</td>
@@ -1833,6 +1833,11 @@
 <td>Units</td>
 <td>Metric / Imperial</td>
 <td>Global unit system for every distance/speed shown in Tools (Nearby Nodes, Trail, navigate-to-point). Metric: m / km, km/h, min/km. Imperial: ft / mi, mph, min/mi</td>
+</tr>
+<tr>
+<td>Reboot</td>
+<td>action (<strong>Enter</strong>)</td>
+<td>Restarts this device. Pending setting changes are saved first. Last row, so it isn't the default-selected one</td>
 </tr>
 </tbody>
 </table>
@@ -1850,11 +1855,22 @@
 <tr>
 <td>Layout</td>
 <td>ABC / T9</td>
-<td>On-screen keyboard style. <strong>ABC</strong>: an a-b-c…z grid, one key per letter (the original layout). <strong>T9</strong>: phone-keypad multi-tap — each key is labelled with its <strong>digit</strong> and a letter group (e.g. <code>2abc</code>); repeated <strong>Enter</strong> presses cycle through the letters and then the digit itself.</td>
+<td>On-screen keyboard style. <strong>ABC</strong>: an a-b-c…z grid, one key per letter (the original layout). <strong>T9</strong>: phone-keypad multi-tap — each key is labelled with its <strong>digit</strong> and a letter group (e.g. <code>2abc</code>); repeated <strong>Enter</strong> presses cycle through the letters and then the digit itself. Applies to whichever script page is active (see Main/Additional below), not just Latin.</td>
+</tr>
+<tr>
+<td>Main</td>
+<td>Latin / Cyrillic / Greek</td>
+<td>Which script the keyboard <strong>opens on by default</strong>. <strong>Latin</strong> (default) matches earlier releases; pick <strong>Cyrillic</strong> or <strong>Greek</strong> here instead to make that script the one you land on every time, with Latin becoming the one reached via cycling (see Additional below) instead of the other way round.</td>
+</tr>
+<tr>
+<td>Additional</td>
+<td>Latin / Cyrillic / Greek</td>
+<td>The second script added to the same <strong>#@/abc</strong> key's cycle (Main → Additional → Symbols → Main) — no separate key to switch scripts. Setting Additional to the <strong>same</strong> script as Main drops the cycle back to just that script plus Symbols (no second script page at all). <strong>Greek</strong> covers the 24-letter alphabet plus final sigma (<code>ς</code>) but not the tonos stress accents used in proper Modern Greek spelling. Every script's letters render natively — the display font (a single unified Unicode font used everywhere on-screen) covers all of them, no separate toggle needed.</td>
 </tr>
 </tbody>
 </table>
 <p>Applies to every on-screen text field (messages, waypoint labels, room passwords, preset names). Earlier releases labelled the grid <em>QWERTY</em>; the layout has always been alphabetical, so it is now named <strong>ABC</strong>.</p>
+<p>European Latin-diacritic letters (Polish, Czech, Slovak, German, French, Spanish, Portuguese, Nordic, etc.) aren't separate alphabet pages — instead, <strong>Hold Enter</strong> on a plain Latin letter that has accented variants (<code>a c d e i l n o r s t u y z</code>) opens a one-row popup of its accents (e.g. holding <code>a</code> offers <code>á à â ã ä å ą</code>); <strong>LEFT/RIGHT</strong> picks, <strong>Enter</strong> inserts it, <strong>Cancel</strong> dismisses with no change. Holding a letter with no accented variants (e.g. <code>b</code>) does nothing. Works on whichever page is currently showing Latin, whether that's Main or Additional.</p>
 <hr />
 <h3 id="contacts">Contacts</h3>
 <table>
@@ -1954,7 +1970,7 @@
       <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["content.action.edit", "content.code.copy", "search.highlight", "search.suggest"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>
