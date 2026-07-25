@@ -1443,15 +1443,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#auto-reply-bot" class="md-nav__link">
+  <a href="#remote-bot" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Auto-Reply Bot
+        Remote Bot
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Auto-Reply Bot">
+    <nav class="md-nav" aria-label="Remote Bot">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1509,6 +1509,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#actions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Actions
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1519,6 +1530,17 @@
     <span class="md-ellipsis">
       
         Diagnostics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gpio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GPIO
       
     </span>
   </a>
@@ -1774,15 +1796,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#auto-reply-bot" class="md-nav__link">
+  <a href="#remote-bot" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Auto-Reply Bot
+        Remote Bot
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Auto-Reply Bot">
+    <nav class="md-nav" aria-label="Remote Bot">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1840,6 +1862,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#actions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Actions
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1850,6 +1883,17 @@
     <span class="md-ellipsis">
       
         Diagnostics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gpio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GPIO
       
     </span>
   </a>
@@ -1939,7 +1983,7 @@
 </tr>
 </tbody>
 </table>
-<p>The Tools screen is a hub for GPS trail recording, nearby node browsing, ringtone editing, auto-reply bot, auto-advert, live location sharing, locator, compass, clock tools (alarm / timer / stopwatch), device diagnostics, repeater mode, and remote admin. Tools are grouped into collapsible <strong>Location</strong> / <strong>Comms</strong> / <strong>System</strong> sections — the same fold-in-place model as Settings; Tools always opens folded back to the section list. Navigate with <strong>UP/DOWN</strong>, press <strong>Enter</strong> on a section header to expand or collapse it, or on a tool to open it.</p>
+<p>The Tools screen is a hub for GPS trail recording, nearby node browsing, ringtone editing, the remote bot, auto-advert, live location sharing, locator, compass, clock tools (alarm / timer / stopwatch), device diagnostics, repeater mode, and remote admin. Tools are grouped into collapsible <strong>Location</strong> / <strong>Comms</strong> / <strong>System</strong> sections — the same fold-in-place model as Settings; Tools always opens folded back to the section list. Navigate with <strong>UP/DOWN</strong>, press <strong>Enter</strong> on a section header to expand or collapse it, or on a tool to open it.</p>
 <hr />
 <h2 id="nearby-nodes">Nearby Nodes</h2>
 <table>
@@ -2619,7 +2663,7 @@ Mark the spot first with <strong>Tools › Trail → Hold Enter → Mark here</s
 </table>
 <p>Melodies can be assigned in <strong>Settings › Sound</strong> (global default) or overridden per contact or channel from the Messages screen context menu.</p>
 <hr />
-<h2 id="auto-reply-bot">Auto-Reply Bot</h2>
+<h2 id="remote-bot">Remote Bot</h2>
 <table>
 <thead>
 <tr>
@@ -2636,7 +2680,7 @@ Mark the spot first with <strong>Tools › Trail → Hold Enter → Mark here</s
 </table>
 <!-- screenshots pending: these predate the tab-carousel layout below (still show the old flat grouped list) -->
 
-<p>Automatically replies to incoming messages that contain a configured trigger word (case-insensitive, contains match). The bot has three independent targets — <strong>DM</strong>, a monitored <strong>Channel</strong>, and a monitored <strong>Room</strong> — each with its own trigger/reply pair.</p>
+<p>Automatically replies to incoming messages that contain a configured trigger word (case-insensitive, contains match). Multiple trigger phrases can be packed into one Trigger field, comma-separated (e.g. <code>hi,hello there,yo</code>) — matching any one of them is enough; spaces around each phrase are trimmed, so <code>hi, hello there</code> and <code>hi,hello there</code> behave the same. The bot has three independent targets — <strong>DM</strong>, a monitored <strong>Channel</strong>, and a monitored <strong>Room</strong> — each with its own trigger/reply pair.</p>
 <p>The screen is a <strong>circular tab carousel</strong>, the same style as Tools › Nearby Nodes' filter tabs: <strong>LEFT/RIGHT</strong> switches between the <strong>Channel</strong> / <strong>Room</strong> / <strong>Direct</strong> / <strong>Other</strong> tabs (opens on Channel), <strong>UP/DOWN</strong> moves between the rows within the active tab, and <strong>Enter</strong> acts on the selected row (LEFT/RIGHT is reserved entirely for tab-switching, so every row's value is changed via Enter, not by cycling it in place).</p>
 <p>Each target has its own <strong>Enable</strong> toggle on its own tab, and they're fully independent — you can run only a channel bot, only a room bot, only DM, or any combination, with no need to also switch on the others.</p>
 <p>Each target also has its own <strong>Commands</strong> toggle (see below) — DM, channel and room can each independently answer <code>!</code> queries or stay quiet, same as Enable.</p>
@@ -2804,6 +2848,36 @@ Mark the spot first with <strong>Tools › Trail → Hold Enter → Mark here</s
 </table>
 <p>Several commands can be combined in one message — <code>!batt !time !hops</code> is answered with a single <code>4.10V | 14:30 | 3 hops</code> reply (one transmission). A message with no recognised command falls through to the trigger bot.</p>
 <p>Each target's Commands toggle is independent — e.g. answer <code>!ping</code> in DMs but stay quiet on a busy public channel. Channel and room replies are broadcast/posted to everyone there, so unlike DM commands they respect quiet hours and use their own shared cooldown. DM commands use the per-contact throttle and the <strong>DM allow</strong> scope above.</p>
+<h3 id="actions">Actions</h3>
+<p>A separate <strong>Actions</strong> toggle, nested under Commands (Commands must be ON for Actions to do anything) — these commands change the device's own behaviour, not just report on it, so they default OFF and are kept independent of the read-only Commands toggle:</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>!buzz [seconds]</code></td>
+<td>Sounds the buzzer as a find-me signal — default 5s, capped at 30s. Sounds even if the buzzer is muted in Settings (that's the point of a find-me signal).</td>
+</tr>
+<tr>
+<td><code>!gps on</code> / <code>!gps off</code></td>
+<td>Enables/disables GPS, same effect as the Home page's GPS toggle.</td>
+</tr>
+<tr>
+<td><code>!gps fix [seconds]</code></td>
+<td>Single-shot location: turns GPS on if it wasn't already, waits for a stabilised fix (HDOP ≤ 2.0, or ≥8 satellites on GPS hardware that doesn't report HDOP, averaged over 10s), sends the position, then restores GPS to whatever state it was in before. Replies in two parts — an immediate <code>GPS: acquiring fix...</code> ack, then the position (or <code>GPS: no fix (timeout)</code> / a partial fix) as a follow-up message up to <code>seconds</code> later (default 90s, clamped to 15-300s) — raise it under poor sky view, where 90s isn't always enough to reach the HDOP/satellite bar. Only one <code>!gps fix</code> can be in flight at a time; a second one gets <code>GPS: fix already pending</code>.</td>
+</tr>
+<tr>
+<td><code>!advert</code></td>
+<td>Sends an advert immediately, same as the Home page's manual advert action.</td>
+</tr>
+</tbody>
+</table>
+<p>Actions combine with Commands and each other in one message the same way — <code>!batt !gps on</code> answers with <code>4.10V | GPS: on</code> in a single reply. With Actions OFF for a target, <code>!buzz</code>/<code>!gps</code>/<code>!gps fix</code>/<code>!advert</code> are silently ignored (no reply, no effect) exactly like any other unrecognised command, and <code>!help</code>'s reply doesn't mention them.</p>
+<p>On boards with user GPIO (see <strong>GPIO</strong> under System tools below), the same Actions gate also covers <code>!gpio1</code>..<code>!gpio4</code>.</p>
 <hr />
 <h2 id="diagnostics">Diagnostics</h2>
 <table>
@@ -2822,7 +2896,7 @@ Mark the spot first with <strong>Tools › Trail → Hold Enter → Mark here</s
 </table>
 <!-- screenshot pending: Diagnostics — live device/mesh stats rows (uptime, rx/tx counters, heap, RSSI/SNR, queue, errors) -->
 
-<p>A circular tab carousel of live device and mesh stats, refreshed once a second (same tab idiom as Auto-Reply Bot / Nodes). <strong>LEFT/RIGHT</strong> switches tab; <strong>UP/DOWN</strong> scrolls within it on a small OLED — on a larger e-ink display a tab's rows all fit at once.</p>
+<p>A circular tab carousel of live device and mesh stats, refreshed once a second (same tab idiom as Remote Bot / Nodes). <strong>LEFT/RIGHT</strong> switches tab; <strong>UP/DOWN</strong> scrolls within it on a small OLED — on a larger e-ink display a tab's rows all fit at once.</p>
 <table>
 <thead>
 <tr>
@@ -2914,6 +2988,16 @@ Mark the spot first with <strong>Tools › Trail → Hold Enter → Mark here</s
 </table>
 <p>The packet counters, <strong>Forwarded</strong> and <strong>Errors</strong> are cumulative since boot. On the <strong>Live</strong> tab, <strong>Hold Enter</strong> opens a one-item <em>Reset counters</em> menu (Back dismisses it); the live readings (noise, RSSI/SNR, pool, queue, uptime) are not affected. <strong>Cancel/Back</strong> returns to the Tools list.</p>
 <p>The counters make the repeater behaviour observable: <strong>Forwarded</strong> confirms the node is actually relaying (not just configured to), and <strong>Pool free</strong> / <strong>Queue</strong> show whether forwarding is exhausting the packet pool. See <strong>Tools › Repeater</strong> for the relaying options.</p>
+<hr />
+<h2 id="gpio">GPIO</h2>
+<p><em>Board-specific — currently Wio Tracker L1 only.</em> Four otherwise-unused pins (GPIO1-GPIO4) are exposed for general-purpose use. Each pin gets its own row showing its current mode; <strong>Enter</strong> (or LEFT/RIGHT) cycles it through <strong>Off → Input → Output</strong> and back to Off — GPIO1 and GPIO2 additionally step through <strong>Analog</strong> between Output and Off (GPIO3/GPIO4 have no ADC channel, so their cycle skips it). Switching a pin's mode shows a brief confirmation (<code>GPIO1: Input</code>, <code>GPIO1: Output</code>, …).</p>
+<p>Once a pin is set to <strong>Output</strong>, a second <strong>State</strong> row appears right underneath it — <strong>Enter</strong> toggles it <strong>ON</strong>/<strong>OFF</strong>, with its own confirmation. The direction (Mode row) and the on/off state (State row) are deliberately separate: changing one never surprises you by also changing the other.</p>
+<ul>
+<li><strong>Input</strong> shows its live level inline on the Mode row: <code>Input (High)</code> / <code>Input (Low)</code>, refreshed continuously.</li>
+<li><strong>Analog</strong> (GPIO1/GPIO2 only) shows a live millivolt reading inline instead: e.g. <code>1650mV</code>. Has no State row — it's read-only.</li>
+<li><strong>Output</strong> shows just <code>Output</code> on the Mode row; the actual ON/OFF value lives on the State row below it.</li>
+</ul>
+<p>The same 4 pins are reachable remotely via the Remote Bot's <code>!gpio1</code>..<code>!gpio4</code> commands (see <strong>Actions</strong> under Remote Bot below) — both paths read/write the same underlying state, so the Tools screen and the bot never disagree. A bare <code>!gpio1</code> reports the pin's current mode and reading (<code>gpio1: out on</code>, <code>gpio1: in on</code>, or <code>gpio1: 1650mV</code> in Analog mode); <code>!gpio1 on</code>/<code>!gpio1 off</code> only takes effect if that pin is currently set to Output here (otherwise the bot replies "not output", including when the pin is in Analog mode).</p>
 <hr />
 <h2 id="repeater">Repeater</h2>
 <table>
@@ -3007,7 +3091,7 @@ Mark the spot first with <strong>Tools › Trail → Hold Enter → Mark here</s
 <ol>
 <li><strong>Select a node</strong> — opening <strong>Tools › Admin</strong> goes straight to <strong>Tools › Nodes</strong> (the same screen, filters, sort and live scan as browsing it normally) so picking a node for Admin looks exactly like using Nodes for anything else; <strong>Enter</strong> on a repeater/room row hands it to Admin, <strong>Cancel</strong> returns to Tools. Admin is also reachable directly from a node's own <strong>Hold Enter</strong> menu in Nodes.</li>
 <li><strong>Log in</strong> — type the node's <strong>admin password</strong> (the same login handshake Messages uses for room servers; a repeater's admin password is set with the <code>password</code> CLI command). If a password was already saved for this node from an earlier successful login, it retries silently instead of prompting. Only a login that comes back with <strong>admin</strong>-level permission unlocks the next step — anything less shows "Not admin on this node".</li>
-<li><strong>Pick a category and a field</strong> — a tab carousel (<strong>LEFT/RIGHT</strong> to switch category, <strong>UP/DOWN</strong> to move within it, same as Auto-Reply Bot's tabs), so common settings don't need the CLI grammar memorised:</li>
+<li><strong>Pick a category and a field</strong> — a tab carousel (<strong>LEFT/RIGHT</strong> to switch category, <strong>UP/DOWN</strong> to move within it, same as Remote Bot's tabs), so common settings don't need the CLI grammar memorised:</li>
 </ol>
 <table>
 <thead>

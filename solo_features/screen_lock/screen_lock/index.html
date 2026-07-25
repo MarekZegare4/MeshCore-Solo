@@ -1501,8 +1501,9 @@
 <hr />
 <h3 id="locking-and-unlocking">Locking and unlocking</h3>
 <p><strong>Hold Back</strong> and press <strong>Enter</strong> three times within 3 seconds. The sequence works in both directions — the same combination locks and unlocks.</p>
-<p>If the display is off when the sequence begins, it turns on automatically so the hint is visible. Each press in the sequence extends the display-on timer by 5 seconds.</p>
-<p>The hint popup at the bottom of the lock screen guides through the sequence:</p>
+<p>On boards with an optional CardKB (I2C keyboard) attached, a single <strong>Fn+Esc</strong> does the same thing, in either direction — no repetition needed, since Fn+Esc is already a deliberate two-key combo. Esc rather than the adjacent Backspace, since Fn and Backspace sit right next to each other on CardKB's layout and would be too easy to hit by accident.</p>
+<p>If the display is off when the sequence begins, it turns on automatically so the hint is visible. Each press in the physical sequence extends the display-on timer by 5 seconds.</p>
+<p>The hint popup at the bottom of the lock screen guides through the physical sequence:</p>
 <table>
 <thead>
 <tr>
@@ -1513,7 +1514,7 @@
 <tbody>
 <tr>
 <td>Not started</td>
-<td><em>Hold Back + 3×Enter</em></td>
+<td><em>Hold Back + 3×Enter</em> (<em>Back+3xEnter/Fn+Esc</em> with CardKB attached)</td>
 </tr>
 <tr>
 <td>1 press done</td>
