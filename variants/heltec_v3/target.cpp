@@ -26,6 +26,20 @@ AutoDiscoverRTCClock rtc_clock(fallback_clock);
 #ifdef DISPLAY_CLASS
   DISPLAY_CLASS display;
   MomentaryButton user_btn(PIN_USER_BTN, 1000, true);
+  #if UI_HAS_JOYSTICK
+    // Optional wired joystick — see the Heltec_v3_companion_solo_dual env for the
+    // pin defines this needs. Unlike the Wio Tracker L1 (external pull-ups on
+    // board) these pass pulldownup = true, so each contact only has to short its
+    // pin to GND; the internal pull-up does the rest. Back gets multiclick = true
+    // because the UI's triple-click buzzer toggle lives on it.
+    MomentaryButton joystick_left (JOYSTICK_LEFT,  1000, true, true, false);
+    MomentaryButton joystick_right(JOYSTICK_RIGHT, 1000, true, true, false);
+    MomentaryButton back_btn      (PIN_BACK_BTN,   1000, true, true, true);
+    #if UI_HAS_JOYSTICK_UPDOWN
+      MomentaryButton joystick_up  (JOYSTICK_UP,   1000, true, true, false);
+      MomentaryButton joystick_down(JOYSTICK_DOWN, 1000, true, true, false);
+    #endif
+  #endif
 #endif
 
 bool radio_init() {

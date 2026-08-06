@@ -13,6 +13,13 @@
 #ifndef AUTO_OFF_MILLIS
   #define AUTO_OFF_MILLIS     15000   // 15 seconds
 #endif
+// Upstream MeshCore version, shown on the splash screen. Most variants set it in
+// their platformio.ini; the ones that don't used to fail to compile this file
+// outright rather than fall back, which quietly made every ui-new env on those
+// boards unbuildable (heltec v3/v4, thinknode m1/m5, mesh pocket, techo).
+#ifndef MESHCORE_VERSION
+  #define MESHCORE_VERSION    "1.16"
+#endif
 #define BOOT_SCREEN_MILLIS   3000   // 3 seconds
 
 #ifdef PIN_STATUS_LED

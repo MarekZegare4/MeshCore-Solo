@@ -41,6 +41,9 @@ static uint32_t _atoi(const char* sp) {
     #ifndef TCP_PORT
       #define TCP_PORT 5000
     #endif
+  #elif defined(DUAL_SERIAL)
+    #include <helpers/esp32/DualSerialInterface.h>
+    DualSerialInterface serial_interface;
   #elif defined(BLE_PIN_CODE)
     #include <helpers/esp32/SerialBLEInterface.h>
     SerialBLEInterface serial_interface;
@@ -220,6 +223,8 @@ void setup() {
 
   WiFi.begin(WIFI_SSID, WIFI_PWD);
   serial_interface.begin(TCP_PORT);
+#elif defined(DUAL_SERIAL)
+  serial_interface.begin(BLE_NAME_PREFIX, the_mesh.getNodePrefs()->node_name, the_mesh.getBLEPin(), Serial);
 #elif defined(BLE_PIN_CODE)
   serial_interface.begin(BLE_NAME_PREFIX, the_mesh.getNodePrefs()->node_name, the_mesh.getBLEPin());
 #elif defined(SERIAL_RX)
