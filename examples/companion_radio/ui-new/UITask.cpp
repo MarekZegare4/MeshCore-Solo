@@ -2332,6 +2332,29 @@ void UITask::loop() {
   }
 #endif
   pollCardKB();
+#ifdef ENV_USE_TCA8418
+  {
+    extern char tca8418_keypad_read();   // provided by the active variant
+    char k = tca8418_keypad_read();
+    if (k) {
+      switch (k) {
+      case KEY_UP:    enqueueKey(checkDisplayOn(KEY_UP));    break;
+      case KEY_ENTER: enqueueKey(checkDisplayOn(KEY_ENTER)); break;
+      case KEY_DOWN:  enqueueKey(checkDisplayOn(KEY_DOWN));  break;
+      case KEY_CANCEL:enqueueKey(checkDisplayOn(KEY_CANCEL));break;
+      case KEY_HOME:
+        #ifdef LILYGO_TECHO_LITE_KEYSHIELD
+        extern void techo_keyshield_backlight_toggle();
+        techo_keyshield_backlight_toggle();
+        #endif
+        break;
+      default:
+        enqueueKey(checkDisplayOn(k));
+        break;
+      }
+    }
+  }
+#endif
 #if defined(BACKLIGHT_BTN)
   if ((int32_t)(millis() - next_backlight_btn_check) >= 0) {
     bool touch_state = digitalRead(PIN_BUTTON2);

@@ -21,6 +21,16 @@ public:
     return "LilyGo T-Echo Lite";
   }
 
+  #if defined(P_LORA_TX_LED)
+  void onBeforeTransmit() override {
+    digitalWrite(P_LORA_TX_LED, LOW);   // turn TX LED on
+  }
+
+  void onAfterTransmit() override {
+    digitalWrite(P_LORA_TX_LED, HIGH);   // turn TX LED off
+  }
+  #endif
+
   void powerOff() override {
     digitalWrite(PIN_VBAT_MEAS_EN, LOW);
     #ifdef LED_RED

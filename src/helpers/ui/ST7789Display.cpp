@@ -2,6 +2,11 @@
 
 #include "ST7789Display.h"
 
+#ifdef OLED_MISC_FIXED_FONT
+  #include "MiscFixedFont.h"
+  #include "LemonIcons.h"
+#endif
+
 #ifndef X_OFFSET
 #define X_OFFSET 0  // No offset needed for landscape
 #endif
@@ -13,9 +18,47 @@
 #ifdef HELTEC_VISION_MASTER_T190
   #define SCALE_X  2.5f        // 320 / 128
   #define SCALE_Y  2.65625f    // 170 / 64
+#elif defined(CARDPUTER_ADV)
+  #define SCALE_X  1.875f      // 240 / 128
+  #define SCALE_Y  2.109375f   // 135 / 64
 #else
   #define SCALE_X  1.875f      // 240 / 128
   #define SCALE_Y  2.109375f   // 135 / 64
+#endif
+
+#ifdef OLED_MISC_FIXED_FONT
+// MiscFixedFont.h/LemonIcons.h store each glyph's rows bit-packed
+// *continuously* (Adafruit_GFX's native GFXfont convention -- no per-row byte
+// padding), but drawXbm() below expects classic XBM packing (each row padded
+// to a whole byte). Re-pack into a small stack buffer so the glyph can be
+// blitted through drawXbm() -- which already implements the correct
+// logical->physical scaling for this panel's non-integer SCALE_X/Y (via
+// per-pixel boundary differences), instead of duplicating that math here.
+static bool repackGlyphToXbm(const uint8_t* bitmapProgmem, uint16_t byteOffset, uint8_t w, uint8_t h, uint8_t* out, uint8_t outCap) {
+  uint8_t widthInBytes = (w + 7) / 8;
+  uint16_t needed = (uint16_t)widthInBytes * h;
+  if (needed == 0 || needed > outCap) return false;
+  memset(out, 0, needed);
+  uint16_t srcBit = 0;
+  for (uint8_t row = 0; row < h; row++) {
+    for (uint8_t col = 0; col < w; col++) {
+      uint16_t byteIdx = byteOffset + (srcBit >> 3);
+      uint8_t  bitMask  = 0x80 >> (srcBit & 7);
+      if (pgm_read_byte(bitmapProgmem + byteIdx) & bitMask) {
+        out[row * widthInBytes + (col >> 3)] |= (0x80 >> (col & 7));
+      }
+      srcBit++;
+    }
+  }
+  return true;
+}
+
+uint8_t ST7789Display::glyphXAdvance(uint32_t cp) {
+  for (uint8_t i = 0; i < lemonIconCount; i++)
+    if (pgm_read_dword(&lemonIconCPs[i]) == cp) return pgm_read_byte(&lemonIconGlyphs[i].xAdvance);
+  if (cp < MiscFixed.first || cp > MiscFixed.last) return 6;
+  return pgm_read_byte(&MiscFixedGlyphs[cp - MiscFixed.first].xAdvance);
+}
 #endif
 
 bool ST7789Display::begin() {
@@ -131,12 +174,55 @@ void ST7789Display::setColor(Color c) {
 }
 
 void ST7789Display::setCursor(int x, int y) {
+#ifdef OLED_MISC_FIXED_FONT
+  _lx = x;
+  _ly = y;
+#endif
   _x = x*SCALE_X + X_OFFSET;
   _y = y*SCALE_Y + Y_OFFSET;
 }
 
 void ST7789Display::print(const char* str) {
+#ifdef OLED_MISC_FIXED_FONT
+  int lx = _lx, ly = _ly;
+  uint8_t glyphBuf[16];
+  const uint8_t* p = (const uint8_t*)str;
+  while (*p) {
+    uint32_t cp = DisplayDriver::decodeCodepoint(p);
+    if (cp == '\n') { ly += MiscFixed.yAdvance; lx = _lx; continue; }
+
+    bool drawn = false;
+    for (uint8_t i = 0; i < lemonIconCount; i++) {
+      if (pgm_read_dword(&lemonIconCPs[i]) != cp) continue;
+      const GFXglyph* g = &lemonIconGlyphs[i];
+      uint8_t gw = pgm_read_byte(&g->width), gh = pgm_read_byte(&g->height);
+      int8_t  xo = (int8_t)pgm_read_byte(&g->xOffset), yo = (int8_t)pgm_read_byte(&g->yOffset);
+      uint16_t bo = pgm_read_word(&g->bitmapOffset);
+      if (repackGlyphToXbm(lemonIconBitmaps, bo, gw, gh, glyphBuf, sizeof(glyphBuf)))
+        drawXbm(lx + xo, ly + 6 + yo, glyphBuf, gw, gh);
+      lx += pgm_read_byte(&g->xAdvance);
+      drawn = true;
+      break;
+    }
+    if (drawn) continue;
+
+    if (cp < MiscFixed.first || cp > MiscFixed.last) {
+      if (cp >= 0x20) fillRect(lx + 1, ly, 4, 6);
+      lx += 6;
+      continue;
+    }
+
+    const GFXglyph* g = &MiscFixedGlyphs[cp - MiscFixed.first];
+    uint8_t gw = pgm_read_byte(&g->width), gh = pgm_read_byte(&g->height);
+    int8_t  xo = (int8_t)pgm_read_byte(&g->xOffset), yo = (int8_t)pgm_read_byte(&g->yOffset);
+    uint16_t bo = pgm_read_word(&g->bitmapOffset);
+    if (repackGlyphToXbm(MiscFixedBitmaps, bo, gw, gh, glyphBuf, sizeof(glyphBuf)))
+      drawXbm(lx + xo, ly + 7 + yo, glyphBuf, gw, gh);
+    lx += pgm_read_byte(&g->xAdvance);
+  }
+#else
   display.drawString(_x, _y, str);
+#endif
 }
 
 void ST7789Display::printWordWrap(const char* str, int max_width) {
@@ -188,7 +274,14 @@ void ST7789Display::drawXbm(int x, int y, const uint8_t* bits, int w, int h) {
 }
 
 uint16_t ST7789Display::getTextWidth(const char* str) {
+#ifdef OLED_MISC_FIXED_FONT
+  uint16_t w = 0;
+  const uint8_t* p = (const uint8_t*)str;
+  while (*p) w += glyphXAdvance(DisplayDriver::decodeCodepoint(p));
+  return w;
+#else
   return display.getStringWidth(str) / SCALE_X;
+#endif
 }
 
 void ST7789Display::endFrame() {
