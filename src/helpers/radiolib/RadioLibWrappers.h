@@ -13,6 +13,19 @@ protected:
   int32_t _floor_sample_sum;
   uint8_t _preamble_sf;
 
+  // Periodic noise-floor recalibration while RX duty-cycle power-save is
+  // active: the frontend is off for most of a duty cycle, so samples taken
+  // there aren't meaningful and loop() skips them entirely (see loop()) —
+  // meaning _noise_floor would otherwise freeze at whatever it was when
+  // power-save turned on, silently breaking int.thresh interference
+  // detection. Instead, drop to plain continuous RX for one window every
+  // NF_CALIB_INTERVAL_MS, run the normal sampling loop, then re-arm the
+  // duty-cycle once a fresh average is published.
+  bool     _nf_calib_active = false;
+  uint32_t _nf_last_calib_ms = 0;
+  uint32_t _nf_calib_deadline_ms = 0;   // abort the window if it can't complete (busy channel)
+  void noiseFloorCalibCheck();
+
   void idle();
   void startRecv();
   float packetScoreInt(float snr, int sf, int packet_len);
@@ -31,6 +44,34 @@ protected:
   // Arm the hardware RX duty-cycle. Base returns UNSUPPORTED → armRecv() falls
   // back to continuous RX; SX126x overrides with startReceiveDutyCycleAuto().
   virtual int16_t startPowerSaveRecv() { return RADIOLIB_ERR_UNSUPPORTED; }
+
+  // RX duty-cycle watchdog: the chip's own sequencer cycles RX<->sleep with no
+  // MCU polling, so if it desyncs (a known SX126x failure mode) nothing else
+  // would notice. Healthy operation shows up as the hardware BUSY pin
+  // toggling as the chip moves through its cycle; if that stops for too long,
+  // first try a cheap soft re-arm, then a full chip reset.
+  bool     _wd_last_busy = false;
+  uint32_t _wd_last_transition_ms = 0;
+  uint8_t  _wd_stage = 0;         // 0 = healthy / not yet tried, 1 = soft re-arm already attempted this stall
+  uint32_t _wd_soft_count = 0, _wd_hard_count = 0;
+  void rxPsWatchdogCheck();
+  // Re-attach the packet-received/duty-cycle-done interrupt action. Exposed so
+  // radioHardReset() overrides (a different translation unit) can redo this
+  // binding after a fresh begin(), without duplicating the static ISR here.
+  void reattachRecvAction();
+
+  // Overridden by radios that support the watchdog (SX126x only today, since
+  // it's the only one with a working startPowerSaveRecv()). Default false so
+  // the watchdog never runs where isChipBusy()/radioHardReset() aren't real.
+  virtual bool supportsRxPsWatchdog() const { return false; }
+  // True while the chip can't service SPI (duty-cycle sleep window, or
+  // briefly mid-command) — radios expose this via the hardware BUSY pin.
+  virtual bool isChipBusy() { return false; }
+  // Full chip reset + re-init after a stuck duty-cycle a soft re-arm didn't
+  // clear. Returns false if unsupported (base default: no-op). Implementations
+  // must reapply any runtime radio state a fresh init would reset to compiled
+  // firmware defaults (frequency/bandwidth/SF/CR/TX power/preamble/gain).
+  virtual bool radioHardReset() { return false; }
 
 public:
   RadioLibWrapper(PhysicalLayer& radio, mesh::MainBoard& board) : _radio(&radio), _board(&board), _preamble_sf(0) { n_recv = n_sent = 0; }
@@ -87,7 +128,9 @@ public:
   uint32_t getPacketsRecv() const { return n_recv; }
   uint32_t getPacketsRecvErrors() const { return n_recv_errors; }
   uint32_t getPacketsSent() const { return n_sent; }
-  void resetStats() { n_recv = n_sent = n_recv_errors = 0; }
+  uint32_t getRxPsWatchdogSoftCount() const { return _wd_soft_count; }
+  uint32_t getRxPsWatchdogHardCount() const { return _wd_hard_count; }
+  void resetStats() { n_recv = n_sent = n_recv_errors = 0; _wd_soft_count = _wd_hard_count = 0; }
 
   virtual float getLastRSSI() const override;
   virtual float getLastSNR() const override;

@@ -497,6 +497,10 @@ class HomeScreen : public UIScreen {
     // keep running with Bluetooth off, so their cue must not vanish with it.
     LocationProvider* loc = _sensors ? _sensors->getLocationProvider() : nullptr;
     bool gps_on  = loc && _node_prefs && _node_prefs->gps_enabled;
+    // Blinks while GPS is napping between duty-cycle wakes -- same convention
+    // the background-mode icons below already use for "running, but not busy
+    // right this instant".
+    bool gps_napping = _sensors && _sensors->isGpsDutySleeping();
     bool mute_on = false;
 #ifdef PIN_BUZZER
     mute_on = _task->isBuzzerQuiet();
@@ -504,7 +508,7 @@ class HomeScreen : public UIScreen {
     struct Sicon { bool active; const MiniIcon* icon; bool boxed; bool blink; };
     const Sicon icons[] = {
       { _task->isSerialEnabled(), &ICON_BLUETOOTH, _task->isSerialEnabled() && _task->isBLEConnected(), false },
-      { gps_on,                   &ICON_GPS,        gps_on && loc->isValid(),                            false },
+      { gps_on,                   &ICON_GPS,        gps_on && loc->isValid(),                            gps_napping },
       { _node_prefs && _node_prefs->alarm_on,                      &ICON_ALARM,       true, false },
       { mute_on,                                                   &ICON_MUTE,        true, false },
       { _node_prefs && _node_prefs->advert_auto_interval_sec > 0,  &ICON_ADVERT,      true, true  },
@@ -2543,6 +2547,28 @@ void UITask::loop() {
     next_batt_chck = millis() + 8000;
   }
 
+  // GPS duty-cycle hold — tells the sensor manager whether *anything* needs
+  // an unbroken stream of fixes right now, so it knows it's safe to let GPS
+  // nap between reads (EnvironmentSensorManager::gpsDutyCycleLoop()).
+  // Deliberately excludes the COG sampler just below: that one runs
+  // unconditionally every ~1s specifically so a heading is ready whenever a
+  // screen opens, and including it here would keep GPS permanently awake and
+  // defeat duty-cycling entirely — it just goes stale during a sleep window
+  // and catches up whenever GPS is awake for any other reason.
+  if (_sensors) {
+    bool gps_needed_live =
+        (_trail.isActive() && !_trail.isPaused())
+        || (_node_prefs && _node_prefs->loc_share_enabled)
+        || (_node_prefs && _node_prefs->locator_enabled && _node_prefs->locator_has_target)
+        || curr == compass_screen
+        || (curr == nearby_screen && ((NearbyScreen*)nearby_screen)->isNavigating());
+    _sensors->setGpsKeepAwake(gps_needed_live);
+    // A fresh wake (either a duty-cycle wake, or GPS forced continuously back
+    // on) may deliver a still-settling first fix — re-seed the locator's
+    // crossing state so that doesn't read as a spurious geofence crossing.
+    if (_sensors->consumeGpsWakeEvent()) resetLocator();
+  }
+
   // GPS trail sampling — runs in the background while the trail is
   // active, independent of which screen is shown. Skips silently if no GPS
   // fix; min-delta gate inside addPoint() avoids near-stationary spam.
@@ -3333,6 +3359,15 @@ void UITask::applyPowerSave() {
 void UITask::applyApc() {
   the_mesh.applyApc();   // (re)initialise Adaptive Power Control from prefs
 }
+
+#if ENV_INCLUDE_GPS == 1
+void UITask::applyGpsInterval() {
+  if (_node_prefs == NULL || _sensors == NULL) return;
+  char buf[12];
+  sprintf(buf, "%u", _node_prefs->gps_interval);
+  _sensors->setSettingValue("gps_interval", buf);
+}
+#endif
 
 void UITask::applyRadioParams() {
   if (_node_prefs == NULL) return;

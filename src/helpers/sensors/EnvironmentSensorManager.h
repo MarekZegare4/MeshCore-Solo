@@ -20,11 +20,23 @@ protected:
   uint8_t      next_available_channel = TELEM_CHANNEL_SELF + 1;
 
   bool     gps_detected = false;
-  bool     gps_active = false;
+  bool     gps_active = false;           // physically powered on right now
   uint32_t gps_update_interval_sec = 1;
 
   #if ENV_INCLUDE_GPS
   LocationProvider* _location;
+  bool     gps_master_enabled = false;   // user's on/off intent (Settings/bot/CLI) -- distinct
+                                          // from gps_active, which duty-cycling now flips on its own
+  // Duty-cycling: while enabled, GPS sleeps for gps_duty_sleep_sec between
+  // acquisitions instead of running continuously. 0 = disabled (today's
+  // always-on behaviour). Skipped entirely while _gps_keep_awake is held by
+  // a live consumer (background trail/live-share/locator, or a screen that
+  // needs a fresh reading right now) -- see setGpsKeepAwake().
+  uint32_t gps_duty_sleep_sec = 0;
+  bool     _gps_keep_awake = false;
+  uint32_t _gps_duty_phase_until = 0;
+  bool     _gps_just_woke = false;       // one-shot; consumed by UITask to reset locator state
+  void gpsDutyCycleLoop();
   void start_gps();
   void stop_gps();
   void initBasicGPS();
@@ -38,6 +50,11 @@ public:
   #if ENV_INCLUDE_GPS
   EnvironmentSensorManager(LocationProvider &location): _location(&location){};
   LocationProvider* getLocationProvider() { return _location; }
+  void setGpsKeepAwake(bool on) override { _gps_keep_awake = on; }
+  bool consumeGpsWakeEvent() override { bool w = _gps_just_woke; _gps_just_woke = false; return w; }
+  bool isGpsDutySleeping() const override {
+    return gps_master_enabled && gps_duty_sleep_sec > 0 && !_gps_keep_awake && !gps_active;
+  }
   #else
   EnvironmentSensorManager(){};
   #endif

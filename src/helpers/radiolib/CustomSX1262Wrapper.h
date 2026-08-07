@@ -9,10 +9,20 @@
 #endif
 
 class CustomSX1262Wrapper : public RadioLibWrapper {
+  // Cached runtime radio params, only used to recover from a hard reset (see
+  // radioHardReset()): std_init() re-applies the compiled LORA_FREQ/BW/SF/CR
+  // firmware defaults, not whatever the user has actually configured, so
+  // these are needed to restore real state afterwards.
+  float   _wd_freq = 0, _wd_bw = 0;
+  uint8_t _wd_sf = 0, _wd_cr = 0;
+  bool    _wd_params_valid = false;
+  bool    _wd_rx_boosted_gain = false;
+
 public:
   CustomSX1262Wrapper(CustomSX1262& radio, mesh::MainBoard& board) : RadioLibWrapper(radio, board) { }
 
   void setParams(float freq, float bw, uint8_t sf, uint8_t cr) override {
+    _wd_freq = freq; _wd_bw = bw; _wd_sf = sf; _wd_cr = cr; _wd_params_valid = true;
     ((CustomSX1262 *)_radio)->setFrequency(freq);
     ((CustomSX1262 *)_radio)->setSpreadingFactor(sf);
     ((CustomSX1262 *)_radio)->setBandwidth(bw);
@@ -55,9 +65,42 @@ public:
   }
 
   void setRxBoostedGainMode(bool en) override {
+    _wd_rx_boosted_gain = en;
     ((CustomSX1262 *)_radio)->setRxBoostedGainMode(en);
   }
   bool getRxBoostedGainMode() const override {
     return ((CustomSX1262 *)_radio)->getRxBoostedGainMode();
+  }
+
+  bool supportsRxPsWatchdog() const override { return true; }
+
+  // BUSY is high whenever the chip can't service SPI -- including the sleep
+  // window of an armed RX duty-cycle. Same access pattern already used by
+  // sx126xResetAGC() in SX126xReset.h.
+  bool isChipBusy() override {
+    SX126x* radio = (SX126x *)_radio;
+    return radio->mod->hal->digitalRead(radio->mod->getGpio());
+  }
+
+  // Full chip reset + re-init after a stuck RX duty-cycle that a soft re-arm
+  // didn't clear. std_init() re-applies compiled firmware defaults, not the
+  // user's runtime settings, so reapply the cached params and re-attach the
+  // packet-received action once it returns.
+  bool radioHardReset() override {
+    if (!((CustomSX1262 *)_radio)->std_init(&SPI)) return false;
+    reattachRecvAction();
+    if (_wd_params_valid) {
+      ((CustomSX1262 *)_radio)->setFrequency(_wd_freq);
+      ((CustomSX1262 *)_radio)->setSpreadingFactor(_wd_sf);
+      ((CustomSX1262 *)_radio)->setBandwidth(_wd_bw);
+      ((CustomSX1262 *)_radio)->setCodingRate(_wd_cr);
+      updatePreamble(_wd_sf);
+    }
+    _radio->setOutputPower(getTxPower());
+    // Unconditional: std_init() may have just turned boosted gain back ON via
+    // the board's SX126X_RX_BOOSTED_GAIN compile default, so the OFF case
+    // needs reapplying just as much as ON.
+    ((CustomSX1262 *)_radio)->setRxBoostedGainMode(_wd_rx_boosted_gain);
+    return true;
   }
 };

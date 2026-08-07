@@ -703,7 +703,7 @@ const char* EnvironmentSensorManager::getSettingValue(int i) const {
   int settings = 0;
   #if ENV_INCLUDE_GPS
     if (gps_detected && i == settings++) {
-      return gps_active ? "1" : "0";
+      return gps_master_enabled ? "1" : "0";
     }
   #endif
   return NULL;
@@ -712,16 +712,19 @@ const char* EnvironmentSensorManager::getSettingValue(int i) const {
 bool EnvironmentSensorManager::setSettingValue(const char* name, const char* value) {
   #if ENV_INCLUDE_GPS
   if (gps_detected && strcmp(name, "gps") == 0) {
-    if (strcmp(value, "0") == 0) {
-      stop_gps();
-    } else {
+    gps_master_enabled = strcmp(value, "0") != 0;
+    if (gps_master_enabled) {
       start_gps();
+    } else {
+      stop_gps();
     }
     return true;
   }
   if (strcmp(name, "gps_interval") == 0) {
-    uint32_t interval_seconds = atoi(value);
-    gps_update_interval_sec = interval_seconds > 0 ? interval_seconds : 1;
+    // Now the GPS duty-cycle sleep window in seconds (0 = disabled) rather
+    // than a read/snapshot cadence -- same setting key, so the companion
+    // app / CLI (MyMesh.cpp's "gps_interval" frame handler) needs no change.
+    gps_duty_sleep_sec = (uint32_t)atoi(value);
     return true;
   }
   #endif
@@ -761,6 +764,7 @@ void EnvironmentSensorManager::initBasicGPS() {
     MESH_DEBUG_PRINTLN("GPS detected");
     #ifdef PERSISTANT_GPS
       gps_active = true;
+      gps_master_enabled = true;
       return;
     #endif
   } else {
@@ -768,6 +772,7 @@ void EnvironmentSensorManager::initBasicGPS() {
   }
   _location->stop();
   gps_active = false; //Set GPS visibility off until setting is changed
+  gps_master_enabled = false;
 }
 
 // gps code for rak might be moved to MicroNMEALoactionProvider
@@ -793,6 +798,7 @@ void EnvironmentSensorManager::rakGPSInit(){
   else{
     MESH_DEBUG_PRINTLN("No GPS found");
     gps_active = false;
+    gps_master_enabled = false;
     gps_detected = false;
     Serial1.end();
     return;
@@ -802,6 +808,12 @@ void EnvironmentSensorManager::rakGPSInit(){
   //Now that GPS is found and set up, set to sleep for initial state
   stop_gps();
   #endif
+  // Mirror whatever gps_active ended up as above into the master on/off
+  // intent -- true if FORCE_GPS_ALIVE kept it running, false if stop_gps()
+  // just parked it. Without this the duty-cycle scheduler (which only obeys
+  // gps_master_enabled) would immediately turn GPS back on next tick and
+  // defeat the initial-sleep intent of the stop_gps() call above.
+  gps_master_enabled = gps_active;
 }
 
 bool EnvironmentSensorManager::gpsIsAwake(uint8_t ioPin){
@@ -852,6 +864,56 @@ bool EnvironmentSensorManager::gpsIsAwake(uint8_t ioPin){
 }
 #endif
 
+// Max time to wait for a fix per wake before giving up and going back to
+// sleep anyway -- an uncapped wait would defeat duty-cycling entirely
+// indoors / under canopy / in a canyon, where a fix may never come.
+#define GPS_DUTY_ACQUIRE_TIMEOUT_MS  60000UL
+
+// Cycles GPS power between a sleep phase and a wake-and-acquire phase when
+// duty-cycling is enabled (gps_duty_sleep_sec > 0) and nothing is holding it
+// continuously awake. Skipped entirely -- and GPS forced back on if it
+// happened to be asleep -- while the master toggle is off, duty-cycling is
+// disabled, or a live consumer is holding _gps_keep_awake, so all three of
+// those states behave exactly like today's always-on GPS.
+void EnvironmentSensorManager::gpsDutyCycleLoop() {
+  if (!gps_detected || !gps_master_enabled) return;
+
+  if (gps_duty_sleep_sec == 0 || _gps_keep_awake) {
+    if (!gps_active) { start_gps(); _gps_just_woke = true; }
+    _gps_duty_phase_until = 0;   // no scheduler-owned phase while bypassed --
+                                 // re-armed fresh below whenever this resumes
+    return;
+  }
+
+  uint32_t now = millis();
+  if (!gps_active) {
+    // sleeping -- wake up once the sleep window has elapsed
+    if (_gps_duty_phase_until == 0 || (int32_t)(now - _gps_duty_phase_until) >= 0) {
+      start_gps();
+      _gps_just_woke = true;
+      _gps_duty_phase_until = now + GPS_DUTY_ACQUIRE_TIMEOUT_MS;
+    }
+    return;
+  }
+
+  // GPS is on, but not because we just armed an acquire phase for it --
+  // either boot-time start via applyGpsPrefs(), or duty-cycling just resumed
+  // after a keep-awake hold. Start a fresh acquire window instead of treating
+  // the unset timer as already-expired, which would stop_gps() before a cold
+  // fix ever had a chance.
+  if (_gps_duty_phase_until == 0) {
+    _gps_duty_phase_until = now + GPS_DUTY_ACQUIRE_TIMEOUT_MS;
+    return;
+  }
+
+  // awake -- back to sleep once we have a fix, or once we've waited long
+  // enough that one isn't coming this cycle
+  if (_location->isValid() || (int32_t)(now - _gps_duty_phase_until) >= 0) {
+    stop_gps();
+    _gps_duty_phase_until = now + gps_duty_sleep_sec * 1000UL;
+  }
+}
+
 void EnvironmentSensorManager::start_gps() {
   gps_active = true;
   #ifdef RAK_WISBLOCK_GPS
@@ -888,6 +950,8 @@ void EnvironmentSensorManager::stop_gps() {
 void EnvironmentSensorManager::loop() {
 
   #if ENV_INCLUDE_GPS
+  gpsDutyCycleLoop();
+
   static long next_gps_update = 0;
   if (gps_active) {
     _location->loop();

@@ -264,6 +264,7 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
   file.read((uint8_t *)&_prefs.buzzer_quiet, sizeof(_prefs.buzzer_quiet));
   file.read((uint8_t *)&_prefs.gps_enabled, sizeof(_prefs.gps_enabled));
   file.read((uint8_t *)&_prefs.gps_interval, sizeof(_prefs.gps_interval));
+  if (_prefs.gps_interval > 86400) _prefs.gps_interval = 0;   // now a duty-cycle sleep window (secs); 0 = disabled
   file.read((uint8_t *)&_prefs.autoadd_config, sizeof(_prefs.autoadd_config));
   file.read((uint8_t *)&_prefs.autoadd_max_hops, sizeof(_prefs.autoadd_max_hops));
   file.read((uint8_t *)&_prefs.rx_boosted_gain, sizeof(_prefs.rx_boosted_gain));

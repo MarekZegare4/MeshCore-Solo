@@ -11,6 +11,10 @@
 #define NUM_NOISE_FLOOR_SAMPLES  64
 #define SAMPLING_THRESHOLD  14
 
+#define RXPS_WATCHDOG_THRESHOLD_MS  60000UL   // no BUSY transition for this long => stuck
+#define NF_CALIB_INTERVAL_MS         60000UL  // recalibrate at least once a minute
+#define NF_CALIB_TIMEOUT_MS           5000UL  // give up on the window (busy channel)
+
 static volatile uint8_t state = STATE_IDLE;
 
 // this function is called when a complete packet
@@ -84,17 +88,94 @@ void RadioLibWrapper::resetAGC() {
   _floor_sample_sum = 0;
 }
 
+// Detects a stuck RX duty-cycle sequencer: a healthy chip shows the hardware
+// BUSY pin toggling as it moves through its own RX<->sleep cycle. If that
+// stops for too long, first try a cheap soft re-arm; if it's still stuck next
+// time, escalate to a full chip reset (radioHardReset()).
+void RadioLibWrapper::rxPsWatchdogCheck() {
+  // Don't interfere mid-transmit, or with a completed-but-unread packet — a
+  // pending DIO1 event is itself proof the radio is alive, and recvRaw()
+  // will consume it and re-arm (re-basing the watchdog) on its own.
+  if ((state & STATE_INT_READY) != 0 || (state & ~STATE_INT_READY) == STATE_TX_WAIT) return;
+
+  uint32_t now = millis();
+  bool busy = isChipBusy();
+  if (busy != _wd_last_busy) {
+    _wd_last_busy = busy;
+    _wd_last_transition_ms = now;
+    _wd_stage = 0;   // proof of life -- any prior stall is over
+    return;
+  }
+
+  if (now - _wd_last_transition_ms <= RXPS_WATCHDOG_THRESHOLD_MS) return;
+
+  _wd_last_transition_ms = now;   // grace period before the next escalation
+
+  if (_wd_stage == 0) {
+    _wd_stage = 1;
+    _wd_soft_count++;
+    MESH_DEBUG_PRINTLN("RadioLibWrapper: RX duty-cycle watchdog: stuck, soft re-arm");
+    state = STATE_IDLE;   // next recvRaw()/loop() re-arms via armRecv()
+  } else {
+    _wd_hard_count++;
+    MESH_DEBUG_PRINTLN("RadioLibWrapper: RX duty-cycle watchdog: still stuck, hard reset");
+    radioHardReset();
+    _wd_stage = 0;   // chip is freshly (re)initialized either way -- observe again from scratch
+    state = STATE_IDLE;
+  }
+}
+
+void RadioLibWrapper::reattachRecvAction() {
+  _radio->setPacketReceivedAction(setFlag);
+}
+
+// Checks whether a periodic noise-floor recalibration window is due while RX
+// duty-cycle power-save is active (see the field comments in the header).
+// Only starts one when it's safe to interrupt: not mid-transmit, no unread
+// packet waiting, and no reception currently in progress.
+void RadioLibWrapper::noiseFloorCalibCheck() {
+  if ((state & STATE_INT_READY) != 0 || (state & ~STATE_INT_READY) == STATE_TX_WAIT) return;
+  if (isReceivingPacket()) return;
+
+  uint32_t now = millis();
+  if (_nf_last_calib_ms != 0 && now - _nf_last_calib_ms < NF_CALIB_INTERVAL_MS) return;
+
+  _nf_calib_active = true;
+  _nf_calib_deadline_ms = now + NF_CALIB_TIMEOUT_MS;
+  _num_floor_samples = 0;   // start a fresh batch for this window
+  _floor_sample_sum = 0;
+  state = STATE_IDLE;       // next loop() re-arms into continuous RX (see armRecv())
+}
+
 void RadioLibWrapper::loop() {
-  // Power-save toggled vs the currently-armed RX mode: re-arm into the other mode
-  // once the radio is idle (don't interrupt an in-flight TX or an unread RX-done).
-  if (_power_save != _ps_active) {
+  // Power-save vs the currently-armed RX mode (toggled by the user, or by a
+  // noise-floor recalibration window borrowing continuous RX for a moment):
+  // re-arm into the wanted mode once the radio is idle (don't interrupt an
+  // in-flight TX or an unread RX-done).
+  bool want_duty_cycle = _power_save && !_nf_calib_active;
+  if (want_duty_cycle != _ps_active) {
     if (state != STATE_TX_WAIT && !(state & STATE_INT_READY) && !isReceivingPacket()) armRecv();
     return;
   }
-  // In power-save the SX126x hardware duty-cycles RX on its own — nothing to poll
-  // here, and noise-floor sampling (used only by the disabled interference check)
-  // would read a chip that is asleep most of the time.
-  if (_power_save) return;
+
+  if (want_duty_cycle) {
+    // Steady-state duty-cycle: the chip cycles RX<->sleep on its own, nothing
+    // to poll here. Just watch for a stuck sequencer and check whether a
+    // recalibration window is due (noiseFloorCalibCheck() flips
+    // _nf_calib_active, which the branch above then re-arms out of).
+    if (supportsRxPsWatchdog()) rxPsWatchdogCheck();
+    noiseFloorCalibCheck();
+    return;
+  }
+
+  if (_nf_calib_active && !isReceivingPacket() && (int32_t)(millis() - _nf_calib_deadline_ms) >= 0) {
+    // Batch couldn't complete in time (busy channel) -- give up, keep the
+    // previous floor, and let the branch above re-arm the duty-cycle.
+    _nf_calib_active = false;
+    _nf_last_calib_ms = millis();
+    state = STATE_IDLE;
+    return;
+  }
 
   if (state == STATE_RX && _num_floor_samples < NUM_NOISE_FLOOR_SAMPLES) {
     if (!isReceivingPacket()) {
@@ -112,6 +193,11 @@ void RadioLibWrapper::loop() {
     _floor_sample_sum = 0;
 
     MESH_DEBUG_PRINTLN("RadioLibWrapper: noise_floor = %d", (int)_noise_floor);
+
+    if (_nf_calib_active) {
+      _nf_calib_active = false;   // fresh floor published -- back to duty-cycle
+      _nf_last_calib_ms = millis();
+    }
   }
 }
 
@@ -119,12 +205,14 @@ void RadioLibWrapper::startRecv() {
   armRecv();
 }
 
-// Arm the receiver. In power-save mode this starts the SX126x hardware RX
-// duty-cycle (the chip cycles RX↔sleep and latches a preamble on its own);
-// otherwise a continuous RX. Falls back to continuous RX if the modem doesn't
-// support duty-cycle (base startPowerSaveRecv() returns UNSUPPORTED).
+// Arm the receiver. In power-save mode (and outside a noise-floor
+// recalibration window, which needs a moment of plain continuous RX -- see
+// noiseFloorCalibCheck()) this starts the SX126x hardware RX duty-cycle (the
+// chip cycles RX↔sleep and latches a preamble on its own); otherwise a
+// continuous RX. Falls back to continuous RX if the modem doesn't support
+// duty-cycle (base startPowerSaveRecv() returns UNSUPPORTED).
 void RadioLibWrapper::armRecv() {
-  if (_power_save) {
+  if (_power_save && !_nf_calib_active) {
     int16_t e = startPowerSaveRecv();
     if (e == RADIOLIB_ERR_NONE) { state = STATE_RX; _ps_active = true; return; }
     MESH_DEBUG_PRINTLN("RadioLibWrapper: RX duty-cycle unsupported (%d) — power-save off", (int)e);

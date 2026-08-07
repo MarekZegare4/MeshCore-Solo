@@ -734,6 +734,11 @@ public:
     _sort_label[0] = '\0';
   }
 
+  // Whether the full-screen navigate-to-node view is up -- used by UITask's
+  // GPS duty-cycle "is anything live using GPS right now" check, since this
+  // view needs an unbroken stream of fixes for bearing/ETA, not a stale one.
+  bool isNavigating() const { return _nav; }
+
   void onShow() override {
     _sel = _scroll = 0;
     _detail = false;

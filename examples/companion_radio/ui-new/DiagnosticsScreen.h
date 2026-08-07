@@ -143,6 +143,13 @@ class DiagnosticsScreen : public UIScreen {
       if (len > 0 && buf[len - 1] == ' ') buf[len - 1] = '\0';
     }
     addRow("Errors", buf);
+
+    // RX duty-cycle watchdog recovery counts since boot/reset (soft re-arm /
+    // hard chip reset). Always 0/0 on radios or profiles that never arm
+    // duty-cycle power-save (repeaters force it off — see applyPowerSave()).
+    snprintf(buf, sizeof(buf), "%lu/%lu", (unsigned long)radio_driver.getRxPsWatchdogSoftCount(),
+             (unsigned long)radio_driver.getRxPsWatchdogHardCount());
+    addRow("RXPS wd s/h", buf);
   }
 
   void buildSystemLines() {
@@ -257,7 +264,8 @@ public:
     if (_reset_menu.active) {
       auto res = _reset_menu.handleInput(c);   // Back/Cancel dismisses; the only item is "Reset counters"
       if (res == PopupMenu::SELECTED) {
-        the_mesh.resetStats();   // zeroes Dispatcher per-type counters + Mesh forward count + err flags
+        the_mesh.resetStats();     // zeroes Dispatcher per-type counters + Mesh forward count + err flags
+        radio_driver.resetStats(); // zeroes the radio's own counters, incl. RXPS watchdog soft/hard counts
         _task->showAlert("Counters reset", 800);
       }
       return true;

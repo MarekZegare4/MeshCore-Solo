@@ -23,6 +23,17 @@ public:
   virtual const char* getSettingValue(int i) const { return NULL; }
   virtual bool setSettingValue(const char* name, const char* value) { return false; }
   virtual LocationProvider* getLocationProvider() { return NULL; }
+  // GPS duty-cycle hold: force GPS continuously on regardless of any sleep
+  // schedule, because something needs an unbroken stream of fixes right now.
+  virtual void setGpsKeepAwake(bool on) { }
+  // One-shot: true the first call after GPS transitions sleep->awake, so a
+  // caller can re-seed state that a stale reading could otherwise corrupt
+  // (e.g. a geofence's crossing state). False the rest of the time.
+  virtual bool consumeGpsWakeEvent() { return false; }
+  // True while GPS is in the sleep phase of its duty cycle (physically off,
+  // waiting for the next scheduled wake) -- purely a UI cue, e.g. to blink
+  // the GPS status icon.
+  virtual bool isGpsDutySleeping() const { return false; }
   virtual int getAvailableLPPTypes(uint8_t* types, int max_count) const { return 0; }
 
   // Helper functions to manage setting by keys (useful in many places ...)

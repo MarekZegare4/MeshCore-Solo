@@ -66,6 +66,9 @@ class SettingsScreen : public UIScreen {
     DEVICE_NAME,
     TIMEZONE,
     LOW_BAT,
+#if ENV_INCLUDE_GPS == 1
+    GPS_DUTY_CYCLE,
+#endif
     UNITS,
     REBOOT,
     // Keyboard section
@@ -106,12 +109,24 @@ class SettingsScreen : public UIScreen {
   static const char* AUTO_OFF_LABELS[5];
   static const int AUTO_OFF_COUNT = 5;
 #endif
-// GPS update interval tables are no longer surfaced in Settings — the sensor
-// manager defaults to 1 s when nothing else sets it. Pref byte _prefs.gps_interval
-// is retained for backwards compatibility.
   static const uint16_t LOW_BAT_OPTS[7];
   static const char* LOW_BAT_LABELS[7];
   static const int LOW_BAT_COUNT = 7;
+#if ENV_INCLUDE_GPS == 1
+  // GPS duty-cycle sleep window: how long GPS naps between fix acquisitions.
+  // "off" (0) keeps it continuously on, today's behaviour. Backed by
+  // NodePrefs::gps_interval, seconds.
+  static const uint32_t GPS_DUTY_OPTS[6];
+  static const char* GPS_DUTY_LABELS[6];
+  static const int GPS_DUTY_COUNT = 6;
+  int gpsDutyIndex() {
+    NodePrefs* p = _task->getNodePrefs();
+    if (!p) return 0;
+    for (int i = 0; i < GPS_DUTY_COUNT; i++)
+      if (GPS_DUTY_OPTS[i] == p->gps_interval) return i;
+    return 0;
+  }
+#endif
   static const char* BATT_DISPLAY_LABELS[3];
   static const int BATT_DISPLAY_COUNT = 3;
   static const char* SOUND_LABELS[4];
@@ -562,6 +577,12 @@ class SettingsScreen : public UIScreen {
       display.print("LowBat");
       display.setCursor(valCol(display), y);
       display.print(LOW_BAT_LABELS[lowBatIndex()]);
+#if ENV_INCLUDE_GPS == 1
+    } else if (item == GPS_DUTY_CYCLE) {
+      display.print("GPS pwr");
+      display.setCursor(valCol(display), y);
+      display.print(GPS_DUTY_LABELS[gpsDutyIndex()]);
+#endif
     } else if (item == UNITS) {
       display.print("Units");
       display.setCursor(valCol(display), y);
@@ -923,6 +944,17 @@ public:
       if (left)  idx = (idx + LOW_BAT_COUNT - 1) % LOW_BAT_COUNT;
       if (left || right) { p->low_batt_mv = LOW_BAT_OPTS[idx]; _dirty = true; return true; }
     }
+#if ENV_INCLUDE_GPS == 1
+    if (_selected == GPS_DUTY_CYCLE && p && (left || right)) {
+      int idx = gpsDutyIndex();
+      if (right) idx = (idx + 1) % GPS_DUTY_COUNT;
+      if (left)  idx = (idx + GPS_DUTY_COUNT - 1) % GPS_DUTY_COUNT;
+      p->gps_interval = GPS_DUTY_OPTS[idx];
+      _task->applyGpsInterval();
+      _dirty = true;
+      return true;
+    }
+#endif
     if (_selected == UNITS && p && (left || right || enter)) {
       p->units_imperial ^= 1;
       _dirty = true;
@@ -1053,6 +1085,10 @@ const char*    SettingsScreen::AUTO_OFF_LABELS[5]  = { "5s", "15s", "30s", "60s"
 #endif
 const uint16_t SettingsScreen::LOW_BAT_OPTS[7]   = { 0, 3000, 3100, 3200, 3300, 3400, 3500 };
 const char*    SettingsScreen::LOW_BAT_LABELS[7]  = { "off", "3.0V", "3.1V", "3.2V", "3.3V", "3.4V", "3.5V" };
+#if ENV_INCLUDE_GPS == 1
+const uint32_t SettingsScreen::GPS_DUTY_OPTS[6]   = { 0, 60, 300, 900, 1800, 3600 };
+const char*    SettingsScreen::GPS_DUTY_LABELS[6] = { "off", "1 min", "5 min", "15 min", "30 min", "1 h" };
+#endif
 const char*    SettingsScreen::BATT_DISPLAY_LABELS[3] = { "icon", "%", "V" };
 const char*    SettingsScreen::SOUND_LABELS[4] = { "built-in", "M1", "M2", "None" };
 const char*    SettingsScreen::AD_SCOPE_LABELS[2] = { "All", "Zero-hop" };
