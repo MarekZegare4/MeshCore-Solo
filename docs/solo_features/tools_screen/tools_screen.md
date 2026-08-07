@@ -494,8 +494,9 @@ A circular tab carousel of live device and mesh stats, refreshed once a second (
 | Pool free    | Free entries in the packet pool                                                                     |
 | Queue        | Packets waiting in the outbound queue                                                               |
 | Errors       | Radio error flags since boot/reset — `OK`, or tokens `F` (queue full), `C` (CAD timeout), `R` (RX-start timeout) |
+| RXPS wd s/h  | RX duty-cycle watchdog recovery count, `soft/hard` — how many times the background watchdog has re-armed (soft) or fully reset (hard) a stuck duty-cycle sequencer. Stays `0/0` unless Settings › Radio › **Pwr save** is on and something actually went wrong. |
 
-The packet counters, **Forwarded** and **Errors** are cumulative since boot. On the **Live** tab, **Hold Enter** opens a one-item *Reset counters* menu (Back dismisses it); the live readings (noise, RSSI/SNR, pool, queue, uptime) are not affected. **Cancel/Back** returns to the Tools list.
+The packet counters, **Forwarded**, **Errors** and **RXPS wd s/h** are cumulative since boot. On the **Live** tab, **Hold Enter** opens a one-item *Reset counters* menu (Back dismisses it); the live readings (noise, RSSI/SNR, pool, queue, uptime) are not affected. **Cancel/Back** returns to the Tools list.
 
 The counters make the repeater behaviour observable: **Forwarded** confirms the node is actually relaying (not just configured to), and **Pool free** / **Queue** show whether forwarding is exhausting the packet pool. See **Tools › Repeater** for the relaying options.
 
