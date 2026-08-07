@@ -10,13 +10,19 @@ Solo firmware thread: https://discord.com/channels/1495203904898728149/150529433
 
 ## Supported Devices
 
-| Device | Display | Firmware file |
-| ------ | ------- | ------------- |
-| Seeed Wio Tracker L1 (OLED) | SSD1306 / SH1106 128 × 64 | `solo-<version>-WioTrackerL1.uf2` |
-| Seeed Wio Tracker L1 (E-ink) | GxEPD2 250 × 122 | `solo-<version>-WioTrackerL1Eink.uf2` |
-| GAT562 30S Mesh Kit | SSD1306 128 × 64 | `solo-<version>-GAT562-30S-Mesh-Kit.uf2` |
+| Device | MCU | Display | Firmware file |
+| ------ | --- | ------- | ------------- |
+| Seeed Wio Tracker L1 (OLED) | nRF52840 | SSD1306 / SH1106 128 × 64 | `solo-<version>-WioTrackerL1.uf2` |
+| Seeed Wio Tracker L1 (E-ink) | nRF52840 | GxEPD2 250 × 122 | `solo-<version>-WioTrackerL1Eink.uf2` |
+| GAT562 30S Mesh Kit | nRF52840 | SSD1306 128 × 64 | `solo-<version>-GAT562-30S-Mesh-Kit.uf2` |
+| Heltec LoRa32 V3 | ESP32-S3 | SSD1306 128 × 64 | `solo-<version>-Heltec-v3-merged.bin` |
+| Heltec LoRa32 V4 | ESP32-S3 | SSD1306 128 × 64 | `solo-<version>-heltec-v4-merged.bin` |
 
 All firmware files are published on the [releases page](https://github.com/MarekZegare4/MeshCore-Solo/releases). Each binary supports both BLE and USB serial — there are no separate BLE/USB builds.
+
+The MCU column decides how you flash: nRF52840 boards take a drag-and-drop `.uf2`, ESP32-S3 boards take a `.bin` written with a flasher — see [Flashing](#flashing).
+
+The three nRF52840 boards work out of the box. The two Heltec boards have no joystick and no keyboard of their own, so they need [a keyboard or a joystick wired up](#hardware-setup--heltec-v3--v4) before the solo UI can be driven.
 
 <!-- **Enclosures (Wio Tracker L1)**
 - [E-ink case](https://www.printables.com/model/1420534-seeed-wio-tracker-l1-e-ink-enclosure)
@@ -26,7 +32,7 @@ All firmware files are published on the [releases page](https://github.com/Marek
 
 ## Feature highlights
 
-- Extended language support with native Unicode rendering and input ([Lemon font](https://github.com/cmvnd/fonts)) alongside the original ASCII mode (Default font with transliteration) — on-screen keyboard alphabets for Cyrillic, Greek, Polish, Czech, Slovak, German, French, Spanish, Portuguese and Nordic (Danish/Norwegian/Swedish), selectable in Settings › Keyboard › Alphabet
+- Extended language support with native Unicode rendering and input — one unified 6×9 display font covering Latin, Greek and Cyrillic, plus on-screen keyboard alphabets for Cyrillic, Greek, Polish, Czech, Slovak, German, French, Spanish, Portuguese and Nordic (Danish/Norwegian/Swedish). Pick two in Settings › Keyboard (**Main** and **Additional**) and switch between them while typing
 
 - Enabled sensor screens with support for onboard sensors (temperature, humidity, pressure, luminosity, CO₂) and GPS data
 
@@ -53,6 +59,8 @@ All firmware files are published on the [releases page](https://github.com/Marek
 
 - [Tools Screen](./docs/solo_features/tools_screen/tools_screen.md) — GPS trail & waypoints, compass, nearby nodes (with ping & navigate), ringtone editor, remote bot, auto-advert, live location sharing, locator, diagnostics, repeater, remote admin
 
+- [External Keyboard & Joystick](./docs/solo_features/external_keyboard.md) — optional, auto-detected hardware: an M5Stack **CardKB** for typing messages without the on-screen grid (Fn+Enter submits, Fn+letter picks an accent, Tab is Hold-Enter, Fn+Esc locks), plus a **wired joystick** for boards without one. A Compact keyboard mode makes CardKB-only, joystick-free operation practical
+
 - **Battery saving (radio)** — two optional, independent toggles under Settings › Radio:
   - **Pwr save** — hardware duty-cycle receive (SX126x `SetRxDutyCycle`): the radio cycles RX↔sleep on its own and wakes on a preamble, cutting average RX current with only a little added receive latency
   - **Auto pwr** — Adaptive Power Control: trims actual TX power on strong links (from ACK SNR) and ramps back up to the configured ceiling on weak/lost links; the home screen shows the live power
@@ -71,20 +79,62 @@ The e-ink variant targets the Wio Tracker L1 fitted with a 2.13″ GxEPD2 panel 
 
 ## Flashing
 
-1. Download the `.uf2` file for your device from the [releases page](https://github.com/MarekZegare4/MeshCore-Solo/releases)
-2. Press reset twice quickly to enter bootloader mode — the device should appear as a mass storage drive on your computer
-3. Copy the `.uf2` file to the drive to flash the firmware
-
-> [!IMPORTANT]
-> BLE connection has priority over USB serial. When a BLE connection is active, the USB protocol is suspended. When connecting to the companion app via USB, ensure to disconnect from BLE first or disable BLE directly from the device to avoid confusion.
-
-Updating to a newer version usually does not require erasing flash unless the release notes explicitly state otherwise.
-
 > [!WARNING]
 > When migrating from official or other custom firmware, backup your data and **perform a factory reset** to prevent conflicts with existing settings:
 >
 > 1. Open device settings in the companion app and download a data backup
 > 2. Go to [MeshCore Flasher](https://meshcore.io/flasher), select your device, and perform **Erase flash** before flashing
+>
+> Updating from an earlier Solo release does not need this, unless the release notes say otherwise.
+
+### nRF52840 boards — Wio Tracker L1, GAT562
+
+1. Download the `.uf2` file for your device from the [releases page](https://github.com/MarekZegare4/MeshCore-Solo/releases)
+2. Press reset twice quickly to enter bootloader mode — the device should appear as a mass storage drive on your computer
+3. Copy the `.uf2` file to the drive to flash the firmware
+
+### ESP32-S3 boards — Heltec V3, V4
+
+ESP32-S3 has no UF2 bootloader and no mass-storage mode. Releases ship a single **`-merged.bin`** per board — bootloader, partition table and app in one image — which goes to offset `0x0`:
+
+- **[MeshCore Flasher](https://meshcore.io/flasher)** or any Web Serial ESP tool — select the `-merged.bin` and flash at `0x0`
+- **esptool** — `esptool.py --chip esp32s3 write_flash 0x0 solo-<version>-<device>-merged.bin`
+
+> [!NOTE]
+> Building from source produces a second, app-only `firmware.bin` alongside the merged one. That one belongs at offset `0x10000` and only works if a bootloader is already on the chip — flashing it at `0x0`, or onto a freshly erased chip, leaves the device dead-silent. `pio run -e <env> -t upload` writes the bootloader, partition table and app at their correct offsets in one go, which is why it works where a hand-flashed single `.bin` does not. Releases only contain the merged image, so this only matters when building yourself.
+
+### Connecting the companion app
+
+Applies to every board: each binary serves the companion app over **both** BLE and USB serial, but not at once.
+
+> [!IMPORTANT]
+> BLE has priority over USB serial. While a BLE connection is active the USB protocol is suspended. To connect the app over USB, disconnect from BLE first or disable BLE directly on the device.
+
+---
+
+## Hardware setup — Heltec V3 / V4
+
+A single button can't drive the solo UI, and neither Heltec board has a joystick or a keyboard of its own. Both stock builds therefore enable an **M5Stack CardKB** and a **wired joystick** on these pins — V3 and V4 are pin-compatible, so the assignment is identical for both:
+
+| Function | GPIO | Notes |
+| -------- | :--: | ----- |
+| CardKB SDA | **3** | second I2C bus (`Wire1`) — *not* the OLED's 17/18 |
+| CardKB SCL | **4** | |
+| Joystick UP | **23** | |
+| Joystick DOWN | **6** | |
+| Joystick LEFT | **47** | |
+| Joystick RIGHT | **48** | |
+| Back button | **33** | required whenever the joystick is enabled |
+| Centre / Enter | **0** | the onboard PRG button — nothing to wire |
+
+Each joystick contact simply shorts its pin to GND — the firmware enables the internal pull-ups, so no external resistors are needed. CardKB needs power and ground alongside SDA/SCL; check your unit's own voltage rating before picking a rail.
+
+> [!NOTE]
+> This assignment is confirmed working on real **V4** hardware. V3 inherits it because Heltec documents the two boards as pin-compatible, but it hasn't been verified on a physical V3 — worth a continuity check against your own module before soldering.
+
+Either device is enough on its own — pins with nothing attached read as not-pressed, and a missing CardKB is simply not detected at boot, so the unused half costs nothing. For a **CardKB-only** build, wire just SDA/SCL and set Settings › Keyboard › **Ext. KB = Compact**, which is designed to need no joystick at all.
+
+These pins are only defaults: they live in the `[env:Heltec_v3_companion_solo_dual]` / `[env:heltec_v4_companion_solo_dual]` blocks in [`variants/heltec_v3/platformio.ini`](./variants/heltec_v3/platformio.ini) and [`variants/heltec_v4/platformio.ini`](./variants/heltec_v4/platformio.ini), with comments listing which GPIOs each board has already claimed if you want to wire yours differently. Full details in [External Keyboard & Joystick](./docs/solo_features/external_keyboard.md).
 
 ---
 
@@ -100,7 +150,9 @@ Updating to a newer version usually does not require erasing flash unless the re
 | [Settings Screen](./docs/solo_features/settings_screen/settings_screen.md) | All settings sections with values and interactions                    |
 | [Screen Lock](./docs/solo_features/screen_lock/screen_lock.md)             | Lock/unlock sequence, lock screen, auto-lock                          |
 | [Tools Screen](./docs/solo_features/tools_screen/tools_screen.md)          | GPS trail & waypoints, compass, navigation, nearby nodes, ringtone editor, remote bot, auto-advert, live location sharing, locator, diagnostics, repeater, remote admin |
+| [External Keyboard & Joystick](./docs/solo_features/external_keyboard.md)  | CardKB shortcuts, Full vs Compact mode, wired joystick, Heltec V3/V4 wiring |
 | [Solo UI framework](./docs/design/solo_ui_framework.md)                    | **Developer guide** — the reusable building blocks (screens, lists, popups, mini-icons, geo/persistence helpers) and how to add a new feature |
+| [Feature roadmap](./docs/development/roadmap.md)                           | **Developer notes** — planned / done / rejected features and the code-audit backlog |
 
 ### Upstream MeshCore
 
@@ -119,18 +171,19 @@ Updating to a newer version usually does not require erasing flash unless the re
 
 All solo builds include screenshot and GPX trail export support out of the box — no special build flags required.
 
-### [Solo Tools Web App](https://marekzegare4.github.io/Solo-tools/) — no install required
+### Web app — nothing to install
 
-Open the link in a browser with Web Serial support (Chromium-based) and click **Connect device**. The web app supports:
+Open [Solo Tools](https://marekzegare4.github.io/Solo-tools/) in a browser with Web Serial support (Chromium-based) and click **Connect device**:
 
-- **Screenshot** — capture the current display contents as a PNG
-- **GPX export** — stream the GPS trail and download a timestamped `.gpx` file
+- **Screenshot** — capture the current display contents as a PNG. Triggered entirely from the browser; nothing to press on the device.
+- **GPX export** — stream the recorded GPS trail and download a timestamped `.gpx` file. Start it on the device with **Tools › Trail › Hold Enter › Export** once connected.
 
-Trigger the relevant action on the device (**Tools › Trail › Hold Enter** for GPX export, **S** key for screenshot) after connecting.
+### Offline equivalents
 
-> Disconnect from the companion app before connecting via USB — USB serial is suspended while a BLE connection is active.
+The same two features are available as local scripts — `tools/screenshot.py` and `tools/trail_export.py` — plus a font converter. See [tools/README.md](./tools/README.md).
 
-> If the companion app is connected over BLE the GPX export is safe (USB receive is ignored). If the app is on USB, disconnect it first — the raw stream will otherwise disrupt the app's frame protocol.
+> [!IMPORTANT]
+> Both routes use USB serial, which is suspended while a BLE connection is active — disconnect the companion app from BLE first. If the app is connected over **USB**, disconnect it too: the raw export stream would otherwise disrupt its frame protocol. (Over BLE the export is safe, since USB receive is ignored.)
 
 ---
 
@@ -141,6 +194,39 @@ This fork tracks the upstream [MeshCore](https://github.com/meshcore-dev/MeshCor
 ```sh
 git config merge.ours.driver true
 ```
+
+### Building from source
+
+| Environment | Device |
+| ----------- | ------ |
+| `WioTrackerL1_companion_solo_dual` | Wio Tracker L1 (OLED) |
+| `WioTrackerL1Eink_companion_solo_dual` | Wio Tracker L1 (E-ink) |
+| `GAT562_30S_Mesh_Kit_solo_dual` | GAT562 30S Mesh Kit |
+| `Heltec_v3_companion_solo_dual` | Heltec LoRa32 V3 |
+| `heltec_v4_companion_solo_dual` | Heltec LoRa32 V4 |
+
+```sh
+pio run -e <env>                                  # build only
+pio run -e <env> -t upload                        # build and flash over USB
+FIRMWARE_VERSION=v1.0.0 bash build.sh build-firmware <env> # release artifacts into out/
+```
+
+The last command runs the same path CI does: a `.uf2` + DFU `.zip` on nRF52, or an app-only `.bin` plus a `-merged.bin` on ESP32. Releases carry the `.uf2`, the `.zip` and the `-merged.bin` only.
+
+### Releasing
+
+Pushing a `v*` tag runs [Build Solo Firmwares](./.github/workflows/build-solo-firmwares.yml), which discovers every `*_solo_dual` environment automatically, builds them all and opens a **draft** release with the artifacts attached. Write the notes from `release-notes.md` and publish it. See [RELEASE.md](./RELEASE.md) for the upstream companion/repeater/room-server tags.
+
+### Repository layout
+
+| Path | Contents |
+| ---- | -------- |
+| `examples/companion_radio/ui-new/` | the solo UI — screens, widgets, `UITask` |
+| `src/helpers/ui/` | display drivers, fonts, buttons, buzzer |
+| `variants/<board>/` | per-board `platformio.ini`, `target.h`, `target.cpp` |
+| `docs/solo_features/` | user documentation for this fork |
+| `docs/design/`, `docs/development/` | developer notes and the feature roadmap |
+| `tools/` | host-side helpers (screenshot, GPX export, font conversion) |
 
 ### Contributing
 
