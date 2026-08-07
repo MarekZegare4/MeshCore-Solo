@@ -65,6 +65,13 @@ jobs:
           mv out/*.uf2 "out/solo-${{ env.BUILD_VERSION }}-${DEVICE_NAME}.uf2" 2>/dev/null || true
           # nRF52 DFU package (adafruit-nrfutil) — used for OTA / BLE-DFU updates.
           mv out/*.zip "out/solo-${{ env.BUILD_VERSION }}-${DEVICE_NAME}-ota.zip" 2>/dev/null || true
+          # ESP32 boards produce .bin instead of .uf2. Only the merged image
+          # (bootloader + partitions + app, flashed at 0x0) is published: build.sh also
+          # writes an app-only .bin, but that one needs offset 0x10000 and a bootloader
+          # already on the chip, so shipping it next to the merged image would only
+          # invite bricked-looking flashes. Anyone who wants it can build it locally.
+          mv out/${{ matrix.env }}-*-merged.bin "out/solo-${{ env.BUILD_VERSION }}-${DEVICE_NAME}-merged.bin" 2>/dev/null || true
+          rm -f out/${{ matrix.env }}-*.bin
 
       - name: Upload Firmware
         uses: actions/upload-artifact@v4
@@ -97,3 +104,4 @@ jobs:
           files: |
             out/*.uf2
             out/*.zip
+            out/*-merged.bin
