@@ -1,0 +1,3161 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the open source MeshCore firmware">
+      
+      
+      
+        <link rel="canonical" href="https://meshcore-dev.github.io/meshcore/development/roadmap/">
+      
+      
+        <link rel="prev" href="../../design/trail_redesign/">
+      
+      
+        <link rel="next" href="../../solo_features/external_keyboard/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Feature roadmap - MeshCore Docs</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../_stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#feature-roadmap" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="MeshCore Docs" class="md-header__button md-logo" aria-label="MeshCore Docs" data-md-component="logo">
+      
+  <img src="../../_assets/meshcore.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            MeshCore Docs
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Feature roadmap
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/meshcore-dev/meshcore/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    meshcore-dev/meshcore
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="MeshCore Docs" class="md-nav__button md-logo" aria-label="MeshCore Docs" data-md-component="logo">
+      
+  <img src="../../_assets/meshcore.svg" alt="logo">
+
+    </a>
+    MeshCore Docs
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/meshcore-dev/meshcore/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    meshcore-dev/meshcore
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Introduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli_commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../companion_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Companion Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../docs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local Documentation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Frequently Asked Questions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../kiss_modem_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MeshCore KISS Modem Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../nrf52_power_management/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF52 Power Management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../number_allocations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Number Allocations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../packet_format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Packet Format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../payloads/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Payload Format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../qr_codes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    QR Codes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../stats_binary_frames/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stats Binary Frame Structures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../terminal_chat_cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terminal Chat CLI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/nearby_redesign/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nearby Nodes — analiza i propozycja uporządkowania
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/solo_ui_framework/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solo UI framework — a guide for adding features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/trail_redesign/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trail (Tools › Trail) — analiza i propozycja uporządkowania
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_15" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_15" id="__nav_15_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_15_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature roadmap
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#priority-queue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Priority queue
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Priority queue">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mark-all-read-at-type-level" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ Mark-all-read at type level
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#favourites-dial" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ Favourites dial
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gps-trail-renamed-from-breadcrumb" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ GPS trail (renamed from breadcrumb)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#backlog-not-yet-prioritised" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backlog (not yet prioritised)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Backlog (not yet prioritised)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#waypoints-navigation-cluster-mark-a-spot-navigate-back" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ Waypoints + navigation cluster — mark a spot, navigate back
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#backtrack-navigate-home-along-the-recorded-trail" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ Backtrack — navigate home along the recorded trail
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#compass-to-contact-folded-into-the-waypoints-nav-view" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ Compass to contact — folded into the Waypoints nav view
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#heading-up-track-up-map-orientation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📋 Heading-up (track-up) map orientation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#battery-power-optimization-duty-cycle-rx-apc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🚧 Battery / power optimization (duty-cycle RX + APC)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#companion-repeater-forwarding-filters-diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ Companion repeater + forwarding filters + diagnostics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sos-broadcast" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SOS broadcast
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#range-test-shipped-as-nearby-nodes-ping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ Range test — shipped as Nearby Nodes ping
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#quiet-hours" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quiet hours
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#channel-scanner-home-page" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Channel scanner home page
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#contact-distance-sort" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Contact distance sort
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#signal-stats-screen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Signal stats screen
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#auto-reply-query-commands-with-live-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ Auto-reply query commands with live data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lock-screen-unread-count" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ Lock-screen unread count
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#power-profile-presets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Power profile presets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#battery-curve-calibration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Battery curve calibration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mark-read-at-type-level-done-see-mark-all-read-at-type-level-above" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ Mark-read at type level — done (see "Mark-all-read at type level" above)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#display-test-pattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Display test pattern
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#group-whos-online-ping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Group "who's online" ping
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#new-ideas-unprioritised" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New ideas (unprioritised)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="New ideas (unprioritised)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#dm-delivery-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ DM delivery status
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#periodic-location-beacon-live-share" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📋 Periodic location beacon ("live share")
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#arrival-proximity-alert" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📋 Arrival / proximity alert
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#where-am-i-location-screen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📋 "Where am I" location screen
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#on-screen-qr-share-own-contact-channel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📋 On-screen QR — share own contact / channel
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sunrise-sunset-golden-hour" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📋 Sunrise / sunset + golden hour
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#find-my-device-remote-buzzer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📋 "Find my device" — remote buzzer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#trail-auto-pause" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📋 Trail auto-pause
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#night-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📋 Night mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stopwatch-timer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📋 Stopwatch / timer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#trail-elevation-ascent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📋 Trail elevation / ascent
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deferred" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deferred
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Deferred">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#morse-keyboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ❌ Morse keyboard
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#buzzer-events_stopped-irq-chaining" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ❌ Buzzer EVENTS_STOPPED IRQ chaining
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vibration-feedback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ❌ Vibration feedback
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-order-suggestion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation order suggestion
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_16" >
+        
+          
+          <label class="md-nav__link" for="__nav_16" id="__nav_16_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solo features
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_16_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_16">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Solo features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../solo_features/external_keyboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External keyboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_16_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_16_2" id="__nav_16_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Clock screen
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_16_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_16_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Clock screen
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../solo_features/clock_screen/clock_screen/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Clock screen
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_16_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_16_3" id="__nav_16_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Favourites dial
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_16_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_16_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Favourites dial
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../solo_features/favourites_dial/favourites_dial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Favourites dial
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_16_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_16_4" id="__nav_16_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Message screen
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_16_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_16_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Message screen
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../solo_features/message_screen/message_screen/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Message screen
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_16_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_16_5" id="__nav_16_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Screen lock
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_16_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_16_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Screen lock
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../solo_features/screen_lock/screen_lock/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Screen lock
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_16_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_16_6" id="__nav_16_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settings screen
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_16_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_16_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Settings screen
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../solo_features/settings_screen/settings_screen/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settings screen
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_16_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_16_7" id="__nav_16_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tools screen
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_16_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_16_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tools screen
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../solo_features/tools_screen/tools_screen/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tools screen
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#priority-queue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Priority queue
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Priority queue">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mark-all-read-at-type-level" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ Mark-all-read at type level
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#favourites-dial" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ Favourites dial
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gps-trail-renamed-from-breadcrumb" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ GPS trail (renamed from breadcrumb)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#backlog-not-yet-prioritised" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backlog (not yet prioritised)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Backlog (not yet prioritised)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#waypoints-navigation-cluster-mark-a-spot-navigate-back" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ Waypoints + navigation cluster — mark a spot, navigate back
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#backtrack-navigate-home-along-the-recorded-trail" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ Backtrack — navigate home along the recorded trail
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#compass-to-contact-folded-into-the-waypoints-nav-view" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ Compass to contact — folded into the Waypoints nav view
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#heading-up-track-up-map-orientation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📋 Heading-up (track-up) map orientation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#battery-power-optimization-duty-cycle-rx-apc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🚧 Battery / power optimization (duty-cycle RX + APC)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#companion-repeater-forwarding-filters-diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ Companion repeater + forwarding filters + diagnostics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sos-broadcast" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SOS broadcast
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#range-test-shipped-as-nearby-nodes-ping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ Range test — shipped as Nearby Nodes ping
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#quiet-hours" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quiet hours
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#channel-scanner-home-page" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Channel scanner home page
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#contact-distance-sort" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Contact distance sort
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#signal-stats-screen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Signal stats screen
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#auto-reply-query-commands-with-live-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ Auto-reply query commands with live data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lock-screen-unread-count" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ Lock-screen unread count
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#power-profile-presets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Power profile presets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#battery-curve-calibration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Battery curve calibration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mark-read-at-type-level-done-see-mark-all-read-at-type-level-above" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ Mark-read at type level — done (see "Mark-all-read at type level" above)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#display-test-pattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Display test pattern
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#group-whos-online-ping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Group "who's online" ping
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#new-ideas-unprioritised" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New ideas (unprioritised)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="New ideas (unprioritised)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#dm-delivery-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ DM delivery status
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#periodic-location-beacon-live-share" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📋 Periodic location beacon ("live share")
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#arrival-proximity-alert" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📋 Arrival / proximity alert
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#where-am-i-location-screen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📋 "Where am I" location screen
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#on-screen-qr-share-own-contact-channel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📋 On-screen QR — share own contact / channel
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sunrise-sunset-golden-hour" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📋 Sunrise / sunset + golden hour
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#find-my-device-remote-buzzer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📋 "Find my device" — remote buzzer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#trail-auto-pause" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📋 Trail auto-pause
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#night-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📋 Night mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stopwatch-timer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📋 Stopwatch / timer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#trail-elevation-ascent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📋 Trail elevation / ascent
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deferred" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deferred
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Deferred">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#morse-keyboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ❌ Morse keyboard
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#buzzer-events_stopped-irq-chaining" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ❌ Buzzer EVENTS_STOPPED IRQ chaining
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vibration-feedback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ❌ Vibration feedback
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-order-suggestion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation order suggestion
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/meshcore-dev/meshcore/edit/main/docs/development/roadmap.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="feature-roadmap">Feature roadmap</h1>
+<p>Joystick-only UX constraints: 4 directions + Enter + Back. No text entry except inside KeyboardWidget. Everything else navigable with cursor + press.</p>
+<p>Status legend: 📋 planned · 🚧 in progress · ✅ done · ❌ rejected/deferred</p>
+<hr />
+<h2 id="priority-queue">Priority queue</h2>
+<h3 id="mark-all-read-at-type-level">✅ Mark-all-read at type level</h3>
+<p>Hold Enter on the MESSAGE mode-select screen (DM / Channels / Rooms) opens a 1-item context menu "Mark all read". Acts on the currently highlighted mode and shows a brief confirmation alert.</p>
+<p>Implementation:
+- New <code>UITask::clearAllDMUnread()</code> — <code>memset</code> over <code>_dm_unread_table</code>
+- <code>MessagesScreen::clearAllChannelUnread()</code> already existed
+- <code>UITask::clearRoomUnread()</code> already existed
+- Title is a <code>static const char*</code> table (PopupMenu stores the title pointer verbatim — locals would dangle)
+- Zero schema impact, all counters live in RAM</p>
+<h3 id="favourites-dial">✅ Favourites dial</h3>
+<p>Phase 1 ✅ (storage + read-only render + grid nav)
+Phase 2 ✅ (pin from Contact options menu in QuickMsg + slot picker submenu)
+  - Enter on a filled tile opens that contact's DM directly
+  - Cancel from a Favourites-opened DM returns to the home screen
+Phase 3 ✅ (in-place pin picker on empty tile: upstream-favourited contacts first,
+   then recent DM contacts deduped; selecting a contact that's already pinned
+   elsewhere moves it to the new slot)</p>
+<p><strong>Follow-up done</strong>: OLED unread-badge overlap fixed — badge and name share the
+same baseline, drawTextEllipsized's max width subtracts badge width + a 3 px
+gap so names shorten to "Nam…" before the digit.</p>
+<p>A 2×3 grid (six slots) of pinned contacts on its own home page, between Clock and Messages. Joystick picks a tile, Enter opens the existing DM conversation or sends a pre-set quick reply.</p>
+<p>Data model:
+- New field in NodePrefs: <code>uint8_t favourite_contacts[6][6]</code> — first 6 bytes of each contact's <code>pub_key</code> (enough to disambiguate locally)
+- Lookup at render time: walk contacts, match prefix, render name + unread badge
+- Empty slot renders as "+" placeholder; Enter on empty opens a contact picker (existing UI)</p>
+<p>Pinning UX:
+- In QuickMsg DM list, long-press on a contact → context menu → "Pin to dial" → asks which of the 6 slots
+- Unpin via the same menu (only shown when contact is already pinned)</p>
+<p>Schema bump: add <code>favourite_contacts</code> to NodePrefs, bump <code>SCHEMA_SENTINEL</code> low byte.</p>
+<p>Render layout (250×122 landscape e-ink):</p>
+<pre><code>╔══════════════════════════════╗
+║ Favourites                   ║
+╠══════════════════════════════╣
+║ ┌──────┐ ┌──────┐ ┌──────┐   ║
+║ │Alice │ │Bob 3 │ │  +   │   ║
+║ └──────┘ └──────┘ └──────┘   ║
+║ ┌──────┐ ┌──────┐ ┌──────┐   ║
+║ │Carol │ │  +   │ │  +   │   ║
+║ └──────┘ └──────┘ └──────┘   ║
+╚══════════════════════════════╝
+</code></pre>
+<p>Joystick navigation is natural with 6 tiles (UP/DOWN between rows, LEFT/RIGHT within row).</p>
+<h3 id="gps-trail-renamed-from-breadcrumb">✅ GPS trail (renamed from breadcrumb)</h3>
+<p>Phase 1 ✅ (storage + sampling + Summary view + G indicator in status bar)
+Phase 2 ✅ (auto-fit Map view with cos(lat) aspect compensation; LEFT/RIGHT cycles views)
+  - Summary scrolls on short panels (OLED) so hint stops overlapping
+  - Status-bar G blinks at the same cadence as A (forces 1 s home refresh)
+  - Default sampling 30 s + 5 m min-delta (was 60 s + 25 m — too sparse on foot)
+  - "Avg speed" replaces "Speed"; Time uses RTC so it ticks every render
+  - Stop → start creates a new segment; the map doesn't bridge dead time,
+    and total distance skips segment boundaries
+Phase 3 ✅ (per-point list view with HH:MM local time + delta-from-previous;
+   segment-start rows show "start" instead of a delta)
+Phase 4 ✅ (Hold-Enter popup grows Save / Load / Reset / Export GPX /
+   Export saved entries. Single flash slot at /trail (binary header with
+   magic+version+count+accumulated_ms then raw TrailPoint records). GPX 1.1
+   dump goes over USB Serial; "Export GPX" streams the live RAM ring,
+   "Export saved" streams the flash file straight to USB without touching
+   the live ring. Segments respect SEG_START boundaries. Alert reflects
+   BLE-app-collision state)
+Phase 5 ✅ (Settings + actions consolidated into a single Hold-Enter popup —
+   Min dist + Units cycled with LEFT/RIGHT (popup stays open), plus
+   Start/Stop tracking and Reset action items. Short Enter never toggles —
+   both start and stop go through the popup, so a stray tap can never change
+   tracking state. View counter (N/3) lives in the title bar; the bottom hint
+   row is gone, content fills the freed space. Sampling cadence fixed at 1 s,
+   GPS upd setting also removed; both rely on the sensor manager's defaults)
+Polish ✅ (map view: filled/open dot markers around segment breaks;
+   "Waiting for GPS fix" status when started without a lock;
+   capacity bumped to 512 points; elapsed/avg-speed run on millis() instead
+   of RTC so they tick even before GPS time is synced)</p>
+<p>Tools › Breadcrumb. Periodically samples <code>(lat, lon, ts)</code> into a RAM ring buffer; user explicitly saves snapshots to flash.</p>
+<p><strong>Logging is a runtime state</strong>, not a settings value. User starts/stops from the
+Tools › Breadcrumb screen. Once active, sampling continues in the background
+regardless of which screen is shown, and a <code>G</code> indicator appears in the status
+bar (analogous to <code>A</code> for auto-advert). A reboot resets the active state to
+off; the RAM trail is also lost on reboot unless saved to a flash slot first.</p>
+<p>Settings only control sampling cadence and the min-distance gate — they don't
+enable/disable the feature.</p>
+<p><strong>Storage model — RAM ring with explicit save</strong></p>
+<p>Rationale: auto-off only blanks the display, the firmware keeps running, so the RAM trail survives every idle scenario. Typical use is a single trip start→stop while wearing the device; persisting across reboots is rarely wanted. RAM-only avoids ~1400 flash writes/day and the LittleFS wear that comes with continuous logging.</p>
+<ul>
+<li>Live ring: <code>BreadcrumbEntry[BC_RAM_CAP]</code> in <code>UITask</code> (or a dedicated component). Each entry <code>int32_t lat_1e6, int32_t lon_1e6, uint32_t ts</code> = 12 B. Cap = 256 → 3 KB RAM. nRF52840 (256 KB RAM) has plenty of headroom.</li>
+<li>Wrap-on-write: oldest entry replaced when buffer full.</li>
+<li>Reboot wipes the live trail (intentional; matches the "this trip" model).</li>
+</ul>
+<p><strong>Snapshot slots on flash</strong> (user-initiated only):
+- <code>/breadcrumb.0</code>, <code>/breadcrumb.1</code>, <code>/breadcrumb.2</code> — three named slots
+- Each file: small header (count, start_ts, end_ts, total_distance_m) + entry array
+- Written only on explicit "Save trail" action — zero background writes, zero wear concern
+- Optional: auto-save to slot 0 on detected low-battery shutdown (single write before going dark)</p>
+<p>UI screens (LEFT/RIGHT cycles):
+1. <strong>Summary</strong> — total distance (km), elapsed time (h:mm), point count, current speed (from last 2 samples), GPS fix indicator
+2. <strong>Trail map</strong> — ASCII bounding-box plot. Auto-fit the polygon, current position marked <code>X</code>, start marked <code>*</code>. UP/DOWN zoom, LEFT/RIGHT pan when zoomed.
+3. <strong>Last N entries list</strong> — scroll through recent points with timestamp + delta from previous.</p>
+<p>Joystick actions:
+- Enter → toggle live logging on/off (status bar shows <code>*</code> when active, like auto-advert <code>A</code>)
+- Back → exit
+- Hold Enter → context menu:
+  - "Reset trail" — clear RAM ring
+  - "Save trail → slot N" — snapshot RAM into chosen flash slot
+  - "Load trail ← slot N" — restore from chosen slot into RAM ring
+  - "Export over USB" — dump live RAM trail as KML/GPX over serial</p>
+<p>Statistics computed on the fly walking the ring:
+- Total distance: sum of Haversine(p[i], p[i-1])
+- Elapsed time: ts[last] - ts[first]
+- Current speed: dist(last, prev) / (ts[last] - ts[prev])</p>
+<p>Settings:
+- Settings › GPS › Breadcrumb interval: 30 s / 1 min / 5 min / 15 min (default 1 min) — only the cadence; logging on/off is a Tools toggle
+- Settings › GPS › Breadcrumb min delta: 5 m / 25 m / 100 m (skip near-stationary samples to keep the ring densely populated with real movement)
+- Export format: GPX (standard for GPS tracks; OSMAnd / Garmin compatible)</p>
+<p>Schema impact: new prefs fields <code>uint8_t breadcrumb_interval_idx</code>, <code>uint8_t breadcrumb_min_delta_idx</code>. Sentinel bump. The slot files are separate from prefs.</p>
+<p>Edge cases:
+- No GPS fix: skip sampling, status indicator dims
+- Low-batt shutdown: optional auto-save to slot 0 (one write) before powerdown
+- Memory: 3 KB RAM is negligible on this MCU; if RAM ever tightens, drop to 128 entries</p>
+<hr />
+<h2 id="backlog-not-yet-prioritised">Backlog (not yet prioritised)</h2>
+<h3 id="waypoints-navigation-cluster-mark-a-spot-navigate-back">✅ Waypoints + navigation cluster — mark a spot, navigate back</h3>
+<p><strong>✅ Shipped</strong> (branch <code>feat/waypoints-nav</code>). The whole navigation suite landed. Notable deltas from the original spec that follows:</p>
+<ul>
+<li><strong>Waypoints</strong> — Mark here / list / Rename / Delete / <strong>Clear waypoints</strong> / <strong>Send</strong>; stored in <code>/waypoints</code> (16 max), independent of trail recording and kept across Reset trail.</li>
+<li><strong>Map</strong> — waypoint marker shows the <strong>first two</strong> label chars (not one), placed edge-aware so it stays on-map. With a trail the view frames the recorded route and clamps far waypoints to the nearest edge; with no trail it auto-fits to waypoints + live position. Degenerate single-point case handled.</li>
+<li><strong>Shared NavView</strong> — one <code>navview::draw(...)</code> reused by waypoints, Trail-start backtrack, Nearby-node nav and message-location nav. Shows distance + <code>To:</code> + <code>Hdg:</code> (two absolute bearings), honouring the global Units setting.</li>
+<li><strong>COG ring in UITask</strong> — heading source decoupled from trail logging, time-sampled with gross-error rejection + min-displacement gate; restarts after a &gt;15 s GPS gap so a reacquired fix can't imply a teleport heading.</li>
+<li><strong>Standalone Compass</strong> (Tools › Compass) — heading-up <strong>scrolling tape</strong> with a fixed travel-direction pointer + large degrees/cardinal readout. (A north-up circular dial was tried first and dropped — only a few-px needle fits the OLED's vertical space.)</li>
+<li><strong>Global Units</strong> (Settings › System: Metric/Imperial) — drives every distance/speed in Tools, the min-distance gate, and the map scale-bar. New <code>units_imperial</code> + <code>trail_show_pace</code> prefs (schema 0xC0DE0006); the old combined <code>trail_units_idx</code> retired.</li>
+<li><strong>Location over mesh</strong> — Waypoints list → <strong>Send</strong> shares <code>[WAY]lat,lon label</code>; a received location ({loc} text or a [WAY] share) offers <strong>Navigate / Save waypoint</strong> from both the message list row and the fullscreen view. Backed by a shared <code>geo::parseLatLon</code>.</li>
+</ul>
+<p>Shared helpers extracted: <code>geo::</code> (haversineKm/bearingDeg/bearingCardinal/fmtDist/parseLatLon) in <code>GeoUtils.h</code>; 1-px <code>gfx::drawLine/drawCircle</code> in <code>GfxUtils.h</code>; one <code>UITask::currentLocation()</code> GPS accessor.</p>
+<p>The original design spec is kept below as a record.</p>
+<hr />
+<p>Turns Solo from a comms device into a basic GPS navigator. Mark the current
+position with a short label, then later get bearing + distance back to it —
+ideal for off-grid use (car, camp, trailhead, water source).</p>
+<p><strong>Storage</strong> — dedicated flash file <code>/waypoints</code> (separate from prefs, like
+<code>/trail</code>). Fixed table, no schema-sentinel impact:</p>
+<pre><code>struct Waypoint {
+  int32_t  lat_1e6, lon_1e6;   // saved fix
+  uint32_t ts;                 // when marked (RTC)
+  char     label[12];          // short name, NUL-terminated (&quot;CAR&quot;, &quot;CAMP&quot;, &quot;H2O&quot;…)
+};
+static const int WAYPOINT_MAX = 16;   // 16 × 24 B = 384 B file
+</code></pre>
+<p><strong>Marking</strong> — from the GPS or Trail screen: Hold Enter → "Mark here".
+- Requires a GPS fix; otherwise alert "No GPS fix".
+- Opens the existing <code>KeyboardWidget</code> to type the label (≤11 chars). Empty
+  input auto-labels <code>WP&lt;n&gt;</code>.
+- Saves the current fix + label, appends to the file.</p>
+<p><strong>Visible on the trail Map</strong> — waypoints render on the existing Map view as a
+distinct marker (e.g. a hollow diamond or a small flag) so they show in
+context with the recorded track:
+- Fold waypoint coords into the map's bounding box so off-track waypoints
+  stay in frame. Today <code>renderMap()</code> derives the box from
+  <code>TrailStore::boundingBox()</code>; extend it to also span the waypoint table
+  (and handle the "waypoints but empty trail" case — map still renders).
+- Generalise the <code>project()</code> lambda to take raw (lat, lon) instead of a
+  <code>TrailPoint&amp;</code> so the same projection draws both track points and waypoints.
+- Marker shows the label's first character beside it when there's room
+  (122 px is tight with many waypoints); the full label lives in the list /
+  nav view.</p>
+<p><strong>Trail workflow integration</strong> — waypoints live <em>inside</em> the Trail screen, not
+a separate Tools entry, because marking points of interest happens while you
+are recording:
+- <strong>Mark</strong>: Trail → Hold Enter → "Mark here" (new action-menu row). Opens the
+  keyboard for the label, saves the current fix. Works whether or not tracking
+  is active — a waypoint is independent of trail recording state.
+- <strong>Manage / navigate</strong>: Trail → Hold Enter → "Waypoints" → a PopupMenu list
+  of saved waypoints (label + distance). Selecting one:
+    - Enter → fullscreen nav (see below).
+    - Hold Enter → Rename / Delete (later: <strong>Share over mesh</strong>).
+- Waypoints persist across trail Reset / reboot (separate <code>/waypoints</code> file),
+  unlike the RAM trail ring.</p>
+<p><strong>Navigation view — two bearings, no compass needed</strong></p>
+<p>The L1 has no magnetometer, so we can't show "you are facing X". Instead the
+nav view shows two <em>absolute</em> bearings and lets the user do the comparison —
+robust against GPS jitter, no relative-turn maths:</p>
+<pre><code>   CAMP            ← waypoint label
+   1.4 km          ← distance to target
+   To:  145° SE    ← absolute bearing target-from-me (haversine/bearingDeg)
+   Hdg: 090° E     ← my course over ground, derived from recent GPS movement
+</code></pre>
+<p>Reading it: target is at 145°, I'm travelling at 90° → I need to bear right.
+When standing still (course undefined) the Hdg line shows <code>--</code> instead of a
+stale value.</p>
+<p><strong>Course over ground (COG)</strong> — a small <code>TrailStore</code> helper:
+<code>bool currentCourse(int&amp; deg)</code> walks back from the newest fix until the
+cumulative distance from it exceeds a threshold (~10–15 m so GPS noise
+doesn't dominate) and returns the bearing from that older fix to the newest.
+Returns false (→ <code>--</code>) when there isn't enough recent movement. Refreshed ~1 s.
+<code>bearingDeg</code> / <code>bearingCardinal</code> are currently private statics in NearbyScreen;
+lift them into a shared header (or TrailStore) so both screens use them.</p>
+<p>This COG value can later back a standalone "heading" trail view if wanted, but
+the two-bearing nav view already covers the practical need.</p>
+<p><strong>Shared nav view — also navigate to a node</strong> ⭐</p>
+<p>The nav view's target is just <code>(lat, lon, label)</code> — it doesn't care whether
+that came from a waypoint, the trail start (Backtrack), or a node's
+last-known advert position. Make it a small reusable component
+(<code>NavView</code> / <code>drawNavTo(display, target_lat, target_lon, label)</code>) and wire it
+in from <strong>Nearby Nodes</strong> too: node detail → "Navigate" → same To/Hdg/distance
+screen, retargeting the selected node. This folds the backlog "Compass to
+contact" idea into one screen and means Nearby stops being a static snapshot —
+you can actually walk toward a person.</p>
+<p>Node target is the contact's <code>gps_lat/gps_lon</code> from its last advert (already
+read in NearbyScreen). It's a <em>last-known</em> fix, not live, so the label could
+show the advert age (e.g. <code>Alice (5m)</code>); pair it with Auto-Advert on the other
+device for a moving target.</p>
+<p><strong>COG source must be decoupled from trail recording.</strong> Deriving the heading
+from <code>TrailStore</code> only works while a trail is actively being recorded — but
+node/waypoint navigation shouldn't require the user to start trail logging.
+Fix: a tiny independent COG ring in UITask (≈4 fixes), maintained on every GPS
+poll regardless of trail state. The trail ring stays a separate concern, so
+the Hdg line is available everywhere (waypoints, nodes, backtrack).</p>
+<p>The COG ring is <strong>time-sampled with guards</strong>, not raw displacement-gated:
+push every GPS fix at the normal poll cadence (~1 s) into a short rolling
+window (a few seconds of fixes), and compute the heading as the bearing
+across the window (oldest→newest), optionally low-pass smoothed. Time-based
+sampling gives a steadier, averaged course than bearing between just two
+points, and tracks slow movement without lagging.</p>
+<p>Two guards keep it honest:
+- <strong>Gross-error rejection</strong> — drop a fix before it enters the window if it
+  implies an impossible jump (implied speed over a sane cap, e.g. &gt; ~50 m/s
+  between consecutive fixes), or if the provider exposes a usable
+  validity/HDOP signal. One bad fix shouldn't swing the heading.
+- <strong>Minimum displacement over the window</strong> — only emit a heading once the
+  total movement across the window exceeds a small threshold (a few m). Below
+  that the user is effectively stationary: hold the last good heading, and
+  show <code>--</code> until the window has cleared the threshold at least once. This
+  is what stops a standing user from getting a spinning bearing.</p>
+<p>Threshold(s) can be fixed constants to start; expose in Settings later if it
+proves worth tuning.</p>
+<p>Open question: whether the nav view should also be reachable as a 4th Map
+overlay state (cycle a "highlighted" waypoint with LEFT/RIGHT on the Map) or
+stay list-driven only. Start list-driven; add map cycling later if wanted.</p>
+<h3 id="backtrack-navigate-home-along-the-recorded-trail">✅ Backtrack — navigate home along the recorded trail</h3>
+<p>Shipped: the Waypoints list always begins with a synthetic <strong>Trail start</strong> row
+whenever a trail exists, opening the shared nav view to the first recorded
+point. No new storage. (Navigates to the start point, not progressive
+nearest-point following — adequate for "get me back".)</p>
+<h3 id="compass-to-contact-folded-into-the-waypoints-nav-view">✅ Compass to contact — folded into the Waypoints nav view</h3>
+<p>Superseded by the shared nav view described under <strong>Waypoints</strong> above:
+navigate to a node = open that nav view with the contact's last-advert
+<code>gps_lat/gps_lon</code> as the target. No separate compass screen needed; the
+"two absolute bearings (To / Hdg)" approach replaces the relative-heading
+arrow this entry originally assumed. Kept here only as a cross-reference.</p>
+<h3 id="heading-up-track-up-map-orientation">📋 Heading-up (track-up) map orientation</h3>
+<p>Today the trail Map is north-up. Optionally orient it to the current course
+(COG, same source as the compass tape) so the travel direction is up — a Trail
+action-menu toggle <strong>Orientation: North-up / Heading-up</strong>.</p>
+<p>Lightweight approach: rotate the already-fitted map around its centre by
+<code>-cog</code> (rotate each projected point before drawing). Point-glyph markers rotate
+cleanly; label text stays upright; the north arrow then points to actual north
+instead of straight up.</p>
+<p>Caveats that make it more than a one-line toggle:
+- <strong>COG-only heading</strong> (no magnetometer) — undefined while stationary, so hold
+  the last good course or fall back to north-up; it can't be heading-up when
+  you're standing still.
+- <strong>Jitter</strong> — rotating the whole map by raw COG makes it shake; needs heading
+  smoothing / hysteresis (only re-rotate past ~10–15° of change).
+- <strong>Fit</strong> — rotated content overflows the rectangle. Refitting to the rotated
+  bbox makes the scale "breathe" as you turn; alternative is to accept minor
+  edge clipping.
+- <strong>Grid</strong> — the axis-aligned scale grid becomes diagonal; drop it in
+  heading-up mode or rewrite it.
+- <strong>e-ink</strong> — a rotating map ghosts badly and refreshes slowly; this is really
+  an OLED feature, flag it as degraded on e-ink.</p>
+<p>A fuller position-centred navigator (you fixed at screen centre, fixed/preset
+zoom, pan) is a larger separate feature; start with the rotate-the-fit version
+if pursued.</p>
+<h3 id="battery-power-optimization-duty-cycle-rx-apc">🚧 Battery / power optimization (duty-cycle RX + APC)</h3>
+<p><strong>On branch <code>feat/power-saving</code></strong> — two independent toggles under Settings ›
+Radio, both <strong>default OFF</strong>. Under field testing; not yet merged.</p>
+<p><strong>✅ Done — hardware duty-cycle RX ("Pwr save")</strong>
+- Uses the SX126x's own <strong>RX duty-cycle</strong> (<code>SetRxDutyCycle</code>, datasheet 13.1.7) via
+  RadioLib <code>startReceiveDutyCycleAuto(preamble, 8)</code>: the chip's sequencer cycles
+  RX↔sleep, latches a preamble and stays in RX to receive the packet (RX_DONE on
+  DIO1). No MCU state machine — <code>recvRaw()</code> reads the packet exactly as in
+  continuous RX. <code>armRecv()</code> arms duty-cycle when power-save is on, else a normal
+  <code>startReceive()</code>; <code>loop()</code> re-arms only on a toggle. Falls back to continuous RX
+  if the modem doesn't support duty-cycle (non-SX126x). <code>state</code> stays <code>STATE_RX</code>
+  so the dispatcher's not-in-RX watchdog never trips.
+- Duty-cycle engages when the configured preamble ≥ 2·8+1 symbols. At SF≤8 the
+  preamble is 32 → full duty-cycle; at SF9–12 it is 16 → RadioLib transparently
+  stays on continuous RX (no power saving on the slow SFs).
+- Companion: <code>rx_powersave</code> pref (schema <code>0xC0DE0009</code>), <strong>Settings › Radio ›
+  "Pwr save"</strong>, applied at boot (MyMesh) and on change (UITask). Noise-floor
+  sampling is skipped while on (chip is asleep most of the time) — the radio page
+  shows "Noise floor: n/a".</p>
+<blockquote>
+<p><strong>History:</strong> an earlier attempt used a <em>software</em> CAD state machine (scan →
+warm-sleep window → on-detect full RX, with <code>standbyXOSC</code>/burst windows). It
+fought the hardware — querying a warm-sleeping chip from <code>checkSend()</code> gave a
+phantom-busy channel that stalled TX for ~4 s, and ACKs dropped in the scan
+gaps. Replaced wholesale by the hardware duty-cycle above, which fixed both.</p>
+</blockquote>
+<p><strong>✅ Done — Adaptive Power Control ("Auto pwr")</strong>
+- <code>tx_power_dbm</code> becomes a <em>ceiling</em>; APC drives the radio's actual power within
+  <code>[APC_MIN_DBM −9, ceiling]</code> to hold the link margin near a target. Lives in
+  <code>MyMesh</code> (<code>applyApc</code> + <code>apcSampleSnr</code>/<code>apcOnFailure</code> controller), <code>tx_apc</code> pref.
+- <strong>Two feedback sources</strong>, both the <em>reverse</em> link (no protocol change):
+  - <strong>Direct messages</strong> — ACK SNR (<code>onAckRecv</code>); missed ACK (<code>onSendTimeout</code>) =
+    lost confirmation.
+  - <strong>Channel/flood messages</strong> — no ACK exists, so we hash each originated flood
+    (<code>apcTrackFloodSend</code> in <code>sendFloodScoped</code>, hash excludes the path) and listen
+    in <code>filterRecvFloodPacket</code> for a repeater rebroadcasting it; the heard echo's
+    SNR is a sample, and <strong>no echo within ~6 s</strong> counts as a lost confirmation.
+    This is what lets a channel send recover after APC trimmed power below what the
+    repeaters can hear (previously it could strand channel TX at the floor).
+- Margin is measured <strong>above the per-SF demod floor</strong> (<code>−7.5 − 2.5·(SF−7)</code> dB) so
+  one target works across SF7–12. Each SNR sample is smoothed with an EWMA (α=0.4);
+  power steps <strong>proportionally</strong> to the error (capped ±2 dB) with a ±2 dB deadband
+  to avoid hunting; the EWMA is nudged by each step so it doesn't re-trigger on a
+  stale sample.
+- Lost confirmation → step up <code>+4 dB</code>; <strong>2 consecutive</strong> losses → jump to the
+  ceiling (ramp gradually first since a loss is an ambiguous power signal). Any
+  confirmation clears the streak. Live power shown on the radio page + name bar.</p>
+<p><strong>⏸ To return to (not done)</strong>
+- <strong>Current measurement</strong> — never taken (no PPK2/meter to hand). Reliability is
+  confirmed in use; the actual mA win is still unquantified. Do this first.
+- <strong>APC sample targeting</strong> — a direct ACK's SNR is the last hop of the <em>return</em>
+  path (sound on symmetric/direct links); a flood echo is the <em>first</em> hop from us
+  to a repeater, which is exactly what our TX power controls. Both feed one shared
+  controller; per-source weighting or direct-only (0-hop) gating could be explored.</p>
+<p><strong>Original analysis (kept for context):</strong></p>
+<p>Goal: multiply battery life <strong>without losing functionality</strong>. The dominant
+draw on this node is the radio in <strong>continuous RX</strong> (always-on <code>startReceive()</code>
+with boosted gain in <a href="src/helpers/radiolib/RadioLibWrappers.cpp"><code>RadioLibWrappers.cpp</code></a>);
+the MCU already sleeps between iterations (<code>sd_app_evt_wait()</code>/WFE in
+<a href="src/helpers/NRF52Board.cpp"><code>NRF52Board.cpp</code></a>), so the framework is not the
+bottleneck — the radio is. The win is framework-agnostic and can land in this
+Arduino tree while keeping the Solo UI and upstream sync.</p>
+<p>Inspired by <strong>ZephCore</strong> (Zephyr MeshCore port, https://github.com/liquidraver/ZephCore),
+whose battery edge comes from radio/peripheral power technique, not the kernel:</p>
+<ul>
+<li><strong>CAD-based RX windowing</strong> — the biggest lever. Instead of continuous RX, use
+  the SX1262 RX-duty-cycle / Channel Activity Detection to briefly sample for a
+  preamble, then sleep, repeat. ZephCore quotes ~10–15 mA → ~3–5 mA RX. RadioLib
+  supports CAD / <code>startReceiveDutyCycle</code>. <strong>Tradeoff:</strong> slightly higher receive
+  latency / a small sensitivity hit — acceptable for a companion, must be a
+  toggle/setting so users who want lowest latency can keep continuous RX.</li>
+<li><strong>Adaptive Power Control (APC)</strong> — drop <code>tx_power_dbm</code> dynamically when link
+  quality (SNR/RSSI of acks) allows; raise it back when needed.</li>
+<li><strong>Config-level wins</strong> (mostly already exposed): BLE off when idle, OLED
+  auto-off (e-ink idle ≈ 0), longer advert intervals.</li>
+</ul>
+<p><strong>Explicitly out of scope: GPS power gating.</strong> ZephCore powers the GNSS only
+during a fix; this device is used as a <em>live</em> navigator + trail recorder, so GPS
+stays continuously powered. Don't gate it.</p>
+<p>Cross-check: as of the <strong>v1.16 upstream merge</strong>, MeshCore now ships native
+NRF52 companion power-saving (<a href="https://github.com/meshcore-dev/MeshCore/pull/1238">PR #1238</a>,
+<a href="docs/nrf52_power_management.md">docs/nrf52_power_management.md</a>). The companion
+loop now sleeps via <code>board.sleep(0)</code> whenever <code>hasPendingWork()</code> is false — but
+that only covers <strong>MCU idle</strong> (it does not touch the radio, which is the real
+draw), and there is no on/off toggle because not-sleeping would only waste power.
+The same merge also brought the <strong>preamble 16→32 bump for SF&lt;9</strong>, which is what
+makes the hardware RX duty-cycle viable at SF8 (it needs ≥ 2·8+1 = 17 preamble
+symbols to latch). Prefer adopting/extending upstream work over a parallel
+implementation. Note ZephCore's licence before copying any code verbatim
+(architecture inspiration is fine).</p>
+<p>Sequencing: hardware duty-cycle RX and APC are both done and in field test on
+<code>feat/power-saving</code>; see the status block at the top of this entry for what's
+left (PPK2 current measurement, multi-hop APC gating).</p>
+<h3 id="companion-repeater-forwarding-filters-diagnostics">✅ Companion repeater + forwarding filters + diagnostics</h3>
+<p>On-device repeater for the Solo companion, scoped to the SX1262 boards (Wio
+Tracker L1 OLED/e-ink, GAT562 30S). All on <code>feature/companion-repeater-presets</code>.</p>
+<ul>
+<li><strong>Repeater toggle</strong> (<code>client_repeat</code>, Tools › Repeater) — the companion relays
+  flood/direct traffic, still working as a normal companion. By default it
+  switches to a dedicated band on enable (see profile note below) rather than
+  relaying on whatever network it's chatting on. <code>MyMesh::allowPacketForward</code>
+  gates it; loop
+  detection (<code>isRepeatLooped</code>, ported from <code>simple_repeater</code>) and an advert
+  flood-depth cap are always applied. Packet pool bumped 16→32 to match the
+  repeater workload (a too-small pool starved channel/DM reception once relaying
+  queued retransmits).</li>
+<li><strong>Consolidated on Tools › Repeater</strong> — the toggle and the five filters share
+  one full-width screen, rather than the original Settings › Radio sub-items
+  (whose indented labels collided with the value column on a 128px OLED). Live
+  forwarding stats (Forwarded / Pool free / Queue) stay on Tools › Diagnostics.</li>
+<li><strong>Optional dedicated radio profile</strong> (<code>Network: Current/Custom</code>,
+  <code>repeater_use_profile</code> + <code>repeater_freq/bw/sf/cr</code>). Custom switches the radio to
+  a preset/manual profile when the repeater is enabled and restores the
+  companion's params when disabled (user-chosen revert-on-disable); a profile
+  equal to the companion = "same network", a different one = drop onto a separate
+  repeater network. <code>MyMesh::applyRepeaterRadio()</code> is the single decision point,
+  called at boot and on every toggle/edit; <code>repeaterProfileValid()</code> gates it.
+  Schema sentinel <code>0xC0DE0010</code>. <strong>Custom is the default</strong>: a never-configured
+  device (or one upgrading from a pre-<code>0x10</code> file, which has no saved profile)
+  turns the profile on and seeds <code>repeater_sf/bw/cr</code> from <code>LORA_SF/BW/CR</code> plus
+  a band-matched <code>repeater_freq</code> — relaying on the same network the operator is
+  chatting on isn't the MeshCore community norm, so "Current" stays opt-in.
+  <code>defaultRepeaterFreqForBand()</code> (<code>NodePrefs.h</code>) buckets the companion's own
+  <code>freq</code> into whichever of the three license-exempt bands MeshCore's app-driven
+  repeat toggle historically restricted to (433.000 / 869.495 / 918.000 MHz —
+  see <code>repeat_freq_ranges</code> in <code>MyMesh.cpp</code>), so the seeded default can't land
+  outside what's legal for wherever the companion's own network already is.
+  <code>LORA_FREQ/BW/SF/CR</code> fallback <code>#define</code>s moved from <code>MyMesh.h</code> to
+  <code>NodePrefs.h</code> so <code>DataStore.cpp</code>'s migration code can see them too.</li>
+<li><strong>Forwarding filters</strong> (all opt-in, default off, flood-only — a direct route's
+  named next hop is never dropped). Shown only while the repeater is on:</li>
+<li><strong>Skip advert</strong> — don't re-flood adverts (highest-volume flood).</li>
+<li><strong>Max hops</strong> — drop a flood past N hops.</li>
+<li><strong>Yield</strong> — scale the retransmit delay for <em>forwarded</em> floods only
+    (<code>getRetransmitDelay</code>); own sends pass their own delay to <code>sendFlood</code>, so the
+    companion's own traffic is never slowed. Widens the overhear window.</li>
+<li><strong>Min SNR</strong> — drop a flood copy below a dB threshold (<code>-128</code> sentinel = off,
+    so an upgraded prefs file can't read as "filter at 0 dB").</li>
+<li><strong>Suppress dup</strong> — overhear cancel: a received flood whose hash matches a
+    queued retransmit cancels our copy (<code>Dispatcher::suppressQueuedDuplicate</code>,
+    <code>wantsOverhearSuppress</code> hook). MeshCore had no overhear-cancel before — the
+    unused <code>removeOutboundByIdx</code>/<code>getOutboundByIdx</code> finally have a caller. Packet
+    hash ignores the path for non-TRACE, so our copy and the peer's relayed copy
+    hash equal. Pairs with Yield (longer delay → wider window to hear a peer).</li>
+<li><strong>Diagnostics screen</strong> (Tools › Diagnostics) — single read-only page: per-type
+  RX/TX counters (generic <code>Dispatcher::n_recv_by_type</code>/<code>n_sent_by_type</code>), uptime,
+  heap + stack (new <code>DeviceDiag</code> helper, nRF52 linker-symbol/<code>sbrk</code> heap +
+  FreeRTOS stack high-water), noise floor, RSSI/SNR, pool free, outbound queue,
+  <strong>Forwarded</strong> (<code>Mesh::n_forwarded</code> — actual retransmits; backed out on overhear
+  cancel so it reflects what hits the air), and <strong>Errors</strong> (Dispatcher
+  <code>ERR_EVENT_*</code> flags decoded to F/C/R). Hold Enter opens a one-item "Reset
+  counters" menu (Back dismisses) — <code>resetStats</code> made virtual; <code>Mesh</code> override
+  also clears <code>n_forwarded</code>.</li>
+<li><strong>Radio settings locked while relaying</strong> — a repeater must hear all traffic and
+  relay at consistent power, so duty-cycle RX ("Pwr save") and APC ("Auto pwr")
+  are forced off whenever <code>client_repeat</code> is on (effective <code>pref &amp;&amp; !client_repeat</code>
+  via <code>applyPowerSave()</code> / <code>apcActive()</code>), applied at boot, on the on-device
+  toggle, and on the app's <code>CMD_SET_RADIO_PARAMS</code>; Settings shows <code>--</code> and blocks
+  the toggle, preserving the user's pref for when the repeater goes off. A
+  blinking <code>»</code> status-bar indicator (<code>ICON_REPEATER</code>) shows relaying at a glance.</li>
+<li>Prefs persisted behind schema sentinels <code>0xC0DE000E</code> (four knobs),
+  <code>0xC0DE000F</code> (suppress-dup), <code>0xC0DE0010</code> (radio profile), with stray-byte
+  clamps for upgraders.</li>
+<li><strong>Open question:</strong> the app-side dedicated-band gate in <code>CMD_SET_RADIO_PARAMS</code>
+  was commented out (not deleted) to match the on-device toggle's any-frequency
+  behaviour — undecided whether that gate was UX-only or regulatory.</li>
+<li><strong>Not done:</strong> live two-device mesh verification (A→repeater→C); counters make
+  it observable but don't replace the field test.</li>
+</ul>
+<h3 id="sos-broadcast">SOS broadcast</h3>
+<p>Configurable in Settings › System › SOS:
+- Target: channel index or DM contact
+- Message template (uses placeholders)</p>
+<p>Trigger: Hold Back + Hold Enter for 3 s on any screen → confirmation popup ("Send SOS?") → Enter to send. Sends with <code>{loc}</code> and <code>{batt}</code> filled. 30 s cooldown.</p>
+<h3 id="range-test-shipped-as-nearby-nodes-ping">✅ Range test — shipped as Nearby Nodes ping</h3>
+<p>The practical need is covered by <strong>ping</strong> rather than a dedicated screen: in
+Nearby Nodes, a node's detail view → <strong>Hold Enter → Ping</strong> sends a direct mesh
+ping and shows RTT + SNR (own and remote), repeatable on demand. Available from
+both the stored-node detail and the active-discovery detail.</p>
+<p>The original idea below (a Tools › Range Test screen with continuous 5 s
+pinging and a 30-sample sparkline) was <strong>not</strong> built — kept as a possible
+future enhancement on top of the existing ping.</p>
+<p>Tools › Range Test:
+- Pick a node from contacts/nearby
+- Enter starts pinging every 5 s, logs RTT + RSSI + SNR (ring ~30)
+- Display shows current values + 30-sample sparkline (block characters)
+- Enter stops; Hold Enter for context menu (reset, change target)</p>
+<h3 id="quiet-hours">Quiet hours</h3>
+<p>Settings › Sound › Quiet Hours:
+- Enable on/off
+- Start HH (LEFT/RIGHT to change, 24 h)
+- End HH</p>
+<p>When within window: buzzer set to "off" (overrides setting), display brightness → 0. Restores prefs values when window ends. Time source: rtc_clock.</p>
+<h3 id="channel-scanner-home-page">Channel scanner home page</h3>
+<p>Toggleable in Settings › Home Pages. Lists channels with: name, unread count, last message age. Enter opens the channel. Sort by recency by default; LEFT/RIGHT toggles to alphabetical.</p>
+<h3 id="contact-distance-sort">Contact distance sort</h3>
+<p>QuickMsg DM list: a 4-th sort mode (currently sorted by message count). LEFT/RIGHT on the list header cycles: name | message-count | recency | distance. Distance uses GPS pos from contact's last advert.</p>
+<h3 id="signal-stats-screen">Signal stats screen</h3>
+<p>Tools › Stats:
+- Battery voltage 60-min sparkline
+- RSSI of last 30 received packets
+- Noise floor current
+- Free heap (if available)</p>
+<p>Read-only. UP/DOWN switches between metrics. Bottom shows current value as text.</p>
+<h3 id="auto-reply-query-commands-with-live-data">✅ Auto-reply query commands with live data</h3>
+<p>Realised as a <strong>command bot</strong> rather than a trigger/reply table: with <strong>Commands</strong> ON, a DM is scanned for <code>!word</code> tokens and answered with live node data via <code>expandMsg</code> — <code>!batt</code>/<code>!loc</code>/<code>!time</code>/<code>!temp</code>/<code>!status</code>/<code>!ping</code>/<code>!help</code>, plus <code>!hops</code> (per-message hop count via <code>getPathHashCount()</code>, <code>direct</code> if heard directly). Multiple commands in one message are merged into a single <code>|</code>-joined reply (one transmission/throttle/counter tick) via the shared <code>botScanCommands</code>. Works in DMs (per-contact throttle, ignores quiet hours — a pull) and on the bot's <strong>monitored channel</strong> (broadcast: per-channel cooldown, respects quiet hours). Toggled independently of the trigger bot. See <a href="examples/companion_radio/MyMeshBot.h"><code>MyMeshBot.h</code></a> <code>tryBotCommand</code> / <code>tryBotChannelCommand</code> / <code>botCommandReply</code>.</p>
+<h3 id="lock-screen-unread-count">✅ Lock-screen unread count</h3>
+<p>Shipped: the lock screen shows a total unread badge (<code>&lt;n&gt; unread</code>, summing DM +
+channel + room counters) below the time. Reuses the existing unread counters;
+no schema change.</p>
+<h3 id="power-profile-presets">Power profile presets</h3>
+<p>Settings › Profile: Indoor / Outdoor / Expedition. Each pre-fills:
+- Auto-off seconds
+- GPS interval
+- Auto-advert interval
+- Brightness</p>
+<p>Single Enter applies. Stored as <code>uint8_t profile_idx</code> with hardcoded value tables.</p>
+<h3 id="battery-curve-calibration">Battery curve calibration</h3>
+<p>Settings › System › Batt Calibration: edit 5 voltage breakpoints used to convert mV → %. UP/DOWN selects breakpoint, LEFT/RIGHT changes voltage in 50 mV steps. Helps users with non-standard LiPos report accurate %.</p>
+<h3 id="mark-read-at-type-level-done-see-mark-all-read-at-type-level-above">✅ Mark-read at type level — done (see "Mark-all-read at type level" above)</h3>
+<h3 id="display-test-pattern">Display test pattern</h3>
+<p>Tools › Display Test: full-screen grid + bars + Lemon glyph dump. Useful for verifying driver/font changes after flashing.</p>
+<h3 id="group-whos-online-ping">Group "who's online" ping</h3>
+<p>From channel view, Hold Enter → "Who's online?". Sends 0-hop discovery to channel members, collects responses for 10 s, shows a list with RSSI. Similar to existing Nearby active discovery but scoped to a channel.</p>
+<hr />
+<h2 id="new-ideas-unprioritised">New ideas (unprioritised)</h2>
+<p>Captured for later triage. None designed in detail yet (DM delivery status has since shipped — see below).</p>
+<h3 id="dm-delivery-status">✅ DM delivery status</h3>
+<p><strong>✅ Shipped</strong> (in <code>main</code>). A per-message marker sits at the end of each outgoing
+DM row in the history and in the fullscreen message view. Deltas from the spec
+that follows:
+- <strong>Pending</strong> isn't a single <code>·/…</code> — it draws <strong>one square dot per send attempt</strong>,
+  so an auto-resent message shows its retry count at a glance.
+- <strong>Delivered / failed</strong> use drawn <strong>scalable mini-icons</strong> (<code>✓</code> / <code>✗</code>) that scale
+  with the font, not glyph-font characters — legible on every layout (see
+  <code>icons.h</code>, authored as compile-time ASCII-art).
+- Adds <strong>DM auto-resend + incoming dedup</strong>, plus a channel <strong>"relayed into mesh"</strong>
+  marker (<code>✓</code> when a repeater echo confirms the channel message went out).</p>
+<p>Original spec:</p>
+<p>Show whether an outgoing direct message reached the recipient, using the ACK
+that MeshCore already produces (no protocol change). <code>sendMessage()</code> returns
+<code>expected_ack</code> + <code>est_timeout</code>; the ACK arrives via <code>onAckRecv</code> / <code>isAckPending</code>
+— the same mechanism APC and ping already consume.</p>
+<p>Per-message status glyph at the end of each outgoing DM row in the history:
+- <code>·</code> / <code>…</code> — sent, awaiting ACK (pending)
+- <code>✓</code> — delivered to the recipient (ACK matched)
+- <code>✗</code> / <code>!</code> — timed out, no confirmation</p>
+<p>Data model (RAM only, no schema bump — DM history already lives in RAM):
+- <code>DmHistEntry</code> gains <code>uint8_t ack_status</code> (0=incoming/none, 1=pending,
+  2=delivered, 3=failed) and <code>uint32_t ack_tag</code> (the <code>expected_ack</code> CRC).</p>
+<p>Wiring:
+- On send: store <code>ack_tag = expected_ack</code>, <code>ack_status = pending</code>, record the
+  send time + <code>est_timeout</code>.
+- On ACK: route <code>onAckRecv(ack_crc)</code> to the UI; find the entry whose <code>ack_tag</code>
+  matches and set it delivered (single shared callback, like <code>onPingResult</code>).
+- Timeout: in the UI loop, a pending entry older than <code>est_timeout</code> → failed.</p>
+<p>Edge cases:
+- Sends with no path / <code>expected_ack == 0</code> (and channel messages, which have no
+  ACK) can't be confirmed → show plain "sent" (<code>→</code>) and no delivery state.
+- Glyph rendering: prefer a Lemon-font check; on the plain ASCII font fall back
+  to drawn 1-px marks or letters so it reads on the OLED.</p>
+<h3 id="periodic-location-beacon-live-share">📋 Periodic location beacon ("live share")</h3>
+<p>Auto-send <code>{loc}</code> every N minutes to a chosen channel or DM contact — group
+trip tracking. Builds on the existing auto-advert cadence pattern and <code>{loc}</code>
+expansion. A status-bar indicator (like <code>A</code>/<code>G</code>) while active; off by default.</p>
+<h3 id="arrival-proximity-alert">📋 Arrival / proximity alert</h3>
+<p>Buzzer + alert when within X m of the active nav target (waypoint / node /
+backtrack). Closes the loop on the navigator — you no longer have to stare at
+the distance readout. Radius configurable (e.g. 20/50/100 m).</p>
+<h3 id="where-am-i-location-screen">📋 "Where am I" location screen</h3>
+<p>Tools entry showing current lat/lon (optionally MGRS/UTM grid ref), fix quality
+(sats / HDOP if the provider exposes it), altitude, and a one-press share to a
+channel/DM. Complements the nav suite with an at-a-glance position readout.</p>
+<h3 id="on-screen-qr-share-own-contact-channel">📋 On-screen QR — share own contact / channel</h3>
+<p>Render the device's own contact (or a channel) as a QR on the display so a
+phone can import it without the companion app. The QR payload format already
+exists (<code>docs/qr_codes.md</code>); this is the on-device render side.</p>
+<h3 id="sunrise-sunset-golden-hour">📋 Sunrise / sunset + golden hour</h3>
+<p>Computed from GPS position + RTC date — pure math, no extra hardware. A Clock
+dashboard field or a small Tools readout. Useful for planning outdoor activity.</p>
+<h3 id="find-my-device-remote-buzzer">📋 "Find my device" — remote buzzer</h3>
+<p>A received command (from a paired contact, or a dedicated channel keyword) makes
+the node play a locator tone for a few seconds. Helps find a dropped/misplaced
+device. Gate behind a setting to avoid abuse.</p>
+<h3 id="trail-auto-pause">📋 Trail auto-pause</h3>
+<p>Stop counting elapsed/avg-speed (and optionally skip sampling) when stationary,
+so "moving time" and average speed reflect actual travel. Reuses the COG ring's
+min-displacement gate to detect standing still.</p>
+<h3 id="night-mode">📋 Night mode</h3>
+<p>Quick toggle for an inverted / minimum-brightness scheme for night use, separate
+from the brightness levels. On e-ink flag as degraded (inversion ghosts).</p>
+<h3 id="stopwatch-timer">📋 Stopwatch / timer</h3>
+<p>Simple Tools utility — count-up stopwatch and a count-down timer with a buzzer
+at zero. Joystick: Enter start/stop, Hold Enter reset.</p>
+<h3 id="trail-elevation-ascent">📋 Trail elevation / ascent</h3>
+<p>If the GPS provider exposes altitude, add total ascent + current elevation to
+the trail Summary and <code>&lt;ele&gt;</code> tags to the GPX export. Skip cleanly when no
+altitude is available.</p>
+<hr />
+<h2 id="deferred">Deferred</h2>
+<h3 id="morse-keyboard">❌ Morse keyboard</h3>
+<p>Cute but niche. Skip unless explicitly requested.</p>
+<h3 id="buzzer-events_stopped-irq-chaining">❌ Buzzer EVENTS_STOPPED IRQ chaining</h3>
+<p>Marginal real-world gain (2 ms between notes during melody playback only), high risk on the PWM peripheral.</p>
+<h3 id="vibration-feedback">❌ Vibration feedback</h3>
+<p>Wio Tracker L1 doesn't have a haptic motor. N/A.</p>
+<hr />
+<h2 id="implementation-order-suggestion">Implementation order suggestion</h2>
+<ol>
+<li><strong>Mark-all-read</strong> — smallest patch, biggest day-to-day comfort gain</li>
+<li><strong>Favourites dial</strong> — new home page + new prefs field; touches familiar areas (QuickMsg context menu, NodePrefs, schema sentinel bump)</li>
+<li><strong>GPS breadcrumb</strong> — largest of the three; introduces a new flash file and a Tools sub-screen with multiple views</li>
+</ol>
+<p>After #3, re-prioritise the backlog with the user.</p>
+<hr />
+<h1 id="code-audit-known-bugs-hardening-backlog">Code audit — known bugs / hardening backlog</h1>
+<p>Pass through wio-unified after commit <code>321d769e</code>. Grouped by severity. Listed but <strong>not yet fixed</strong>.</p>
+<h2 id="critical">Critical</h2>
+<h3 id="onchannelmessagerecv-onchanneldatarecv-guard-for-findchannelidx-1">✅ <code>onChannelMessageRecv</code> / <code>onChannelDataRecv</code> — guard for <code>findChannelIdx == -1</code></h3>
+<p><a href="examples/companion_radio/MyMesh.cpp#L561-L602"><code>MyMesh.cpp:561-602</code></a>, <a href="examples/companion_radio/MyMesh.cpp#L619-L625"><code>MyMesh.cpp:619-625</code></a></p>
+<p>Both group-channel receive paths now check the result of <code>findChannelIdx()</code> before continuing:</p>
+<pre><code class="language-cpp">int idx = findChannelIdx(channel);
+if (idx &lt; 0) {
+  MESH_DEBUG_PRINTLN(&quot;...: unknown channel secret — dropping message&quot;);
+  return;
+}
+uint8_t channel_idx = (uint8_t)idx;
+</code></pre>
+<p>Unknown-secret packets no longer pollute the offline queue, UI history or trigger the bot with a bogus <code>idx=255</code>.</p>
+<h3 id="addchannelmsg-guards-against-bogus-index">✅ <code>addChannelMsg</code> guards against bogus index</h3>
+<p><a href="examples/companion_radio/ui-new/MessagesScreen.h#L414-L433"><code>MessagesScreen.h:414-433</code></a></p>
+<p>Defensive <code>if (ch_idx &gt;= MAX_GROUP_CHANNELS) return;</code> at function entry — prevents ring-buffer pollution in case any future caller forgets the upstream guard. With C1 fixed this should never trigger, but the cost is zero.</p>
+<h2 id="high">High</h2>
+<h3 id="findchannelidx-scans-all-zero-secret-in-uninitialised-slots">✅ <code>findChannelIdx</code> scans all-zero secret in uninitialised slots</h3>
+<p><a href="src/helpers/BaseChatMesh.cpp#L908"><code>BaseChatMesh.cpp:908</code></a></p>
+<p>Fixed (local override): <code>findChannelIdx()</code> now returns <code>-1</code> immediately when the queried secret is all-zero, so a corrupted/empty channel can't match an unused all-zero slot. Complements the load-side skip already in <code>loadChannels()</code>.</p>
+<h3 id="savechannels-writes-all-40-slots-to-channels2">✅ <code>saveChannels</code> writes all 40 slots to <code>/channels2</code></h3>
+<p><a href="examples/companion_radio/DataStore.cpp#L687"><code>DataStore.cpp:687</code></a></p>
+<p>Fixed: the save loop now skips unused slots (all-zero secret) instead of writing every slot up to <code>MAX_GROUP_CHANNELS</code>, so the file holds only the channels actually configured (was always ~2.7 KB). <code>loadChannels()</code> already compacted empty entries on read, so the loaded result is unchanged — only on-flash size and write wear drop.</p>
+<h3 id="msgread0-wipes-the-whole-dm-unread-table">📋 <code>msgRead(0)</code> wipes the whole DM unread table</h3>
+<p><a href="examples/companion_radio/ui-new/UITask.cpp#L1403-L1410"><code>UITask.cpp:1403-1410</code></a></p>
+<pre><code class="language-cpp">if (msgcount == 0) {
+    memset(_dm_unread_table, 0, sizeof(_dm_unread_table));
+    ((MessagesScreen*)messages_screen)-&gt;clearAllChannelUnread();
+}
+</code></pre>
+<p>When the companion app reads the last message from the offline queue, all on-device badges disappear. Previously discussed and a fix was reverted as "intended sync behaviour" — keep as known limitation; document or restrict to "Favourites Dial badges only".</p>
+<h3 id="message-buffers-sized-below-the-protocol-maximum-clipped-long-messages">✅ Message buffers sized below the protocol maximum (clipped long messages)</h3>
+<p><a href="examples/companion_radio/ui-new/MessagesScreen.h"><code>MessagesScreen.h</code></a>, <a href="examples/companion_radio/ui-new/KeyboardWidget.h"><code>KeyboardWidget.h</code></a></p>
+<p><code>ChHistEntry::text</code> was 140 B and <code>DmHistEntry::text</code> only 80 B, while the
+keyboard capped input at 139 B — all below MeshCore's <code>MAX_TEXT_LEN</code> (160 B).
+Channel messages embed the sender as <code>"Name: body"</code> in the payload, so the
+prefix ate into the 140 and clipped the tail; DMs over ~80 B were cut outright;
+and Polish text (2 bytes per accented char) roughly halved the visible limit.
+Fixed: history + fullscreen/preview copies sized to <code>MAX_TEXT_LEN + 1</code>, keyboard
+cap raised to 160 with per-field maxima kept on the smaller stores (custom_msgs,
+bot reply). Full-length messages now compose, send, store and display intact.</p>
+<h3 id="loadprefsint-scopes-trail_units_idx-reset-to-the-0xc0de0003-jump">✅ <code>loadPrefsInt</code> scopes <code>trail_units_idx</code> reset to the 0xC0DE0003 jump</h3>
+<p><a href="examples/companion_radio/DataStore.cpp#L326-L343"><code>DataStore.cpp:326-343</code></a></p>
+<p>The reset is now gated on <code>sentinel == 0xC0DE0003</code> so newer mismatches (e.g. 0xC0DE0004 → 0xC0DE0005, which both saved the field correctly) no longer clobber the user's choice.</p>
+<h2 id="medium">Medium</h2>
+<h3 id="cmd_set_default_flood_scope-off-by-one-not-a-bug">❌ <code>CMD_SET_DEFAULT_FLOOD_SCOPE</code> off-by-one — not a bug</h3>
+<p><a href="examples/companion_radio/MyMesh.cpp#L2143"><code>MyMesh.cpp:2143</code></a></p>
+<p>Re-checked: <code>default_scope_name</code> is declared <code>char[31]</code> (not 32), so <code>n &lt; 31</code> correctly admits the maximum 30-character string + NUL. The audit entry was a misread.</p>
+<h3 id="strlen-on-cmd_frame-without-null-termination-replaced-with-strnlen">✅ <code>strlen</code> on <code>cmd_frame</code> without null-termination — replaced with <code>strnlen</code></h3>
+<p><a href="examples/companion_radio/MyMesh.cpp#L2140-L2147"><code>MyMesh.cpp:2140-2147</code></a></p>
+<p>The 31-byte name slot in <code>CMD_SET_DEFAULT_FLOOD_SCOPE</code> doesn't have to be NUL-terminated by the sender. Switched to <code>strnlen(…, 31)</code> so the search can't run past the field into the 16-byte key (or beyond the frame).</p>
+<h3 id="popupmenu_cap-updated-only-in-render">📋 <code>PopupMenu._cap</code> updated only in <code>render()</code></h3>
+<p><a href="examples/companion_radio/ui-new/PopupMenu.h#L37-L90"><code>PopupMenu.h:37-44, 77-90</code></a></p>
+<p>Left as-is: the framework always renders before forwarding input, so the fragile invariant doesn't fire in practice. Worth a refactor only if the call order ever changes.</p>
+<h3 id="scan-detail-guarded-against-narrow-displays">✅ Scan detail guarded against narrow displays</h3>
+<p><a href="examples/companion_radio/ui-new/NearbyScreen.h#L448-L451"><code>NearbyScreen.h:448-451</code></a></p>
+<p>Pub-key line is skipped entirely when <code>max_chars &lt; 4</code> instead of feeding a negative length to <code>strncpy</code>. (Lived in <code>renderDiscoverDetail</code> before the one-list refactor; now in <code>renderScanDetail</code>.)</p>
+<h3 id="expandmsg-gps-validity-test-treats-0-0-as-invalid">📋 <code>expandMsg</code> GPS validity test treats (0, 0) as invalid</h3>
+<p><a href="examples/companion_radio/MyMeshBot.h#L95"><code>MyMeshBot.h:95, 132, 182</code></a></p>
+<pre><code class="language-cpp">sensors.node_lat != 0.0 || sensors.node_lon != 0.0  // proxy for &quot;valid GPS&quot;
+</code></pre>
+<p>Point (0, 0) is a legitimate location (Gulf of Guinea). Corner case but a logic error. Left for a future pass with a proper GPS-validity bool.</p>
+<h2 id="low">Low</h2>
+<h3 id="snr-division-by-4-now-uses-1f">✅ SNR division by 4 — now uses <code>%.1f</code></h3>
+<p><a href="examples/companion_radio/ui-new/NearbyScreen.h#L467-L470"><code>NearbyScreen.h:467-470</code></a>, <a href="examples/companion_radio/ui-new/NearbyScreen.h#L330-L332"><code>330-332</code></a></p>
+<p>Scan detail view (<code>SNR: %.1f dB</code>, <code>Rem: %.1f dB</code>) and the ping popup keep the 0.25 dB resolution. (After the one-list refactor the scan list cards show <strong>RSSI</strong> in the right column, not SNR.)</p>
+<h3 id="trail-_count-cast-to-uint16_t">✅ Trail <code>_count</code> cast to <code>uint16_t</code></h3>
+<p><a href="examples/companion_radio/Trail.h#L27"><code>Trail.h:27</code></a></p>
+<p>A <code>static_assert(CAPACITY &lt;= 0xFFFF, …)</code> next to the CAPACITY definition now fails the build if it is ever grown past what the uint16_t save-header count can hold, instead of silently truncating. Safe today (CAPACITY=512).</p>
+<h3 id="bot-strstr-on-truncated-199-char-buffer-not-reachable">✅ Bot <code>strstr</code> on truncated 199-char buffer — not reachable</h3>
+<p><a href="examples/companion_radio/MyMeshBot.h#L11"><code>MyMeshBot.h:11</code></a></p>
+<p>Re-checked: <code>BOT_SCRATCH</code> is 200 and <code>MAX_TEXT_LEN</code> is 160, so an incoming message never reaches the 199-char truncation point — the scratch buffer (used by the centralised <code>botTriggerMatches()</code>) always holds the whole message. No fix needed.</p>
+<h3 id="strncpy-buf-sizeofbuf-replaced-with-strcpy">✅ <code>strncpy("?", buf, sizeof(buf))</code> replaced with <code>strcpy</code></h3>
+<p><a href="examples/companion_radio/ui-new/MessagesScreen.h#L785"><code>MessagesScreen.h:785, 858</code></a></p>
+<p>Two fallback "?" sender names now use a plain <code>strcpy</code> so we don't memset 21 unused bytes for a one-character string.</p>
+<h3 id="title-truncation-in-msg_pick-reply-mode-not-an-overflow">❌ Title truncation in MSG_PICK reply mode — not an overflow</h3>
+<p><a href="examples/companion_radio/ui-new/MessagesScreen.h#L1279"><code>MessagesScreen.h:1279-1287</code></a></p>
+<p>Re-checked: <code>rlen</code> is clamped to 20 before building <code>"RE:" + nick</code>, so the title is ≤23 chars and fits <code>title[24]</code> with no overflow. A nick longer than 20 chars is shown truncated, but that's an intentional fit-to-header limit (the OLED header only fits ~21 chars anyway), not a bug.</p>
+<h2 id="priority-for-merge">Priority for merge</h2>
+<p>Fix status after this pass:</p>
+<ul>
+<li>✅ C1 + C2 — <code>findChannelIdx == -1</code> guarded at both channel-recv paths; <code>addChannelMsg</code> defends against bogus index</li>
+<li>✅ H4 — <code>trail_units_idx</code> reset scoped to the 0xC0DE0003 jump</li>
+<li>✅ M2 — <code>strnlen</code> instead of <code>strlen</code> on default scope name</li>
+<li>✅ M4 — <code>renderDiscoverDetail</code> skips pub-key line on very narrow displays</li>
+<li>✅ L1 — SNR shown with 0.25 dB precision everywhere</li>
+<li>✅ L4 — fallback <code>"?"</code> sender no longer memsets through <code>strncpy</code></li>
+<li>✅ Trail map grid silent loss — superseded by the Trail refactor: <code>renderGrid</code> now picks a round labelled step (<code>1m…100km</code> / <code>10ft…100mi</code>) nearest ~1/3 of the shorter side and enforces a <code>MIN_GRID_PX</code> floor, so the grid can never silently vanish on an elongated trail. <a href="examples/companion_radio/ui-new/TrailScreen.h#L635"><code>TrailScreen.h:635</code></a></li>
+<li>❌ M1 — re-checked, not a bug (<code>default_scope_name[31]</code>)</li>
+<li>📋 H1 + H2 — still open; need coordinated fix in upstream <code>BaseChatMesh</code> (<code>findChannelIdx</code> should iterate <code>num_channels</code>, not <code>MAX_GROUP_CHANNELS</code>; <code>saveChannels</code> should stop at the first uninitialised slot) or a local override</li>
+<li>📋 H3 — left as known limitation pending UX call</li>
+<li>📋 M3, M5, L2, L3, L6 — minor or stylistic; left in backlog</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.action.edit", "content.code.copy", "search.highlight", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
