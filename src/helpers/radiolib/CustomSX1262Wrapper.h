@@ -28,6 +28,9 @@ public:
     ((CustomSX1262 *)_radio)->setBandwidth(bw);
     ((CustomSX1262 *)_radio)->setCodingRate(cr);
     updatePreamble(sf);
+    PacketMillis pm = calcMaxPacketMillis(sf, bw, cr, preambleLengthForSF(sf));
+    ((CustomSX1262 *)_radio)->setPreambleMillis(pm.preambleMillis);
+    ((CustomSX1262 *)_radio)->setMaxPayloadMillis(pm.payloadMillis);
   }
 
   // From RadioLib's SX1262::setFrequency(): RADIOLIB_CHECK_RANGE(freq, 150.0f, 960.0f, ...).
@@ -64,9 +67,9 @@ public:
     return ((SX126x *)_radio)->startReceiveDutyCycleAuto(preambleLengthForSF(_preamble_sf), 8);
   }
 
-  void setRxBoostedGainMode(bool en) override {
+  bool setRxBoostedGainMode(bool en) override {
     _wd_rx_boosted_gain = en;
-    ((CustomSX1262 *)_radio)->setRxBoostedGainMode(en);
+    return ((CustomSX1262 *)_radio)->setRxBoostedGainMode(en) == RADIOLIB_ERR_NONE;
   }
   bool getRxBoostedGainMode() const override {
     return ((CustomSX1262 *)_radio)->getRxBoostedGainMode();

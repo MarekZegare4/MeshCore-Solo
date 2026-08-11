@@ -483,7 +483,6 @@ switch(t){
     buzzer.play("ack:d=32,o=8,b=120:c");
     break;
   case UIEventType::roomMessage:
-  case UIEventType::newContactMessage:
   case UIEventType::none:
   default:
     break;
@@ -506,7 +505,7 @@ void UITask::msgRead(int msgcount) {
   }
 }
 
-void UITask::newMsg(uint8_t path_len, const char* from_name, const char* text, int msgcount) {
+void UITask::newMsg(uint8_t path_len, const char* from_name, const char* text, int msgcount, uint8_t contact_type, const uint8_t* pub_key) {
   _msgcount = msgcount;
 
   if (_display != NULL) {

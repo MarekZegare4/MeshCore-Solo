@@ -14,11 +14,18 @@
 
 #include "Button.h"
 
+#ifdef HAS_DRV2605
+  #include <helpers/ui/DRV2605Vibration.h>
+#endif
+
 class UITask : public AbstractUITask {
   DisplayDriver* _display;
   SensorManager* _sensors;
 #ifdef PIN_BUZZER
   genericBuzzer buzzer;
+#endif
+#ifdef HAS_DRV2605
+  DRV2605Vibration vibration;
 #endif
   unsigned long _next_refresh, _auto_off;
   NodePrefs* _node_prefs;
@@ -65,7 +72,7 @@ public:
 
   // from AbstractUITask
   void msgRead(int msgcount) override;
-  void newMsg(uint8_t path_len, const char* from_name, const char* text, int msgcount) override;
+  void newMsg(uint8_t path_len, const char* from_name, const char* text, int msgcount, uint8_t contact_type = 0, const uint8_t* pub_key = nullptr) override;
   void notify(UIEventType t = UIEventType::none) override;
   void loop() override;
 
