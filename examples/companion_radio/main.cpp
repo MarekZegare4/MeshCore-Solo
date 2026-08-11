@@ -12,19 +12,20 @@ static uint32_t _atoi(const char* sp) {
   return n;
 }
 
+// platform file system
 #if defined(NRF52_PLATFORM) || defined(STM32_PLATFORM)
   #include <InternalFileSystem.h>
   #if defined(QSPIFLASH)
     #include <CustomLFS_QSPIFlash.h>
     DataStore store(InternalFS, QSPIFlash, rtc_clock);
   #else
-  #if defined(EXTRAFS)
-    #include <CustomLFS.h>
-    CustomLFS ExtraFS(0xD4000, 0x19000, 128);
-    DataStore store(InternalFS, ExtraFS, rtc_clock);
-  #else
-    DataStore store(InternalFS, rtc_clock);
-  #endif
+    #if defined(EXTRAFS)
+      #include <CustomLFS.h>
+      CustomLFS ExtraFS(0xD4000, 0x19000, 128);
+      DataStore store(InternalFS, ExtraFS, rtc_clock);
+    #else
+      DataStore store(InternalFS, rtc_clock);
+    #endif
   #endif
 #elif defined(RP2040_PLATFORM)
   #include <LittleFS.h>
@@ -119,8 +120,11 @@ void halt() {
 
 void setup() {
   Serial.begin(115200);
-
   board.begin();
+
+#ifdef HAS_EXTERNAL_WATCHDOG
+  external_watchdog.begin();
+#endif
 
 #ifdef DISPLAY_CLASS
   DisplayDriver* disp = NULL;
@@ -273,6 +277,9 @@ void loop() {
   ui_task.loop();
 #endif
   rtc_clock.tick();
+#ifdef HAS_EXTERNAL_WATCHDOG
+  external_watchdog.loop();
+#endif
 
   // CPU sleeps until next interrupt (radio, timer, BLE) — but only when the
   // mesh has no pending work, so queued TX/processing isn't delayed.

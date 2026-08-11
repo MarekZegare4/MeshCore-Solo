@@ -26,6 +26,16 @@
   #define SCALE_Y  2.109375f   // 135 / 64
 #endif
 
+#ifdef DISPLAY_SCALE_X
+  #undef SCALE_X
+  #define SCALE_X DISPLAY_SCALE_X
+#endif
+
+#ifdef DISPLAY_SCALE_Y
+  #undef SCALE_Y
+  #define SCALE_Y DISPLAY_SCALE_Y
+#endif
+
 #ifdef OLED_MISC_FIXED_FONT
 // MiscFixedFont.h/LemonIcons.h store each glyph's rows bit-packed
 // *continuously* (Adafruit_GFX's native GFXfont convention -- no per-row byte
@@ -75,6 +85,9 @@ bool ST7789Display::begin() {
 
     display.init();
     display.landscapeScreen();
+    #ifdef DISPLAY_FLIP_VERTICALLY
+    display.flipScreenVertically();
+    #endif
     display.displayOn();
     setCursor(0,0);
 
@@ -92,6 +105,9 @@ void ST7789Display::turnOn() {
     // Re-initialize the display
     display.init();
     display.displayOn();
+    #ifdef DISPLAY_FLIP_VERTICALLY
+    display.flipScreenVertically();
+    #endif
     delay(20);
 
     // Now turn on the backlight
@@ -146,22 +162,22 @@ void ST7789Display::setColor(Color c) {
       display.setColor(OLEDDISPLAY_COLOR::BLACK);
       break;
 #if 0
-    case DisplayDriver::LIGHT : 
+    case DisplayDriver::LIGHT :
       _color = ST77XX_WHITE;
       break;
-    case DisplayDriver::RED : 
+    case DisplayDriver::RED :
       _color = ST77XX_RED;
       break;
-    case DisplayDriver::GREEN : 
+    case DisplayDriver::GREEN :
       _color = ST77XX_GREEN;
       break;
-    case DisplayDriver::BLUE : 
+    case DisplayDriver::BLUE :
       _color = ST77XX_BLUE;
       break;
-    case DisplayDriver::YELLOW : 
+    case DisplayDriver::YELLOW :
       _color = ST77XX_YELLOW;
       break;
-    case DisplayDriver::ORANGE : 
+    case DisplayDriver::ORANGE :
       _color = ST77XX_ORANGE;
       break;
 #endif
