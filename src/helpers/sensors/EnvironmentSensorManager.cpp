@@ -718,6 +718,13 @@ bool EnvironmentSensorManager::setSettingValue(const char* name, const char* val
     } else {
       stop_gps();
     }
+    // This bypasses gpsDutyCycleLoop()'s own start_gps()/stop_gps() calls, so
+    // its phase timer would otherwise still be counting down (or already
+    // expired) from before this external change -- reset it so the next
+    // duty-cycle tick re-arms a fresh phase instead of judging gps_active
+    // against a stale deadline (e.g. stopping GPS again a tick after this
+    // just started it).
+    _gps_duty_phase_until = 0;
     return true;
   }
   if (strcmp(name, "gps_interval") == 0) {

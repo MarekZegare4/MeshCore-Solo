@@ -2589,7 +2589,8 @@ void UITask::loop() {
         || (_node_prefs && _node_prefs->loc_share_enabled)
         || (_node_prefs && _node_prefs->locator_enabled && _node_prefs->locator_has_target)
         || curr == compass_screen
-        || (curr == nearby_screen && ((NearbyScreen*)nearby_screen)->isNavigating());
+        || (curr == nearby_screen && ((NearbyScreen*)nearby_screen)->isNavigating())
+        || the_mesh.isGpsFixPending();
     _sensors->setGpsKeepAwake(gps_needed_live);
     // A fresh wake (either a duty-cycle wake, or GPS forced continuously back
     // on) may deliver a still-settling first fix — re-seed the locator's

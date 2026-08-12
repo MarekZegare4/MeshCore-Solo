@@ -323,6 +323,11 @@ public:
   // Number of auto-replies sent since boot (DM + channel + room). Shown on BotScreen.
   uint16_t botReplyCount() const { return _bot_reply_count; }
 
+  // Whether a "!gps fix" request is acquiring/averaging right now -- used by
+  // UITask's GPS duty-cycle "is anything live using GPS right now" check, so
+  // the scheduler doesn't nap GPS out from under an in-flight bot request.
+  bool isGpsFixPending() const { return _loc_fix.active; }
+
 private:
   void tryBotReplyDM(const ContactInfo& from, const char* text, uint8_t hops);
   void tryBotReplyChannel(uint8_t channel_idx, const char* text, uint8_t hops);
