@@ -990,6 +990,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#built-in-keyboards-cardputer-adv-t-echo-lite-keyshield" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Built-in keyboards (Cardputer ADV, T-Echo Lite + KeyShield)
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1617,6 +1628,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#built-in-keyboards-cardputer-adv-t-echo-lite-keyshield" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Built-in keyboards (Cardputer ADV, T-Echo Lite + KeyShield)
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1647,7 +1669,9 @@
 <h2 id="external-keyboard-joystick">External Keyboard &amp; Joystick</h2>
 <p><a href="../../README.md">Go back</a></p>
 <p>Two optional hardware add-ons, both auto-detected and both entirely optional — a
-build with them enabled runs exactly the same with nothing plugged in.</p>
+build with them enabled runs exactly the same with nothing plugged in. Two of
+the newer boards also ship with their own <strong>built-in</strong> keypad instead —
+see <a href="#built-in-keyboards-cardputer-adv-t-echo-lite--keyshield">Built-in keyboards</a>.</p>
 <ul>
 <li><strong>CardKB</strong> — an M5Stack I2C QWERTY keyboard (address <code>0x5F</code>), for typing
   messages, names and labels without walking the on-screen letter grid.</li>
@@ -1680,14 +1704,24 @@ build with them enabled runs exactly the same with nothing plugged in.</p>
 <td style="text-align: center;">onboard</td>
 </tr>
 <tr>
-<td>Heltec V3</td>
+<td>Heltec V3 <em>(experimental)</em></td>
 <td style="text-align: center;">✅ solder to free GPIOs</td>
 <td style="text-align: center;">✅ solder to free GPIOs</td>
 </tr>
 <tr>
-<td>Heltec V4</td>
+<td>Heltec V4 <em>(experimental)</em></td>
 <td style="text-align: center;">✅ solder to free GPIOs</td>
 <td style="text-align: center;">✅ solder to free GPIOs</td>
+</tr>
+<tr>
+<td>M5Stack Cardputer ADV <em>(experimental)</em></td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">built-in keyboard instead, see below</td>
+</tr>
+<tr>
+<td>LilyGO T-Echo Lite + KeyShield <em>(experimental)</em></td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">built-in keypad instead, see below</td>
 </tr>
 </tbody>
 </table>
@@ -1856,6 +1890,19 @@ hardware</strong>; still worth checking against your own V3 module before solder
 and <a href="../../variants/heltec_v4/platformio.ini"><code>variants/heltec_v4/platformio.ini</code></a>,
 with comments explaining which pins are safe to reuse. To build a CardKB-only
 device, comment out the joystick block and set Ext. KB to Compact.</p>
+<hr />
+<h2 id="built-in-keyboards-cardputer-adv-t-echo-lite-keyshield">Built-in keyboards (Cardputer ADV, T-Echo Lite + KeyShield)</h2>
+<p><em>Experimental</em> — newly-added board support, not the CardKB/joystick add-ons
+above. Both keypads are TCA8418-based and share one polling path, entirely
+independent of the CardKB code — a board can have either, or neither.</p>
+<ul>
+<li><strong>M5Stack Cardputer ADV</strong> — built-in QWERTY, no CardKB or joystick needed.</li>
+<li><strong>LilyGO T-Echo Lite + KeyShield</strong> — the KeyShield add-on gives the T-Echo
+  Lite a T9 keypad; without it the board has no usable input for the solo UI.</li>
+</ul>
+<p>Neither keypad follows CardKB's exact Fn-shortcut table (Fn+Enter,
+Fn+letter accent popups, Tab, Fn+Esc lock) — see each board's own
+<code>platformio.ini</code> / keyboard driver under <code>variants/</code> for its current keymap.</p>
 
 
 
