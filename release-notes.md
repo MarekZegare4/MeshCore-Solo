@@ -7,6 +7,7 @@
 - **Screenshot support added to the Heltec V3/V4 solo builds.**
 - **GPS duty-cycling** (Settings › System › "GPS pwr") — sleeps GPS between fixes to save power. Stays on automatically when Trail, Live share, Locator, Compass/Nearby, or `!gps fix` need it.
 - **RX power-save (Settings › Radio › Pwr save) now recovers on its own** if the hardware duty-cycle sequencer gets stuck.
+- **Updated upstream base to companion-v1.17.0** — hardware Channel Activity Detection, MCU temperature telemetry, LR2021 standby fix, and misc upstream fixes.
 
 ### Fixes
 
