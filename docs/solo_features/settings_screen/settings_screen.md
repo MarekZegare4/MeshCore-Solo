@@ -20,13 +20,13 @@ Press **Cancel/Back** to save and return to the home screen.
 | ------------------------------------ | -------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Brightness                           | 1–5                              | LEFT/RIGHT; preview applies immediately                                                               |
 | Auto-off                             | 5 s / 15 s / 30 s / 60 s / never | LEFT/RIGHT                                                                                            |
-| Auto-lock                            | on / off                         | Locks device when display turns off                                                                   |
+| Auto-lock                            | ON / OFF                         | Locks device when display turns off                                                                   |
 | Battery                              | icon / % / V                     | Display mode for the top-bar battery indicator                                                        |
 | Clock seconds                        | show / hide                      | Hiding reduces OLED refresh from 1 s to 60 s                                                          |
 | Clock format                         | 24 h / 12 h                      | 12 h appends AM/PM                                                                                    |
 | Display rotation _(e-ink only)_      | 0° / 90° / 180° / 270°           | Applied immediately                                                                                   |
 | Joystick rotation _(e-ink only)_     | 0° / 90° / 180° / 270°           | Rotates input mapping independently of display rotation; useful for custom enclosures                 |
-| Full refresh interval _(e-ink only)_ | off / 5 / 10 / 20 / 30           | Partial refreshes between full clears; reduces ghosting on long sessions                              |
+| Full refresh interval _(e-ink only)_ | OFF / 5 / 10 / 20 / 30           | Partial refreshes between full clears; reduces ghosting on long sessions                              |
 
 ---
 
@@ -34,7 +34,7 @@ Press **Cancel/Back** to save and return to the home screen.
 
 | Setting        | Options                        | Notes                                                        |
 | -------------- | ------------------------------ | ------------------------------------------------------------ |
-| Buzzer         | On / Off / Auto                | Auto: silences while BLE connected, re-enables on disconnect |
+| Buzzer         | ON / OFF / Auto                | Auto: silences while BLE connected, re-enables on disconnect |
 | Volume         | 1–5                            | LEFT/RIGHT; preview tone plays on each change                |
 | DM Melody      | built-in / Melody 1 / Melody 2 / None | Notification sound for incoming private messages. `None` disables the sound for this event. |
 | Channel Melody | built-in / Melody 1 / Melody 2 / None | Notification sound for incoming channel messages. `None` disables the sound for this event. |
@@ -89,8 +89,8 @@ The **repeater** mode and its flood filters live on their own screen — see **T
 | ----------- | --------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | Name        | keyboard entry (up to 31 chars)                     | This device's node name, shown to others and in every advert. **Enter** opens the keyboard pre-filled with the current name; applied and saved on submit |
 | Timezone    | −12 h … +14 h                                       | UTC offset in whole hours                                                              |
-| Low battery | off / 3.0 V / 3.1 V / 3.2 V / 3.3 V / 3.4 V / 3.5 V | Auto-shutdown threshold; also sets the 0 % anchor for the battery percentage indicator |
-| GPS pwr _(if GPS detected)_ | off / 1 min / 5 min / 15 min / 30 min / 1 h | **Battery saver.** Cycles GPS off between fixes instead of running it continuously; each wake waits for a fix (up to 60 s) before sleeping again for the chosen interval. Automatically stays continuously on regardless of this setting whenever something needs a live position — an active Trail recording, Map › Live share, an armed Locator, the Compass / Nearby navigate view, or an in-flight `!gps fix` bot request. `off` (default) matches earlier releases: GPS runs continuously whenever enabled. The GPS status icon blinks while napping between fixes. |
+| Low battery | OFF / 3.0 V / 3.1 V / 3.2 V / 3.3 V / 3.4 V / 3.5 V | Auto-shutdown threshold; also sets the 0 % anchor for the battery percentage indicator |
+| GPS pwr _(if GPS detected)_ | OFF / 1 min / 5 min / 15 min / 30 min / 1 h | **Battery saver.** Cycles GPS off between fixes instead of running it continuously; each wake waits for a fix (up to 60 s) before sleeping again for the chosen interval. Automatically stays continuously on regardless of this setting whenever something needs a live position — an active Trail recording, Map › Live share, an armed Locator, the Compass / Nearby navigate view, or an in-flight `!gps fix` bot request. `OFF` (default) matches earlier releases: GPS runs continuously whenever enabled. The GPS status icon blinks while napping between fixes. |
 | Units       | Metric / Imperial                                   | Global unit system for every distance/speed shown in Tools (Nearby Nodes, Trail, navigate-to-point). Metric: m / km, km/h, min/km. Imperial: ft / mi, mph, min/mi |
 | Reboot      | action (**Enter**)                                  | Restarts this device. Pending setting changes are saved first. Last row, so it isn't the default-selected one |
 
@@ -124,6 +124,6 @@ European Latin-diacritic letters (Polish, Czech, Slovak, German, French, Spanish
 
 | Setting | Options        | Notes                                                                                          |
 | ------- | -------------- | ---------------------------------------------------------------------------------------------- |
-| Resend  | off / 1×–5×    | Auto-resend an on-device direct message this many times when no delivery ACK is received (default 2×) |
+| Resend  | OFF / 1×–5×    | Auto-resend an on-device direct message this many times when no delivery ACK is received (default 2×) |
 
 Up to 10 quick reply templates (Q1–Q10). Press **Enter** on a slot to open the keyboard editor. Supports the same placeholders as the main keyboard (`{time}`, `{loc}`, and sensor placeholders when connected).

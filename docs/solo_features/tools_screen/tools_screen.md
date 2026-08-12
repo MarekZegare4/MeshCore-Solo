@@ -128,9 +128,9 @@ Cycle views with **LEFT / RIGHT**:
 | Item       | Available | Action                                                  |
 | ---------- | --------- | ------------------------------------------------------- |
 | Min dist   | always    | Sample gate, 4 levels — metric: 5/10/25/100 m, imperial: 15/30/75/300 ft |
-| Auto-pause | always    | Off / 1 / 2 / 5 min — auto-freeze the trail after a stop, resume on movement (see below) |
-| Mark avg   | always    | Off / 5 / 10 / 30 s — GPS averaging for **Mark here** (see Waypoints below) |
-| Auto-save  | always    | Off / On — auto-write the live trail to flash on shutdown, so a **low-battery auto-shutdown** doesn't lose the route (see below) |
+| Auto-pause | always    | OFF / 1 / 2 / 5 min — auto-freeze the trail after a stop, resume on movement (see below) |
+| Mark avg   | always    | OFF / 5 / 10 / 30 s — GPS averaging for **Mark here** (see Waypoints below) |
+| Auto-save  | always    | OFF / ON — auto-write the live trail to flash on shutdown, so a **low-battery auto-shutdown** doesn't lose the route (see below) |
 | Readout    | Summary view | Summary shows Speed or Pace (in the global unit system) |
 | Grid       | Map view  | Toggle scale grid on the map                            |
 
@@ -150,7 +150,7 @@ A waypoint is a saved spot — your car, camp, a water source — that you can n
 
 **Dropping a waypoint** — **Hold Enter → Mark here**. This captures the current GPS fix and opens the on-screen keyboard for a short label (up to 11 characters — e.g. `CAR`, `CAMP`, `H2O`). Leaving it blank auto-names it `WP1`, `WP2`, … Marking works whether or not the trail is being recorded; it needs a GPS fix (otherwise it reports *No GPS fix*).
 
-**GPS averaging** — with **Settings → Mark avg** set (5 / 10 / 30 s), *Mark here* doesn't snapshot a single fix; it samples the GPS once a second for that window and stores the **mean** position, for a steadier mark than one instantaneous reading (handy for a precise spot — a cache, a car, a trailhead). A short screen shows the time left and the sample count while it runs; **Cancel** aborts. When the window closes it opens the label keyboard as usual. With **Mark avg = Off** (the default) marking is instant.
+**GPS averaging** — with **Settings → Mark avg** set (5 / 10 / 30 s), *Mark here* doesn't snapshot a single fix; it samples the GPS once a second for that window and stores the **mean** position, for a steadier mark than one instantaneous reading (handy for a precise spot — a cache, a car, a trailhead). A short screen shows the time left and the sample count while it runs; **Cancel** aborts. When the window closes it opens the label keyboard as usual. With **Mark avg = OFF** (the default) marking is instant.
 
 **Adding by coordinates** — open **Hold Enter → Waypoints** and select the **+ Add by coords** row (always the last entry in the list). This creates a waypoint without being there — no GPS fix required (handy for a meeting point or a spot read off a map). It opens a small form with three editable rows plus **Save**:
 
@@ -219,10 +219,10 @@ Saved **waypoints are included** in the export as GPX `<wpt>` elements (with the
 
 ## Auto-Advert
 
-Periodically broadcasts a 0-hop advert with your GPS position. Configurable interval: off / 30 s / 1 min / 2 min / 5 min / 10 min / 30 min / 1 h. A blinking **A** appears in the status bar while active.
+Periodically broadcasts a 0-hop advert with your GPS position. Configurable interval: OFF / 30 s / 1 min / 2 min / 5 min / 10 min / 30 min / 1 h. A blinking **A** appears in the status bar while active.
 
 > [!TIP]
-> **Audible connection heartbeat** — the device chirps each time it *receives* an advert from any node (sound chosen in **Settings › Sound › AD sound**). With Auto-Advert running on both ends (e.g. two people on a hike), each hearing the other's periodic advert becomes a hands-free "in range" beep — no need to look at the screen. It fires for **every** received advert, so in a busy mesh it can get chatty; choose `None` in **Settings › Sound › AD sound** to silence just this event, or set **Settings › Sound › Advert scope** to `Zero-hop` to limit it to local adverts only. You can also set **Settings › Sound › Buzzer** to *Off* (or *Auto*, which mutes while a companion app is connected) to silence all buzzer output.
+> **Audible connection heartbeat** — the device chirps each time it *receives* an advert from any node (sound chosen in **Settings › Sound › AD sound**). With Auto-Advert running on both ends (e.g. two people on a hike), each hearing the other's periodic advert becomes a hands-free "in range" beep — no need to look at the screen. It fires for **every** received advert, so in a busy mesh it can get chatty; choose `None` in **Settings › Sound › AD sound** to silence just this event, or set **Settings › Sound › Advert scope** to `Zero-hop` to limit it to local adverts only. You can also set **Settings › Sound › Buzzer** to *OFF* (or *Auto*, which mutes while a companion app is connected) to silence all buzzer output.
 
 ---
 
@@ -247,7 +247,7 @@ The tool holds both directions of sharing in one flat list. Navigate with **UP/D
 | To         | channel or contact          | **Enter** opens the Messages recipient chooser to pick the target channel or DM contact.        |
 | Move       | 50 / 100 / 250 / 500 m      | Movement gate — only send after you've moved at least this far since the last share.            |
 | Min gap    | 30 s / 1 / 2 / 5 min        | Minimum time between sends, so fast movement can't flood the channel.                           |
-| Heartbeat  | Off / 5 / 15 min            | Optional keep-alive: re-send even while stationary, so the other end knows you're still there.  |
+| Heartbeat  | OFF / 5 / 15 min            | Optional keep-alive: re-send even while stationary, so the other end knows you're still there.  |
 
 **How auto-share decides to send.** With **Auto share** on, the device checks a few times a minute: it transmits when you've moved at least **Move** metres *and* at least **Min gap** has passed since the last send — so a stationary device stays silent unless a **Heartbeat** is set. It also sends once immediately when you enable sharing (or change the target), so the other end gets a fresh fix right away.
 
@@ -504,7 +504,7 @@ The counters make the repeater behaviour observable: **Forwarded** confirms the 
 
 ## GPIO
 
-*Board-specific — currently Wio Tracker L1 only.* Four otherwise-unused pins (GPIO1-GPIO4) are exposed for general-purpose use. Each pin gets its own row showing its current mode; **Enter** (or LEFT/RIGHT) cycles it through **Off → Input → Output** and back to Off — GPIO1 and GPIO2 additionally step through **Analog** between Output and Off (GPIO3/GPIO4 have no ADC channel, so their cycle skips it). Switching a pin's mode shows a brief confirmation (`GPIO1: Input`, `GPIO1: Output`, …).
+*Board-specific — currently Wio Tracker L1 only.* Four otherwise-unused pins (GPIO1-GPIO4) are exposed for general-purpose use. Each pin gets its own row showing its current mode; **Enter** (or LEFT/RIGHT) cycles it through **OFF → Input → Output** and back to OFF — GPIO1 and GPIO2 additionally step through **Analog** between Output and OFF (GPIO3/GPIO4 have no ADC channel, so their cycle skips it). Switching a pin's mode shows a brief confirmation (`GPIO1: Input`, `GPIO1: Output`, …).
 
 Once a pin is set to **Output**, a second **State** row appears right underneath it — **Enter** toggles it **ON**/**OFF**, with its own confirmation. The direction (Mode row) and the on/off state (State row) are deliberately separate: changing one never surprises you by also changing the other.
 
