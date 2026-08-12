@@ -126,8 +126,8 @@ A single button can't drive the solo UI, and neither Heltec board has a joystick
 | Joystick DOWN | **6** | |
 | Joystick LEFT | **47** | |
 | Joystick RIGHT | **48** | |
-| Back button | **33** | required whenever the joystick is enabled |
-| Centre / Enter | **0** | the onboard PRG button — nothing to wire |
+| Joystick press — Enter | **33** | the stick's own fifth contact; required whenever the joystick is enabled |
+| Back | **0** | the onboard PRG button — nothing to wire |
 
 Each joystick contact simply shorts its pin to GND — the firmware enables the internal pull-ups, so no external resistors are needed. CardKB needs power and ground alongside SDA/SCL; check your unit's own voltage rating before picking a rail.
 

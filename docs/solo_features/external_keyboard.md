@@ -80,14 +80,15 @@ so they behave identically in both modes.
 
 ## Wired joystick
 
-Four direction contacts plus a separate Back button. Each contact simply shorts
-its pin to ground — the firmware enables the internal pull-ups, so no external
-resistors are needed.
+Four direction contacts plus a fifth "press" contact. Each contact simply
+shorts its pin to ground — the firmware enables the internal pull-ups, so no
+external resistors are needed.
 
-- The board's existing user button (PRG on the Heltec boards) stays the
-  centre / Enter press.
-- Back is **not** optional: the UI uses it unconditionally once the joystick is
-  enabled. Triple-clicking Back toggles the buzzer.
+- The stick's own press contact drives the centre / Enter press — your thumb
+  is already on the stick, so pressing it in is the natural "confirm" action.
+- The board's existing user button (PRG on the Heltec boards) becomes Back
+  instead. Back is **not** optional: the UI uses it unconditionally once the
+  joystick is enabled. Triple-clicking Back toggles the buzzer.
 - **Settings › Display › Joystick rotation** rotates the direction mapping at
   runtime (0–3), for a stick mounted sideways in a custom enclosure. It is
   independent of display rotation.
@@ -109,8 +110,8 @@ hardware**; still worth checking against your own V3 module before soldering.
 | Joystick DOWN | 6 | |
 | Joystick LEFT | 47 | |
 | Joystick RIGHT | 48 | |
-| Back button | 33 | required when the joystick is enabled |
-| Centre / Enter | 0 | the onboard PRG button — nothing to wire |
+| Joystick press — Enter | 33 | the stick's own fifth contact; required when the joystick is enabled |
+| Back | 0 | the onboard PRG button — nothing to wire |
 
 Everything above lives in the `[env:Heltec_v3_companion_solo_dual]` /
 `[env:heltec_v4_companion_solo_dual]` blocks in
