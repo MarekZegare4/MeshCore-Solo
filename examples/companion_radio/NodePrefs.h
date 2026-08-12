@@ -301,7 +301,7 @@ struct NodePrefs {  // persisted to file
     return M[idx < ALARM_REPEAT_COUNT ? idx : 0];
   }
   // Reverse lookup for display: an arbitrary mask (e.g. loaded from a future
-  // custom-day picker) that doesn't match a preset just reads as "Off" here —
+  // custom-day picker) that doesn't match a preset just reads as "OFF" here —
   // it still fires correctly, computeAlarmNextFire() reads the raw mask.
   static uint8_t alarmRepeatIdxForMask(uint8_t mask) {
     switch (mask) {

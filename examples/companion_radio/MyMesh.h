@@ -20,7 +20,7 @@ class UITask;
 // "dev-<commit>" otherwise; see build-solo-firmwares.yml). This default only
 // shows up for a `pio run` invoked directly, bypassing build.sh entirely.
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION "v1.24-dev"
+#define FIRMWARE_VERSION "v1.25-dev"
 #endif
 
 #if defined(NRF52_PLATFORM) || defined(STM32_PLATFORM)
