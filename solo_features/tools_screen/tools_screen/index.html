@@ -2376,17 +2376,17 @@ The <strong>Map</strong> view is also reachable directly from the home carousel 
 <tr>
 <td>Auto-pause</td>
 <td>always</td>
-<td>Off / 1 / 2 / 5 min — auto-freeze the trail after a stop, resume on movement (see below)</td>
+<td>OFF / 1 / 2 / 5 min — auto-freeze the trail after a stop, resume on movement (see below)</td>
 </tr>
 <tr>
 <td>Mark avg</td>
 <td>always</td>
-<td>Off / 5 / 10 / 30 s — GPS averaging for <strong>Mark here</strong> (see Waypoints below)</td>
+<td>OFF / 5 / 10 / 30 s — GPS averaging for <strong>Mark here</strong> (see Waypoints below)</td>
 </tr>
 <tr>
 <td>Auto-save</td>
 <td>always</td>
-<td>Off / On — auto-write the live trail to flash on shutdown, so a <strong>low-battery auto-shutdown</strong> doesn't lose the route (see below)</td>
+<td>OFF / ON — auto-write the live trail to flash on shutdown, so a <strong>low-battery auto-shutdown</strong> doesn't lose the route (see below)</td>
 </tr>
 <tr>
 <td>Readout</td>
@@ -2408,7 +2408,7 @@ The <strong>Map</strong> view is also reachable directly from the home carousel 
 <h3 id="waypoints">Waypoints</h3>
 <p>A waypoint is a saved spot — your car, camp, a water source — that you can navigate back to later. Waypoints are <strong>independent of the trail</strong>: they live in their own flash file (<code>/waypoints</code>), survive a reboot, and are <strong>not</strong> cleared by <em>Reset trail</em>. Up to 16 can be stored — the Waypoints list header shows how many are in use (e.g. <code>WAYPOINTS 3/16</code>).</p>
 <p><strong>Dropping a waypoint</strong> — <strong>Hold Enter → Mark here</strong>. This captures the current GPS fix and opens the on-screen keyboard for a short label (up to 11 characters — e.g. <code>CAR</code>, <code>CAMP</code>, <code>H2O</code>). Leaving it blank auto-names it <code>WP1</code>, <code>WP2</code>, … Marking works whether or not the trail is being recorded; it needs a GPS fix (otherwise it reports <em>No GPS fix</em>).</p>
-<p><strong>GPS averaging</strong> — with <strong>Settings → Mark avg</strong> set (5 / 10 / 30 s), <em>Mark here</em> doesn't snapshot a single fix; it samples the GPS once a second for that window and stores the <strong>mean</strong> position, for a steadier mark than one instantaneous reading (handy for a precise spot — a cache, a car, a trailhead). A short screen shows the time left and the sample count while it runs; <strong>Cancel</strong> aborts. When the window closes it opens the label keyboard as usual. With <strong>Mark avg = Off</strong> (the default) marking is instant.</p>
+<p><strong>GPS averaging</strong> — with <strong>Settings → Mark avg</strong> set (5 / 10 / 30 s), <em>Mark here</em> doesn't snapshot a single fix; it samples the GPS once a second for that window and stores the <strong>mean</strong> position, for a steadier mark than one instantaneous reading (handy for a precise spot — a cache, a car, a trailhead). A short screen shows the time left and the sample count while it runs; <strong>Cancel</strong> aborts. When the window closes it opens the label keyboard as usual. With <strong>Mark avg = OFF</strong> (the default) marking is instant.</p>
 <p><strong>Adding by coordinates</strong> — open <strong>Hold Enter → Waypoints</strong> and select the <strong>+ Add by coords</strong> row (always the last entry in the list). This creates a waypoint without being there — no GPS fix required (handy for a meeting point or a spot read off a map). It opens a small form with three editable rows plus <strong>Save</strong>:</p>
 <table>
 <thead>
@@ -2481,10 +2481,10 @@ If the companion app is connected via <strong>BLE</strong>, the export is safe �
 </blockquote>
 <hr />
 <h2 id="auto-advert">Auto-Advert</h2>
-<p>Periodically broadcasts a 0-hop advert with your GPS position. Configurable interval: off / 30 s / 1 min / 2 min / 5 min / 10 min / 30 min / 1 h. A blinking <strong>A</strong> appears in the status bar while active.</p>
+<p>Periodically broadcasts a 0-hop advert with your GPS position. Configurable interval: OFF / 30 s / 1 min / 2 min / 5 min / 10 min / 30 min / 1 h. A blinking <strong>A</strong> appears in the status bar while active.</p>
 <blockquote>
 <p>[!TIP]
-<strong>Audible connection heartbeat</strong> — the device chirps each time it <em>receives</em> an advert from any node (sound chosen in <strong>Settings › Sound › AD sound</strong>). With Auto-Advert running on both ends (e.g. two people on a hike), each hearing the other's periodic advert becomes a hands-free "in range" beep — no need to look at the screen. It fires for <strong>every</strong> received advert, so in a busy mesh it can get chatty; choose <code>None</code> in <strong>Settings › Sound › AD sound</strong> to silence just this event, or set <strong>Settings › Sound › Advert scope</strong> to <code>Zero-hop</code> to limit it to local adverts only. You can also set <strong>Settings › Sound › Buzzer</strong> to <em>Off</em> (or <em>Auto</em>, which mutes while a companion app is connected) to silence all buzzer output.</p>
+<strong>Audible connection heartbeat</strong> — the device chirps each time it <em>receives</em> an advert from any node (sound chosen in <strong>Settings › Sound › AD sound</strong>). With Auto-Advert running on both ends (e.g. two people on a hike), each hearing the other's periodic advert becomes a hands-free "in range" beep — no need to look at the screen. It fires for <strong>every</strong> received advert, so in a busy mesh it can get chatty; choose <code>None</code> in <strong>Settings › Sound › AD sound</strong> to silence just this event, or set <strong>Settings › Sound › Advert scope</strong> to <code>Zero-hop</code> to limit it to local adverts only. You can also set <strong>Settings › Sound › Buzzer</strong> to <em>OFF</em> (or <em>Auto</em>, which mutes while a companion app is connected) to silence all buzzer output.</p>
 </blockquote>
 <hr />
 <h2 id="live-share">Live Share</h2>
@@ -2543,7 +2543,7 @@ If the companion app is connected via <strong>BLE</strong>, the export is safe �
 </tr>
 <tr>
 <td>Heartbeat</td>
-<td>Off / 5 / 15 min</td>
+<td>OFF / 5 / 15 min</td>
 <td>Optional keep-alive: re-send even while stationary, so the other end knows you're still there.</td>
 </tr>
 </tbody>
@@ -3104,7 +3104,7 @@ Mark the spot first with <strong>Tools › Trail → Hold Enter → Mark here</s
 <p>The counters make the repeater behaviour observable: <strong>Forwarded</strong> confirms the node is actually relaying (not just configured to), and <strong>Pool free</strong> / <strong>Queue</strong> show whether forwarding is exhausting the packet pool. See <strong>Tools › Repeater</strong> for the relaying options.</p>
 <hr />
 <h2 id="gpio">GPIO</h2>
-<p><em>Board-specific — currently Wio Tracker L1 only.</em> Four otherwise-unused pins (GPIO1-GPIO4) are exposed for general-purpose use. Each pin gets its own row showing its current mode; <strong>Enter</strong> (or LEFT/RIGHT) cycles it through <strong>Off → Input → Output</strong> and back to Off — GPIO1 and GPIO2 additionally step through <strong>Analog</strong> between Output and Off (GPIO3/GPIO4 have no ADC channel, so their cycle skips it). Switching a pin's mode shows a brief confirmation (<code>GPIO1: Input</code>, <code>GPIO1: Output</code>, …).</p>
+<p><em>Board-specific — currently Wio Tracker L1 only.</em> Four otherwise-unused pins (GPIO1-GPIO4) are exposed for general-purpose use. Each pin gets its own row showing its current mode; <strong>Enter</strong> (or LEFT/RIGHT) cycles it through <strong>OFF → Input → Output</strong> and back to OFF — GPIO1 and GPIO2 additionally step through <strong>Analog</strong> between Output and OFF (GPIO3/GPIO4 have no ADC channel, so their cycle skips it). Switching a pin's mode shows a brief confirmation (<code>GPIO1: Input</code>, <code>GPIO1: Output</code>, …).</p>
 <p>Once a pin is set to <strong>Output</strong>, a second <strong>State</strong> row appears right underneath it — <strong>Enter</strong> toggles it <strong>ON</strong>/<strong>OFF</strong>, with its own confirmation. The direction (Mode row) and the on/off state (State row) are deliberately separate: changing one never surprises you by also changing the other.</p>
 <ul>
 <li><strong>Input</strong> shows its live level inline on the Mode row: <code>Input (High)</code> / <code>Input (Low)</code>, refreshed continuously.</li>
