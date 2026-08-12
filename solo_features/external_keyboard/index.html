@@ -1815,14 +1815,15 @@ V3/V4 with no joystick soldered on. In that case set it once and forget it.</p>
 so they behave identically in both modes.</p>
 <hr />
 <h2 id="wired-joystick">Wired joystick</h2>
-<p>Four direction contacts plus a separate Back button. Each contact simply shorts
-its pin to ground — the firmware enables the internal pull-ups, so no external
-resistors are needed.</p>
+<p>Four direction contacts plus a fifth "press" contact. Each contact simply
+shorts its pin to ground — the firmware enables the internal pull-ups, so no
+external resistors are needed.</p>
 <ul>
-<li>The board's existing user button (PRG on the Heltec boards) stays the
-  centre / Enter press.</li>
-<li>Back is <strong>not</strong> optional: the UI uses it unconditionally once the joystick is
-  enabled. Triple-clicking Back toggles the buzzer.</li>
+<li>The stick's own press contact drives the centre / Enter press — your thumb
+  is already on the stick, so pressing it in is the natural "confirm" action.</li>
+<li>The board's existing user button (PRG on the Heltec boards) becomes Back
+  instead. Back is <strong>not</strong> optional: the UI uses it unconditionally once the
+  joystick is enabled. Triple-clicking Back toggles the buzzer.</li>
 <li><strong>Settings › Display › Joystick rotation</strong> rotates the direction mapping at
   runtime (0–3), for a stick mounted sideways in a custom enclosure. It is
   independent of display rotation.</li>
@@ -1873,12 +1874,12 @@ hardware</strong>; still worth checking against your own V3 module before solder
 <td></td>
 </tr>
 <tr>
-<td>Back button</td>
+<td>Joystick press — Enter</td>
 <td>33</td>
-<td>required when the joystick is enabled</td>
+<td>the stick's own fifth contact; required when the joystick is enabled</td>
 </tr>
 <tr>
-<td>Centre / Enter</td>
+<td>Back</td>
 <td>0</td>
 <td>the onboard PRG button — nothing to wire</td>
 </tr>
