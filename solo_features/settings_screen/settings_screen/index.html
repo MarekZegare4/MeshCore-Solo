@@ -1887,7 +1887,7 @@
 <tr>
 <td>Pwr save</td>
 <td>ON / OFF</td>
-<td><strong>Battery saver.</strong> Hardware duty-cycle receive: the SX126x cycles RX↔sleep on its own and wakes on a preamble, cutting average RX current. Trades a little receive latency; leave OFF for lowest-latency reception. Requires an SX126x radio (otherwise stays on continuous RX). <strong>Forced off (shown as <code>--</code>) while the repeater is on</strong> — a repeater must listen continuously; your setting is restored when the repeater is switched off.</td>
+<td><strong>Battery saver.</strong> Hardware duty-cycle receive: the SX126x cycles RX↔sleep on its own and wakes on a preamble, cutting average RX current. Trades a little receive latency; leave OFF for lowest-latency reception. Requires an SX126x radio (otherwise stays on continuous RX). <strong>Forced off (shown as <code>--</code>) while the repeater is on</strong> — a repeater must listen continuously; your setting is restored when the repeater is switched off. A background watchdog recovers automatically if the duty-cycle sequencer ever gets stuck (soft re-arm, then a full radio reset) — see Tools › Diagnostics for the recovery counts.</td>
 </tr>
 <tr>
 <td>Auto pwr</td>
@@ -1938,6 +1938,11 @@
 <td>Low battery</td>
 <td>off / 3.0 V / 3.1 V / 3.2 V / 3.3 V / 3.4 V / 3.5 V</td>
 <td>Auto-shutdown threshold; also sets the 0 % anchor for the battery percentage indicator</td>
+</tr>
+<tr>
+<td>GPS pwr <em>(if GPS detected)</em></td>
+<td>off / 1 min / 5 min / 15 min / 30 min / 1 h</td>
+<td><strong>Battery saver.</strong> Cycles GPS off between fixes instead of running it continuously; each wake waits for a fix (up to 60 s) before sleeping again for the chosen interval. Automatically stays continuously on regardless of this setting whenever something needs a live position — an active Trail recording, Map › Live share, an armed Locator, or the Compass / Nearby navigate view. <code>off</code> (default) matches earlier releases: GPS runs continuously whenever enabled. The GPS status icon blinks while napping between fixes.</td>
 </tr>
 <tr>
 <td>Units</td>

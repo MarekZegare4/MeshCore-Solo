@@ -3094,9 +3094,13 @@ Mark the spot first with <strong>Tools › Trail → Hold Enter → Mark here</s
 <td>Errors</td>
 <td>Radio error flags since boot/reset — <code>OK</code>, or tokens <code>F</code> (queue full), <code>C</code> (CAD timeout), <code>R</code> (RX-start timeout)</td>
 </tr>
+<tr>
+<td>RXPS wd s/h</td>
+<td>RX duty-cycle watchdog recovery count, <code>soft/hard</code> — how many times the background watchdog has re-armed (soft) or fully reset (hard) a stuck duty-cycle sequencer. Stays <code>0/0</code> unless Settings › Radio › <strong>Pwr save</strong> is on and something actually went wrong.</td>
+</tr>
 </tbody>
 </table>
-<p>The packet counters, <strong>Forwarded</strong> and <strong>Errors</strong> are cumulative since boot. On the <strong>Live</strong> tab, <strong>Hold Enter</strong> opens a one-item <em>Reset counters</em> menu (Back dismisses it); the live readings (noise, RSSI/SNR, pool, queue, uptime) are not affected. <strong>Cancel/Back</strong> returns to the Tools list.</p>
+<p>The packet counters, <strong>Forwarded</strong>, <strong>Errors</strong> and <strong>RXPS wd s/h</strong> are cumulative since boot. On the <strong>Live</strong> tab, <strong>Hold Enter</strong> opens a one-item <em>Reset counters</em> menu (Back dismisses it); the live readings (noise, RSSI/SNR, pool, queue, uptime) are not affected. <strong>Cancel/Back</strong> returns to the Tools list.</p>
 <p>The counters make the repeater behaviour observable: <strong>Forwarded</strong> confirms the node is actually relaying (not just configured to), and <strong>Pool free</strong> / <strong>Queue</strong> show whether forwarding is exhausting the packet pool. See <strong>Tools › Repeater</strong> for the relaying options.</p>
 <hr />
 <h2 id="gpio">GPIO</h2>
