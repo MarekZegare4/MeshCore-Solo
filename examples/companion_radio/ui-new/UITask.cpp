@@ -2027,7 +2027,7 @@ bool UITask::isButtonPressed() const {
 }
 
 static void formatDashVal(uint8_t field, char* val, int val_len, uint16_t batt_mv,
-                          uint16_t low_batt_mv, CayenneLPP* lpp = nullptr) {
+                          uint16_t low_batt_mv, int unread, CayenneLPP* lpp = nullptr) {
   val[0] = '\0';
   switch (field) {
     case DASH_NONE: return;
@@ -2041,6 +2041,9 @@ static void formatDashVal(uint8_t field, char* val, int val_len, uint16_t batt_m
       return;
     case DASH_NODES:
       snprintf(val, val_len, "%d nodes", the_mesh.getNumContacts());
+      return;
+    case DASH_MSGS:
+      snprintf(val, val_len, "%d msgs", unread);
       return;
 #if ENV_INCLUDE_GPS == 1
     case DASH_GPS: {
@@ -2454,8 +2457,10 @@ void UITask::loop() {
           if (isLPP(f0) || isLPP(f1)) {
             _dash_lpp.reset(); sensors.querySensors(0xFF, _dash_lpp); lpp_ptr = &_dash_lpp;
           }
-          formatDashVal(f0, v0, sizeof(v0), _batt_mv, _node_prefs->low_batt_mv, lpp_ptr);
-          formatDashVal(f1, v1, sizeof(v1), _batt_mv, _node_prefs->low_batt_mv, lpp_ptr);
+          int unread = (f0 == DASH_MSGS || f1 == DASH_MSGS)
+                     ? getDMUnreadTotal() + getChannelUnreadCount() + getRoomUnreadCount() : 0;
+          formatDashVal(f0, v0, sizeof(v0), _batt_mv, _node_prefs->low_batt_mv, unread, lpp_ptr);
+          formatDashVal(f1, v1, sizeof(v1), _batt_mv, _node_prefs->low_batt_mv, unread, lpp_ptr);
           if (v0[0] || v1[0]) {
             int sv_y = date_y + lk_step;
             _display->setColor(DisplayDriver::LIGHT);
