@@ -12,12 +12,15 @@ class UITask;
 #define FIRMWARE_VER_CODE 13
 
 #ifndef FIRMWARE_BUILD_DATE
-#define FIRMWARE_BUILD_DATE "11 Aug 2026"
+#define FIRMWARE_BUILD_DATE "12 Aug 2026"
 #endif
 
-// Versioning: vX.Y = upstream base, solo.N = fork revision
+// Fallback only -- every real build (local or CI) goes through build.sh, which
+// always injects FIRMWARE_VERSION itself (the pushed tag name for a release,
+// "dev-<commit>" otherwise; see build-solo-firmwares.yml). This default only
+// shows up for a `pio run` invoked directly, bypassing build.sh entirely.
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION "v1.17-solo.0"
+#define FIRMWARE_VERSION "v1.24-dev"
 #endif
 
 #if defined(NRF52_PLATFORM) || defined(STM32_PLATFORM)

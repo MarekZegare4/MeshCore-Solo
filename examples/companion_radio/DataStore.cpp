@@ -264,7 +264,18 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
   file.read((uint8_t *)&_prefs.buzzer_quiet, sizeof(_prefs.buzzer_quiet));
   file.read((uint8_t *)&_prefs.gps_enabled, sizeof(_prefs.gps_enabled));
   file.read((uint8_t *)&_prefs.gps_interval, sizeof(_prefs.gps_interval));
-  if (_prefs.gps_interval > 86400) _prefs.gps_interval = 0;   // now a duty-cycle sleep window (secs); 0 = disabled
+  // Only today's duty-cycle presets are meaningful now (see SettingsScreen's
+  // GPS_DUTY_OPTS). Anything else -- out of range, or a leftover value from
+  // the pre-v1.13 "GPS Interval" setting this byte used to hold (its own
+  // 30s option isn't one of today's presets) -- wouldn't match a Settings
+  // choice, so "GPS pwr" would misleadingly show OFF while still silently
+  // duty-cycling GPS on that stale value. Snap anything unrecognised to OFF.
+  {
+    static const uint32_t GPS_DUTY_PRESETS[] = { 0, 60, 300, 900, 1800, 3600 };
+    bool known = false;
+    for (uint32_t v : GPS_DUTY_PRESETS) { if (_prefs.gps_interval == v) { known = true; break; } }
+    if (!known) _prefs.gps_interval = 0;
+  }
   file.read((uint8_t *)&_prefs.autoadd_config, sizeof(_prefs.autoadd_config));
   file.read((uint8_t *)&_prefs.autoadd_max_hops, sizeof(_prefs.autoadd_max_hops));
   file.read((uint8_t *)&_prefs.rx_boosted_gain, sizeof(_prefs.rx_boosted_gain));
