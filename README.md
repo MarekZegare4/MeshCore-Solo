@@ -1,6 +1,6 @@
 # MeshCore Solo Companion Firmware
 
-A fork of the official [MeshCore](https://github.com/meshcore-dev/MeshCore) companion radio firmware with extended features and UI enhancements, targeting a growing set of supported devices.
+A fork of the official [MeshCore](https://github.com/meshcore-dev/MeshCore) companion radio firmware with a full standalone on-device UI and extra features.
 
 Join the discussion on the official MeshCore Discord: https://discord.gg/sdhYArU2jr
 
@@ -24,7 +24,7 @@ All firmware files are published on the [releases page](https://github.com/Marek
 
 The MCU column decides how you flash: nRF52840 boards take a drag-and-drop `.uf2`, ESP32-S3 boards take a `.bin` written with a flasher — see [Flashing](#flashing).
 
-The Wio Tracker L1s, GAT562 and the Cardputer ADV work out of the box. Heltec V3/V4 have no joystick and no keyboard of their own, so they need [a keyboard or a joystick wired up](#hardware-setup--heltec-v3--v4) before the solo UI can be driven. The Cardputer ADV has a built-in QWERTY keyboard; the T-Echo Lite needs the KeyShield add-on (its own T9 keypad) to be usable standalone — see [External Keyboard & Joystick](./docs/solo_features/external_keyboard.md).
+The Wio Tracker L1s, GAT562 and Cardputer ADV work out of the box (the Cardputer has a built-in QWERTY keyboard). Heltec V3/V4 need [a keyboard or joystick wired up](#hardware-setup--heltec-v3--v4) first. The T-Echo Lite needs the KeyShield add-on (its own T9 keypad) to be usable standalone — see [External Keyboard & Joystick](./docs/solo_features/external_keyboard.md).
 
 <!-- **Enclosures (Wio Tracker L1)**
 - [E-ink case](https://www.printables.com/model/1420534-seeed-wio-tracker-l1-e-ink-enclosure)
@@ -34,7 +34,7 @@ The Wio Tracker L1s, GAT562 and the Cardputer ADV work out of the box. Heltec V3
 
 ## Feature highlights
 
-- Extended language support with native Unicode rendering and input — one unified 6×9 display font covering Latin, Greek and Cyrillic, plus on-screen keyboard alphabets for Cyrillic, Greek, Polish, Czech, Slovak, German, French, Spanish, Portuguese and Nordic (Danish/Norwegian/Swedish). Pick two in Settings › Keyboard (**Main** and **Additional**) and switch between them while typing
+- Extended language support — one unified 6×9 font (Latin, Greek, Cyrillic) plus on-screen keyboard alphabets for Cyrillic, Greek, Polish, Czech, Slovak, German, French, Spanish, Portuguese and Nordic. Pick two in Settings › Keyboard (**Main**/**Additional**) and switch between them while typing
 
 - Enabled sensor screens with support for onboard sensors (temperature, humidity, pressure, luminosity, CO₂) and GPS data
 
@@ -45,7 +45,7 @@ The Wio Tracker L1s, GAT562 and the Cardputer ADV work out of the box. Heltec V3
   - **Navigate to anything** — a saved waypoint, a node straight from Nearby Nodes, or a location someone shares with you in a message
   - **Share & save locations** — send a waypoint to a contact or channel; on the other end, navigate to or save any shared location with one menu
   - **Live location sharing** — broadcast your position over the mesh as you move (movement-gated, to a channel or contact) and see others who share theirs as pins on the map and live distance/bearing in Nearby
-  - **Locator** — arm a geofence around a target — a saved waypoint *or* a person (their live/last-known position) — and get an alert when you arrive/leave or they get near/far, with an optional homing beeper that ticks faster the closer you get. Set it from the Locator screen or straight from Nearby Nodes / Waypoints, and see the target as a flag on the map
+  - **Locator** — arm a geofence around a waypoint or a person, get alerted on arrive/leave or near/far, with an optional homing beeper that speeds up as you close in. Set from the Locator screen, Nearby Nodes, or Waypoints; target shown as a flag on the map
   - **GPS trail** — background route recording with an auto-fit map (waypoints + live position), summary stats, auto-pause on stops, and [GPX export](#solo-tools)
   - **Metric or imperial** — one global Units setting drives every distance and speed across the UI
 
@@ -61,7 +61,7 @@ The Wio Tracker L1s, GAT562 and the Cardputer ADV work out of the box. Heltec V3
 
 - [Tools Screen](./docs/solo_features/tools_screen/tools_screen.md) — GPS trail & waypoints, compass, nearby nodes (with ping & navigate), ringtone editor, remote bot, auto-advert, live location sharing, locator, diagnostics, repeater, remote admin
 
-- [External Keyboard & Joystick](./docs/solo_features/external_keyboard.md) — optional, auto-detected hardware: an M5Stack **CardKB** for typing messages without the on-screen grid (Fn+Enter submits, Fn+letter picks an accent, Tab is Hold-Enter, Fn+Esc locks), plus a **wired joystick** for boards without one. A Compact keyboard mode makes CardKB-only, joystick-free operation practical
+- [External Keyboard & Joystick](./docs/solo_features/external_keyboard.md) — optional, auto-detected: **CardKB** for typing without the on-screen grid (Fn+Enter submits, Fn+letter picks an accent, Tab is Hold-Enter, Fn+Esc locks), plus a **wired joystick** for boards without one. Compact mode makes CardKB-only operation practical
 
 - **Battery saving (radio)** — two optional, independent toggles under Settings › Radio:
   - **Pwr save** — hardware duty-cycle receive (SX126x `SetRxDutyCycle`): the radio cycles RX↔sleep on its own and wakes on a preamble, cutting average RX current with only a little added receive latency
@@ -69,7 +69,7 @@ The Wio Tracker L1s, GAT562 and the Cardputer ADV work out of the box. Heltec V3
 
 ### E-ink Display (Wio Tracker L1)
 
-The e-ink variant targets the Wio Tracker L1 fitted with a 2.13″ GxEPD2 panel (250 × 122 px). All screens have been adapted for the e-ink panel:
+The e-ink variant targets the Wio Tracker L1 fitted with a 2.13″ GxEPD2 panel (250 × 122 px). Every screen is adapted for it:
 
 - **Adaptive layout** — every screen reflows correctly in both landscape (250 × 122) and portrait (122 × 250) orientations
 - **Display rotation** — configurable in Settings › Display; applied immediately and persisted across reboots
@@ -103,7 +103,7 @@ ESP32-S3 has no UF2 bootloader and no mass-storage mode. Releases ship a single 
 - **esptool** — `esptool.py --chip esp32s3 write_flash 0x0 solo-<version>-<device>-merged.bin`
 
 > [!NOTE]
-> Building from source produces a second, app-only `firmware.bin` alongside the merged one. That one belongs at offset `0x10000` and only works if a bootloader is already on the chip — flashing it at `0x0`, or onto a freshly erased chip, leaves the device dead-silent. `pio run -e <env> -t upload` writes the bootloader, partition table and app at their correct offsets in one go, which is why it works where a hand-flashed single `.bin` does not. Releases only contain the merged image, so this only matters when building yourself.
+> Building from source also produces an app-only `firmware.bin`. It belongs at offset `0x10000` and needs a bootloader already on the chip — flashing it at `0x0`, or onto a freshly erased chip, leaves the device dead-silent. `pio run -e <env> -t upload` writes bootloader, partition table and app at their correct offsets in one go; a hand-flashed single `.bin` doesn't. Releases only ship the merged image, so this only matters when building yourself.
 
 ### Connecting the companion app
 
@@ -116,7 +116,7 @@ Applies to every board: each binary serves the companion app over **both** BLE a
 
 ## Hardware setup — Heltec V3 / V4
 
-A single button can't drive the solo UI, and neither Heltec board has a joystick or a keyboard of its own. Both stock builds therefore enable an **M5Stack CardKB** and a **wired joystick** on these pins — V3 and V4 are pin-compatible, so the assignment is identical for both:
+A single button can't drive the solo UI, and neither Heltec board has one built in. Both stock builds enable an **M5Stack CardKB** and a **wired joystick** on these pins — V3 and V4 are pin-compatible, so the assignment is identical:
 
 | Function | GPIO | Notes |
 | -------- | :--: | ----- |
@@ -134,9 +134,9 @@ Each joystick contact simply shorts its pin to GND — the firmware enables the 
 > [!NOTE]
 > This assignment is confirmed working on real **V4** hardware. V3 inherits it because Heltec documents the two boards as pin-compatible, but it hasn't been verified on a physical V3 — worth a continuity check against your own module before soldering.
 
-Either device is enough on its own — pins with nothing attached read as not-pressed, and a missing CardKB is simply not detected at boot, so the unused half costs nothing. For a **CardKB-only** build, wire just SDA/SCL and set Settings › Keyboard › **Ext. KB = Compact**, which is designed to need no joystick at all.
+Either device is enough on its own — unwired pins read as not-pressed, and a missing CardKB just isn't detected at boot. For **CardKB-only**, wire just SDA/SCL and set Settings › Keyboard › **Ext. KB = Compact**, which needs no joystick at all.
 
-These pins are only defaults: they live in the `[env:Heltec_v3_companion_solo_dual]` / `[env:heltec_v4_companion_solo_dual]` blocks in [`variants/heltec_v3/platformio.ini`](./variants/heltec_v3/platformio.ini) and [`variants/heltec_v4/platformio.ini`](./variants/heltec_v4/platformio.ini), with comments listing which GPIOs each board has already claimed if you want to wire yours differently. Full details in [External Keyboard & Joystick](./docs/solo_features/external_keyboard.md).
+These are only defaults, set in the `[env:Heltec_v3_companion_solo_dual]` / `[env:heltec_v4_companion_solo_dual]` blocks in [`variants/heltec_v3/platformio.ini`](./variants/heltec_v3/platformio.ini) and [`variants/heltec_v4/platformio.ini`](./variants/heltec_v4/platformio.ini) — comments there list which GPIOs are already claimed. Full details in [External Keyboard & Joystick](./docs/solo_features/external_keyboard.md).
 
 ---
 
@@ -185,7 +185,7 @@ Open [Solo Tools](https://marekzegare4.github.io/Solo-tools/) in a browser with 
 The same two features are available as local scripts — `tools/screenshot.py` and `tools/trail_export.py` — plus a font converter. See [tools/README.md](./tools/README.md).
 
 > [!IMPORTANT]
-> Both routes use USB serial, which is suspended while a BLE connection is active — disconnect the companion app from BLE first. If the app is connected over **USB**, disconnect it too: the raw export stream would otherwise disrupt its frame protocol. (Over BLE the export is safe, since USB receive is ignored.)
+> Both routes use USB serial, suspended while a BLE connection is active — disconnect BLE first. If the app is connected over **USB**, disconnect that too, or the raw export stream disrupts its frame protocol. (Safe over BLE, since USB receive is ignored then.)
 
 ---
 
@@ -204,8 +204,10 @@ git config merge.ours.driver true
 | `WioTrackerL1_companion_solo_dual` | Wio Tracker L1 (OLED) |
 | `WioTrackerL1Eink_companion_solo_dual` | Wio Tracker L1 (E-ink) |
 | `GAT562_30S_Mesh_Kit_solo_dual` | GAT562 30S Mesh Kit |
-| `Heltec_v3_companion_solo_dual` | Heltec LoRa32 V3 |
-| `heltec_v4_companion_solo_dual` | Heltec LoRa32 V4 |
+| `Heltec_v3_companion_solo_dual` | Heltec LoRa32 V3 *(experimental)* |
+| `heltec_v4_companion_solo_dual` | Heltec LoRa32 V4 *(experimental)* |
+| `M5Stack_Cardputer_ADV_companion_solo_dual` | M5Stack Cardputer ADV *(experimental)* |
+| `LilyGo_T-Echo-Lite_keyshield_companion_solo_dual` | LilyGO T-Echo Lite + KeyShield *(experimental)* |
 
 ```sh
 pio run -e <env>                                  # build only

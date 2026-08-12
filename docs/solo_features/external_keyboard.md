@@ -2,9 +2,9 @@
 
 [Go back](../../README.md)
 
-Two optional hardware add-ons, both auto-detected and both entirely optional — a
-build with them enabled runs exactly the same with nothing plugged in. Two of
-the newer boards also ship with their own **built-in** keypad instead —
+Two optional, auto-detected hardware add-ons — a build with them enabled runs
+the same with nothing plugged in. Two of the newer boards also ship with
+their own **built-in** keypad instead —
 see [Built-in keyboards](#built-in-keyboards-cardputer-adv-t-echo-lite--keyshield).
 
 - **CardKB** — an M5Stack I2C QWERTY keyboard (address `0x5F`), for typing
@@ -69,9 +69,9 @@ a CardKB is doing the typing.
 | **Full** (default) | The letter grid stays on screen. Arrows and Enter drive the grid exactly as physical buttons do, so CardKB and the joystick can be used interchangeably. |
 | **Compact** | The grid, the special-row icons and the status line are all hidden — only the text being typed and two shortcut hints remain. Arrows move the **text cursor** directly, and plain Enter submits the field (same as Fn+Enter). |
 
-**Compact is designed to need no joystick at all**, which makes it the right
-choice on a board where CardKB is the only input device — for example a Heltec
-V3/V4 with no joystick soldered on. In that case set it once and forget it.
+**Compact is designed to need no joystick at all** — the right choice when
+CardKB is the only input device, e.g. a Heltec V3/V4 with no joystick
+soldered on.
 
 Cursor mode and the accent / placeholder popups draw their own visible feedback,
 so they behave identically in both modes.

@@ -70,9 +70,9 @@ Sensor fields show `--` when the sensor is not connected or has no data.
 
 A wake alarm with an optional repeat. Rows: **Hour**, **Minute**, **Repeat** and **Armed**. **Enter** on Hour or Minute opens the digit editor (LEFT/RIGHT moves between the tens/units, UP/DOWN changes the digit); **Enter** on Repeat cycles **OFF → Daily → Weekdays → Weekends → OFF**; **Enter** on Armed toggles ON/OFF. The configured time is shown next to the **Alarm** menu row when armed, and the setting persists across reboots.
 
-While an alarm is armed a bell icon signals it in two places: the top-left corner of the **Clock page** itself, and the **top status bar** of the other home pages (the status bar is hidden on the Clock page, which is why the clock face carries its own indicator). The bell is icon-only — the exact alarm time is on the **Alarm** row inside Clock Tools.
+While armed, a bell icon shows in the Clock page's top-left corner and in the status bar on other home pages (hidden on the Clock page itself, hence its own indicator). Icon-only — the exact time is on the **Alarm** row in Clock Tools.
 
-The alarm is scheduled as an absolute fire instant, so it is **robust to clock re-syncs** — the mesh (every inbound packet), the companion app, GPS and the CLI can all jump the device clock at any moment. A correction that moves the clock a little still fires at the right wall-clock time; a jump that skips over the alarm time still fires (late). With **Repeat** set to OFF (the default) the alarm disarms itself after firing once, same as before; with a repeat pattern set, it stays armed and re-schedules itself for the next matching day instead.
+The alarm fires at an absolute instant, so it survives clock re-syncs (mesh packets, companion app, GPS and the CLI can all jump the device clock). A jump past the alarm time still fires it, just late. With **Repeat** OFF (default) it disarms after firing once; with a pattern set, it re-arms for the next matching day.
 
 The alarm only fires while the device is **awake** (it keeps running with the display off or locked). It cannot wake the device from a full **Shutdown** (the CPU and RAM are powered down), and needs a valid time source — it stays pending until the clock is synced.
 

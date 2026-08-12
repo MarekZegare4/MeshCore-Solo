@@ -16,7 +16,7 @@ Screen lock prevents accidental keypresses. While locked the display turns off a
 
 **Hold Back** and press **Enter** three times within 3 seconds. The sequence works in both directions — the same combination locks and unlocks.
 
-On boards with an optional CardKB (I2C keyboard) attached, a single **Fn+Esc** does the same thing, in either direction — no repetition needed, since Fn+Esc is already a deliberate two-key combo. Esc rather than the adjacent Backspace, since Fn and Backspace sit right next to each other on CardKB's layout and would be too easy to hit by accident.
+On boards with a CardKB attached, **Fn+Esc** does the same thing in one press. Esc rather than the adjacent Backspace — those two keys sit next to each other on CardKB's layout and would be too easy to hit by accident.
 
 If the display is off when the sequence begins, it turns on automatically so the hint is visible. Each press in the physical sequence extends the display-on timer by 5 seconds.
 
@@ -50,4 +50,4 @@ The display turns off again automatically after 5 seconds of inactivity (or 2 se
 
 ### Auto-lock
 
-Enable **Auto-lock** in **Settings › Display** to lock the device automatically whenever the display turns off due to auto-off timeout. With auto-lock on, the device is always locked after the screen goes dark — no manual lock needed.
+Enable **Auto-lock** in **Settings › Display** to lock the device automatically whenever the display turns off due to auto-off timeout.

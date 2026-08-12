@@ -142,7 +142,7 @@ Cycle views with **LEFT / RIGHT**:
 
 ### Track back
 
-**Hold Enter → Track back** retraces the trail you just recorded, back to where you started — useful for returning the same way in poor visibility or unfamiliar ground. It reuses the navigation view (distance + two absolute bearings; see *Waypoints › Navigating*), but instead of a single fixed target it walks the recorded breadcrumbs in reverse: it snaps onto the route at the **nearest recorded point**, guides you to it, then automatically advances to the next earlier point as you reach each one (within ~20 m). The header shows how many points remain (`Back: 12 pt`), reading `Trail start` on the final leg; arriving there shows `Back at start` and exits. **Cancel** leaves track-back at any time. It needs a trail with at least two points and a GPS fix; it doesn't require tracking to still be running.
+**Hold Enter → Track back** retraces your recorded trail back to the start — useful in poor visibility or unfamiliar ground. It reuses the navigation view (distance + two absolute bearings; see *Waypoints › Navigating*), but walks the recorded breadcrumbs in reverse: snaps to the **nearest recorded point**, guides you to it, then advances to the next earlier point as you reach each one (within ~20 m). The header shows points remaining (`Back: 12 pt`), reading `Trail start` on the final leg; arriving shows `Back at start` and exits. **Cancel** leaves track-back at any time. Needs a trail with at least two points and a GPS fix; tracking doesn't need to still be running.
 
 ### Waypoints
 
@@ -165,7 +165,7 @@ A waypoint is a saved spot — your car, camp, a water source — that you can n
 - **Label** — **Enter** to type a name (blank → auto `WP<n>`).
 - **Save** — validates the range and stores the waypoint. Missing or out-of-range values report a brief error.
 
-**On the map** — saved waypoints show on the Trail Map view as a hollow diamond with the label's first two characters beside it (enough to tell nearby waypoints apart). Waypoints and your current GPS position are drawn continuously — even with no trail recording in progress — so the Map view doubles as a live "you + your marks" view, not just a recorded-track plot. With **no trail**, the view auto-fits to your waypoints and position. **While a trail exists**, the view frames the recorded route instead, and any waypoint that falls outside it is clamped to the nearest map edge — a distant mark can't blow up the scale and squash the trail.
+**On the map** — saved waypoints show as a hollow diamond with the label's first two characters beside it. Waypoints and your GPS position are drawn continuously, even with no trail recording, so the Map view doubles as a live "you + your marks" view. With **no trail**, it auto-fits to waypoints and position; **with a trail**, it frames the route instead, clamping any out-of-frame waypoint to the nearest edge so a distant mark can't blow up the scale.
 
 **Navigating** — **Hold Enter → Waypoints** opens the list (each row shows the label and live distance). The list always begins with a synthetic **Trail start** row whenever a trail exists, so you can backtrack to where you began without having marked it. Select a row and press **Enter** to open the navigation view:
 
@@ -210,7 +210,7 @@ Then on the device: **Tools › Trail** → **Hold Enter** → **Export (live)**
 - **macOS/Linux** — `cat /dev/tty.usbmodem* > track.gpx` (stop with Ctrl-C after the dump finishes)
 - **Windows** — PuTTY (Serial, 115200) or Arduino IDE Serial Monitor with no line ending; copy the text from `<?xml` to `</gpx>` into a `.gpx` file
 
-Saved **waypoints are included** in the export as GPX `<wpt>` elements (with their label as `<name>`), alongside the track — so they show as pins in OsmAnd, Garmin BaseCamp, GPX Studio, Google Earth, etc. Either way, the resulting file imports into all of those.
+Saved **waypoints are included** in the export as GPX `<wpt>` elements (with their label as `<name>`), alongside the track — so they show as pins in OsmAnd, Garmin BaseCamp, GPX Studio, Google Earth, etc.
 
 > [!NOTE]
 > If the companion app is connected via **BLE**, the export is safe — BLE and USB operate independently. If connected via **USB**, disconnect the app before exporting.
@@ -222,7 +222,7 @@ Saved **waypoints are included** in the export as GPX `<wpt>` elements (with the
 Periodically broadcasts a 0-hop advert with your GPS position. Configurable interval: OFF / 30 s / 1 min / 2 min / 5 min / 10 min / 30 min / 1 h. A blinking **A** appears in the status bar while active.
 
 > [!TIP]
-> **Audible connection heartbeat** — the device chirps each time it *receives* an advert from any node (sound chosen in **Settings › Sound › AD sound**). With Auto-Advert running on both ends (e.g. two people on a hike), each hearing the other's periodic advert becomes a hands-free "in range" beep — no need to look at the screen. It fires for **every** received advert, so in a busy mesh it can get chatty; choose `None` in **Settings › Sound › AD sound** to silence just this event, or set **Settings › Sound › Advert scope** to `Zero-hop` to limit it to local adverts only. You can also set **Settings › Sound › Buzzer** to *OFF* (or *Auto*, which mutes while a companion app is connected) to silence all buzzer output.
+> **Audible connection heartbeat** — the device chirps on every *received* advert (sound in **Settings › Sound › AD sound**). With Auto-Advert on both ends (e.g. two hikers), each hears the other's periodic advert as a hands-free "in range" beep. It fires on **every** received advert, so a busy mesh gets chatty — set `None` in **AD sound** to silence just this, or **Advert scope** to `Zero-hop` to limit it to local adverts. **Settings › Sound › Buzzer** = *OFF* (or *Auto*, mutes while a companion app is connected) silences all buzzer output.
 
 ---
 
@@ -249,7 +249,7 @@ The tool holds both directions of sharing in one flat list. Navigate with **UP/D
 | Min gap    | 30 s / 1 / 2 / 5 min        | Minimum time between sends, so fast movement can't flood the channel.                           |
 | Heartbeat  | OFF / 5 / 15 min            | Optional keep-alive: re-send even while stationary, so the other end knows you're still there.  |
 
-**How auto-share decides to send.** With **Auto share** on, the device checks a few times a minute: it transmits when you've moved at least **Move** metres *and* at least **Min gap** has passed since the last send — so a stationary device stays silent unless a **Heartbeat** is set. It also sends once immediately when you enable sharing (or change the target), so the other end gets a fresh fix right away.
+**How auto-share decides to send.** The device checks a few times a minute and transmits once you've moved at least **Move** metres *and* **Min gap** has passed since the last send — a stationary device stays silent unless **Heartbeat** is set. It also sends once immediately on enabling sharing (or changing the target).
 
 **Receiving.** With **Track loc** on, incoming `[LOC]` messages update a small live table (up to 16 nodes, entries expire ~20 min after the last update). DM shares are keyed by the sender's public key (reliable); channel and room-server shares are keyed by name (best-effort, since channel names are unsigned and a room post only carries a short sender prefix). Tracked nodes appear on the **Trail Map** as a filled diamond with the first two characters of their name, and in **Nearby Nodes** with their live distance/bearing.
 
@@ -265,7 +265,7 @@ The tool holds both directions of sharing in one flat list. Navigate with **UP/D
 
 <!-- screenshot pending: Locator screen with a target set (e.g. "@Bob (5m)"), radius/mode/beeper rows -->
 
-A single **geofence** that beeps and shows an alert when you cross **into** or **out of** a radius. The target can be a **saved waypoint** (a fixed place — "tell me when I'm back at camp") or a **live contact** (a person sharing their position via Live Share — "alert me when my friend gets near / falls behind"). A waypoint target is a **snapshot** (coordinate + label copied), so it keeps working even if you later edit that waypoint; a contact target follows the person's latest shared position. **Deleting** the target's waypoint, or the target contact being removed from the contacts list, clears the Locator target back to `none` instead of leaving it pointed at something that's gone.
+A single **geofence** that beeps and alerts when you cross **into** or **out of** a radius. The target is either a **saved waypoint** (a fixed place — "tell me when I'm back at camp") or a **live contact** ("alert me when my friend gets near / falls behind"). A waypoint target is a **snapshot** — it keeps working even if you edit that waypoint later; a contact target follows their latest shared position. If the target waypoint or contact is deleted, the Locator target clears back to `none`.
 
 Navigate with **UP/DOWN**, change a value with **LEFT/RIGHT** (or **Enter**); **Cancel/Back** saves and returns to Tools.
 
@@ -279,9 +279,9 @@ Navigate with **UP/DOWN**, change a value with **LEFT/RIGHT** (or **Enter**); **
 
 **Crossing alert.** When armed with a target, the device watches its own GPS fix and fires the alert (a short melody plus an on-screen message) the moment you cross the radius, according to **Mode**. The wording adapts to the target — `Arrived` / `Left` for a waypoint, `Near` / `Away` for a person. The edge has a little hysteresis so a fix hovering right on the boundary doesn't chatter, and the first reading after arming only seeds the in/out state — it won't fire spuriously just because you armed it while already inside.
 
-**Following a person.** Pick a **favourite** (or any contact with a known position) as the target and the geofence tracks the distance *between you and them*, so it works even while both of you move. The position is resolved with a fixed precedence: an **active live `[LOC]` share** wins, and with no current share it **falls back to the contact's last-advertised GPS position** — so a rarely-updating but stationary node (a repeater, or someone who shared a fix once) still works as a target. You can arm it **ahead of time** — choosing a favourite locks onto their identity (pubkey), and the alert starts working as soon as a position is known. Live following requires a **DM** share (a channel share carries no stable identity to lock onto); the last-advertised fallback works for any contact regardless.
+**Following a person.** Pick a **favourite** (or any contact with a known position) as the target and the geofence tracks the distance *between you and them*, working while both of you move. Position resolves with a fixed precedence: an active live `[LOC]` share wins, falling back to the contact's last-advertised position otherwise — so a stationary node (a repeater, or a one-time fix) still works. You can arm ahead of time — a favourite locks onto their pubkey, and the alert starts once a position is known. Live following needs a **DM** share (a channel share has no stable identity); the last-advertised fallback works for any contact.
 
-**Proximity beeper.** With **Beeper** on, the device also ticks while you're inside the radius and **shortens the gap between ticks the closer you get to the target** — slow near the edge, rapid near the centre — like a homing beeper guiding you to the exact spot. It's silent outside the radius. Because the beeper is its own opt-in toggle, turning it on **overrides the global buzzer mute** (**Settings › Sound › Buzzer**) — it's an explicit "I want to hear this". Since homing only makes sense while you're approaching a target, the **Beeper** row appears only in **Arrive** or **Both** mode — it's hidden in **Leave**-only mode, and stays silent there even if it was switched on earlier. Otherwise it's independent of the crossing alert (which does follow the mute), so you can use either or both.
+**Proximity beeper.** With **Beeper** on, the device ticks while inside the radius, shortening the gap as you get closer — slow near the edge, rapid near the centre — like a homing beeper. Silent outside the radius. As an opt-in toggle, it **overrides the global buzzer mute** — an explicit "I want to hear this." It only appears in **Arrive**/**Both** mode (hidden and silent in **Leave**-only). Independent of the crossing alert, which does follow the mute — use either or both.
 
 **Setting the target from anywhere.** Besides this screen's picker, the *same* active target can be set in one step with **Set as target** from **Nearby Nodes**' or **Waypoints**' own **Hold Enter** menu — handy so you don't need a detour through Tools. Picking from this screen's picker saves on exit (so **LEFT/RIGHT** cycling stays cheap); the per-item shortcuts save immediately and confirm with a `Target set` toast.
 
@@ -312,9 +312,9 @@ Navigate with **UP/DOWN**, change a value with **LEFT/RIGHT** (or **Enter**); **
 
 <!-- screenshot pending: Compass — scrolling heading tape with centre pointer + large degrees/cardinal readout -->
 
-A heads-up GPS compass. The L1 has no magnetometer, so the heading is the **course over ground** — derived from how your GPS position moves over the last few seconds. The display is a horizontal **heading tape**: a fixed travel-direction pointer sits at the centre and the N..E..S..W scale scrolls underneath it as you turn, so whatever is under the pointer is your current course. A large numeric readout below shows that course in degrees and cardinal (e.g. `145° SE`).
+A heads-up GPS compass. No magnetometer, so heading is **course over ground** — derived from how your GPS position moved over the last few seconds. Display is a horizontal **heading tape**: a fixed pointer at centre, N..E..S..W scrolling underneath as you turn, so whatever's under the pointer is your course. A large numeric readout below shows it in degrees and cardinal (e.g. `145° SE`).
 
-Because the heading comes from movement, it only updates while you are actually moving: standing still shows *move to set heading* (and navigation's **Hdg** line reads `--`). Gross GPS jumps are rejected so a single bad fix can't swing the heading. The heading source runs whenever there's a GPS fix — recording a trail is **not** required.
+Since heading comes from movement, it only updates while moving — standing still shows *move to set heading* (navigation's **Hdg** reads `--`). Gross GPS jumps are rejected so one bad fix can't swing it. Runs on any GPS fix; recording a trail is **not** required.
 
 ---
 
@@ -367,9 +367,9 @@ Melodies can be assigned in **Settings › Sound** (global default) or overridde
 
 <!-- screenshots pending: these predate the tab-carousel layout below (still show the old flat grouped list) -->
 
-Automatically replies to incoming messages that contain a configured trigger word (case-insensitive, contains match). Multiple trigger phrases can be packed into one Trigger field, comma-separated (e.g. `hi,hello there,yo`) — matching any one of them is enough; spaces around each phrase are trimmed, so `hi, hello there` and `hi,hello there` behave the same. The bot has three independent targets — **DM**, a monitored **Channel**, and a monitored **Room** — each with its own trigger/reply pair.
+Automatically replies to incoming messages containing a configured trigger word (case-insensitive, contains match). Pack multiple phrases into one Trigger field, comma-separated (`hi,hello there,yo`) — any one matches; spaces around each phrase are trimmed. Three independent targets — **DM**, a monitored **Channel**, and a monitored **Room** — each with its own trigger/reply pair.
 
-The screen is a **circular tab carousel**, the same style as Tools › Nearby Nodes' filter tabs: **LEFT/RIGHT** switches between the **Channel** / **Room** / **Direct** / **Other** tabs (opens on Channel), **UP/DOWN** moves between the rows within the active tab, and **Enter** acts on the selected row (LEFT/RIGHT is reserved entirely for tab-switching, so every row's value is changed via Enter, not by cycling it in place).
+The screen is a **circular tab carousel** (same style as Nearby Nodes' filter tabs): **LEFT/RIGHT** switches between **Channel** / **Room** / **Direct** / **Other** (opens on Channel), **UP/DOWN** moves within the active tab, **Enter** acts on the selected row (LEFT/RIGHT is reserved for tab-switching — every value changes via Enter, not in-place cycling).
 
 Each target has its own **Enable** toggle on its own tab, and they're fully independent — you can run only a channel bot, only a room bot, only DM, or any combination, with no need to also switch on the others.
 
@@ -418,7 +418,7 @@ The DM, channel and room triggers are independent, so you can run e.g. an away-m
 
 The header shows a running count of auto-replies sent since boot, alongside the tab bar.
 
-**Room posting requires a login.** The room bot reuses whatever session the device already has with that room server (Messages › Rooms › **Login…**, or a password saved from an earlier login/the phone app) — it has no way to prompt for a password itself in the background. If the saved password stops working, the room bot just silently stops posting there, the same as a manual post would; log back in from Messages to fix it.
+**Room posting requires a login.** The room bot reuses whatever session the device already has with that server (Messages › Rooms › **Login…**, or a password saved earlier / from the phone app) — it can't prompt for one itself in the background. If the saved password stops working, it silently stops posting there; log back in from Messages to fix it.
 
 **Throttle.** DM auto-replies are rate-limited **per contact** (10 s), so a second sender is never starved while one contact is on cooldown. The channel and room bots each keep their own single 10 s cooldown and won't echo a message identical to their own reply (so two bots running the same reply text on one channel/room can't ping-pong); the cooldown caps any residual back-and-forth.
 
@@ -451,7 +451,7 @@ A separate **Actions** toggle, nested under Commands (Commands must be ON for Ac
 | ----------------- | -------------------------------------------------------------------- |
 | `!buzz [seconds]` | Sounds the buzzer as a find-me signal — default 5s, capped at 30s. Sounds even if the buzzer is muted in Settings (that's the point of a find-me signal). |
 | `!gps on` / `!gps off` | Enables/disables GPS, same effect as the Home page's GPS toggle.  |
-| `!gps fix [seconds]` | Single-shot location: turns GPS on if it wasn't already, waits for a stabilised fix (HDOP ≤ 2.0, or ≥8 satellites on GPS hardware that doesn't report HDOP, averaged over 10s), sends the position, then restores GPS to whatever state it was in before. Replies in two parts — an immediate `GPS: acquiring fix...` ack, then the position (or `GPS: no fix (timeout)` / a partial fix) as a follow-up message up to `seconds` later (default 90s, clamped to 15-300s) — raise it under poor sky view, where 90s isn't always enough to reach the HDOP/satellite bar. Only one `!gps fix` can be in flight at a time; a second one gets `GPS: fix already pending`. |
+| `!gps fix [seconds]` | Single-shot location: turns GPS on if needed, waits for a stabilised fix (HDOP ≤ 2.0, or ≥8 satellites without HDOP, averaged over 10s), sends the position, then restores GPS's prior state. Two-part reply — immediate `GPS: acquiring fix...` ack, then the position (or `GPS: no fix (timeout)` / partial fix) up to `seconds` later (default 90s, 15–300s range — raise it under poor sky view). Only one in flight at a time; a second gets `GPS: fix already pending`. |
 | `!advert`         | Sends an advert immediately, same as the Home page's manual advert action. |
 
 Actions combine with Commands and each other in one message the same way — `!batt !gps on` answers with `4.10V | GPS: on` in a single reply. With Actions OFF for a target, `!buzz`/`!gps`/`!gps fix`/`!advert` are silently ignored (no reply, no effect) exactly like any other unrecognised command, and `!help`'s reply doesn't mention them.
@@ -524,14 +524,14 @@ The same 4 pins are reachable remotely via the Remote Bot's `!gpio1`..`!gpio4` c
 
 <!-- screenshot pending: Repeater — toggle + Network/profile + flood-filter rows -->
 
-Turns the companion into a packet **repeater** while it keeps working as a normal companion — no separate firmware. By default, enabling it switches the radio to a dedicated repeater profile rather than relaying on whatever network you're chatting on (see **Network** below) — that matches the MeshCore community norm of repeaters sitting on a standard channel, not a private one. Loop-detection and an advert flood-depth cap are always applied. This screen keeps the toggle, the network/profile, and its flood-filter options together; live forwarding stats are on **Tools › Diagnostics**.
+Turns the companion into a packet **repeater** while it keeps working as a normal companion — no separate firmware. By default, enabling it switches the radio to a dedicated repeater profile rather than relaying on your chat network (see **Network** below), matching the MeshCore community norm of repeaters sitting on a standard channel. Loop-detection and an advert flood-depth cap always apply. Live forwarding stats are on **Tools › Diagnostics**.
 
 Navigate with **UP/DOWN**; change a value with **LEFT/RIGHT** (or **Enter** for toggles). **Cancel/Back** saves and returns to Tools.
 
 | Setting        | Options         | Notes                                                                                                          |
 | -------------- | --------------- | -------------------------------------------------------------------------------------------------------------- |
 | Repeater       | ON / OFF        | Master switch. The options below appear only while it is ON.                                                    |
-| Network        | Current / Custom | **Custom** _(default)_: enabling the repeater switches the radio to a dedicated profile (below) and disabling restores the companion's settings — so you can drop onto a separate repeater network and come back. A never-configured device seeds Custom with a frequency in the same band as your own network (433/868/915 MHz region), not a flat one-size-fits-all default — so it can't land outside what's legal for your region. Switching to Custom afterwards (if it was OFF and unconfigured) seeds it from your current settings instead. **Current**: relay on the companion's own frequency — opt-in; not the community norm. |
+| Network        | Current / Custom | **Custom** _(default)_: enabling the repeater switches to a dedicated profile (below), disabling restores the companion's settings. A never-configured device seeds Custom from your own network's band (433/868/915 MHz region), not a flat default, so it can't land outside what's legal for your region. **Current**: relay on the companion's own frequency — opt-in, not the community norm. |
 | Rpt preset     | named presets   | _(Custom only)_ **Enter** picks a community/saved preset for the repeater profile. |
 | Rpt freq       | chip range      | _(Custom only)_ **Enter** opens the digit-by-digit editor (chip-validated bounds). |
 | Rpt SF / BW / CR | 5–12 / 7.8–500 kHz / 5–8 | _(Custom only)_ **LEFT/RIGHT** to adjust the profile's spreading factor, bandwidth, coding rate. |
@@ -543,9 +543,9 @@ Navigate with **UP/DOWN**; change a value with **LEFT/RIGHT** (or **Enter** for 
 
 The five flood filters are **opt-in** (default OFF, so a plain repeater is unaffected) and act on **flood** traffic only — on a direct route this node is the named next hop, so it never drops those.
 
-**Same network vs. separate network.** With **Network = Current** (or a Custom profile set equal to your companion settings) the repeater stays on your own network — you keep messaging while relaying. With a *different* Custom profile the device moves entirely onto that network while relaying (a single radio can't be on two at once) and returns to your companion network when the repeater is switched off. The profile also re-applies after a reboot if the repeater was left on.
+**Same network vs. separate network.** With **Network = Current** (or a Custom profile matching your companion settings) the repeater stays on your own network — you keep messaging while relaying. A *different* Custom profile moves the device entirely onto that network while relaying (one radio can't be on two at once), returning to your own network when switched off. The profile re-applies after a reboot if the repeater was left on.
 
-While the repeater is on, a **»** indicator appears in the status bar (same blink convention as the auto-advert and trail markers) so you can tell it's relaying at a glance. Two radio settings are also overridden while relaying and restored afterwards: **Settings › Radio › Pwr save** is forced off (a repeater must listen continuously) and **Auto pwr** is forced off (a repeater holds full TX power for consistent relay reach). Both show `--` in Settings while the repeater is on.
+While on, a **»** indicator appears in the status bar (same blink convention as auto-advert/trail markers). Two radio settings are overridden and restored afterwards: **Pwr save** forced off (must listen continuously) and **Auto pwr** forced off (full TX power for relay reach). Both show `--` in Settings while active.
 
 Live forwarding stats — **Forwarded**, **Pool free**, **Queue** — are shown on **Tools › Diagnostics** (this screen is config-only).
 
@@ -557,8 +557,8 @@ Live forwarding stats — **Forwarded**, **Pool free**, **Queue** — are shown 
 
 Send commands to a **repeater/room server you have admin permission on** — the on-device equivalent of the companion app's repeater-admin feature. See [CLI Commands](../../cli_commands.md) for the full command grammar. (Admin only manages *remote* nodes; this device's own name, radio, TX power and reboot live in **Settings** — see below.)
 
-1. **Select a node** — opening **Tools › Admin** goes straight to **Tools › Nodes** (the same screen, filters, sort and live scan as browsing it normally) so picking a node for Admin looks exactly like using Nodes for anything else; **Enter** on a repeater/room row hands it to Admin, **Cancel** returns to Tools. Admin is also reachable directly from a node's own **Hold Enter** menu in Nodes.
-2. **Log in** — type the node's **admin password** (the same login handshake Messages uses for room servers; a repeater's admin password is set with the `password` CLI command). If a password was already saved for this node from an earlier successful login, it retries silently instead of prompting. Only a login that comes back with **admin**-level permission unlocks the next step — anything less shows "Not admin on this node".
+1. **Select a node** — **Tools › Admin** opens straight into **Tools › Nodes** (same screen, filters, sort, live scan), so picking a node for Admin looks like using Nodes normally; **Enter** on a repeater/room row hands it to Admin, **Cancel** returns to Tools. Also reachable from a node's own **Hold Enter** menu in Nodes.
+2. **Log in** — type the node's **admin password** (same handshake Messages uses for rooms; set on a repeater with the `password` CLI command). A saved password from an earlier login retries silently. Only **admin**-level permission unlocks the next step — anything less shows "Not admin on this node".
 3. **Pick a category and a field** — a tab carousel (**LEFT/RIGHT** to switch category, **UP/DOWN** to move within it, same as Remote Bot's tabs), so common settings don't need the CLI grammar memorised:
 
    | Tab | Rows |
@@ -579,7 +579,7 @@ Send commands to a **repeater/room server you have admin permission on** — the
 > [!WARNING]
 > This screen can run **destructive** commands on the *remote* node — `reboot`, `erase`, a new admin password, and others. That's the same capability the phone app's repeater-admin feature already exposes, not a new risk, but double-check the value and the target before sending.
 
-**Passwords are remembered across reboots**, the same self-healing behaviour as room logins in Messages: after a successful admin login the password is saved on the device, so picking that node again — even after a power cycle — logs back in silently. If a saved password stops working (e.g. it was changed on the node), the failed login forgets it, so the next pick prompts for a new one. A correct password that just lacks admin permission is left alone — retyping the same one wouldn't change the outcome. Some commands are marked **Serial Only** in the CLI reference — those reject a remote CLI request and only work over that node's own USB serial connection.
+**Passwords are remembered across reboots**, same self-healing behaviour as room logins in Messages: a successful login is saved, so picking that node again — even after a power cycle — logs back in silently. A password that stops working is forgotten on failure, prompting fresh next time. A correct password that just lacks admin permission is left alone. Commands marked **Serial Only** in the CLI reference reject a remote request and only work over that node's own USB serial.
 
 ### This device
 
