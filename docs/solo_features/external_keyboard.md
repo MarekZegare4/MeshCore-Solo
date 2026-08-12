@@ -3,7 +3,9 @@
 [Go back](../../README.md)
 
 Two optional hardware add-ons, both auto-detected and both entirely optional — a
-build with them enabled runs exactly the same with nothing plugged in.
+build with them enabled runs exactly the same with nothing plugged in. Two of
+the newer boards also ship with their own **built-in** keypad instead —
+see [Built-in keyboards](#built-in-keyboards-cardputer-adv-t-echo-lite--keyshield).
 
 - **CardKB** — an M5Stack I2C QWERTY keyboard (address `0x5F`), for typing
   messages, names and labels without walking the on-screen letter grid.
@@ -17,8 +19,10 @@ build with them enabled runs exactly the same with nothing plugged in.
 | Seeed Wio Tracker L1 (OLED) | ✅ Grove connector | onboard |
 | Seeed Wio Tracker L1 (E-ink) | ✅ Grove connector | onboard |
 | GAT562 30S Mesh Kit | — | onboard |
-| Heltec V3 | ✅ solder to free GPIOs | ✅ solder to free GPIOs |
-| Heltec V4 | ✅ solder to free GPIOs | ✅ solder to free GPIOs |
+| Heltec V3 *(experimental)* | ✅ solder to free GPIOs | ✅ solder to free GPIOs |
+| Heltec V4 *(experimental)* | ✅ solder to free GPIOs | ✅ solder to free GPIOs |
+| M5Stack Cardputer ADV *(experimental)* | — | built-in keyboard instead, see below |
+| LilyGO T-Echo Lite + KeyShield *(experimental)* | — | built-in keypad instead, see below |
 
 ---
 
@@ -114,3 +118,19 @@ Everything above lives in the `[env:Heltec_v3_companion_solo_dual]` /
 and [`variants/heltec_v4/platformio.ini`](../../variants/heltec_v4/platformio.ini),
 with comments explaining which pins are safe to reuse. To build a CardKB-only
 device, comment out the joystick block and set Ext. KB to Compact.
+
+---
+
+## Built-in keyboards (Cardputer ADV, T-Echo Lite + KeyShield)
+
+*Experimental* — newly-added board support, not the CardKB/joystick add-ons
+above. Both keypads are TCA8418-based and share one polling path, entirely
+independent of the CardKB code — a board can have either, or neither.
+
+- **M5Stack Cardputer ADV** — built-in QWERTY, no CardKB or joystick needed.
+- **LilyGO T-Echo Lite + KeyShield** — the KeyShield add-on gives the T-Echo
+  Lite a T9 keypad; without it the board has no usable input for the solo UI.
+
+Neither keypad follows CardKB's exact Fn-shortcut table (Fn+Enter,
+Fn+letter accent popups, Tab, Fn+Esc lock) — see each board's own
+`platformio.ini` / keyboard driver under `variants/` for its current keymap.

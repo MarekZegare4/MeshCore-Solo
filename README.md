@@ -15,14 +15,16 @@ Solo firmware thread: https://discord.com/channels/1495203904898728149/150529433
 | Seeed Wio Tracker L1 (OLED) | nRF52840 | SSD1306 / SH1106 128 × 64 | `solo-<version>-WioTrackerL1.uf2` |
 | Seeed Wio Tracker L1 (E-ink) | nRF52840 | GxEPD2 250 × 122 | `solo-<version>-WioTrackerL1Eink.uf2` |
 | GAT562 30S Mesh Kit | nRF52840 | SSD1306 128 × 64 | `solo-<version>-GAT562-30S-Mesh-Kit.uf2` |
-| Heltec LoRa32 V3 | ESP32-S3 | SSD1306 128 × 64 | `solo-<version>-Heltec-v3-merged.bin` |
-| Heltec LoRa32 V4 | ESP32-S3 | SSD1306 128 × 64 | `solo-<version>-heltec-v4-merged.bin` |
+| Heltec LoRa32 V3 *(experimental)* | ESP32-S3 | SSD1306 128 × 64 | `solo-<version>-Heltec-v3-merged.bin` |
+| Heltec LoRa32 V4 *(experimental)* | ESP32-S3 | SSD1306 128 × 64 | `solo-<version>-heltec-v4-merged.bin` |
+| M5Stack Cardputer ADV *(experimental)* | ESP32-S3 | ST7789 TFT 240 × 135 | `solo-<version>-M5Stack-Cardputer-ADV-merged.bin` |
+| LilyGO T-Echo Lite + KeyShield *(experimental)* | nRF52840 | GxEPD2 250 × 122 | `solo-<version>-LilyGo-T-Echo-Lite-keyshield.uf2` |
 
 All firmware files are published on the [releases page](https://github.com/MarekZegare4/MeshCore-Solo/releases). Each binary supports both BLE and USB serial — there are no separate BLE/USB builds.
 
 The MCU column decides how you flash: nRF52840 boards take a drag-and-drop `.uf2`, ESP32-S3 boards take a `.bin` written with a flasher — see [Flashing](#flashing).
 
-The three nRF52840 boards work out of the box. The two Heltec boards have no joystick and no keyboard of their own, so they need [a keyboard or a joystick wired up](#hardware-setup--heltec-v3--v4) before the solo UI can be driven.
+The Wio Tracker L1s, GAT562 and the Cardputer ADV work out of the box. Heltec V3/V4 have no joystick and no keyboard of their own, so they need [a keyboard or a joystick wired up](#hardware-setup--heltec-v3--v4) before the solo UI can be driven. The Cardputer ADV has a built-in QWERTY keyboard; the T-Echo Lite needs the KeyShield add-on (its own T9 keypad) to be usable standalone — see [External Keyboard & Joystick](./docs/solo_features/external_keyboard.md).
 
 <!-- **Enclosures (Wio Tracker L1)**
 - [E-ink case](https://www.printables.com/model/1420534-seeed-wio-tracker-l1-e-ink-enclosure)
@@ -87,13 +89,13 @@ The e-ink variant targets the Wio Tracker L1 fitted with a 2.13″ GxEPD2 panel 
 >
 > Updating from an earlier Solo release does not need this, unless the release notes say otherwise.
 
-### nRF52840 boards — Wio Tracker L1, GAT562
+### nRF52840 boards — Wio Tracker L1, GAT562, T-Echo Lite + KeyShield
 
 1. Download the `.uf2` file for your device from the [releases page](https://github.com/MarekZegare4/MeshCore-Solo/releases)
 2. Press reset twice quickly to enter bootloader mode — the device should appear as a mass storage drive on your computer
 3. Copy the `.uf2` file to the drive to flash the firmware
 
-### ESP32-S3 boards — Heltec V3, V4
+### ESP32-S3 boards — Heltec V3, V4, Cardputer ADV
 
 ESP32-S3 has no UF2 bootloader and no mass-storage mode. Releases ship a single **`-merged.bin`** per board — bootloader, partition table and app in one image — which goes to offset `0x0`:
 
