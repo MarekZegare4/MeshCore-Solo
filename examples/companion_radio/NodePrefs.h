@@ -471,7 +471,7 @@ struct NodePrefs {  // persisted to file
     return S[idx < GPS_AVG_COUNT ? idx : 0];
   }
   static const char* gpsAvgLabel(uint8_t idx) {
-    static const char* L[GPS_AVG_COUNT] = { "Off", "5s", "10s", "30s" };
+    static const char* L[GPS_AVG_COUNT] = { "OFF", "5s", "10s", "30s" };
     return L[idx < GPS_AVG_COUNT ? idx : 0];
   }
 
@@ -482,7 +482,7 @@ struct NodePrefs {  // persisted to file
     return S[idx < TRAIL_AUTOPAUSE_COUNT ? idx : 0];
   }
   static const char* trailAutoPauseLabel(uint8_t idx) {
-    static const char* L[TRAIL_AUTOPAUSE_COUNT] = { "Off", "1m", "2m", "5m" };
+    static const char* L[TRAIL_AUTOPAUSE_COUNT] = { "OFF", "1m", "2m", "5m" };
     return L[idx < TRAIL_AUTOPAUSE_COUNT ? idx : 0];
   }
   // Movement under this many metres counts as "stationary" for auto-pause.

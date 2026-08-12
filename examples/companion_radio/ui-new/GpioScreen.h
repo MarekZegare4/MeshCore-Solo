@@ -69,12 +69,12 @@ class GpioScreen : public UIScreen {
         else strncpy(buf, "Analog", n);
         break;
       }
-      default: strncpy(buf, "Off", n); break;
+      default: strncpy(buf, "OFF", n); break;
     }
     buf[n - 1] = '\0';
   }
 
-  // Off -> Input -> Output (starts OFF) -> [Analog, GPIO1/GPIO2 only] -> Off
+  // OFF -> Input -> Output (starts OFF) -> [Analog, GPIO1/GPIO2 only] -> OFF
   // ... one press per step. Output's ON/OFF split lives on the State row
   // below, not in this cycle; Analog is read-only so it has no State row.
   void cycleMode(int pin) {
@@ -84,9 +84,9 @@ class GpioScreen : public UIScreen {
     if      (mode == 0)             next = 1;
     else if (mode == 1)             next = 2;
     else if (mode == 2 || mode == 3) next = analog_ok ? 4 : 0;
-    else                             next = 0;   // was Analog -> back to Off
+    else                             next = 0;   // was Analog -> back to OFF
     _task->setGpioMode(pin + 1, next);
-    const char* name = (next == 0) ? "Off" : (next == 1) ? "Input" : (next == 2) ? "Output" : "Analog";
+    const char* name = (next == 0) ? "OFF" : (next == 1) ? "Input" : (next == 2) ? "Output" : "Analog";
     char msg[24];
     snprintf(msg, sizeof(msg), "GPIO%d: %s", pin + 1, name);
     _task->showAlert(msg, 800);

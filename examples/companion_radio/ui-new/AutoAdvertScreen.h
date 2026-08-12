@@ -69,4 +69,4 @@ public:
 };
 
 const uint32_t AutoAdvertScreen::OPTS[AutoAdvertScreen::OPT_COUNT]       = { 0, 30, 60, 120, 300, 600, 1800, 3600 };
-const char*    AutoAdvertScreen::OPT_LABELS[AutoAdvertScreen::OPT_COUNT] = { "off", "30s", "1min", "2min", "5min", "10min", "30min", "1h" };
+const char*    AutoAdvertScreen::OPT_LABELS[AutoAdvertScreen::OPT_COUNT] = { "OFF", "30s", "1min", "2min", "5min", "10min", "30min", "1h" };

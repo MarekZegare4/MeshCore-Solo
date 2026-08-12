@@ -114,7 +114,7 @@ class SettingsScreen : public UIScreen {
   static const int LOW_BAT_COUNT = 7;
 #if ENV_INCLUDE_GPS == 1
   // GPS duty-cycle sleep window: how long GPS naps between fix acquisitions.
-  // "off" (0) keeps it continuously on, today's behaviour. Backed by
+  // "OFF" (0) keeps it continuously on, today's behaviour. Backed by
   // NodePrefs::gps_interval, seconds.
   static const uint32_t GPS_DUTY_OPTS[6];
   static const char* GPS_DUTY_LABELS[6];
@@ -1084,14 +1084,14 @@ const uint16_t SettingsScreen::AUTO_OFF_OPTS[5]   = { 5, 15, 30, 60, 0 };
 const char*    SettingsScreen::AUTO_OFF_LABELS[5]  = { "5s", "15s", "30s", "60s", "never" };
 #endif
 const uint16_t SettingsScreen::LOW_BAT_OPTS[7]   = { 0, 3000, 3100, 3200, 3300, 3400, 3500 };
-const char*    SettingsScreen::LOW_BAT_LABELS[7]  = { "off", "3.0V", "3.1V", "3.2V", "3.3V", "3.4V", "3.5V" };
+const char*    SettingsScreen::LOW_BAT_LABELS[7]  = { "OFF", "3.0V", "3.1V", "3.2V", "3.3V", "3.4V", "3.5V" };
 #if ENV_INCLUDE_GPS == 1
 const uint32_t SettingsScreen::GPS_DUTY_OPTS[6]   = { 0, 60, 300, 900, 1800, 3600 };
-const char*    SettingsScreen::GPS_DUTY_LABELS[6] = { "off", "1 min", "5 min", "15 min", "30 min", "1 h" };
+const char*    SettingsScreen::GPS_DUTY_LABELS[6] = { "OFF", "1 min", "5 min", "15 min", "30 min", "1 h" };
 #endif
 const char*    SettingsScreen::BATT_DISPLAY_LABELS[3] = { "icon", "%", "V" };
 const char*    SettingsScreen::SOUND_LABELS[4] = { "built-in", "M1", "M2", "None" };
 const char*    SettingsScreen::AD_SCOPE_LABELS[2] = { "All", "Zero-hop" };
 #if FEAT_FULL_REFRESH_SETTING
-const char* SettingsScreen::EINK_FULL_REFRESH_LABELS[5] = { "off", "5", "10", "20", "30" };
+const char* SettingsScreen::EINK_FULL_REFRESH_LABELS[5] = { "OFF", "5", "10", "20", "30" };
 #endif
