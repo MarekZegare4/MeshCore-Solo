@@ -1887,12 +1887,12 @@
 <tr>
 <td>Pwr save</td>
 <td>ON / OFF</td>
-<td><strong>Battery saver.</strong> Hardware duty-cycle receive: the SX126x cycles RX↔sleep on its own and wakes on a preamble, cutting average RX current. Trades a little receive latency; leave OFF for lowest-latency reception. Requires an SX126x radio (otherwise stays on continuous RX). <strong>Forced off (shown as <code>--</code>) while the repeater is on</strong> — a repeater must listen continuously; your setting is restored when the repeater is switched off. A background watchdog recovers automatically if the duty-cycle sequencer ever gets stuck (soft re-arm, then a full radio reset) — see Tools › Diagnostics for the recovery counts.</td>
+<td><strong>Battery saver.</strong> Hardware duty-cycle receive (SX126x only): cycles RX↔sleep, wakes on preamble, cuts average RX current at the cost of some latency. <strong>Forced off (<code>--</code>) while the repeater is on</strong> — restored once it's switched off. A background watchdog auto-recovers if the sequencer gets stuck (soft re-arm, then a full reset) — see Tools › Diagnostics for the counts.</td>
 </tr>
 <tr>
 <td>Auto pwr</td>
 <td>ON / OFF</td>
-<td><strong>Adaptive Power Control.</strong> Lowers actual TX power on strong links to save energy, ramping back up — to the <strong>TX Pwr</strong> ceiling — on weak or lost links. Link quality comes from direct-message ACK SNR and, for channel messages (no ACK), from hearing a repeater rebroadcast your packet. The radio page / name bar shows the live power. Default OFF (fixed TX power). <strong>Suppressed (shown as <code>--</code>) while the repeater is on</strong> — a repeater holds full TX power for consistent relay reach; your setting is restored when the repeater is switched off.</td>
+<td><strong>Adaptive Power Control.</strong> Lowers TX power on strong links, ramps back to the <strong>TX Pwr</strong> ceiling on weak/lost ones. Link quality from DM ACK SNR, or — for channels (no ACK) — a repeater's rebroadcast. Live power shown on the radio page/name bar. Default OFF. <strong>Suppressed (<code>--</code>) while the repeater is on</strong> — restored once it's switched off.</td>
 </tr>
 </tbody>
 </table>
@@ -1942,7 +1942,7 @@
 <tr>
 <td>GPS pwr <em>(if GPS detected)</em></td>
 <td>OFF / 1 min / 5 min / 15 min / 30 min / 1 h</td>
-<td><strong>Battery saver.</strong> Cycles GPS off between fixes instead of running it continuously; each wake waits for a fix (up to 60 s) before sleeping again for the chosen interval. Automatically stays continuously on regardless of this setting whenever something needs a live position — an active Trail recording, Map › Live share, an armed Locator, the Compass / Nearby navigate view, or an in-flight <code>!gps fix</code> bot request. <code>OFF</code> (default) matches earlier releases: GPS runs continuously whenever enabled. The GPS status icon blinks while napping between fixes.</td>
+<td><strong>Battery saver.</strong> Cycles GPS off between fixes; each wake waits up to 60 s for a fix before sleeping again. Stays continuously on whenever something needs a live position — Trail recording, Live share, an armed Locator, Compass/Nearby, or an in-flight <code>!gps fix</code>. <code>OFF</code> (default) = always-on, as before. Status icon blinks while napping.</td>
 </tr>
 <tr>
 <td>Units</td>
@@ -1970,17 +1970,17 @@
 <tr>
 <td>Layout</td>
 <td>ABC / T9</td>
-<td>On-screen keyboard style. <strong>ABC</strong>: an a-b-c…z grid, one key per letter (the original layout). <strong>T9</strong>: phone-keypad multi-tap — each key is labelled with its <strong>digit</strong> and a letter group (e.g. <code>2abc</code>); repeated <strong>Enter</strong> presses cycle through the letters and then the digit itself. Applies to whichever script page is active (see Main/Additional below), not just Latin.</td>
+<td>On-screen keyboard style. <strong>ABC</strong>: a-b-c…z grid, one key per letter. <strong>T9</strong>: phone-keypad multi-tap — each key labelled digit+letters (e.g. <code>2abc</code>); repeated <strong>Enter</strong> cycles the letters then the digit. Applies to whichever script page is active, not just Latin.</td>
 </tr>
 <tr>
 <td>Main</td>
 <td>Latin / Cyrillic / Greek</td>
-<td>Which script the keyboard <strong>opens on by default</strong>. <strong>Latin</strong> (default) matches earlier releases; pick <strong>Cyrillic</strong> or <strong>Greek</strong> here instead to make that script the one you land on every time, with Latin becoming the one reached via cycling (see Additional below) instead of the other way round.</td>
+<td>Which script the keyboard opens on by default. <strong>Latin</strong> is the default; picking <strong>Cyrillic</strong> or <strong>Greek</strong> makes that the one you land on, with Latin moving to the Additional cycle instead.</td>
 </tr>
 <tr>
 <td>Additional</td>
 <td>Latin / Cyrillic / Greek</td>
-<td>The second script added to the same <strong>#@/abc</strong> key's cycle (Main → Additional → Symbols → Main) — no separate key to switch scripts. Setting Additional to the <strong>same</strong> script as Main drops the cycle back to just that script plus Symbols (no second script page at all). <strong>Greek</strong> covers the 24-letter alphabet plus final sigma (<code>ς</code>) but not the tonos stress accents used in proper Modern Greek spelling. Every script's letters render natively — the display font (a single unified Unicode font used everywhere on-screen) covers all of them, no separate toggle needed.</td>
+<td>The second script in the <strong>#@/abc</strong> key's cycle (Main → Additional → Symbols → Main). Setting it to the same script as Main drops the cycle to just that script plus Symbols. <strong>Greek</strong> covers the 24-letter alphabet plus final sigma (<code>ς</code>), not the tonos stress accents. Every script renders natively via one shared Unicode font — no separate toggle needed.</td>
 </tr>
 </tbody>
 </table>
