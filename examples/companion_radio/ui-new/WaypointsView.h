@@ -274,6 +274,12 @@ public:
   // True while the component owns the screen (a sub-mode or the keyboard is up).
   bool active() const { return _mode != OFF || _kb_active; }
 
+  // True in the sub-modes that read a live, continuous GPS position (bearing
+  // to target, running average, walking a track back) -- as opposed to LIST
+  // (just browsing) or ADD (typed coordinates, no fix involved). Used by
+  // UITask's GPS duty-cycle hold so these don't stall waiting on a nap.
+  bool needsLiveGps() const { return _mode == NAV || _mode == AVG || _mode == TRACKBACK; }
+
   // Entry points called from TrailScreen's action menu.
   void openList() { _mode = LIST; _sel = 0; _scroll = 0; }
   void markHere() {

@@ -2590,6 +2590,8 @@ void UITask::loop() {
         || (_node_prefs && _node_prefs->locator_enabled && _node_prefs->locator_has_target)
         || curr == compass_screen
         || (curr == nearby_screen && ((NearbyScreen*)nearby_screen)->isNavigating())
+        || (curr == trail_screen && ((TrailScreen*)trail_screen)->wpNeedsLiveGps())
+        || (curr == messages_screen && ((MessagesScreen*)messages_screen)->navActive())
         || the_mesh.isGpsFixPending();
     _sensors->setGpsKeepAwake(gps_needed_live);
     // A fresh wake (either a duty-cycle wake, or GPS forced continuously back

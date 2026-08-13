@@ -627,6 +627,10 @@ public:
     // The history rings + per-channel unread counters init in MessageHistory.
   }
 
+  // Forwarded to UITask's GPS duty-cycle hold — true while showing the
+  // bearing/distance view to a location shared in a message.
+  bool navActive() const { return _nav_active; }
+
   // First free channel slot (existing config or blank name), or -1 if full.
   int findFreeChannelSlot() const {
     for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {

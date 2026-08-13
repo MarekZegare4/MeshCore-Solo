@@ -114,6 +114,9 @@ public:
   // KEY_CANCEL returns there, not to Tools.
   void showMapView() { _view = V_MAP; _return_home = true; }
 
+  // Forwarded to UITask's GPS duty-cycle hold — see WaypointsView::needsLiveGps().
+  bool wpNeedsLiveGps() const { return _wp.needsLiveGps(); }
+
   int render(DisplayDriver& display) override {
     display.setTextSize(1);
     display.setColor(DisplayDriver::LIGHT);
