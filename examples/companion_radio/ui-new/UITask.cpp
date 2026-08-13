@@ -2346,6 +2346,7 @@ void UITask::loop() {
       case KEY_DOWN:  enqueueKey(checkDisplayOn(KEY_DOWN));  break;
       case KEY_CANCEL:enqueueKey(checkDisplayOn(KEY_CANCEL));break;
       case KEY_HOME:
+        checkDisplayOn(k);   // wake/extend same as every other key here, even though Home has no nav action
         #ifdef LILYGO_TECHO_LITE_KEYSHIELD
         extern void techo_keyshield_backlight_toggle();
         techo_keyshield_backlight_toggle();

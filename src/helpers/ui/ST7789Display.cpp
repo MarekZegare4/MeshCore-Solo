@@ -18,11 +18,8 @@
 #ifdef HELTEC_VISION_MASTER_T190
   #define SCALE_X  2.5f        // 320 / 128
   #define SCALE_Y  2.65625f    // 170 / 64
-#elif defined(CARDPUTER_ADV)
-  #define SCALE_X  1.875f      // 240 / 128
-  #define SCALE_Y  2.109375f   // 135 / 64
 #else
-  #define SCALE_X  1.875f      // 240 / 128
+  #define SCALE_X  1.875f      // 240 / 128 -- also Cardputer ADV's panel, same resolution
   #define SCALE_Y  2.109375f   // 135 / 64
 #endif
 
