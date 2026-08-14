@@ -4,6 +4,8 @@
 #include <cstring>
 #include <string>
 
+#include <Arduino.h>
+
 #include "../../examples/companion_radio/NodePrefs.h"
 
 class ReplayStream : public Stream {
