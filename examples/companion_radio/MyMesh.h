@@ -12,7 +12,7 @@ class UITask;
 #define FIRMWARE_VER_CODE 13
 
 #ifndef FIRMWARE_BUILD_DATE
-#define FIRMWARE_BUILD_DATE "12 Aug 2026"
+#define FIRMWARE_BUILD_DATE "14 Aug 2026"
 #endif
 
 // Fallback only -- every real build (local or CI) goes through build.sh, which

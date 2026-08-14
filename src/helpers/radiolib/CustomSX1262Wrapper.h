@@ -54,8 +54,6 @@ public:
     ((CustomSX1262 *)_radio)->sleep(false);
   }
 
-  void doResetAGC() override { sx126xResetAGC((SX126x *)_radio); }
-
   // Power-save RX = hardware RX duty-cycle (SX126x SetRxDutyCycle, datasheet
   // 13.1.7). The chip's sequencer cycles RX↔sleep on its own, latches a preamble
   // of the configured length and then stays in RX to receive the packet, raising
@@ -106,4 +104,5 @@ public:
     ((CustomSX1262 *)_radio)->setRxBoostedGainMode(_wd_rx_boosted_gain);
     return true;
   }
+  void doResetAGC() override { sx126xResetAGC((SX126x *)_radio, getRxBoostedGainMode()); }
 };

@@ -65,6 +65,14 @@ struct NodePrefs {  // persisted to file
   uint32_t gps_interval;     // GPS duty-cycle sleep window in seconds (0 = disabled, GPS stays continuous)
   uint8_t autoadd_config;    // bitmask for auto-add contacts config
   uint8_t rx_boosted_gain; // SX126x RX boosted gain mode (0=power saving, 1=boosted)
+  // External LoRa FEM gain (LNA/PA), from upstream companion-v1.17.1 —
+  // board-level only right now (BaseCustomBoard::setLoRaFemLnaEnabled/
+  // PaGainEnabled, both default no-op false), no companion CLI/UI to set
+  // these yet, so — matching upstream's own decision — NOT persisted here:
+  // always reset to the constructor default (MyMesh.cpp) on boot. Not part
+  // of the DataStore save/load tripwire below.
+  uint8_t radio_fem_rxgain;
+  uint8_t radio_fem_txgain;
   uint8_t client_repeat;
   uint8_t path_hash_mode;    // which path mode to use when sending
   uint8_t autoadd_max_hops;  // 0 = no limit, 1 = direct (0 hops), N = up to N-1 hops (max 64)
