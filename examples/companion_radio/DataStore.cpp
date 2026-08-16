@@ -568,6 +568,10 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
   // behaviour for upgraders).
   rd(&_prefs.keyboard_cardkb_compact, sizeof(_prefs.keyboard_cardkb_compact));
   if (_prefs.keyboard_cardkb_compact > 1) _prefs.keyboard_cardkb_compact = 0;
+  // → 0xC0DE0024: persist board.setAdcMultiplier()'s value. A pre-0x24 file
+  // has no bytes here; _prefs.adc_multiplier stays at its zero-init default,
+  // which is exactly "no override".
+  rd(&_prefs.adc_multiplier, sizeof(_prefs.adc_multiplier));
 
   // Schema sentinel: bumped on layout changes. Mismatch means an older file
   // (or a different schema); rd() already zero-inits any fields not present,
@@ -781,6 +785,7 @@ void DataStore::savePrefs(const NodePrefs& _prefs, double node_lat, double node_
     file.write((uint8_t *)&_prefs.gpio3_mode, sizeof(_prefs.gpio3_mode));
     file.write((uint8_t *)&_prefs.gpio4_mode, sizeof(_prefs.gpio4_mode));
     file.write((uint8_t *)&_prefs.keyboard_cardkb_compact, sizeof(_prefs.keyboard_cardkb_compact));
+    file.write((uint8_t *)&_prefs.adc_multiplier, sizeof(_prefs.adc_multiplier));
 
     // Tail sentinel — must be last. See NodePrefs::SCHEMA_SENTINEL. Its write is
     // the one we check: once the flash fills, writes return 0, so a good

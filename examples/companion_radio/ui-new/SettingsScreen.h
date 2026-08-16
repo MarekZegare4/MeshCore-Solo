@@ -66,6 +66,9 @@ class SettingsScreen : public UIScreen {
     DEVICE_NAME,
     TIMEZONE,
     LOW_BAT,
+#ifdef ADC_MULTIPLIER
+    ADC_MULT,
+#endif
 #if ENV_INCLUDE_GPS == 1
     GPS_DUTY_CYCLE,
 #endif
@@ -76,7 +79,7 @@ class SettingsScreen : public UIScreen {
     KEYBOARD_TYPE,
     KEYBOARD_MAIN_ALPHABET,
     KEYBOARD_ALPHABET,
-#if defined(ENV_PIN_SDA) && defined(ENV_PIN_SCL)
+#if (defined(ENV_PIN_SDA) && defined(ENV_PIN_SCL)) || defined(CARDKB_ENABLE)
     KEYBOARD_CARDKB_COMPACT,
 #endif
     // Contacts section
@@ -525,7 +528,22 @@ class SettingsScreen : public UIScreen {
         display.setCursor(xc, y);
         display.print(buf);
       }
-    } else if (item == CUSTOM_SF) {
+        }
+#ifdef ADC_MULTIPLIER
+    else if (item == ADC_MULT) {
+      display.print("ADC Mult");
+      int xc = valCol(display);
+      if (sel && _adc_ed.active) {
+        _adc_ed.render(display, xc, y);
+      } else {
+        char buf[10];
+        snprintf(buf, sizeof(buf), "%.3f", board.getAdcMultiplier());
+        display.setCursor(xc, y);
+        display.print(buf);
+      }
+    }
+#endif
+    else if (item == CUSTOM_SF) {
       display.print("SF");
       char buf[6];
       snprintf(buf, sizeof(buf), "%d", p ? (int)p->sf : 0);
@@ -605,7 +623,7 @@ class SettingsScreen : public UIScreen {
       display.print("Additional");
       display.setCursor(valCol(display), y);
       display.print(NodePrefs::keyboardAlphabetLabel(p ? p->keyboard_alt_alphabet : 0));
-#if defined(ENV_PIN_SDA) && defined(ENV_PIN_SCL)
+#if (defined(ENV_PIN_SDA) && defined(ENV_PIN_SCL)) || defined(CARDKB_ENABLE)
     } else if (item == KEYBOARD_CARDKB_COMPACT) {
       display.print("Ext. KB");
       display.setCursor(valCol(display), y);
@@ -689,6 +707,9 @@ class SettingsScreen : public UIScreen {
   // Manual radio-parameter editing (digit-by-digit Freq editor + SF/BW/CR
   // stepping), shared with Tools › Repeater — see RadioParamsEditor.h.
   RadioParamsEditor _editor;
+  #ifdef ADC_MULTIPLIER
+  DigitEditor _adc_ed;
+#endif
 
 public:
   SettingsScreen(UITask* task, KeyboardWidget* kb)
@@ -776,6 +797,16 @@ public:
       if (_editor.handleFreqInput(c) && p) { _task->applyRadioParams(); _dirty = true; }
       return true;
     }
+    #ifdef ADC_MULTIPLIER
+    if (_adc_ed.active) {
+      DigitEditor::Result r = _adc_ed.handleInput(c);
+      if (r == DigitEditor::DONE) {
+        board.setAdcMultiplier(_adc_ed.value);
+        if (p) { p->adc_multiplier = _adc_ed.value; _dirty = true; }
+      }
+      return true;
+    }
+#endif
 
     // Keyboard editing mode for naming a new saved preset
     if (_picker.saving) {
@@ -903,6 +934,12 @@ public:
       _editor.beginFreq(p->freq, min_mhz, max_mhz);
       return true;
     }
+    #ifdef ADC_MULTIPLIER
+    if (_selected == ADC_MULT && enter) {
+      _adc_ed.begin(board.getAdcMultiplier(), 0.0f, 10.0f, 2, 3);
+      return true;
+    }
+#endif
     int dir = right ? 1 : (left ? -1 : 0);
     if (_selected == CUSTOM_SF && p && dir && RadioParamsEditor::stepSF(p->sf, dir)) { _task->applyRadioParams(); _dirty = true; return true; }
     if (_selected == CUSTOM_BW && p && dir && RadioParamsEditor::stepBW(p->bw, dir)) { _task->applyRadioParams(); _dirty = true; return true; }
@@ -993,7 +1030,7 @@ public:
       _dirty = true;
       return true;
     }
-#if defined(ENV_PIN_SDA) && defined(ENV_PIN_SCL)
+#if (defined(ENV_PIN_SDA) && defined(ENV_PIN_SCL)) || defined(CARDKB_ENABLE)
     if (_selected == KEYBOARD_CARDKB_COMPACT && p && (left || right || enter)) {
       p->keyboard_cardkb_compact ^= 1;
       _dirty = true;

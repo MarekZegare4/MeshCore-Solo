@@ -1701,6 +1701,10 @@ void MyMesh::begin(bool has_display) {
   _prefs.tx_power_dbm = constrain(_prefs.tx_power_dbm, -9, MAX_LORA_TX_POWER);
   _prefs.gps_enabled = constrain(_prefs.gps_enabled, 0, 1);  // Ensure boolean 0 or 1
   _prefs.gps_interval = constrain(_prefs.gps_interval, 0, 86400);  // Max 24 hours
+  // Apply the persisted ADC multiplier. 0.0f already means "use hardware
+  // default" to setAdcMultiplier() itself, so always safe to call.
+  if (isnan(_prefs.adc_multiplier) || isinf(_prefs.adc_multiplier)) _prefs.adc_multiplier = 0.0f;
+  board.setAdcMultiplier(_prefs.adc_multiplier);
 
 #ifdef BLE_PIN_CODE // 123456 by default
   if (_prefs.ble_pin == 0) {
@@ -2606,8 +2610,21 @@ void MyMesh::handleCmdFrame(size_t len) {
       strcpy(dp, sensors.getSettingName(i));
       dp = strchr(dp, 0);
       *dp++ = ':';
-      strcpy(dp, sensors.getSettingValue(i));
+            strcpy(dp, sensors.getSettingValue(i));
       dp = strchr(dp, 0);
+    }
+    // Board-level ADC calibration, not a sensor setting -- route directly.
+    // getAdcMultiplier() returns 0.0f on boards that don't implement calibration.
+    {
+      float am = board.getAdcMultiplier();
+      if (am != 0.0f && dp - (char *)&out_frame[1] < 120) {
+        if (dp != (char *)&out_frame[1]) *dp++ = ',';
+        strcpy(dp, "adc.multiplier");
+        dp = strchr(dp, 0);
+        *dp++ = ':';
+        sprintf(dp, "%.3f", am);
+        dp = strchr(dp, 0);
+      }
     }
     _serial->writeFrame(out_frame, dp - (char *)out_frame);
   } else if (cmd_frame[0] == CMD_SET_CUSTOM_VAR && len >= 4) {
@@ -2616,8 +2633,20 @@ void MyMesh::handleCmdFrame(size_t len) {
     char *np = strchr(sp, ':'); // look for separator char
     if (np) {
       *np++ = 0; // modify 'cmd_frame', replace ':' with null
-      bool success = sensors.setSettingValue(sp, np);
+      bool success;
+      if (strcmp(sp, "adc.multiplier") == 0) {
+        // Board-level ADC calibration, not a sensor setting -- route directly.
+        // setAdcMultiplier() returns false on boards that don't support it.
+        float multiplier = atof(np);
+        success = board.setAdcMultiplier(multiplier);
+      } else {
+        success = sensors.setSettingValue(sp, np);
+      }
       if (success) {
+        if (strcmp(sp, "adc.multiplier") == 0) {
+          _prefs.adc_multiplier = atof(np);
+          savePrefs();
+        }
         #if ENV_INCLUDE_GPS == 1
         // Update node preferences for GPS settings
         if (strcmp(sp, "gps") == 0) {

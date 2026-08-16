@@ -440,6 +440,11 @@ struct NodePrefs {  // persisted to file
   // stays put even if the module is briefly unplugged. Default 0 (full grid,
   // unchanged behaviour) on upgrade.
   uint8_t  keyboard_cardkb_compact;
+    // Board-level ADC calibration (see board.getAdcMultiplier()/setAdcMultiplier()
+  // -- CommonCLI's adc.multiplier). 0.0f means "no override, use the board's
+  // hardware-default ADC_MULTIPLIER constant". Default 0.0f (unchanged
+  // behaviour) on upgrade.
+  float    adc_multiplier;
 
   // Single source of truth for the live-share option tables (shared by the Map
   // UI labels and the auto-send engine in UITask).
@@ -503,7 +508,7 @@ struct NodePrefs {  // persisted to file
   // adding/removing/reordering fields in DataStore::savePrefs/loadPrefsInt so
   // older saves are detected on load and skipped (zero-init defaults kept).
   // High 24 bits identify the file format; low byte is the schema revision.
-  static const uint32_t SCHEMA_SENTINEL = 0xC0DE0023;
+  static const uint32_t SCHEMA_SENTINEL = 0xC0DE0024;
 
   // Bit-index for each home page. Used by page_order (entries store bit+1) and
   // by home_pages_mask. Single source of truth — both HomeScreen::pageBit/bitToPage
@@ -608,7 +613,7 @@ struct NodePrefs {  // persisted to file
 // bumps, 7 more uint8_t total) added 8 bytes, not 7 -- one byte of tail
 // padding got consumed along the way. 2720 confirmed via a real
 // WioTrackerL1Eink_companion_solo_dual build.
-static_assert(sizeof(NodePrefs) == 2720,
+  static_assert(sizeof(NodePrefs) == 2728,
               "NodePrefs layout changed — sync DataStore save/load + clamp, bump "
               "SCHEMA_SENTINEL, then update this size (see steps above).");
 
