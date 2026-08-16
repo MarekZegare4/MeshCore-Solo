@@ -42,7 +42,10 @@ public:
   // y where list items begin: a 2px breathing gap below the header separator so
   // the first row doesn't touch the line (matches the hand-rolled hdr+2 used by
   // the graphical screens).
-  int listStart()            const { return headerH() + 2; }
+  #ifndef LIST_START_EXTRA_PAD
+     #define LIST_START_EXTRA_PAD 0
+   #endif
+     int listStart()            const { return headerH() + 2 + LIST_START_EXTRA_PAD; }
   int listVisible(int itemH) const { return (height() - listStart()) / itemH; }
   int listVisible()          const { return listVisible(lineStep()); }
   // x where a right-side value column starts (leaves ~8 chars for the value)

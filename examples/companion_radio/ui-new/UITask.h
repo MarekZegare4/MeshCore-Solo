@@ -198,7 +198,7 @@ class UITask : public AbstractUITask {
   // EnvironmentSensorManager) as the "this board has a second I2C bus" gate,
   // rather than a new board-specific pin define. No-op entirely on boards
   // without that bus, or when nothing ACKs 0x5F at boot.
-#if defined(ENV_PIN_SDA) && defined(ENV_PIN_SCL)
+#if (defined(ENV_PIN_SDA) && defined(ENV_PIN_SCL)) || defined(CARDKB_ENABLE)
   bool     _has_cardkb = false;
   // CardKB is level-triggered, not edge-triggered -- it keeps returning the
   // same byte for as long as the physical key is held, not just once. Track
