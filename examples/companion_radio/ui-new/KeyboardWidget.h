@@ -577,18 +577,18 @@ struct KeyboardWidget {
     // ...and the byte offset that line starts at.
     int ps = 0;
     for (int n = first_line * cpl; n > 0 && ps < len; n--) ps += kbUtf8CharBytesAt(buf, ps, len);
-    bool cursor_drawn = false;   // draw it on exactly one line, even once the text itself runs out
     for (int pl = 0; pl < prev_lines; pl++) {
       int pe = ps;   // byte offset cpl codepoints further along (or end of text)
       for (int k = 0; k < cpl && pe < len; k++) pe += kbUtf8CharBytesAt(buf, pe, len);
-      // cursor_pos == len == pe is the common "typing at the end" case: that's
-      // this line's cursor only if THIS is where the text actually ends (pe ==
-      // len), not just whichever line happens to be the bottom of the preview
-      // area -- short text (fitting in fewer than prev_lines rows) would
-      // otherwise always show the cursor stranded on the last blank row
-      // instead of right after what was just typed.
-      bool cursor_here = !cursor_drawn && ps <= cursor_pos && (cursor_pos < pe || pe == len);
-      if (cursor_here) cursor_drawn = true;
+      // Which row the cursor is on is already decided above, by the same
+      // cursor_chars / cpl the scroll window uses -- just ask it. Deriving it a
+      // second time from byte offsets here is what put the cursor in the wrong
+      // place: "cursor_pos >= ps and this is the bottom row" stranded it on the
+      // last blank row whenever the text was shorter than the preview area,
+      // and "text ends here" instead pinned it to the end of a full line
+      // (drawing the '_' one character past the display width) at every
+      // wrap boundary, where cursor_line has already moved to the next row.
+      bool cursor_here = (first_line + pl == cursor_line);
       int line_end = (len < pe) ? len : pe;
       char linebuf[KB_PREVIEW_BYTES + 2];   // cpl codepoints + cursor '_' + NUL
       if (cursor_here) {

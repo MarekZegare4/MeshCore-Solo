@@ -691,7 +691,11 @@ void MyMesh::rebuildRepeatScopes() {
     if (*tok != '\0') {
       char hashtag[1 + sizeof(_prefs.repeat_extra_scopes)];
       snprintf(hashtag, sizeof(hashtag), "#%s", tok);
-      temp.getAutoKeyFor(0, hashtag, repeat_scopes[repeat_scope_count++]);
+      // Distinct id per scope: getAutoKeyFor() keys its cache on the id ALONE
+      // and ignores the name on a hit, so reusing one id here would hand every
+      // scope after the first the first one's key.
+      temp.getAutoKeyFor(repeat_scope_count, hashtag, repeat_scopes[repeat_scope_count]);
+      repeat_scope_count++;
     }
     tok = strtok(NULL, ",");
   }
@@ -2807,6 +2811,7 @@ void MyMesh::handleCmdFrame(size_t len) {
       if (n > 0 && n < 31) {
         strcpy(_prefs.default_scope_name, (char *) &cmd_frame[1]);
         memcpy(_prefs.default_scope_key, &cmd_frame[1+31], 16);
+        rebuildRepeatScopes();   // slot 0 of the relay filter tracks this key
         savePrefs();
         writeOKFrame();
       } else {
@@ -2815,6 +2820,7 @@ void MyMesh::handleCmdFrame(size_t len) {
     } else {
       memset(_prefs.default_scope_name, 0, sizeof(_prefs.default_scope_name));  // set default scope to null
       memset(_prefs.default_scope_key, 0, sizeof(_prefs.default_scope_key));
+      rebuildRepeatScopes();   // drop it from the relay filter too, not just from sends
       savePrefs();
       writeOKFrame();
     }
