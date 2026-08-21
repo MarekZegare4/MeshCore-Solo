@@ -35,9 +35,10 @@ class RepeaterScreen : public UIScreen {
   enum Item {
     IT_REPEATER, IT_NETWORK,
     IT_RPRESET, IT_RFREQ, IT_RSF, IT_RBW, IT_RCR,   // dedicated profile (Custom network)
-    IT_SKIP, IT_HOPS, IT_YIELD, IT_SNR, IT_SUPPRESS
+    IT_SKIP, IT_HOPS, IT_YIELD, IT_SNR, IT_SUPPRESS, IT_SCOPE, IT_SCOPE_EXTRA
   };
-  uint8_t _items[12];
+  uint8_t _items[14];
+  bool    _editing_scope;   // keyboard is entering/editing the extra scopes
   int     _item_count;
 
   RadioPresetPicker _picker;
@@ -66,6 +67,8 @@ class RepeaterScreen : public UIScreen {
       _items[_item_count++] = IT_YIELD;
       _items[_item_count++] = IT_SNR;
       _items[_item_count++] = IT_SUPPRESS;
+      _items[_item_count++] = IT_SCOPE;
+      _items[_item_count++] = IT_SCOPE_EXTRA;
     }
     if (_sel >= _item_count) _sel = _item_count - 1;
     if (_sel < 0) _sel = 0;
@@ -84,7 +87,9 @@ class RepeaterScreen : public UIScreen {
       case IT_HOPS:     return "Max hops";
       case IT_YIELD:    return "Yield";
       case IT_SNR:      return "Min SNR";
-      case IT_SUPPRESS: return "Suppress dup";
+      case IT_SUPPRESS:    return "Suppress dup";
+      case IT_SCOPE:       return "Scope only";
+      case IT_SCOPE_EXTRA: return "Extra scopes";
     }
     return "";
   }
@@ -113,6 +118,10 @@ class RepeaterScreen : public UIScreen {
         else strncpy(buf, "OFF", n);
         break;
       case IT_SUPPRESS: strncpy(buf, p->repeat_suppress_dup ? "ON" : "OFF", n); break;
+      case IT_SCOPE:    strncpy(buf, p->repeat_scope_only ? "ON" : "OFF", n); break;
+      case IT_SCOPE_EXTRA:
+        strncpy(buf, p->repeat_extra_scopes[0] ? p->repeat_extra_scopes : "(none)", n);
+        break;
       default: strncpy(buf, "", n); break;
     }
     buf[n - 1] = '\0';
@@ -126,16 +135,17 @@ class RepeaterScreen : public UIScreen {
   }
 
 public:
-  RepeaterScreen(UITask* task) : _task(task), _dirty(false), _sel(0), _scroll(0), _item_count(1) {}
+  RepeaterScreen(UITask* task) : _task(task), _dirty(false), _sel(0), _scroll(0), _item_count(1), _editing_scope(false) {}
 
   void onShow() override {
     _dirty = false; _sel = 0; _scroll = 0;
     _picker.menu.active = false; _editor.freq.active = false;
     _picker.saving = false; _picker.deleting = false;
+    _editing_scope = false;
   }
 
   int render(DisplayDriver& display) override {
-    if (_picker.saving) return _task->keyboard().render(display);
+    if (_picker.saving || _editing_scope) return _task->keyboard().render(display);
 
     NodePrefs* p = _task->getNodePrefs();
     buildItems(p);
@@ -177,6 +187,23 @@ public:
         _picker.saving = false;
       } else if (res == KeyboardWidget::CANCELLED) {
         _picker.saving = false;
+      }
+      return true;
+    }
+
+    // Keyboard editing mode for the extra (relay-only) scopes
+    if (_editing_scope) {
+      auto res = _task->keyboard().handleInput(c);
+      if (res == KeyboardWidget::DONE) {
+        if (p) {
+          strncpy(p->repeat_extra_scopes, _task->keyboard().buf, sizeof(p->repeat_extra_scopes) - 1);
+          p->repeat_extra_scopes[sizeof(p->repeat_extra_scopes) - 1] = '\0';
+          the_mesh.rebuildRepeatScopes();
+          _dirty = true;
+        }
+        _editing_scope = false;
+      } else if (res == KeyboardWidget::CANCELLED) {
+        _editing_scope = false;
       }
       return true;
     }
@@ -278,6 +305,14 @@ public:
     }
     if (item == IT_SUPPRESS && (left || right || enter)) {
       p->repeat_suppress_dup ^= 1; _dirty = true; return true;
+    }
+    if (item == IT_SCOPE && (left || right || enter)) {
+      p->repeat_scope_only ^= 1; _dirty = true; return true;
+    }
+    if (item == IT_SCOPE_EXTRA && enter) {
+      _task->keyboard().begin(p->repeat_extra_scopes, (int)sizeof(p->repeat_extra_scopes) - 1);
+      _editing_scope = true;
+      return true;
     }
     return false;
   }

@@ -540,8 +540,10 @@ Navigate with **UP/DOWN**; change a value with **LEFT/RIGHT** (or **Enter** for 
 | Yield          | OFF / x2–x9     | Scales the retransmit delay for **forwarded** floods only (your own sends are unaffected), so a mobile companion defers to better-sited fixed repeaters. Widens the window for **Suppress dup**. |
 | Min SNR        | OFF / −20…10 dB | Drop a flood copy received below this signal-to-noise threshold, so marginal fringe traffic isn't re-flooded.   |
 | Suppress dup   | ON / OFF        | If the same flood packet is overheard from another node while still queued to retransmit, cancel our copy — a peer already relayed it. Cuts redundant airtime in dense meshes; pairs with **Yield**. |
+| Scope only     | ON / OFF        | Only forward flood traffic matching this device's own **Scope** (Settings › Radio) or one of the **Extra scopes** below — drops unscoped floods and floods tagged for a different community. No-op while neither is set, so switching this on with no scope configured can't silently stop all relaying. |
+| Extra scopes   | text            | Comma-separated extra region names this repeater also relays for (e.g. `eu,de`), on top of its own Settings › Radio › **Scope** — relay-only, never changes what scope this device's own messages send under. **Enter** opens the keyboard. |
 
-The five flood filters are **opt-in** (default OFF, so a plain repeater is unaffected) and act on **flood** traffic only — on a direct route this node is the named next hop, so it never drops those.
+The flood filters (**Skip advert** through **Scope only**) are **opt-in** (default OFF, so a plain repeater is unaffected) and act on **flood** traffic only — on a direct route this node is the named next hop, so it never drops those.
 
 **Same network vs. separate network.** With **Network = Current** (or a Custom profile matching your companion settings) the repeater stays on your own network — you keep messaging while relaying. A *different* Custom profile moves the device entirely onto that network while relaying (one radio can't be on two at once), returning to your own network when switched off. The profile re-applies after a reboot if the repeater was left on.
 

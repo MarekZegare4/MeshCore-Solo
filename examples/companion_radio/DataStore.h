@@ -37,7 +37,13 @@ public:
   void savePrefs(const NodePrefs& prefs, double node_lat, double node_lon);
   void loadContacts(DataStoreHost* host);
   void saveContacts(DataStoreHost* host, bool (*filter)(const ContactInfo& c) = NULL);
-  void loadChannels(DataStoreHost* host);
+  // Returns true if a channels file (current or legacy) existed and was
+  // loaded -- false only on a genuinely fresh device with neither file, so
+  // the caller knows whether it's safe to seed default channels (see
+  // MyMesh::begin()'s addChannel("Public", ...) -- seeding unconditionally
+  // would resurrect a channel the user had deliberately deleted, since a
+  // deleted slot is simply absent from the file, not written as empty).
+  bool loadChannels(DataStoreHost* host);
   void saveChannels(DataStoreHost* host);
   void migrateToSecondaryFS();
   uint8_t getBlobByKey(const uint8_t key[], int key_len, uint8_t dest_buf[]);

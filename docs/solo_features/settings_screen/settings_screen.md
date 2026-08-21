@@ -72,6 +72,7 @@ Lists all available home screen pages. For each entry:
 | CR        | 5–8        | LEFT/RIGHT. Coding rate (4/5–4/8). |
 | Pwr save  | ON / OFF   | **Battery saver.** Hardware duty-cycle receive (SX126x only): cycles RX↔sleep, wakes on preamble, cuts average RX current at the cost of some latency. **Forced off (`--`) while the repeater is on** — restored once it's switched off. A background watchdog auto-recovers if the sequencer gets stuck (soft re-arm, then a full reset) — see Tools › Diagnostics for the counts. |
 | Auto pwr  | ON / OFF   | **Adaptive Power Control.** Lowers TX power on strong links, ramps back to the **TX Pwr** ceiling on weak/lost ones. Link quality from DM ACK SNR, or — for channels (no ACK) — a repeater's rebroadcast. Live power shown on the radio page/name bar. Default OFF. **Suppressed (`--`) while the repeater is on** — restored once it's switched off. |
+| Scope     | text       | Names your device's radio "community" (e.g. `pl`) — typing a name derives a shared key the same way on every device, so any device that types the same name lands on the same scope automatically, no key exchange needed. Tags this device's own DM/channel sends so repeaters can tell your community's flood traffic apart from others sharing the same frequency; paired with **Tools › Repeater › Scope only**, it's also what this device relays for in repeater mode. Not encryption — message content is unaffected either way. **Enter** opens the keyboard; empty clears it (unscoped, the previous default). |
 
 |           OLED            |           E-Ink           |
 | :-----------------------: | :-----------------------: |
@@ -79,7 +80,7 @@ Lists all available home screen pages. For each entry:
 
 <!-- screenshot pending: Radio — preset popup (pick/save/delete) and/or the digit-by-digit frequency editor -->
 
-The **repeater** mode and its flood filters live on their own screen — see **Tools › Repeater**.
+The **repeater** mode and its flood filters live on their own screen — see **Tools › Repeater**, including how it uses **Scope** above.
 
 ---
 

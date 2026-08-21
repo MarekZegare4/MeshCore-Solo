@@ -9,6 +9,7 @@
 #ifdef DISPLAY_CLASS
 #include "helpers/ui/DisplayDriver.h"
 #include "UITask.h"
+#include <helpers/UTF8Helpers.h>
 #endif
 
 #define CMD_APP_START                 1
@@ -277,10 +278,16 @@ float MyMesh::getAirtimeBudgetFactor() const {
 }
 
 int MyMesh::getInterferenceThreshold() const {
-  return 0; // disabled for now, until currentRSSI() problem is resolved
+  return _prefs.interference_threshold;
 }
 bool MyMesh::getCADEnabled() const {
-  return false; // hardware CAD before TX (disabled by default, until configurable)
+  // RSSI-threshold interference detection relies on _noise_floor, which is only
+  // kept fresh by continuous RX — stale during RX duty-cycle sleep. Auto-enable
+  // hardware CAD (a fresh explicit scan) whenever power-save is actually active.
+  // _prefs.cad_enabled itself has no UI/CLI exposure yet on companion_radio
+  // (unlike simple_repeater's CommonCLI `cad` command) — it's wired and
+  // persisted for a future manual override, but always 0 today.
+  return _prefs.cad_enabled || (_prefs.rx_powersave && !_prefs.client_repeat);
 }
 
 int MyMesh::calcRxDelay(float score, uint32_t air_time) const {
@@ -512,9 +519,9 @@ void MyMesh::queueMessage(const ContactInfo &from, uint8_t txt_type, mesh::Packe
     memcpy(&out_frame[i], extra, extra_len);
     i += extra_len;
   }
-  int tlen = strlen(text); // TODO: UTF-8 ??
+  int tlen = strlen(text);
   if (i + tlen > MAX_FRAME_SIZE) {
-    tlen = MAX_FRAME_SIZE - i;
+    tlen = mesh::validUtf8PrefixLength(text, MAX_FRAME_SIZE - i); // don't split a multi-byte char
   }
   memcpy(&out_frame[i], text, tlen);
   i += tlen;
@@ -634,9 +641,60 @@ bool MyMesh::allowPacketForward(const mesh::Packet* packet) {
     if (_prefs.repeat_skip_adverts && packet->getPayloadType() == PAYLOAD_TYPE_ADVERT) return false;
     if (_prefs.repeat_max_hops > 0 && packet->getPathHashCount() >= _prefs.repeat_max_hops) return false;
     if (packet->getPayloadType() == PAYLOAD_TYPE_ADVERT && packet->getPathHashCount() >= REPEAT_MAX_ADVERT_HOPS) return false;
+    if (_prefs.repeat_scope_only && repeat_scope_count > 0) {   // no-op while unconfigured
+      if (!packet->hasTransportCodes()) return false;   // unscoped flood, we only want our own scope(s)
+      bool matched = false;
+      for (uint8_t i = 0; i < repeat_scope_count && !matched; i++) {
+        matched = repeat_scopes[i].calcTransportCode(packet) == packet->transport_codes[0];
+      }
+      if (!matched) return false;
+    }
     if (isRepeatLooped(packet)) return false;
   }
   return true;
+}
+
+void MyMesh::setPrimaryScope(const char* name) {
+  strncpy(_prefs.default_scope_name, name, sizeof(_prefs.default_scope_name) - 1);
+  _prefs.default_scope_name[sizeof(_prefs.default_scope_name) - 1] = '\0';
+  if (_prefs.default_scope_name[0] == '\0') {
+    memset(_prefs.default_scope_key, 0, sizeof(_prefs.default_scope_key));
+  } else {
+    char hashtag[1 + sizeof(_prefs.default_scope_name)];
+    snprintf(hashtag, sizeof(hashtag), "#%s", _prefs.default_scope_name);
+    TransportKeyStore temp;
+    TransportKey key;
+    temp.getAutoKeyFor(0, hashtag, key);
+    memcpy(_prefs.default_scope_key, key.key, sizeof(key.key));
+  }
+  rebuildRepeatScopes();
+}
+
+void MyMesh::rebuildRepeatScopes() {
+  repeat_scope_count = 0;
+
+  TransportKey primary;
+  memcpy(primary.key, _prefs.default_scope_key, sizeof(primary.key));
+  if (!primary.isNull()) repeat_scopes[repeat_scope_count++] = primary;
+
+  TransportKeyStore temp;
+  char names[sizeof(_prefs.repeat_extra_scopes)];
+  strncpy(names, _prefs.repeat_extra_scopes, sizeof(names));
+  names[sizeof(names) - 1] = '\0';
+
+  char* tok = strtok(names, ",");
+  while (tok != NULL && repeat_scope_count < MAX_REPEAT_SCOPES) {
+    while (*tok == ' ') tok++;   // trim leading spaces
+    char* end = tok + strlen(tok);
+    while (end > tok && end[-1] == ' ') *(--end) = '\0';   // trim trailing spaces
+
+    if (*tok != '\0') {
+      char hashtag[1 + sizeof(_prefs.repeat_extra_scopes)];
+      snprintf(hashtag, sizeof(hashtag), "#%s", tok);
+      temp.getAutoKeyFor(0, hashtag, repeat_scopes[repeat_scope_count++]);
+    }
+    tok = strtok(NULL, ",");
+  }
 }
 
 void MyMesh::sendFloodScoped(const TransportKey& scope, mesh::Packet* pkt, uint32_t delay_millis) {
@@ -769,9 +827,9 @@ void MyMesh::onChannelMessageRecv(const mesh::GroupChannel &channel, mesh::Packe
   out_frame[i++] = TXT_TYPE_PLAIN;
   memcpy(&out_frame[i], &timestamp, 4);
   i += 4;
-  int tlen = strlen(text); // TODO: UTF-8 ??
+  int tlen = strlen(text);
   if (i + tlen > MAX_FRAME_SIZE) {
-    tlen = MAX_FRAME_SIZE - i;
+    tlen = mesh::validUtf8PrefixLength(text, MAX_FRAME_SIZE - i); // don't split a multi-byte char
   }
   memcpy(&out_frame[i], text, tlen);
   i += tlen;
@@ -1592,6 +1650,7 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   memset(_ping_results, 0, sizeof(_ping_results));
 
   send_unscoped = false;
+  repeat_scope_count = 0;
 
   // defaults
   memset(&_prefs, 0, sizeof(_prefs));
@@ -1683,6 +1742,7 @@ void MyMesh::begin(bool has_display) {
 
   // load persisted prefs
   _store->loadPrefs(_prefs, sensors.node_lat, sensors.node_lon);
+  rebuildRepeatScopes();
 
   // sanitise bad pref values. NaN/inf must be reset BEFORE constrain(): constrain
   // is a min/max macro and NaN compares false against both bounds, so it would
@@ -1724,8 +1784,14 @@ void MyMesh::begin(bool has_display) {
   resetContacts();
   _store->loadContacts(this);
   bootstrapRTCfromContacts();
-  addChannel("Public", PUBLIC_GROUP_PSK); // pre-configure Andy's public channel
-  _store->loadChannels(this);
+  // Only seed the default Public channel on a genuinely fresh device (no
+  // channels file at all yet) -- a deleted channel is simply absent from
+  // /channels3, not written back as an empty record (see saveChannels()), so
+  // seeding unconditionally here would silently resurrect Public every boot
+  // even after the user explicitly deleted it.
+  if (!_store->loadChannels(this)) {
+    addChannel("Public", PUBLIC_GROUP_PSK); // pre-configure Andy's public channel
+  }
 
   applyRepeaterRadio();   // companion params, or the repeater profile if relaying with one set
   applyApc();                                         // sets TX power to the ceiling and arms APC if enabled

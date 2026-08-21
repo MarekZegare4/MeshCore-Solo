@@ -173,7 +173,16 @@ class NearbyScreen : public UIScreen {
     int nc = the_mesh.getNumContacts();
     for (int i = 0; i < nc && _count < MAX_NEARBY; i++) {
       ContactInfo ci;
-      if (!the_mesh.getContactByIdx(i, ci)) continue;
+      // getContactByIdx() indexes the RAW contact table, whose first
+      // MAX_ANON_CONTACTS slots are reserved for anon-request bookkeeping
+      // (see BaseChatMesh::resetContacts()/ContactsIterator) -- getNumContacts()
+      // already excludes them from the count, so real contact 0 lives at raw
+      // index MAX_ANON_CONTACTS, not 0. Reading from 0 pulled those reserved
+      // (blank, type=ADV_TYPE_NONE) slots into the list as bogus "Unknown"
+      // rows, and silently dropped the same number of real contacts off the
+      // end -- while never touching the anon slots themselves, so it always
+      // reproduced the same way regardless of the auto-add overwrite setting.
+      if (!the_mesh.getContactByIdx(i + MAX_ANON_CONTACTS, ci)) continue;
       if (!typeMatchesFilter(ci.type, ci.flags, true)) continue;
 
       Entry& e = _entries[_count++];
@@ -188,7 +197,7 @@ class NearbyScreen : public UIScreen {
                     ? geo::haversineKm(_own_lat, _own_lon, ci.gps_lat, ci.gps_lon)
                     : -1.0f;
       e.type        = ci.type;
-      e.contact_idx = i;
+      e.contact_idx = i + MAX_ANON_CONTACTS;   // raw index -- other lookups re-key off this directly
       e.lastmod     = ci.lastmod;
       e.is_known    = true;
       e.is_live     = false;

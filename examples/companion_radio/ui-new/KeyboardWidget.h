@@ -577,10 +577,18 @@ struct KeyboardWidget {
     // ...and the byte offset that line starts at.
     int ps = 0;
     for (int n = first_line * cpl; n > 0 && ps < len; n--) ps += kbUtf8CharBytesAt(buf, ps, len);
+    bool cursor_drawn = false;   // draw it on exactly one line, even once the text itself runs out
     for (int pl = 0; pl < prev_lines; pl++) {
       int pe = ps;   // byte offset cpl codepoints further along (or end of text)
       for (int k = 0; k < cpl && pe < len; k++) pe += kbUtf8CharBytesAt(buf, pe, len);
-      bool cursor_here = (ps <= cursor_pos && (cursor_pos < pe || pl == prev_lines - 1));
+      // cursor_pos == len == pe is the common "typing at the end" case: that's
+      // this line's cursor only if THIS is where the text actually ends (pe ==
+      // len), not just whichever line happens to be the bottom of the preview
+      // area -- short text (fitting in fewer than prev_lines rows) would
+      // otherwise always show the cursor stranded on the last blank row
+      // instead of right after what was just typed.
+      bool cursor_here = !cursor_drawn && ps <= cursor_pos && (cursor_pos < pe || pe == len);
+      if (cursor_here) cursor_drawn = true;
       int line_end = (len < pe) ? len : pe;
       char linebuf[KB_PREVIEW_BYTES + 2];   // cpl codepoints + cursor '_' + NUL
       if (cursor_here) {

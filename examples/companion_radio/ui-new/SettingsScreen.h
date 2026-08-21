@@ -61,6 +61,7 @@ class SettingsScreen : public UIScreen {
     CUSTOM_FREQ, CUSTOM_SF, CUSTOM_BW, CUSTOM_CR,
     POWER_SAVE,
     TX_APC,
+    SCOPE_NAME,
     // System section
     SECTION_SYSTEM,
     DEVICE_NAME,
@@ -555,6 +556,11 @@ class SettingsScreen : public UIScreen {
       // Suppressed (and locked) while repeating — a repeater holds full TX power.
       if (p && p->client_repeat) display.print("--");
       else display.print((p && p->tx_apc) ? "ON" : "OFF");
+    } else if (item == SCOPE_NAME) {
+      display.print("Scope");
+      int vx = valCol(display);
+      display.drawTextEllipsized(vx, y, display.width() - vx - _reserve,
+                                  (p && p->default_scope_name[0]) ? p->default_scope_name : "(none)");
 #if AUTO_OFF_MILLIS > 0
     } else if (item == AUTO_OFF) {
       display.print("AutoOff");
@@ -678,6 +684,7 @@ class SettingsScreen : public UIScreen {
   // Keyboard state for editing message slots
   int            _edit_slot = -1;  // -1 = not editing, 0..9 = slot being edited
   bool           _edit_name = false;  // editing DEVICE_NAME via the keyboard
+  bool           _edit_scope = false; // editing SCOPE_NAME via the keyboard
   KeyboardWidget* _kb;
 
   // Radio preset picker — names are too long for the value column, so Enter on
@@ -701,6 +708,7 @@ public:
   void onShow() override {
     _dirty = false;
     _edit_name = false;
+    _edit_scope = false;
     resetList();
     _editor.freq.active = false;
   }
@@ -708,7 +716,7 @@ public:
   int render(DisplayDriver& display) override {
     display.setTextSize(1);
 
-    if (_edit_slot >= 0 || _edit_name || _picker.saving) {
+    if (_edit_slot >= 0 || _edit_name || _edit_scope || _picker.saving) {
       return _kb->render(display);
     }
 
@@ -767,6 +775,19 @@ public:
         _edit_name = false;
       } else if (res == KeyboardWidget::CANCELLED) {
         _edit_name = false;
+      }
+      return true;
+    }
+
+    // Keyboard editing mode for the scope name
+    if (_edit_scope) {
+      auto res = _kb->handleInput(c);
+      if (res == KeyboardWidget::DONE) {
+        the_mesh.setPrimaryScope(_kb->buf);
+        _dirty = true;
+        _edit_scope = false;
+      } else if (res == KeyboardWidget::CANCELLED) {
+        _edit_scope = false;
       }
       return true;
     }
@@ -964,6 +985,12 @@ public:
       _edit_name = true;
       _kb->begin(the_mesh.getNodeName(), (int)sizeof(p->node_name) - 1);
       _kb->clearPlaceholders();   // a device name is literal, not a message
+      return true;
+    }
+    if (_selected == SCOPE_NAME && p && enter) {
+      _edit_scope = true;
+      _kb->begin(p->default_scope_name, (int)sizeof(p->default_scope_name) - 1);
+      _kb->clearPlaceholders();   // a scope name is literal, not a message
       return true;
     }
     if (_selected == REBOOT && enter) {

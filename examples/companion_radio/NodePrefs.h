@@ -208,12 +208,24 @@ struct NodePrefs {  // persisted to file
   //    fringe traffic isn't re-flooded. REPEAT_SNR_DISABLED (-128) = off.
   //  repeat_suppress_dup: 1 = cancel a queued retransmit when the same flood is
   //    overheard from another node first (less redundant airtime in dense mesh).
+  //  repeat_scope_only: 1 = only forward flood packets matching this device's
+  //    own scope (Settings > Radio > Scope, default_scope_key) or one of the
+  //    repeat_extra_scopes below — drops unscoped floods and floods tagged for
+  //    a different community. A no-op (forwards everything, unchanged) while
+  //    no scope is configured at all, so enabling this on an unconfigured
+  //    device can't silently blackhole all flood traffic.
   uint8_t  repeat_skip_adverts;
   uint8_t  repeat_max_hops;
   uint8_t  repeat_delay_boost;
   int8_t   repeat_min_snr;
   static const int8_t REPEAT_SNR_DISABLED = -128;
   uint8_t  repeat_suppress_dup;
+  uint8_t  repeat_scope_only;
+  // Extra region names this repeater also relays for, beyond its own
+  // Settings > Radio > Scope (comma-separated, e.g. "eu,de") — see
+  // MyMesh::rebuildRepeatScopes(). Relay-only: never affects what scope the
+  // companion's own messages send under, only what repeat_scope_only accepts.
+  char     repeat_extra_scopes[24];
 
   // Optional dedicated radio profile for repeater mode. When repeater_use_profile
   // is 1, enabling the repeater switches the radio to repeater_freq/bw/sf/cr and
@@ -441,6 +453,16 @@ struct NodePrefs {  // persisted to file
   // unchanged behaviour) on upgrade.
   uint8_t  keyboard_cardkb_compact;
 
+  // RSSI-based interference detection (relative to the radio's own noise
+  // floor) and hardware Channel Activity Detection before TX. See
+  // MyMesh::getInterferenceThreshold()/getCADEnabled() — CAD is also
+  // auto-enabled whenever rx_powersave is active, regardless of this flag,
+  // since duty-cycle sleep leaves the noise floor stale. Both default 0/off,
+  // and neither has a Settings/CLI toggle yet on companion_radio — persisted
+  // and wired for a future manual override.
+  uint8_t  interference_threshold;
+  uint8_t  cad_enabled;
+
   // Single source of truth for the live-share option tables (shared by the Map
   // UI labels and the auto-send engine in UITask).
   static const uint8_t LOC_SHARE_MOVE_COUNT = 4;
@@ -503,7 +525,7 @@ struct NodePrefs {  // persisted to file
   // adding/removing/reordering fields in DataStore::savePrefs/loadPrefsInt so
   // older saves are detected on load and skipped (zero-init defaults kept).
   // High 24 bits identify the file format; low byte is the schema revision.
-  static const uint32_t SCHEMA_SENTINEL = 0xC0DE0023;
+  static const uint32_t SCHEMA_SENTINEL = 0xC0DE0026;
 
   // Bit-index for each home page. Used by page_order (entries store bit+1) and
   // by home_pages_mask. Single source of truth — both HomeScreen::pageBit/bitToPage
@@ -608,7 +630,14 @@ struct NodePrefs {  // persisted to file
 // bumps, 7 more uint8_t total) added 8 bytes, not 7 -- one byte of tail
 // padding got consumed along the way. 2720 confirmed via a real
 // WioTrackerL1Eink_companion_solo_dual build.
-static_assert(sizeof(NodePrefs) == 2720,
+// interference_threshold + cad_enabled (0xC0DE0024) are the new struct tail --
+// added 8 bytes, not 2 -- the 2 real bytes rounded the struct up to its next
+// alignment boundary. Confirmed via a real Heltec_v3_companion_radio_ble build.
+// repeat_scope_only (0xC0DE0025) landed in the padding left over from the
+// 0xC0DE0024 bump -- confirmed via a real build, sizeof unchanged at 2728.
+// repeat_extra_scopes[24] (0xC0DE0026) added exactly 24 bytes, no leftover
+// padding this time -- confirmed via a real build, sizeof now 2752.
+static_assert(sizeof(NodePrefs) == 2752,
               "NodePrefs layout changed — sync DataStore save/load + clamp, bump "
               "SCHEMA_SENTINEL, then update this size (see steps above).");
 

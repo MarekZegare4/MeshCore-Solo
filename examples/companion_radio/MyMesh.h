@@ -12,7 +12,7 @@ class UITask;
 #define FIRMWARE_VER_CODE 13
 
 #ifndef FIRMWARE_BUILD_DATE
-#define FIRMWARE_BUILD_DATE "14 Aug 2026"
+#define FIRMWARE_BUILD_DATE "19 Aug 2026"
 #endif
 
 // Fallback only -- every real build (local or CI) goes through build.sh, which
@@ -20,7 +20,7 @@ class UITask;
 // "dev-<commit>" otherwise; see build-solo-firmwares.yml). This default only
 // shows up for a `pio run` invoked directly, bypassing build.sh entirely.
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION "v1.25-dev"
+#define FIRMWARE_VERSION "v1.26-dev"
 #endif
 
 #if defined(NRF52_PLATFORM) || defined(STM32_PLATFORM)
@@ -301,6 +301,19 @@ public:
   // the repeater toggle / network / profile changes.
   void applyRepeaterRadio();
 
+  // Sets this device's own scope (Settings > Radio > Scope) from a single
+  // typed region name, deriving default_scope_key the same "#name" -> SHA256
+  // way as DEFAULT_FLOOD_SCOPE_NAME (see begin()). Empty name clears the
+  // scope. Governs what scope the companion's own messages send under, and
+  // (as scope[0]) what repeat_scope_only accepts. Calls rebuildRepeatScopes().
+  void setPrimaryScope(const char* name);
+
+  // Rebuilds repeat_scopes[]/repeat_scope_count from default_scope_key (slot 0,
+  // if configured) plus the comma-separated repeat_extra_scopes (Tools >
+  // Repeater > Extra scopes). Call after loading prefs at boot and whenever
+  // either scope setting is edited.
+  void rebuildRepeatScopes();
+
   bool isAckPending(uint32_t expected_ack) const {
     if (expected_ack == 0) return false;   // 0 marks an empty/cleared slot, not a real ACK
     for (int i = 0; i < EXPECTED_ACK_TABLE_SIZE; i++)
@@ -497,6 +510,14 @@ private:
   void resetPendingBotActions();
 
   TransportKey send_scope;
+
+  // Runtime-only (not persisted) cache of scopes accepted by repeat_scope_only:
+  // slot 0 is default_scope_key (if configured), the rest are derived from the
+  // comma-separated repeat_extra_scopes. Rebuilt by rebuildRepeatScopes() (see
+  // the public section below) whenever either scope setting changes.
+  static const uint8_t MAX_REPEAT_SCOPES = 4;
+  TransportKey repeat_scopes[MAX_REPEAT_SCOPES];
+  uint8_t repeat_scope_count;
 
   uint8_t cmd_frame[MAX_FRAME_SIZE + 1];
   uint8_t out_frame[MAX_FRAME_SIZE + 1];

@@ -1,3 +1,20 @@
+## MeshCore Solo Companion Firmware v1.26
+
+### What's new
+
+- **On-device community scope, and repeater-side scope filtering.** Settings › Radio gets a **Scope** field — type a region/community name (e.g. `pl`) and every device typing the same name derives the same shared tag, no key exchange needed; it's what your own DM/channel sends carry, previously only settable from a connected app. Tools › Repeater gains **Scope only** (only relay flood traffic matching your own scope, or one of the new **Extra scopes** below — a no-op until a scope is actually set, so it can't silently blackhole all forwarding) and **Extra scopes** (comma-separated additional regions to relay for, without changing what scope this device's own messages send under).
+
+### Fixes
+
+- **Hardware CAD and RSSI interference-threshold detection were silently hardcoded off on companion_radio**, regardless of any setting. CAD now auto-enables whenever RX power-save (duty-cycle) is active — the noise floor isn't kept fresh during duty-cycle sleep, so a fresh hardware channel scan before TX is needed instead of the RSSI-threshold check.
+- **A long message could split a multi-byte UTF-8 character in half when truncated to fit the send frame** (e.g. a Polish/accented character landing right at the cut-off), delivering a mangled trailing byte to the app. Truncation now stops at the last complete character.
+- **Deleting the default "Public" channel didn't stick — it came back on every reboot.** A deleted channel is correctly left out of the saved channel file (to avoid rewriting it every save), but the Public channel was unconditionally re-added at every boot *before* the saved list was loaded, so its absence from the file never got a chance to matter. Now only seeded on a genuinely fresh device (no channel file yet) — once you've saved any channel state at all, your own list is authoritative.
+- **Tools › Nodes could show a handful of blank "Unknown" entries** — always the first ones in the list, regardless of any auto-add setting. The list read from the wrong starting offset into the contact table, landing on internally-reserved bookkeeping slots instead of your real contacts; with 8 or fewer saved contacts, every row shown could end up blank, and any device with more had that same number of real contacts silently missing off the end of the list. Fixed.
+- **The keyboard's multi-line text preview could show the cursor stranded on an empty line below whatever you'd just typed**, rather than right after it — most noticeable composing a short message, since it showed up as soon as the preview area had room for more lines than your text needed. The cursor now always renders on the line where the text actually ends.
+- **`resetContacts()` only cleared the first few reserved bookkeeping slots, not the whole contact table**, despite its own comment describing the opposite. Only reachable today via private-key import (which reloads contacts to invalidate cached shared secrets) and left over stale entries if the reload produced fewer contacts than were already in memory. Fixed regardless, to match the stated intent.
+
+---
+
 ## MeshCore Solo Companion Firmware v1.25
 
 ### What's new

@@ -383,6 +383,18 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
       (_prefs.repeat_min_snr < -20 || _prefs.repeat_min_snr > 10))
     _prefs.repeat_min_snr = NodePrefs::REPEAT_SNR_DISABLED;   // match the UI's -20..10 range
   if (_prefs.repeat_suppress_dup > 1) _prefs.repeat_suppress_dup = 0;
+
+  // → 0xC0DE0025: append repeat_scope_only right after the other repeater
+  // forwarding filters. A pre-0x25 file has no byte here; clamp to 0 (off,
+  // unchanged forwarding behaviour for upgraders).
+  rd(&_prefs.repeat_scope_only, sizeof(_prefs.repeat_scope_only));
+  if (_prefs.repeat_scope_only > 1) _prefs.repeat_scope_only = 0;
+
+  // → 0xC0DE0026: append repeat_extra_scopes right after it. A pre-0x26 file
+  // has no bytes here; rd() zero-inits, which is already an empty string.
+  rd(_prefs.repeat_extra_scopes, sizeof(_prefs.repeat_extra_scopes));
+  _prefs.repeat_extra_scopes[sizeof(_prefs.repeat_extra_scopes) - 1] = '\0';
+
   rd(&_prefs.repeater_use_profile, sizeof(_prefs.repeater_use_profile));
   rd(&_prefs.repeater_freq,        sizeof(_prefs.repeater_freq));
   rd(&_prefs.repeater_bw,          sizeof(_prefs.repeater_bw));
@@ -569,6 +581,13 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
   rd(&_prefs.keyboard_cardkb_compact, sizeof(_prefs.keyboard_cardkb_compact));
   if (_prefs.keyboard_cardkb_compact > 1) _prefs.keyboard_cardkb_compact = 0;
 
+  // → 0xC0DE0024: append interference_threshold + cad_enabled at the tail.
+  // A pre-0x24 file has no bytes here; clamp to 0 (both off, matching the
+  // getters' previous hardcoded behaviour for upgraders).
+  rd(&_prefs.interference_threshold, sizeof(_prefs.interference_threshold));
+  rd(&_prefs.cad_enabled, sizeof(_prefs.cad_enabled));
+  if (_prefs.cad_enabled > 1) _prefs.cad_enabled = 0;
+
   // Schema sentinel: bumped on layout changes. Mismatch means an older file
   // (or a different schema); rd() already zero-inits any fields not present,
   // so we just log it — next savePrefs writes the current sentinel.
@@ -729,6 +748,8 @@ void DataStore::savePrefs(const NodePrefs& _prefs, double node_lat, double node_
     file.write((uint8_t *)&_prefs.repeat_delay_boost,   sizeof(_prefs.repeat_delay_boost));
     file.write((uint8_t *)&_prefs.repeat_min_snr,       sizeof(_prefs.repeat_min_snr));
     file.write((uint8_t *)&_prefs.repeat_suppress_dup,  sizeof(_prefs.repeat_suppress_dup));
+    file.write((uint8_t *)&_prefs.repeat_scope_only,    sizeof(_prefs.repeat_scope_only));
+    file.write((uint8_t *)_prefs.repeat_extra_scopes,   sizeof(_prefs.repeat_extra_scopes));
     file.write((uint8_t *)&_prefs.repeater_use_profile, sizeof(_prefs.repeater_use_profile));
     file.write((uint8_t *)&_prefs.repeater_freq,        sizeof(_prefs.repeater_freq));
     file.write((uint8_t *)&_prefs.repeater_bw,          sizeof(_prefs.repeater_bw));
@@ -781,6 +802,8 @@ void DataStore::savePrefs(const NodePrefs& _prefs, double node_lat, double node_
     file.write((uint8_t *)&_prefs.gpio3_mode, sizeof(_prefs.gpio3_mode));
     file.write((uint8_t *)&_prefs.gpio4_mode, sizeof(_prefs.gpio4_mode));
     file.write((uint8_t *)&_prefs.keyboard_cardkb_compact, sizeof(_prefs.keyboard_cardkb_compact));
+    file.write((uint8_t *)&_prefs.interference_threshold, sizeof(_prefs.interference_threshold));
+    file.write((uint8_t *)&_prefs.cad_enabled, sizeof(_prefs.cad_enabled));
 
     // Tail sentinel — must be last. See NodePrefs::SCHEMA_SENTINEL. Its write is
     // the one we check: once the flash fills, writes return 0, so a good
@@ -894,7 +917,7 @@ void DataStore::saveContacts(DataStoreHost* host, bool (*filter)(const ContactIn
   }
 }
 
-void DataStore::loadChannels(DataStoreHost* host) {
+bool DataStore::loadChannels(DataStoreHost* host) {
     FILESYSTEM* fs = _getContactsChannelsFS();
     File file = openRead(fs, "/channels3");
     if (file) {
@@ -942,7 +965,7 @@ void DataStore::loadChannels(DataStoreHost* host) {
         MESH_DEBUG_PRINTLN("loadChannels: skipped %u corrupted/empty channel entr%s",
                            (unsigned)skipped, skipped == 1 ? "y" : "ies");
       }
-      return;
+      return true;
     }
 
     // One-time migration from the old /channels2 format (sequential index,
@@ -972,7 +995,10 @@ void DataStore::loadChannels(DataStoreHost* host) {
       }
       file.close();
       saveChannels(host);   // write /channels3 so the migration runs only once
+      return true;
     }
+
+    return false;   // neither file exists -- genuinely fresh device
 }
 
 void DataStore::saveChannels(DataStoreHost* host) {

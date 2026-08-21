@@ -95,7 +95,16 @@ protected:
   void bootstrapRTCfromContacts();
 
   void resetContacts() {
-    memset(contacts, 0, sizeof(contacts[0])*MAX_ANON_CONTACTS);   // set all to have type = ADV_TYPE_NONE(0)
+    // Clears the WHOLE table, not just the anon-reserved range -- this can run
+    // mid-session (CMD_IMPORT_PRIVATE_KEY re-loads contacts after a key
+    // change), and previously only zeroed slots 0..MAX_ANON_CONTACTS-1 despite
+    // the comment's intent, leaving every real contact slot
+    // (MAX_ANON_CONTACTS..) holding whatever it had before the reset.
+    // loadContacts() only overwrites as many slots as /contacts3 actually has,
+    // so if that reload ever yields fewer contacts than were in RAM, the
+    // leftover slots keep their stale pre-reset contents instead of going
+    // back to empty.
+    memset(contacts, 0, sizeof(contacts));   // set all to have type = ADV_TYPE_NONE(0)
     num_contacts = MAX_ANON_CONTACTS;  // seed the first contacts for anon requests
   }
   void populateContactFromAdvert(ContactInfo& ci, const mesh::Identity& id, const AdvertDataParser& parser, uint32_t timestamp);
