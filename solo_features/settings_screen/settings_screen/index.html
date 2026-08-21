@@ -1894,6 +1894,11 @@
 <td>ON / OFF</td>
 <td><strong>Adaptive Power Control.</strong> Lowers TX power on strong links, ramps back to the <strong>TX Pwr</strong> ceiling on weak/lost ones. Link quality from DM ACK SNR, or — for channels (no ACK) — a repeater's rebroadcast. Live power shown on the radio page/name bar. Default OFF. <strong>Suppressed (<code>--</code>) while the repeater is on</strong> — restored once it's switched off.</td>
 </tr>
+<tr>
+<td>Scope</td>
+<td>text</td>
+<td>Names your device's radio "community" (e.g. <code>pl</code>) — typing a name derives a shared key the same way on every device, so any device that types the same name lands on the same scope automatically, no key exchange needed. Tags this device's own DM/channel sends so repeaters can tell your community's flood traffic apart from others sharing the same frequency; paired with <strong>Tools › Repeater › Scope only</strong>, it's also what this device relays for in repeater mode. Not encryption — message content is unaffected either way. <strong>Enter</strong> opens the keyboard; empty clears it (unscoped, the previous default).</td>
+</tr>
 </tbody>
 </table>
 <table>
@@ -1912,7 +1917,7 @@
 </table>
 <!-- screenshot pending: Radio — preset popup (pick/save/delete) and/or the digit-by-digit frequency editor -->
 
-<p>The <strong>repeater</strong> mode and its flood filters live on their own screen — see <strong>Tools › Repeater</strong>.</p>
+<p>The <strong>repeater</strong> mode and its flood filters live on their own screen — see <strong>Tools › Repeater</strong>, including how it uses <strong>Scope</strong> above.</p>
 <hr />
 <h3 id="system">System</h3>
 <table>

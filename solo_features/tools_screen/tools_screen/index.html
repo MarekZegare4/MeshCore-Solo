@@ -3191,9 +3191,19 @@ Mark the spot first with <strong>Tools › Trail → Hold Enter → Mark here</s
 <td>ON / OFF</td>
 <td>If the same flood packet is overheard from another node while still queued to retransmit, cancel our copy — a peer already relayed it. Cuts redundant airtime in dense meshes; pairs with <strong>Yield</strong>.</td>
 </tr>
+<tr>
+<td>Scope only</td>
+<td>ON / OFF</td>
+<td>Only forward flood traffic matching this device's own <strong>Scope</strong> (Settings › Radio) or one of the <strong>Extra scopes</strong> below — drops unscoped floods and floods tagged for a different community. No-op while neither is set, so switching this on with no scope configured can't silently stop all relaying.</td>
+</tr>
+<tr>
+<td>Extra scopes</td>
+<td>text</td>
+<td>Comma-separated extra region names this repeater also relays for (e.g. <code>eu,de</code>), on top of its own Settings › Radio › <strong>Scope</strong> — relay-only, never changes what scope this device's own messages send under. <strong>Enter</strong> opens the keyboard.</td>
+</tr>
 </tbody>
 </table>
-<p>The five flood filters are <strong>opt-in</strong> (default OFF, so a plain repeater is unaffected) and act on <strong>flood</strong> traffic only — on a direct route this node is the named next hop, so it never drops those.</p>
+<p>The flood filters (<strong>Skip advert</strong> through <strong>Scope only</strong>) are <strong>opt-in</strong> (default OFF, so a plain repeater is unaffected) and act on <strong>flood</strong> traffic only — on a direct route this node is the named next hop, so it never drops those.</p>
 <p><strong>Same network vs. separate network.</strong> With <strong>Network = Current</strong> (or a Custom profile matching your companion settings) the repeater stays on your own network — you keep messaging while relaying. A <em>different</em> Custom profile moves the device entirely onto that network while relaying (one radio can't be on two at once), returning to your own network when switched off. The profile re-applies after a reboot if the repeater was left on.</p>
 <p>While on, a <strong>»</strong> indicator appears in the status bar (same blink convention as auto-advert/trail markers). Two radio settings are overridden and restored afterwards: <strong>Pwr save</strong> forced off (must listen continuously) and <strong>Auto pwr</strong> forced off (full TX power for relay reach). Both show <code>--</code> in Settings while active.</p>
 <p>Live forwarding stats — <strong>Forwarded</strong>, <strong>Pool free</strong>, <strong>Queue</strong> — are shown on <strong>Tools › Diagnostics</strong> (this screen is config-only).</p>
