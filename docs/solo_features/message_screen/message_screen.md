@@ -74,7 +74,7 @@ Messages appear as chat bubbles sized to their content — **right**-anchored fo
 | :-----------------------: | :-----------------------: |
 | ![](./fullscreen_oled.png) | ![](./fullscreen_eink.png) |
 
-Navigate between messages with **LEFT** (newer) and **RIGHT** (older). Long messages scroll with **UP/DOWN**.
+Navigate between messages like pages in a book — **LEFT** goes back to the older message, **RIGHT** forward to the newer one. The `<` / `>` markers along the bottom edge show which directions still have a message. Long messages scroll with **UP/DOWN**.
 
 If the message is a reply addressed to someone (`@[nick]`), a **To: nick** bar is shown below the sender name and the body is displayed without the address prefix.
 

@@ -6,6 +6,7 @@
 
 ### Fixes
 
+- **Paging through the fullscreen message view now reads like a book** — **RIGHT** moves forward to the newer message, **LEFT** back to the older one, and the `<` / `>` markers along the bottom edge follow suit. It was the other way round before.
 - **Hardware CAD and RSSI interference-threshold detection were silently hardcoded off on companion_radio**, regardless of any setting. CAD now auto-enables whenever RX power-save (duty-cycle) is active — the noise floor isn't kept fresh during duty-cycle sleep, so a fresh hardware channel scan before TX is needed instead of the RSSI-threshold check.
 - **A long message could split a multi-byte UTF-8 character in half when truncated to fit the send frame** (e.g. a Polish/accented character landing right at the cut-off), delivering a mangled trailing byte to the app. Truncation now stops at the last complete character.
 - **Deleting the default "Public" channel didn't stick — it came back on every reboot.** A deleted channel is correctly left out of the saved channel file (to avoid rewriting it every save), but the Public channel was unconditionally re-added at every boot *before* the saved list was loaded, so its absence from the file never got a chance to matter. Now only seeded on a genuinely fresh device (no channel file yet) — once you've saved any channel state at all, your own list is authoritative.
