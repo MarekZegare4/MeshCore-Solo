@@ -193,12 +193,21 @@ class UITask : public AbstractUITask {
   void enqueueKey(char c);
   bool dequeueKey(char& c);
 
-  // Optional M5Stack CardKB (I2C keyboard, addr 0x5F) on the Grove/Wire1 bus
-  // -- reuses ENV_PIN_SDA/ENV_PIN_SCL (already brought up for
-  // EnvironmentSensorManager) as the "this board has a second I2C bus" gate,
-  // rather than a new board-specific pin define. No-op entirely on boards
-  // without that bus, or when nothing ACKs 0x5F at boot.
+  // Optional M5Stack CardKB (I2C keyboard, addr 0x5F). Two ways to reach it:
+  //  - ENV_PIN_SDA/ENV_PIN_SCL defined -> CardKB rides the dedicated second
+  //    I2C bus (Wire1) that EnvironmentSensorManager already brings up.
+  //  - CARDKB_USE_PRIMARY_WIRE defined instead -> CardKB shares the board's
+  //    main Wire bus (whatever the display/RTC already use), for boards
+  //    where no second bus is free. Mutually exclusive with the above.
+  // Either way it's a no-op on boards with neither define, or when nothing
+  // ACKs 0x5F at boot.
 #if defined(ENV_PIN_SDA) && defined(ENV_PIN_SCL)
+  #define CARDKB_I2C Wire1
+#elif defined(CARDKB_USE_PRIMARY_WIRE)
+  #define CARDKB_I2C Wire
+#endif
+
+#if defined(CARDKB_I2C)
   bool     _has_cardkb = false;
   // CardKB is level-triggered, not edge-triggered -- it keeps returning the
   // same byte for as long as the physical key is held, not just once. Track
