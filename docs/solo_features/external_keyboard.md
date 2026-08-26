@@ -115,8 +115,8 @@ hardware**; still worth checking against your own V3 module before soldering.
 
 Everything above lives in the `[env:Heltec_v3_companion_solo_dual]` /
 `[env:heltec_v4_companion_solo_dual]` blocks in
-[`variants/heltec_v3/platformio.ini`](../../variants/heltec_v3/platformio.ini)
-and [`variants/heltec_v4/platformio.ini`](../../variants/heltec_v4/platformio.ini),
+[`solo/heltec_v3/platformio.ini`](../../solo/heltec_v3/platformio.ini)
+and [`solo/heltec_v4/platformio.ini`](../../solo/heltec_v4/platformio.ini),
 with comments explaining which pins are safe to reuse. To build a CardKB-only
 device, comment out the joystick block and set Ext. KB to Compact.
 
@@ -134,4 +134,5 @@ independent of the CardKB code — a board can have either, or neither.
 
 Neither keypad follows CardKB's exact Fn-shortcut table (Fn+Enter,
 Fn+letter accent popups, Tab, Fn+Esc lock) — see each board's own
-`platformio.ini` / keyboard driver under `variants/` for its current keymap.
+keyboard driver under `variants/` and its solo `platformio.ini` under `solo/`
+for its current keymap.

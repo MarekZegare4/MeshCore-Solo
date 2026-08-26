@@ -136,7 +136,7 @@ Each joystick contact simply shorts its pin to GND — the firmware enables the 
 
 Either device is enough on its own — unwired pins read as not-pressed, and a missing CardKB just isn't detected at boot. For **CardKB-only**, wire just SDA/SCL and set Settings › Keyboard › **Ext. KB = Compact**, which needs no joystick at all.
 
-These are only defaults, set in the `[env:Heltec_v3_companion_solo_dual]` / `[env:heltec_v4_companion_solo_dual]` blocks in [`variants/heltec_v3/platformio.ini`](./variants/heltec_v3/platformio.ini) and [`variants/heltec_v4/platformio.ini`](./variants/heltec_v4/platformio.ini) — comments there list which GPIOs are already claimed. Full details in [External Keyboard & Joystick](./docs/solo_features/external_keyboard.md).
+These are only defaults, set in the `[env:Heltec_v3_companion_solo_dual]` / `[env:heltec_v4_companion_solo_dual]` blocks in [`solo/heltec_v3/platformio.ini`](./solo/heltec_v3/platformio.ini) and [`solo/heltec_v4/platformio.ini`](./solo/heltec_v4/platformio.ini) — comments there list which GPIOs are already claimed. Full details in [External Keyboard & Joystick](./docs/solo_features/external_keyboard.md).
 
 ---
 
@@ -153,6 +153,7 @@ These are only defaults, set in the `[env:Heltec_v3_companion_solo_dual]` / `[en
 | [Screen Lock](./docs/solo_features/screen_lock/screen_lock.md)             | Lock/unlock sequence, lock screen, auto-lock                          |
 | [Tools Screen](./docs/solo_features/tools_screen/tools_screen.md)          | GPS trail & waypoints, compass, navigation, nearby nodes, ringtone editor, remote bot, auto-advert, live location sharing, locator, diagnostics, repeater, remote admin |
 | [External Keyboard & Joystick](./docs/solo_features/external_keyboard.md)  | CardKB shortcuts, Full vs Compact mode, wired joystick, Heltec V3/V4 wiring |
+| [Build Flags](./docs/solo_features/build_flags.md)                        | Every optional `-D` build flag a solo build understands — GPIO, Hall sensor, buzzer/vibration, GPS switch, display/battery tuning |
 | [Solo UI framework](./docs/design/solo_ui_framework.md)                    | **Developer guide** — the reusable building blocks (screens, lists, popups, mini-icons, geo/persistence helpers) and how to add a new feature |
 | [Feature roadmap](./docs/development/roadmap.md)                           | **Developer notes** — planned / done / rejected features and the code-audit backlog |
 
@@ -217,6 +218,11 @@ FIRMWARE_VERSION=v1.0.0 bash build.sh build-firmware <env> # release artifacts i
 
 The last command runs the same path CI does: a `.uf2` + DFU `.zip` on nRF52, or an app-only `.bin` plus a `-merged.bin` on ESP32. Releases carry the `.uf2`, the `.zip` and the `-merged.bin` only.
 
+Every environment above builds as-is with no extra hardware required. If you've
+wired up something extra — CardKB, a joystick, GPIO, a magnetic cover sensor,
+a buzzer — see [Build Flags](./docs/solo_features/build_flags.md) for the full
+list of optional `-D` flags to add to your own `solo/<board>/platformio.ini`.
+
 ### Releasing
 
 Pushing a `v*` tag runs [Build Solo Firmwares](./.github/workflows/build-solo-firmwares.yml), which discovers every `*_solo_dual` environment automatically, builds them all and opens a **draft** release with the artifacts attached. Write the notes from `release-notes.md` and publish it. See [RELEASE.md](./RELEASE.md) for the upstream companion/repeater/room-server tags.
@@ -228,6 +234,7 @@ Pushing a `v*` tag runs [Build Solo Firmwares](./.github/workflows/build-solo-fi
 | `examples/companion_radio/ui-new/` | the solo UI — screens, widgets, `UITask` |
 | `src/helpers/ui/` | display drivers, fonts, buttons, buzzer |
 | `variants/<board>/` | per-board `platformio.ini`, `target.h`, `target.cpp` |
+| `solo/<board>/` | that board's solo (`*_solo_dual`) environment — kept separate from `variants/` so this fork's Solo-specific additions don't mix into configs upstream/other forks also carry |
 | `docs/solo_features/` | user documentation for this fork |
 | `docs/design/`, `docs/development/` | developer notes and the feature roadmap |
 | `tools/` | host-side helpers (screenshot, GPX export, font conversion) |
