@@ -208,6 +208,20 @@ class UITask : public AbstractUITask {
 #endif
   void pollCardKB();
 
+  // Optional magnetic "flip cover" lock: a Hall-effect or reed sensor wired to
+  // any free GPIO, closing (pulling active) when a magnet is near. Entirely
+  // user-supplied -- no board in this repo ships one, so PIN_HALL_SENSOR must
+  // be added as a build_flag by whoever wires the sensor up; no-op everywhere
+  // else. HALL_ACTIVE_HIGH overrides the default polarity for modules that
+  // pull the pin HIGH (instead of LOW) when the magnet is present.
+#if defined(PIN_HALL_SENSOR)
+#ifndef HALL_ACTIVE_HIGH
+  #define HALL_ACTIVE_HIGH 0
+#endif
+  bool _hall_magnet_present = false;
+#endif
+  void pollHallSensor();
+
   void setCurrScreen(UIScreen* c);
 
   // Centred alert overlay (the showAlert() box). Wraps long text to up to

@@ -51,3 +51,14 @@ The display turns off again automatically after 5 seconds of inactivity (or 2 se
 ### Auto-lock
 
 Enable **Auto-lock** in **Settings › Display** to lock the device automatically whenever the display turns off due to auto-off timeout.
+
+---
+
+### Magnetic cover (Hall sensor)
+
+Optional, user-supplied hardware — no board in this repo has one built in. Wire a Hall-effect or reed sensor to any free GPIO, then set `PIN_HALL_SENSOR` (and `HALL_ACTIVE_HIGH=1`, if your module pulls the pin high rather than low when the magnet is present) as `build_flags` in your own env. No-op entirely unless `PIN_HALL_SENSOR` is defined.
+
+Fully autonomous, independent of Auto-lock and of any key combo:
+
+- **Magnet near (cover closed)** — locks and blanks the display immediately, no wake grace.
+- **Magnet away (cover opened)** — unlocks and wakes the display right away.

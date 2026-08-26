@@ -1404,6 +1404,17 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
   _has_cardkb = (Wire1.endTransmission() == 0);
 #endif
 
+#if defined(PIN_HALL_SENSOR)
+  // Internal pull matches the default polarity: pulled up so an active-low
+  // sensor reads HIGH at rest, pulled down so an active-high one reads LOW at
+  // rest. Most reed/Hall breakouts are open-drain, active-low -- HALL_ACTIVE_HIGH
+  // is only for modules wired the other way.
+  pinMode(PIN_HALL_SENSOR, HALL_ACTIVE_HIGH ? INPUT_PULLDOWN : INPUT_PULLUP);
+  _hall_magnet_present = HALL_ACTIVE_HIGH ? (digitalRead(PIN_HALL_SENSOR) == HIGH)
+                                           : (digitalRead(PIN_HALL_SENSOR) == LOW);
+  if (_hall_magnet_present) _locked = true;   // booting with the cover already closed
+#endif
+
 #if defined(PIN_USER_BTN)
   user_btn.begin();
 #endif
@@ -2237,6 +2248,37 @@ void UITask::pollCardKB() {
 #endif
 }
 
+// Level-triggered, like pollCardKB() -- a magnet held near the sensor reads the
+// same way every tick, so this only acts on the two edges (closed/opened), not
+// on every poll. Fully autonomous: closing locks and blanks the display
+// immediately (no wake grace -- the cover is physically over the screen, so
+// there's nothing to show), opening unlocks and wakes it, with no combo or
+// keypress either way. Independent of Auto-lock (Settings > Display), which is
+// a timeout-driven setting -- this is a direct physical event.
+void UITask::pollHallSensor() {
+#if defined(PIN_HALL_SENSOR)
+  bool present = HALL_ACTIVE_HIGH ? (digitalRead(PIN_HALL_SENSOR) == HIGH)
+                                   : (digitalRead(PIN_HALL_SENSOR) == LOW);
+  if (present == _hall_magnet_present) return;
+  _hall_magnet_present = present;
+
+  if (present) {   // cover closed
+    _locked = true;
+    _lock_wake_until = 0;
+    if (_display) _display->turnOff();
+#ifdef PIN_LED
+    digitalWrite(PIN_LED, LOW);   // same as the auto-off path -- one less thing lit under a closed cover
+#endif
+  } else {   // cover opened
+    _locked = false;
+    if (_display && !_display->isOn()) _display->turnOn();
+    uint32_t aoff = autoOffMillis();
+    if (aoff > 0) _auto_off = millis() + aoff;
+  }
+  _next_refresh = 0;
+#endif
+}
+
 void UITask::loop() {
   // Background delivery: resend pending on-device DMs whose ACK timed out, and
   // finalise the ✗ marker — runs regardless of which screen is active.
@@ -2335,6 +2377,7 @@ void UITask::loop() {
   }
 #endif
   pollCardKB();
+  pollHallSensor();
 #ifdef ENV_USE_TCA8418
   {
     extern char tca8418_keypad_read();   // provided by the active variant
