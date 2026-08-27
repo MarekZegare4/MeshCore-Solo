@@ -219,6 +219,13 @@ class UITask : public AbstractUITask {
   #define HALL_ACTIVE_HIGH 0
 #endif
   bool _hall_magnet_present = false;
+  // Contact-bounce guard for a mechanical reed switch (a Hall-effect IC reads
+  // clean, but the docs recommend either): a raw reading only replaces
+  // _hall_magnet_present once it's held steady for HALL_DEBOUNCE_MS, same
+  // threshold and reasoning as MomentaryButton's ISR_DEBOUNCE_MS.
+  static const uint32_t HALL_DEBOUNCE_MS = 25;
+  bool     _hall_candidate = false;
+  uint32_t _hall_candidate_since = 0;
 #endif
   void pollHallSensor();
 

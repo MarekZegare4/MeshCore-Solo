@@ -2255,11 +2255,24 @@ void UITask::pollCardKB() {
 // there's nothing to show), opening unlocks and wakes it, with no combo or
 // keypress either way. Independent of Auto-lock (Settings > Display), which is
 // a timeout-driven setting -- this is a direct physical event.
+//
+// Debounced against a mechanical reed switch chattering for a few ms as the
+// magnet crosses the trigger distance -- a raw flip only becomes the new
+// _hall_magnet_present once it's been steady for HALL_DEBOUNCE_MS, so a bounce
+// can't fire the lock/unlock actions (each including a full display
+// off/on -- slow and disruptive on e-ink) more than once per real transition.
 void UITask::pollHallSensor() {
 #if defined(PIN_HALL_SENSOR)
-  bool present = HALL_ACTIVE_HIGH ? (digitalRead(PIN_HALL_SENSOR) == HIGH)
-                                   : (digitalRead(PIN_HALL_SENSOR) == LOW);
-  if (present == _hall_magnet_present) return;
+  bool raw = HALL_ACTIVE_HIGH ? (digitalRead(PIN_HALL_SENSOR) == HIGH)
+                               : (digitalRead(PIN_HALL_SENSOR) == LOW);
+  if (raw != _hall_candidate) {
+    _hall_candidate = raw;
+    _hall_candidate_since = millis();
+  }
+  if (_hall_candidate == _hall_magnet_present) return;   // no debounced change yet
+  if (millis() - _hall_candidate_since < HALL_DEBOUNCE_MS) return;   // not steady long enough
+
+  bool present = _hall_candidate;
   _hall_magnet_present = present;
 
   if (present) {   // cover closed
