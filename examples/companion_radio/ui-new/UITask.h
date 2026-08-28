@@ -23,6 +23,21 @@
 #include "../AbstractUITask.h"
 #include "../NodePrefs.h"
 #include "../Trail.h"
+
+// Optional M5Stack CardKB (I2C keyboard, addr 0x5F). CARDKB_I2C names which
+// TwoWire it lives on -- set at file scope (not inside the class body, and
+// not resolved via an #elif ladder) so both this header and SettingsScreen.h
+// see a fully-resolved macro no matter which one gets included first.
+//  - Boards with a free second I2C bus define ENV_PIN_SDA/ENV_PIN_SCL
+//    (already brought up for EnvironmentSensorManager) and get Wire1 here,
+//    same as before.
+//  - Boards without a free second bus set -D CARDKB_I2C=Wire directly in
+//    platformio.ini, sharing whatever bus the display/RTC already use.
+// Either way it's a no-op on boards that define neither, or when nothing
+// ACKs 0x5F at boot.
+#if !defined(CARDKB_I2C) && defined(ENV_PIN_SDA) && defined(ENV_PIN_SCL)
+  #define CARDKB_I2C Wire1
+#endif
 #include "../Waypoint.h"
 #include "../LiveTrack.h"
 #include "KeyboardWidget.h"
@@ -193,20 +208,8 @@ class UITask : public AbstractUITask {
   void enqueueKey(char c);
   bool dequeueKey(char& c);
 
-  // Optional M5Stack CardKB (I2C keyboard, addr 0x5F). Two ways to reach it:
-  //  - ENV_PIN_SDA/ENV_PIN_SCL defined -> CardKB rides the dedicated second
-  //    I2C bus (Wire1) that EnvironmentSensorManager already brings up.
-  //  - CARDKB_USE_PRIMARY_WIRE defined instead -> CardKB shares the board's
-  //    main Wire bus (whatever the display/RTC already use), for boards
-  //    where no second bus is free. Mutually exclusive with the above.
-  // Either way it's a no-op on boards with neither define, or when nothing
-  // ACKs 0x5F at boot.
-#if defined(ENV_PIN_SDA) && defined(ENV_PIN_SCL)
-  #define CARDKB_I2C Wire1
-#elif defined(CARDKB_USE_PRIMARY_WIRE)
-  #define CARDKB_I2C Wire
-#endif
-
+  // Optional M5Stack CardKB (I2C keyboard, addr 0x5F). See the CARDKB_I2C
+  // definition near the top of this file for which bus it's on and why.
 #if defined(CARDKB_I2C)
   bool     _has_cardkb = false;
   // CardKB is level-triggered, not edge-triggered -- it keeps returning the

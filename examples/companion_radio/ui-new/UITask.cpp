@@ -1398,11 +1398,11 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
   _auto_off = millis() + (aoff > 0 ? aoff : AUTO_OFF_MILLIS);
 
 #if defined(CARDKB_I2C)
-  // On the ENV_PIN_SDA/SCL path, Wire1 is already brought up by
+  // On the ENV_PIN_SDA/SCL path, CARDKB_I2C is Wire1, already brought up by
   // sensors.begin() (EnvironmentSensorManager), which runs before this. On
-  // the CARDKB_USE_PRIMARY_WIRE path, Wire is already brought up by the
-  // board's own begin() (display/RTC), also before this -- either way, just
-  // probe for a CardKB sitting on the bus.
+  // boards that set CARDKB_I2C=Wire directly in platformio.ini, that bus is
+  // brought up by the board's own begin() instead -- also before this.
+  // Either way, just probe for a CardKB sitting on it.
   CARDKB_I2C.beginTransmission(0x5F);
   _has_cardkb = (CARDKB_I2C.endTransmission() == 0);
 #endif
@@ -2120,7 +2120,7 @@ static const char CARDKB_FN_BASE[48] = {
 };
 #endif
 
-// Poll an optional CardKB (I2C keyboard, addr 0x5F) on Wire1/Grove, feeding
+// Poll an optional CardKB (I2C keyboard, addr 0x5F) on CARDKB_I2C, feeding
 // the same key queue as every physical button. Most of its output needs no
 // translation at all: CardKB's own arrow/Enter/Esc byte codes are already
 // identical to this UI's KEY_LEFT/UP/DOWN/RIGHT/ENTER/CANCEL (0xB4-0xB7, 13,
