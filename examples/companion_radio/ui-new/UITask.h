@@ -23,6 +23,21 @@
 #include "../AbstractUITask.h"
 #include "../NodePrefs.h"
 #include "../Trail.h"
+
+// Optional M5Stack CardKB (I2C keyboard, addr 0x5F). CARDKB_I2C names which
+// TwoWire it lives on -- set at file scope (not inside the class body, and
+// not resolved via an #elif ladder) so both this header and SettingsScreen.h
+// see a fully-resolved macro no matter which one gets included first.
+//  - Boards with a free second I2C bus define ENV_PIN_SDA/ENV_PIN_SCL
+//    (already brought up for EnvironmentSensorManager) and get Wire1 here,
+//    same as before.
+//  - Boards without a free second bus set -D CARDKB_I2C=Wire directly in
+//    platformio.ini, sharing whatever bus the display/RTC already use.
+// Either way it's a no-op on boards that define neither, or when nothing
+// ACKs 0x5F at boot.
+#if !defined(CARDKB_I2C) && defined(ENV_PIN_SDA) && defined(ENV_PIN_SCL)
+  #define CARDKB_I2C Wire1
+#endif
 #include "../Waypoint.h"
 #include "../LiveTrack.h"
 #include "KeyboardWidget.h"
@@ -193,12 +208,9 @@ class UITask : public AbstractUITask {
   void enqueueKey(char c);
   bool dequeueKey(char& c);
 
-  // Optional M5Stack CardKB (I2C keyboard, addr 0x5F) on the Grove/Wire1 bus
-  // -- reuses ENV_PIN_SDA/ENV_PIN_SCL (already brought up for
-  // EnvironmentSensorManager) as the "this board has a second I2C bus" gate,
-  // rather than a new board-specific pin define. No-op entirely on boards
-  // without that bus, or when nothing ACKs 0x5F at boot.
-#if defined(ENV_PIN_SDA) && defined(ENV_PIN_SCL)
+  // Optional M5Stack CardKB (I2C keyboard, addr 0x5F). See the CARDKB_I2C
+  // definition near the top of this file for which bus it's on and why.
+#if defined(CARDKB_I2C)
   bool     _has_cardkb = false;
   // CardKB is level-triggered, not edge-triggered -- it keeps returning the
   // same byte for as long as the physical key is held, not just once. Track
@@ -207,6 +219,27 @@ class UITask : public AbstractUITask {
   uint8_t  _cardkb_last_raw = 0;
 #endif
   void pollCardKB();
+
+  // Optional magnetic "flip cover" lock: a Hall-effect or reed sensor wired to
+  // any free GPIO, closing (pulling active) when a magnet is near. Entirely
+  // user-supplied -- no board in this repo ships one, so PIN_HALL_SENSOR must
+  // be added as a build_flag by whoever wires the sensor up; no-op everywhere
+  // else. HALL_ACTIVE_HIGH overrides the default polarity for modules that
+  // pull the pin HIGH (instead of LOW) when the magnet is present.
+#if defined(PIN_HALL_SENSOR)
+#ifndef HALL_ACTIVE_HIGH
+  #define HALL_ACTIVE_HIGH 0
+#endif
+  bool _hall_magnet_present = false;
+  // Contact-bounce guard for a mechanical reed switch (a Hall-effect IC reads
+  // clean, but the docs recommend either): a raw reading only replaces
+  // _hall_magnet_present once it's held steady for HALL_DEBOUNCE_MS, same
+  // threshold and reasoning as MomentaryButton's ISR_DEBOUNCE_MS.
+  static const uint32_t HALL_DEBOUNCE_MS = 25;
+  bool     _hall_candidate = false;
+  uint32_t _hall_candidate_since = 0;
+#endif
+  void pollHallSensor();
 
   void setCurrScreen(UIScreen* c);
 

@@ -157,12 +157,14 @@ struct FullscreenMsgView {
       display.print(s_wrap_lines[scroll + i]);
     }
     drawScrollIndicator(display, startY, visible * lineH, lcount, visible, scroll);
+    // Page markers read like a book: the older message is back to the left,
+    // the newer one forward to the right (see handleInput).
     const int nav_y = display.height() - lineH;
-    if (has_next) {
+    if (has_prev) {
       display.setCursor(0, nav_y);
       display.print("<");
     }
-    if (has_prev) {
+    if (has_next) {
       display.setCursor(display.width() - cw, nav_y);
       display.print(">");
     }
@@ -172,8 +174,12 @@ struct FullscreenMsgView {
   Result handleInput(char c) {
     if (c == KEY_UP)          { if (scroll > 0) scroll--; return NONE; }
     if (c == KEY_DOWN)        { if (scroll < _max_scroll) scroll++; return NONE; }
-    if (keyIsPrev(c))         return NEXT;   // page between messages (encoder too)
-    if (keyIsNext(c))         return PREV;
+    // Page between messages (encoder too), in reading order: left goes back to
+    // the older message, right forward to the newer one. PREV/NEXT are named in
+    // message order, and MessagesScreen's _hist_sel counts newest-first, so PREV
+    // (older) is what a left press means.
+    if (keyIsPrev(c))         return PREV;
+    if (keyIsNext(c))         return NEXT;
     if (c == KEY_CONTEXT_MENU) return REPLY;
     if (c == KEY_ENTER || c == KEY_CANCEL) return CLOSE;
     return NONE;

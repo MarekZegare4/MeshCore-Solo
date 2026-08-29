@@ -23,6 +23,7 @@ see [Built-in keyboards](#built-in-keyboards-cardputer-adv-t-echo-lite--keyshiel
 | Heltec V4 *(experimental)* | ✅ solder to free GPIOs | ✅ solder to free GPIOs |
 | M5Stack Cardputer ADV *(experimental)* | — | built-in keyboard instead, see below |
 | LilyGO T-Echo Lite + KeyShield *(experimental)* | — | built-in keypad instead, see below |
+| ProMicro (nRF52840) *(experimental)* | ✅ shares the primary I2C bus (D8/D7) — no free pins for a second bus | — |
 
 ---
 
@@ -34,6 +35,11 @@ for it once at boot — nothing to enable in Settings.
 
 The same bus is scanned for environment sensors, so a CardKB and a sensor can
 share it.
+
+On a board with no free pins for a second bus (ProMicro), CardKB instead
+shares the primary bus already used by the display/RTC — set `CARDKB_I2C=Wire`
+as a build flag rather than `ENV_PIN_SDA`/`ENV_PIN_SCL`. See
+[Build Flags](./build_flags.md) for both forms.
 
 ### Typing
 
@@ -115,8 +121,8 @@ hardware**; still worth checking against your own V3 module before soldering.
 
 Everything above lives in the `[env:Heltec_v3_companion_solo_dual]` /
 `[env:heltec_v4_companion_solo_dual]` blocks in
-[`variants/heltec_v3/platformio.ini`](../../variants/heltec_v3/platformio.ini)
-and [`variants/heltec_v4/platformio.ini`](../../variants/heltec_v4/platformio.ini),
+[`solo/heltec_v3/platformio.ini`](../../solo/heltec_v3/platformio.ini)
+and [`solo/heltec_v4/platformio.ini`](../../solo/heltec_v4/platformio.ini),
 with comments explaining which pins are safe to reuse. To build a CardKB-only
 device, comment out the joystick block and set Ext. KB to Compact.
 
@@ -134,4 +140,5 @@ independent of the CardKB code — a board can have either, or neither.
 
 Neither keypad follows CardKB's exact Fn-shortcut table (Fn+Enter,
 Fn+letter accent popups, Tab, Fn+Esc lock) — see each board's own
-`platformio.ini` / keyboard driver under `variants/` for its current keymap.
+keyboard driver under `variants/` and its solo `platformio.ini` under `solo/`
+for its current keymap.

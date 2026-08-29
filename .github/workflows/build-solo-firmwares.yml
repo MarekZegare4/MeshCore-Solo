@@ -26,7 +26,7 @@ jobs:
       - name: List solo_dual envs
         id: list-envs
         run: |
-          envs=$(grep -rh '^\[env:' platformio.ini variants/ \
+          envs=$(grep -rh '^\[env:' solo/ \
             | sed 's/\[env://;s/\]//' \
             | grep '_solo_dual$' \
             | jq -R -s -c 'split("\n") | map(select(length > 0))')

@@ -77,7 +77,7 @@ class SettingsScreen : public UIScreen {
     KEYBOARD_TYPE,
     KEYBOARD_MAIN_ALPHABET,
     KEYBOARD_ALPHABET,
-#if defined(ENV_PIN_SDA) && defined(ENV_PIN_SCL)
+#if defined(CARDKB_I2C)
     KEYBOARD_CARDKB_COMPACT,
 #endif
     // Contacts section
@@ -611,7 +611,7 @@ class SettingsScreen : public UIScreen {
       display.print("Additional");
       display.setCursor(valCol(display), y);
       display.print(NodePrefs::keyboardAlphabetLabel(p ? p->keyboard_alt_alphabet : 0));
-#if defined(ENV_PIN_SDA) && defined(ENV_PIN_SCL)
+#if defined(CARDKB_I2C)
     } else if (item == KEYBOARD_CARDKB_COMPACT) {
       display.print("Ext. KB");
       display.setCursor(valCol(display), y);
@@ -1020,7 +1020,7 @@ public:
       _dirty = true;
       return true;
     }
-#if defined(ENV_PIN_SDA) && defined(ENV_PIN_SCL)
+#if defined(CARDKB_I2C)
     if (_selected == KEYBOARD_CARDKB_COMPACT && p && (left || right || enter)) {
       p->keyboard_cardkb_compact ^= 1;
       _dirty = true;
