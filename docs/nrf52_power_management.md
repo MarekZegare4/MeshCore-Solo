@@ -40,12 +40,19 @@ Shutdown reason codes (stored in GPREGRET2):
 | Seeed Studio XIAO nRF52840 (`xiao_nrf52`) | Yes         | Yes         | Yes       |
 | RAK4631 (`rak4631`)                       | Yes         | Yes         | Yes       |
 | Heltec T114 (`heltec_t114`)               | Yes         | Yes         | Yes       |
+| Heltec T1 (`heltec_t1`)                   | Yes         | Yes         | Yes       |
+| Heltec T096 (`heltec_t096`)               | Yes         | Yes         | Yes       |
+| Heltec Tower V2 (`heltec_tower_v2`)       | Yes         | Yes         | Yes       |
+| GAT562 30S Mesh Kit (`gat562_30s_mesh_kit`) | Yes       | Yes         | Yes       |
 | GAT562 Mesh Watch13                       | Yes         | Yes         | Yes       |
+| GAT562 Mesh Tracker Pro (`gat562_mesh_tracker_pro`) | Yes | Yes       | Yes       |
+| GAT562 EVB Pro (`gat562_mesh_evb_pro`)    | Yes         | Yes         | Yes       |
+| muzi works R1 Neo (`muziworks_r1_neo`)    | Yes         | Yes         | Yes       |
+| SenseCAP Solar                            | Yes         | Yes         | Yes       |
+| RAK 3401 (`rak3401`)                      | Yes         | Yes         | Yes       |
 | Promicro nRF52840                         | No          | No          | No        |
-| RAK WisMesh Tag                           | No          | No          | No        |
 | Heltec Mesh Solar                         | No          | No          | No        |
 | LilyGo T-Echo / T-Echo Lite               | No          | No          | No        |
-| SenseCAP Solar                            | Yes         | Yes         | Yes       |
 | WIO Tracker L1 / L1 E-Ink                 | No          | No          | No        |
 | WIO WM1110                                | No          | No          | No        |
 | Mesh Pocket                               | No          | No          | No        |

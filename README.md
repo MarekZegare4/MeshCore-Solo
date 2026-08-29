@@ -15,16 +15,18 @@ Solo firmware thread: https://discord.com/channels/1495203904898728149/150529433
 | Seeed Wio Tracker L1 (OLED) | nRF52840 | SSD1306 / SH1106 128 × 64 | `solo-<version>-WioTrackerL1.uf2` |
 | Seeed Wio Tracker L1 (E-ink) | nRF52840 | GxEPD2 250 × 122 | `solo-<version>-WioTrackerL1Eink.uf2` |
 | GAT562 30S Mesh Kit | nRF52840 | SSD1306 128 × 64 | `solo-<version>-GAT562-30S-Mesh-Kit.uf2` |
+| GAT562 Mesh Watch13 *(experimental)* | nRF52840 | SSD1306 128 × 64 | `solo-<version>-GAT562-Mesh-Watch13.uf2` |
 | Heltec LoRa32 V3 *(experimental)* | ESP32-S3 | SSD1306 128 × 64 | `solo-<version>-Heltec-v3-merged.bin` |
 | Heltec LoRa32 V4 *(experimental)* | ESP32-S3 | SSD1306 128 × 64 | `solo-<version>-heltec-v4-merged.bin` |
 | M5Stack Cardputer ADV *(experimental)* | ESP32-S3 | ST7789 TFT 240 × 135 | `solo-<version>-M5Stack-Cardputer-ADV-merged.bin` |
 | LilyGO T-Echo Lite + KeyShield *(experimental)* | nRF52840 | GxEPD2 250 × 122 | `solo-<version>-LilyGo-T-Echo-Lite-keyshield.uf2` |
+| ProMicro *(experimental)* | nRF52840 | SSD1306 128 × 64 | `solo-<version>-ProMicro.uf2` |
 
 All firmware files are published on the [releases page](https://github.com/MarekZegare4/MeshCore-Solo/releases). Each binary supports both BLE and USB serial — there are no separate BLE/USB builds.
 
 The MCU column decides how you flash: nRF52840 boards take a drag-and-drop `.uf2`, ESP32-S3 boards take a `.bin` written with a flasher — see [Flashing](#flashing).
 
-The Wio Tracker L1s, GAT562 and Cardputer ADV work out of the box (the Cardputer has a built-in QWERTY keyboard). Heltec V3/V4 need [a keyboard or joystick wired up](#hardware-setup--heltec-v3--v4) first. The T-Echo Lite needs the KeyShield add-on (its own T9 keypad) to be usable standalone — see [External Keyboard & Joystick](./docs/solo_features/external_keyboard.md).
+The Wio Tracker L1s, both GAT562 boards and Cardputer ADV work out of the box (the Cardputer has a built-in QWERTY keyboard). Heltec V3/V4 need [a keyboard or joystick wired up](#hardware-setup--heltec-v3--v4) first. The T-Echo Lite needs the KeyShield add-on (its own T9 keypad) to be usable standalone. ProMicro has no onboard buttons at all — a CardKB is required, sharing the board's primary I2C bus — see [External Keyboard & Joystick](./docs/solo_features/external_keyboard.md).
 
 <!-- **Enclosures (Wio Tracker L1)**
 - [E-ink case](https://www.printables.com/model/1420534-seeed-wio-tracker-l1-e-ink-enclosure)
@@ -205,6 +207,7 @@ git config merge.ours.driver true
 | `WioTrackerL1_companion_solo_dual` | Wio Tracker L1 (OLED) |
 | `WioTrackerL1Eink_companion_solo_dual` | Wio Tracker L1 (E-ink) |
 | `GAT562_30S_Mesh_Kit_solo_dual` | GAT562 30S Mesh Kit |
+| `GAT562_Mesh_Watch13_solo_dual` | GAT562 Mesh Watch13 *(experimental)* |
 | `Heltec_v3_companion_solo_dual` | Heltec LoRa32 V3 *(experimental)* |
 | `heltec_v4_companion_solo_dual` | Heltec LoRa32 V4 *(experimental)* |
 | `M5Stack_Cardputer_ADV_companion_solo_dual` | M5Stack Cardputer ADV *(experimental)* |
