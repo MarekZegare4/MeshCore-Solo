@@ -252,5 +252,6 @@ Big thanks to the people who contributed to this fork:
 
 - [vanous](https://github.com/vanous)
 - [marczykm](https://github.com/marczykm)
+- [tchellow](https://github.com/tchellow)
 
 Built on upstream [MeshCore](https://github.com/meshcore-dev/MeshCore) and its [community](https://github.com/meshcore-dev/MeshCore/graphs/contributors).
