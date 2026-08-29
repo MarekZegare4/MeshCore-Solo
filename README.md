@@ -209,6 +209,7 @@ git config merge.ours.driver true
 | `heltec_v4_companion_solo_dual` | Heltec LoRa32 V4 *(experimental)* |
 | `M5Stack_Cardputer_ADV_companion_solo_dual` | M5Stack Cardputer ADV *(experimental)* |
 | `LilyGo_T-Echo-Lite_keyshield_companion_solo_dual` | LilyGO T-Echo Lite + KeyShield *(experimental)* |
+| `ProMicro_companion_solo_dual` | ProMicro (nRF52840) + CardKB *(experimental)* |
 
 ```sh
 pio run -e <env>                                  # build only

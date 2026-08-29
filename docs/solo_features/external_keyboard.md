@@ -23,6 +23,7 @@ see [Built-in keyboards](#built-in-keyboards-cardputer-adv-t-echo-lite--keyshiel
 | Heltec V4 *(experimental)* | ✅ solder to free GPIOs | ✅ solder to free GPIOs |
 | M5Stack Cardputer ADV *(experimental)* | — | built-in keyboard instead, see below |
 | LilyGO T-Echo Lite + KeyShield *(experimental)* | — | built-in keypad instead, see below |
+| ProMicro (nRF52840) *(experimental)* | ✅ shares the primary I2C bus (D8/D7) — no free pins for a second bus | — |
 
 ---
 
@@ -34,6 +35,11 @@ for it once at boot — nothing to enable in Settings.
 
 The same bus is scanned for environment sensors, so a CardKB and a sensor can
 share it.
+
+On a board with no free pins for a second bus (ProMicro), CardKB instead
+shares the primary bus already used by the display/RTC — set `CARDKB_I2C=Wire`
+as a build flag rather than `ENV_PIN_SDA`/`ENV_PIN_SCL`. See
+[Build Flags](./build_flags.md) for both forms.
 
 ### Typing
 

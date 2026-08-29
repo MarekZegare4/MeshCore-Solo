@@ -4,6 +4,8 @@
 
 - **On-device community scope, and repeater-side scope filtering.** Settings › Radio gets a **Scope** field — type a region/community name (e.g. `pl`) and every device typing the same name derives the same shared tag, no key exchange needed; it's what your own DM/channel sends carry, previously only settable from a connected app. Tools › Repeater gains **Scope only** (only relay flood traffic matching your own scope, or one of the new **Extra scopes** below — a no-op until a scope is actually set, so it can't silently blackhole all forwarding) and **Extra scopes** (comma-separated additional regions to relay for, without changing what scope this device's own messages send under).
 - **Optional magnetic "flip cover" screen lock**, for anyone who wants to wire a Hall-effect or reed sensor to a free GPIO — no board ships one built in. Set `PIN_HALL_SENSOR` as a build flag on your own env and closing the cover locks and blanks the screen instantly, opening it unlocks and wakes it — no combo, independent of Auto-lock. See [Screen Lock](docs/solo_features/screen_lock/screen_lock.md#magnetic-cover-hall-sensor).
+- **Experimental: solo build for ProMicro (nRF52840)**, with CardKB support sharing the board's primary I2C bus (no free pins for a second one on this board). Contributed by @tchellow — thanks!
+- **New [Build Flags](docs/solo_features/build_flags.md) reference** — every optional `-D` flag a solo build understands (GPIO, CardKB/joystick, Hall-sensor cover lock, buzzer/vibration, GPS switch, display/battery tuning) in one place.
 
 ### Fixes
 
