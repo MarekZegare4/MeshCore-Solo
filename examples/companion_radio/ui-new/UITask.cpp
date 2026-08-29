@@ -1397,11 +1397,14 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
   uint32_t aoff = autoOffMillis();
   _auto_off = millis() + (aoff > 0 ? aoff : AUTO_OFF_MILLIS);
 
-#if defined(ENV_PIN_SDA) && defined(ENV_PIN_SCL)
-  // Wire1 is already brought up by sensors.begin() (EnvironmentSensorManager),
-  // which runs before this -- just probe for a CardKB sitting on it.
-  Wire1.beginTransmission(0x5F);
-  _has_cardkb = (Wire1.endTransmission() == 0);
+#if defined(CARDKB_I2C)
+  // On the ENV_PIN_SDA/SCL path, CARDKB_I2C is Wire1, already brought up by
+  // sensors.begin() (EnvironmentSensorManager), which runs before this. On
+  // boards that set CARDKB_I2C=Wire directly in platformio.ini, that bus is
+  // brought up by the board's own begin() instead -- also before this.
+  // Either way, just probe for a CardKB sitting on it.
+  CARDKB_I2C.beginTransmission(0x5F);
+  _has_cardkb = (CARDKB_I2C.endTransmission() == 0);
 #endif
 
 #if defined(PIN_HALL_SENSOR)
@@ -2115,7 +2118,7 @@ bool UITask::dequeueKey(char& c) {
   return true;
 }
 
-#if defined(ENV_PIN_SDA) && defined(ENV_PIN_SCL)
+#if defined(CARDKB_I2C)
 // CardKB's "fn" column (key_map in M5Stack's unit_CardKB.cpp): Fn+<physical
 // key> sends 0x80 + that key's row index, entirely disjoint from every other
 // code this UI recognises. Indexed by (raw - 0x80); non-letter slots (digits,
@@ -2128,7 +2131,7 @@ static const char CARDKB_FN_BASE[48] = {
 };
 #endif
 
-// Poll an optional CardKB (I2C keyboard, addr 0x5F) on Wire1/Grove, feeding
+// Poll an optional CardKB (I2C keyboard, addr 0x5F) on CARDKB_I2C, feeding
 // the same key queue as every physical button. Most of its output needs no
 // translation at all: CardKB's own arrow/Enter/Esc byte codes are already
 // identical to this UI's KEY_LEFT/UP/DOWN/RIGHT/ENTER/CANCEL (0xB4-0xB7, 13,
@@ -2156,7 +2159,7 @@ static const char CARDKB_FN_BASE[48] = {
 // once), so _cardkb_last_raw debounces it into one press per physical
 // keypress, same as a MomentaryButton's CLICK event.
 void UITask::pollCardKB() {
-#if defined(ENV_PIN_SDA) && defined(ENV_PIN_SCL)
+#if defined(CARDKB_I2C)
   if (!_has_cardkb) return;
   // No artificial throttle: unlike a MomentaryButton (BUTTON_USE_INTERRUPTS
   // latches every edge in an ISR ring buffer, so it survives a blocking e-ink
@@ -2167,9 +2170,9 @@ void UITask::pollCardKB() {
   // Polling every loop() iteration (same as a digital button's check(), which
   // has no throttle either) just shrinks that miss window down to exactly the
   // render() duration instead of render()+30ms.
-  Wire1.requestFrom(0x5F, 1);
-  if (!Wire1.available()) return;
-  uint8_t raw = Wire1.read();
+  CARDKB_I2C.requestFrom(0x5F, 1);
+  if (!CARDKB_I2C.available()) return;
+  uint8_t raw = CARDKB_I2C.read();
   if (raw == _cardkb_last_raw) return;   // still held (or still released) -- no new edge
   _cardkb_last_raw = raw;
   if (raw == 0) return;   // key just released, nothing to enqueue
@@ -2536,7 +2539,7 @@ void UITask::loop() {
       }
       // Hint popup at bottom (like alert style)
       _display->setTextSize(1);
-#if defined(ENV_PIN_SDA) && defined(ENV_PIN_SCL)
+#if defined(CARDKB_I2C)
       const char* hint = _lock_seq_count == 0 ? (_has_cardkb ? "Back+3xEnter/Fn+Esc" : "Hold Back + 3xEnter") :
                          _lock_seq_count == 1 ? "Enter x2 more..."   : "Enter x1 more...";
 #else
