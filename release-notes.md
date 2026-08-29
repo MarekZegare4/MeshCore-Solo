@@ -6,6 +6,7 @@
 - **Optional magnetic "flip cover" screen lock**, for anyone who wants to wire a Hall-effect or reed sensor to a free GPIO — no board ships one built in. Set `PIN_HALL_SENSOR` as a build flag on your own env and closing the cover locks and blanks the screen instantly, opening it unlocks and wakes it — no combo, independent of Auto-lock. See [Screen Lock](docs/solo_features/screen_lock/screen_lock.md#magnetic-cover-hall-sensor).
 - **Experimental: solo build for ProMicro (nRF52840)**, with CardKB support sharing the board's primary I2C bus (no free pins for a second one on this board). Contributed by @tchellow — thanks!
 - **New [Build Flags](docs/solo_features/build_flags.md) reference** — every optional `-D` flag a solo build understands (GPIO, CardKB/joystick, Hall-sensor cover lock, buzzer/vibration, GPS switch, display/battery tuning) in one place.
+- **Tools › Admin gains a "Start OTA" action** for a repeater/room server you're logged into — sends the same `start ota` CLI command the Custom-command row already reached, now with its own menu row and a confirm ("Start" defaulting to "Cancel" first) since it puts the remote into BLE DFU mode for the duration of the update.
 
 ### Fixes
 

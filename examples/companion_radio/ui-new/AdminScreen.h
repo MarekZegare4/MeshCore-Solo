@@ -25,6 +25,7 @@
 
 #include "FullscreenMsgView.h"
 #include "TabBar.h"
+#include "PopupMenu.h"           // "Start OTA" confirmation
 #include "RadioParamsEditor.h"   // DigitEditor + stepSF/stepBW/stepCR -- same widgets Settings/Repeater use locally
 #include <helpers/ClientACL.h>   // PERM_ACL_ADMIN / PERM_ACL_ROLE_MASK
 
@@ -137,6 +138,15 @@ class AdminScreen : public UIScreen {
   FullscreenMsgView _reply_view;
   char _reply_text[200] = "";
 
+  // "Start OTA" confirmation -- pulls the remote out of the mesh into BLE DFU
+  // mode for the duration of the update, far more disruptive than the other
+  // one-shot actions on this tab, so unlike Reboot it doesn't fire on a bare
+  // Enter. Only this one action needs a confirm today, so it's special-cased
+  // in activateField() by command string rather than adding a generic
+  // needs_confirm flag to every AdminField literal below.
+  PopupMenu _confirm;
+  const AdminField* _pending_confirm_field = nullptr;
+
   KeyboardWidget& kb() { return _task->keyboard(); }
 
   bool isAdminOk(const uint8_t* pub_key) const {
@@ -226,6 +236,14 @@ class AdminScreen : public UIScreen {
     if (f.get_cmd == nullptr && f.set_prefix == nullptr) {          // Custom command...
       openValueKb(_cmd_text, true);
     } else if (f.set_prefix == nullptr) {                            // Action
+      if (!strcmp(f.get_cmd, "start ota")) {                         // see _confirm's comment
+        _pending_confirm_field = &f;
+        _confirm.begin("Start OTA update?", 2);
+        _confirm.addItem("Start");
+        _confirm.addItem("Cancel");
+        _confirm.setSelected(1);   // default highlight = Cancel
+        return;
+      }
       strncpy(_cmd_text, f.get_cmd, sizeof(_cmd_text) - 1);
       _cmd_text[sizeof(_cmd_text) - 1] = '\0';
       sendCommand();
@@ -333,6 +351,8 @@ public:
     _value_editing = false;
     _login_waiting = false;
     _admin_ok = false;
+    _confirm.active = false;
+    _pending_confirm_field = nullptr;
   }
 
   // Canonical entry for a specific target -- called by UITask::openAdminFor(),
@@ -519,6 +539,7 @@ public:
           }
         }
       });
+      if (_confirm.active) { _confirm.render(display); return 50; }
       return _value_editing ? 50 : 2000;
     }
 
@@ -552,6 +573,20 @@ public:
     }
 
     if (_phase == COMMAND) {
+      if (_confirm.active) {
+        auto res = _confirm.handleInput(c);
+        if (res == PopupMenu::SELECTED) {
+          if (_confirm.selectedIndex() == 0 && _pending_confirm_field) {
+            strncpy(_cmd_text, _pending_confirm_field->get_cmd, sizeof(_cmd_text) - 1);
+            _cmd_text[sizeof(_cmd_text) - 1] = '\0';
+            sendCommand();
+          }
+          _pending_confirm_field = nullptr;
+        } else if (res == PopupMenu::CANCELLED) {
+          _pending_confirm_field = nullptr;
+        }
+        return true;
+      }
       if (_kb_active) {
         auto r = kb().handleInput(c);
         if (r == KeyboardWidget::DONE) {
@@ -670,6 +705,7 @@ const AdminScreen::AdminField AdminScreen::ACTION_FIELDS[] = {
   { "Send zero-hop advert", "advert.zerohop", nullptr },
   { "Sync clock",           "clock sync",     nullptr },
   { "Reboot",               "reboot",         nullptr },  // disruptive + no confirm: keep off the default row
+  { "Start OTA",            "start ota",      nullptr },  // confirmed first -- see _confirm's comment
   { "Custom command...",    nullptr,          nullptr },
 };
 

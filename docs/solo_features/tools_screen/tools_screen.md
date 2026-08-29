@@ -568,13 +568,13 @@ Send commands to a **repeater/room server you have admin permission on** — the
    | **System** | Name, Owner info, Admin password |
    | **Radio** | Frequency, Bandwidth, Spreading factor, Coding rate, TX power |
    | **Routing** | Repeat, Advert interval, Flood advert interval, Max hops |
-   | **Actions** | Send advert, Send zero-hop advert, Sync clock, Reboot, **Custom command...** |
+   | **Actions** | Send advert, Send zero-hop advert, Sync clock, Reboot, Start OTA, **Custom command...** |
 
    **Enter** on a row does one of four things, depending on the field:
    - **Name / Owner info** first **fetch** the node's current value, then open the keyboard **pre-filled** with it to edit — submitting sends the change. If the fetch fails or times out, the keyboard still opens (blank), so the value can be set blind.
    - **Radio and Routing rows** are typed, not free text: **Repeat** is an ON/OFF toggle; **Advert interval / Flood advert interval / Max hops / TX power** are number steppers (**LEFT/RIGHT** to adjust, within that field's valid range); **Frequency** uses the same digit-by-digit cursor editor as Settings' own Radio screen (**LEFT/RIGHT** moves between digits, **UP/DOWN** changes the selected one); **Bandwidth / Spreading factor / Coding rate** step through their valid discrete LoRa values with **LEFT/RIGHT**. All four Radio-tuple fields (Frequency/Bandwidth/SF/Coding rate) fetch and re-send the same underlying `radio` value together — editing any one of them still only overwrites that one, the other three round-trip unchanged. **Enter** sends the change; **Cancel** discards it and returns to the row list without sending anything.
    - **Admin password** has no fetch (there's no way to read a password back) — it opens straight to a blank keyboard.
-   - **Actions** (Reboot, Send advert, …) send immediately, no editing step.
+   - **Actions** (Reboot, Send advert, …) send immediately, no editing step — except **Start OTA**, which asks **Start / Cancel** first (defaulting to Cancel): it puts the remote into BLE DFU mode for the duration of the update, far more disruptive than a quick reboot.
    - **Custom command...** (last row of Actions) opens the same free-text entry for anything not covered above — up to 160 characters, see the linked reference for the full grammar. The keyboard's **{}** key doubles as command completion here: it lists commands matching whatever's typed since the last space (narrowing as you type), and picking one completes that word instead of just inserting after it.
 4. **Read the reply** — the text reply opens in a scrollable view (**UP/DOWN** to scroll, **Cancel/Enter** to go back to the category tabs).
 
