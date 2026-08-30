@@ -17,6 +17,7 @@
 - **Tools › Nodes could show a handful of blank "Unknown" entries** — always the first ones in the list, regardless of any auto-add setting. The list read from the wrong starting offset into the contact table, landing on internally-reserved bookkeeping slots instead of your real contacts; with 8 or fewer saved contacts, every row shown could end up blank, and any device with more had that same number of real contacts silently missing off the end of the list. Fixed.
 - **The keyboard's multi-line text preview could show the cursor stranded on an empty line below whatever you'd just typed**, rather than right after it — most noticeable composing a short message, since it showed up as soon as the preview area had room for more lines than your text needed. The cursor now always renders on the line where the text actually ends.
 - **`resetContacts()` only cleared the first few reserved bookkeeping slots, not the whole contact table**, despite its own comment describing the opposite. Only reachable today via private-key import (which reloads contacts to invalidate cached shared secrets) and left over stale entries if the reload produced fewer contacts than were already in memory. Fixed regardless, to match the stated intent.
+- **The splash screen showed "1.17" instead of the actual upstream base, "1.17.1"** — the version string was never bumped when v1.17.1 was merged in (see v1.25's "Updated upstream base" note below). Now matches what's actually shipping.
 
 ---
 
