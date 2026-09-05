@@ -204,7 +204,7 @@ static int battMvToPercent(int mv, int low_mv) {
 // digits fill the narrow width. On wide panels (OLED, landscape e-ink) the
 // classic single-line "HH:MM" at size 2 is kept.
 static int drawClockTime(DisplayDriver& d, int top_y, const struct tm* ti,
-                         bool h12, bool show_sec) {
+                         bool h12, bool show_sec, bool alignCenter = false) {
   const bool tall = d.height() > d.width();   // true only on portrait e-ink
 
   if (tall) {
@@ -225,13 +225,27 @@ static int drawClockTime(DisplayDriver& d, int top_y, const struct tm* ti,
     // Centre on the visible width (minus that trailing column) instead.
     const int trail = d.getCharWidth() / 6;   // one built-in column at this size
     auto drawBig = [&](const char* s, int yy) {
-      int w = (int)d.getTextWidth(s) - trail;
-      d.setCursor(cx - w / 2, yy);
-      d.print(s);
+      if (alignCenter) {
+        int w = (int)d.getTextWidth(s) - trail;
+        d.setCursor(cx - w / 2, yy);
+        d.print(s);
+      } else {
+        d.setCursor(0, yy);
+        d.print(s);
+      }
     };
     drawBig(hbuf, y);  y += lhb + 2;
     drawBig(mbuf, y);  y += lhb + 2;
-    if (ap) { d.setTextSize(2); d.drawTextCentered(cx, y, ap); y += d.getLineHeight() + 1; }
+    if (ap) {
+      d.setTextSize(2);
+      if (alignCenter) {
+        d.drawTextCentered(cx, y, ap);
+      } else {
+        d.setCursor(0, y);
+        d.print(ap);
+      }
+      y += d.getLineHeight() + 1;
+    }
     d.setTextSize(1);
     return y;
   }
@@ -249,7 +263,12 @@ static int drawClockTime(DisplayDriver& d, int top_y, const struct tm* ti,
     if (show_sec) snprintf(buf, sizeof(buf), "%02d:%02d:%02d", ti->tm_hour, ti->tm_min, ti->tm_sec);
     else          snprintf(buf, sizeof(buf), "%02d:%02d", ti->tm_hour, ti->tm_min);
   }
-  d.drawTextCentered(d.width() / 2, top_y, buf);
+  if (alignCenter) {
+    d.drawTextCentered(d.width() / 2, top_y, buf);
+  } else {
+    d.setCursor(0, top_y);
+    d.print(buf);
+  }
   d.setTextSize(1);
   return top_y + lh2 + 2;
 }
@@ -812,7 +831,7 @@ public:
         display.setColor(DisplayDriver::LIGHT);
         bool show_sec = !Features::IS_EINK && (!_node_prefs || !_node_prefs->clock_hide_seconds);
         bool h12 = _node_prefs && _node_prefs->clock_12h;
-        int date_y = drawClockTime(display, 0, ti, h12, show_sec);
+        int date_y = drawClockTime(display, 0, ti, h12, show_sec, true);
 
         display.setTextSize(1);
         static const char* wd[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
