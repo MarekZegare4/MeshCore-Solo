@@ -90,7 +90,7 @@ void DataStore::begin() {
     #include <CustomLFS_QSPIFlash.h>
   #elif defined(EXTRAFS)
     #include <CustomLFS.h>
-  #else 
+  #else
     #include <InternalFileSystem.h>
   #endif
 #endif
@@ -622,6 +622,11 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
   rd(&_prefs.loc_share_duration_idx, sizeof(_prefs.loc_share_duration_idx));
   if (_prefs.loc_share_duration_idx >= NodePrefs::LOC_SHARE_DURATION_COUNT) _prefs.loc_share_duration_idx = 0;
 
+  // append the lock-screen password. Should be empty by default
+  // since struct was zero initialized in begin(), meaning password is disabled
+  rd(_prefs.lock_screen_password, sizeof(_prefs.lock_screen_password));
+  _prefs.lock_screen_password[sizeof(_prefs.lock_screen_password) - 1] = '\0';
+
   // Schema sentinel: bumped on layout changes. Mismatch means an older file
   // (or a different schema); rd() and the clamps above already keep every
   // field within its valid range regardless, so we just log it here —
@@ -819,6 +824,7 @@ void DataStore::savePrefs(const NodePrefs& _prefs, double node_lat, double node_
     file.write((uint8_t *)&_prefs.contact_expiry_idx, sizeof(_prefs.contact_expiry_idx));
     file.write((uint8_t *)&_prefs.loc_share_scope, sizeof(_prefs.loc_share_scope));
     file.write((uint8_t *)&_prefs.loc_share_duration_idx, sizeof(_prefs.loc_share_duration_idx));
+    file.write((uint8_t *)_prefs.lock_screen_password, sizeof(_prefs.lock_screen_password));
 
     // Tail sentinel — must be last. See NodePrefs::SCHEMA_SENTINEL. Its write is
     // the one we check: once the flash fills, writes return 0, so a good
@@ -1360,7 +1366,7 @@ bool DataStore::deleteBlobByKey(const uint8_t key[], int key_len) {
   makeBlobPath(key, key_len, path, sizeof(path));
 
   _fs->remove(path);
-  
+
   return true; // return true even if file did not exist
 }
 #endif

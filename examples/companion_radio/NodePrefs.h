@@ -536,6 +536,11 @@ struct NodePrefs {  // persisted to file
   // ── Custom messages ────────────────────────────────────────────────────
   char custom_msgs[10][140];   // user-defined quick messages (supports {loc}, {time})
 
+  // Lock-screen password, empty by default. If set, a password is required to
+  // unlock the lock screen.
+  static const uint8_t LOCK_PASSWORD_MAX_LEN = 32;
+  char lock_screen_password[LOCK_PASSWORD_MAX_LEN];
+
   // Single source of truth for the live-share option tables (shared by the Map
   // UI labels and the auto-send engine in UITask).
   static const uint8_t LOC_SHARE_MOVE_COUNT = 4;
@@ -623,7 +628,7 @@ struct NodePrefs {  // persisted to file
   // repeat_* fields) instead of at the tail, which shifted every field after
   // them by 25 bytes when loading an older file. Never released, but a dev
   // build wrote it, so the number must not be reused for anything else.
-  static const uint32_t SCHEMA_SENTINEL = 0xC0DE002E;
+  static const uint32_t SCHEMA_SENTINEL = 0xC0DE002F;
 
   // Bit-index for each home page. Used by page_order (entries store bit+1) and
   // by home_pages_mask. Single source of truth — both HomeScreen::pageBit/bitToPage
@@ -763,6 +768,7 @@ struct NodePrefs {  // persisted to file
 // msg_wake_screen_off (0xC0DE002A) landed in the 1 byte of padding the
 // 0xC0DE0029 bump left over -- confirmed via a real sim_companion_radio
 // (native) build, sizeof unchanged at 2760.
+
 // repeat_extra_scope_mask + ch_scope_idx[64] (0xC0DE002B) added 64 bytes,
 // not 66 -- the struct had 2 bytes of spare tail padding left over from an
 // earlier bump -- confirmed via a real sim_companion_radio (native) build
@@ -777,7 +783,8 @@ struct NodePrefs {  // persisted to file
 // WioTrackerL1_companion_solo_dual (nRF52/ARM) and Heltec_v3_companion_radio_ble
 // (ESP32) builds, sizeof unchanged at 2824. loc_share_duration_idx (0xC0DE002E)
 // likewise (sim build; see the check below).
-static_assert(sizeof(NodePrefs) == 2824,
+// 0xC0DE002F 32 byte bump for lock_screen_password
+static_assert(sizeof(NodePrefs) == 2856,
               "NodePrefs layout changed — sync DataStore save/load + clamp, bump "
               "SCHEMA_SENTINEL, then update this size (see steps above).");
 
