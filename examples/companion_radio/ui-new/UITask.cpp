@@ -255,6 +255,10 @@ static int drawClockTime(DisplayDriver& d, int top_y, const struct tm* ti,
 }
 
 // ── HomeScreen ────────────────────────────────────────────────────────────────
+// Forward declaration to be able to call formatDashVal from HomeScreen::render()
+static void formatDashVal(uint8_t field, char* val, int val_len, uint16_t batt_mv,
+                          uint16_t low_batt_mv, int unread, CayenneLPP* lpp = nullptr);
+
 class HomeScreen : public UIScreen {
   enum HomePage {
     CLOCK,
@@ -274,7 +278,8 @@ class HomeScreen : public UIScreen {
     TOOLS,
     QUICK_MSG,
     SHUTDOWN,
-    Count    // keep as last
+    Count,   // keep before LOCK — navigable-page count
+    LOCK     // lock screen: full clock + dashboard view, not a navigable page
   };
 
   // Selected slot on the Favourites page (0..FAVOURITES_COUNT - 1).
@@ -352,6 +357,7 @@ class HomeScreen : public UIScreen {
   SensorManager* _sensors;
   NodePrefs* _node_prefs;
   uint8_t _page;
+  uint8_t _prev_page;   // home page restored when the device unlocks
   bool _shutdown_init;
 
   int pageBit(int page) const {
@@ -560,7 +566,17 @@ class HomeScreen : public UIScreen {
 public:
   HomeScreen(UITask* task, mesh::RTCClock* rtc, SensorManager* sensors, NodePrefs* node_prefs)
      : _task(task), _rtc(rtc), _sensors(sensors), _node_prefs(node_prefs), _page(0),
-       _shutdown_init(false), sensors_lpp(200) {  }
+       _prev_page(0), _shutdown_init(false), sensors_lpp(200) {  }
+
+  // Flips home screen between LOCK page and the page that was showing before locking
+  void setLocked(bool locked) {
+    if (locked) {
+      if (_page != LOCK) _prev_page = _page;
+      _page = LOCK;
+    } else {
+      _page = _prev_page;
+    }
+  }
 
   void poll() override {
     if (_shutdown_init && !_task->isButtonPressed()) {  // must wait for USR button to be released
@@ -729,7 +745,7 @@ public:
     const int content_y = dots_y + pg_half + 3;   // first content row, below the icons
 
     // node name + battery — hidden on CLOCK page (full screen used for dashboard)
-    if (_page != CLOCK) {
+    if (_page != CLOCK && _page != LOCK) {
       display.setColor(DisplayDriver::LIGHT);
       char filtered_name[sizeof(_node_prefs->node_name)];
       display.translateUTF8ToBlocks(filtered_name, _node_prefs->node_name, sizeof(filtered_name));
@@ -754,8 +770,9 @@ public:
     if (!isPageVisible(_page)) _page = navPage(_page, +1);
 
     // curr page indicator — a row of small page icons, one per visible page, with
-    // the current page underlined. Hidden on CLOCK (full screen used for dashboard).
-    if (_page != CLOCK) {
+    // the current page underlined. Hidden on CLOCK and LOCK (full screen used for
+    // the clock/dashboard).
+    if (_page != CLOCK && _page != LOCK) {
       int order[(int)Count]; int n = buildVisibleOrder(order);
       int curr_vis = 0;
       for (int i = 0; i < n; i++) if (order[i] == _page) { curr_vis = i; break; }
@@ -902,6 +919,79 @@ public:
           }
         }
       }
+    } else if (_page == HomePage::LOCK) {
+      // Lock screen: clock + two dashboard spots + unlock-hint popup
+      uint32_t unix_ts = _rtc->getCurrentTime();
+      display.setColor(DisplayDriver::LIGHT);
+      display.setTextSize(1);
+      if (unix_ts < 1000000000UL) {
+        display.drawTextCentered(display.width() / 2, display.height() / 2 - step, "No time sync");
+      } else {
+        int8_t tz = _node_prefs ? _node_prefs->tz_offset_hours : 0;
+        unix_ts += (int32_t)tz * 3600;
+        time_t t = (time_t)unix_ts;
+        struct tm* ti = gmtime(&t);
+        char buf[12];
+        const int clk_y = lh + 1;   // below the status bar line
+        bool h12 = _node_prefs && _node_prefs->clock_12h;
+        int date_y = drawClockTime(display, clk_y, ti, h12, /*show_sec*/false);
+        display.setTextSize(1);
+        static const char* wd[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
+        static const char* mo[] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
+        snprintf(buf, sizeof(buf),"%s %d %s", wd[ti->tm_wday], ti->tm_mday, mo[ti->tm_mon]);
+        display.drawTextCentered(display.width() / 2, date_y, buf);
+
+        // Two sensor values side by side (dashboard_fields[0] and [1])
+        if (_node_prefs) {
+          char v0[20] = "", v1[20] = "";
+          CayenneLPP* lpp_ptr = nullptr;
+          uint8_t f0 = _node_prefs->dashboard_fields[0], f1 = _node_prefs->dashboard_fields[1];
+          auto isLPP = [](uint8_t f) {
+            return f==DASH_TEMP||f==DASH_HUM||f==DASH_PRES||f==DASH_ALT||f==DASH_LUX||f==DASH_CO2;
+          };
+          if (isLPP(f0) || isLPP(f1)) {
+            sensors_lpp.reset(); sensors.querySensors(0xFF, sensors_lpp); lpp_ptr = &sensors_lpp;
+          }
+          int unread = (f0 == DASH_MSGS || f1 == DASH_MSGS)
+                     ? _task->getDMUnreadTotal() + _task->getChannelUnreadCount() + _task->getRoomUnreadCount() : 0;
+          uint16_t batt_mv = _task->getBattMilliVolts();
+          formatDashVal(f0, v0, sizeof(v0), batt_mv, _node_prefs->low_batt_mv, unread, lpp_ptr);
+          formatDashVal(f1, v1, sizeof(v1), batt_mv, _node_prefs->low_batt_mv, unread, lpp_ptr);
+          if (v0[0] || v1[0]) {
+            int sv_y = date_y + step;
+            display.setColor(DisplayDriver::LIGHT);
+            if (v0[0] && v1[0]) {
+              display.setCursor(0, sv_y);
+              display.print(v0);
+              int vw = display.getTextWidth(v1);
+              display.setCursor(display.width() - vw, sv_y);
+              display.print(v1);
+            } else {
+              const char* sv = v0[0] ? v0 : v1;
+              display.drawTextCentered(display.width() / 2, sv_y, sv);
+            }
+          }
+        }
+      }
+      // Unlock-hint popup at the bottom (like alert style)
+      display.setTextSize(1);
+      const int lk_lh = display.getLineHeight();
+#if defined(CARDKB_I2C)
+      const char* hint = _task->lockSeqCount() == 0 ? (_task->hasCardKB() ? "Back+3xEnter/Fn+Esc" : "Hold Back + 3xEnter") :
+                         _task->lockSeqCount() == 1 ? "Enter x2 more..."   : "Enter x1 more...";
+#else
+      const char* hint = _task->lockSeqCount() == 0 ? "Hold Back + 3xEnter" :
+                         _task->lockSeqCount() == 1 ? "Enter x2 more..."   : "Enter x1 more...";
+#endif
+      const int p = 3;
+      const int hy = display.height() - lk_lh - p * 2;
+      const int hw = display.getTextWidth(hint);
+      const int hx = (display.width() - hw) / 2;
+      display.setColor(DisplayDriver::LIGHT);
+      display.fillRect(hx - p, hy - p, hw + p*2, lk_lh + p*2);
+      display.setColor(DisplayDriver::DARK);
+      display.setCursor(hx, hy);
+      display.print(hint);
     } else if (_page == HomePage::RADIO) {
       display.setColor(DisplayDriver::LIGHT);
       // freq / sf
@@ -1415,7 +1505,12 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
   pinMode(PIN_HALL_SENSOR, HALL_ACTIVE_HIGH ? INPUT_PULLDOWN : INPUT_PULLUP);
   _hall_magnet_present = HALL_ACTIVE_HIGH ? (digitalRead(PIN_HALL_SENSOR) == HIGH)
                                            : (digitalRead(PIN_HALL_SENSOR) == LOW);
-  if (_hall_magnet_present) _locked = true;   // booting with the cover already closed
+
+  // Handle booting with the cover already closed
+  if (_hall_magnet_present) {
+    _locked = true;
+    syncLockToHome();
+  }
 #endif
 
 #if defined(PIN_USER_BTN)
@@ -1482,6 +1577,7 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
 
   splash = new SplashScreen(this);
   home = new HomeScreen(this, &rtc_clock, sensors, node_prefs);
+  syncLockToHome();   // booted locked (e.g. cover closed) → home starts on the LOCK page
   settings = new SettingsScreen(this, &_kb);
   messages_screen = new MessagesScreen(this, &_kb);
   tools_screen  = new ToolsScreen(this);
@@ -1975,6 +2071,11 @@ void UITask::setCurrScreen(UIScreen* c) {
   _next_refresh = 100;
 }
 
+void UITask::syncLockToHome() {
+  // Lock/unlock switches the home screen's page to LOCK (or back)
+  if (home) static_cast<HomeScreen*>(home)->setLocked(_locked);
+}
+
 bool UITask::savePrefsIfDirty(bool& dirty) {
   if (!dirty) return false;
   the_mesh.savePrefs();
@@ -2041,7 +2142,7 @@ bool UITask::isButtonPressed() const {
 }
 
 static void formatDashVal(uint8_t field, char* val, int val_len, uint16_t batt_mv,
-                          uint16_t low_batt_mv, int unread, CayenneLPP* lpp = nullptr) {
+                          uint16_t low_batt_mv, int unread, CayenneLPP* lpp) {
   val[0] = '\0';
   switch (field) {
     case DASH_NONE: return;
@@ -2225,6 +2326,7 @@ void UITask::pollCardKB() {
       uint32_t aoff = autoOffMillis();
       if (aoff > 0) _auto_off = millis() + aoff;
     }
+    syncLockToHome();
     _next_refresh = 0;
     return;
   } else if (raw >= 0x80 && raw <= 0xAF) {   // Fn+<letter> -- open its accent popup
@@ -2280,6 +2382,7 @@ void UITask::pollHallSensor() {
 
   if (present) {   // cover closed
     _locked = true;
+    syncLockToHome();
     _lock_wake_until = 0;
     if (_display) _display->turnOff();
 #ifdef PIN_LED
@@ -2287,6 +2390,7 @@ void UITask::pollHallSensor() {
 #endif
   } else {   // cover opened
     _locked = false;
+    syncLockToHome();
     if (_display && !_display->isOn()) _display->turnOn();
     uint32_t aoff = autoOffMillis();
     if (aoff > 0) _auto_off = millis() + aoff;
@@ -2325,6 +2429,7 @@ void UITask::loop() {
           uint32_t aoff = autoOffMillis();
           if (aoff > 0) _auto_off = millis() + aoff;
         }
+        syncLockToHome();
       }
       // eat the Enter — don't pass to curr
     } else {
@@ -2481,80 +2586,9 @@ void UITask::loop() {
   if (_display != NULL && _display->isOn()) {
     if (_locked && (int32_t)(millis() - _lock_wake_until) >= 0) {
       _display->turnOff();
-    } else if (_locked && millis() >= _next_refresh) {
+    } else if (_locked && millis() >= _next_refresh && home) {
       _display->startFrame();
-      // Lock screen: clock + unlock hint popup
-      uint32_t unix_ts = rtc_clock.getCurrentTime();
-      _display->setColor(DisplayDriver::LIGHT);
-      _display->setTextSize(1);
-      const int lk_lh   = _display->getLineHeight();
-      const int lk_step = _display->lineStep();
-      if (unix_ts < 1000000000UL) {
-        _display->drawTextCentered(_display->width() / 2, _display->height() / 2 - lk_step, "No time sync");
-      } else {
-        int8_t tz = _node_prefs ? _node_prefs->tz_offset_hours : 0;
-        unix_ts += (int32_t)tz * 3600;
-        time_t t = (time_t)unix_ts;
-        struct tm* ti = gmtime(&t);
-        char buf[12];
-        const int clk_y = 2;
-        bool h12 = _node_prefs && _node_prefs->clock_12h;
-        int date_y = drawClockTime(*_display, clk_y, ti, h12, /*show_sec*/false);
-        _display->setTextSize(1);
-        static const char* wd[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
-        static const char* mo[] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
-        snprintf(buf, sizeof(buf),"%s %d %s", wd[ti->tm_wday], ti->tm_mday, mo[ti->tm_mon]);
-        _display->drawTextCentered(_display->width() / 2, date_y, buf);
-
-        // Two sensor values side by side (dashboard_fields[0] and [1])
-        if (_node_prefs) {
-          char v0[20] = "", v1[20] = "";
-          CayenneLPP* lpp_ptr = nullptr;
-          uint8_t f0 = _node_prefs->dashboard_fields[0], f1 = _node_prefs->dashboard_fields[1];
-          auto isLPP = [](uint8_t f) {
-            return f==DASH_TEMP||f==DASH_HUM||f==DASH_PRES||f==DASH_ALT||f==DASH_LUX||f==DASH_CO2;
-          };
-          if (isLPP(f0) || isLPP(f1)) {
-            _dash_lpp.reset(); sensors.querySensors(0xFF, _dash_lpp); lpp_ptr = &_dash_lpp;
-          }
-          int unread = (f0 == DASH_MSGS || f1 == DASH_MSGS)
-                     ? getDMUnreadTotal() + getChannelUnreadCount() + getRoomUnreadCount() : 0;
-          formatDashVal(f0, v0, sizeof(v0), _batt_mv, _node_prefs->low_batt_mv, unread, lpp_ptr);
-          formatDashVal(f1, v1, sizeof(v1), _batt_mv, _node_prefs->low_batt_mv, unread, lpp_ptr);
-          if (v0[0] || v1[0]) {
-            int sv_y = date_y + lk_step;
-            _display->setColor(DisplayDriver::LIGHT);
-            if (v0[0] && v1[0]) {
-              _display->setCursor(0, sv_y);
-              _display->print(v0);
-              int vw = _display->getTextWidth(v1);
-              _display->setCursor(_display->width() - vw, sv_y);
-              _display->print(v1);
-            } else {
-              const char* sv = v0[0] ? v0 : v1;
-              _display->drawTextCentered(_display->width() / 2, sv_y, sv);
-            }
-          }
-        }
-      }
-      // Hint popup at bottom (like alert style)
-      _display->setTextSize(1);
-#if defined(CARDKB_I2C)
-      const char* hint = _lock_seq_count == 0 ? (_has_cardkb ? "Back+3xEnter/Fn+Esc" : "Hold Back + 3xEnter") :
-                         _lock_seq_count == 1 ? "Enter x2 more..."   : "Enter x1 more...";
-#else
-      const char* hint = _lock_seq_count == 0 ? "Hold Back + 3xEnter" :
-                         _lock_seq_count == 1 ? "Enter x2 more..."   : "Enter x1 more...";
-#endif
-      int p = 3;
-      int hy = _display->height() - lk_lh - p * 2;
-      int hw = _display->getTextWidth(hint);
-      int hx = (_display->width() - hw) / 2;
-      _display->setColor(DisplayDriver::LIGHT);
-      _display->fillRect(hx - p, hy - p, hw + p*2, lk_lh + p*2);
-      _display->setColor(DisplayDriver::DARK);
-      _display->setCursor(hx, hy);
-      _display->print(hint);
+      home->render(*_display);
       // Alert overlay on top — without this a ringing alarm on a locked device
       // played its melody against a screen that never said what was ringing.
       if (millis() < _alert_expiry) renderAlertOverlay();
@@ -2601,6 +2635,7 @@ void UITask::loop() {
       if (_node_prefs && _node_prefs->auto_lock) {
         _locked = true;
         _lock_wake_until = 0;
+        syncLockToHome();
       }
     }
 #endif
