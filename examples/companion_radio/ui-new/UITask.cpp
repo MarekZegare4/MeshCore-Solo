@@ -763,25 +763,30 @@ public:
     const int dots_y    = lh + pg_half + 1;       // icon-row centre, below the header
     const int content_y = dots_y + pg_half + 3;   // first content row, below the icons
 
-    // node name + battery — hidden on CLOCK page (full screen used for dashboard)
-    if (_page != CLOCK && _page != LOCK) {
+    // Title bar displaying node name (except on lock screen), status icons and battery.
+    // Hidden on fullscreen pages (CLOCK).
+    if (_page != CLOCK) {
       display.setColor(DisplayDriver::LIGHT);
-      char filtered_name[sizeof(_node_prefs->node_name)];
-      display.translateUTF8ToBlocks(filtered_name, _node_prefs->node_name, sizeof(filtered_name));
       int rightEdge = renderBatteryIndicator(display, _task->getBattMilliVolts());
       display.setColor(DisplayDriver::LIGHT);
-      // Only show the live-power readout when APC is actually controlling power —
-      // not merely when the pref is set. While repeating APC is suppressed and
-      // power is pinned to the ceiling, so apcActive() is false and the name bar
-      // drops the readout (matching the "--" lock in Settings).
-      if (the_mesh.apcActive()) {
-        char pwr_buf[8];
-        snprintf(pwr_buf, sizeof(pwr_buf), "%ddB", (int)radio_driver.getTxPower());
-        int pwr_w = display.getTextWidth(pwr_buf);
-        display.drawTextEllipsized(0, 0, rightEdge - 2 - pwr_w - 2, filtered_name);
-        display.drawTextRightAlign(rightEdge - 2, 0, pwr_buf);
-      } else {
-        display.drawTextEllipsized(0, 0, rightEdge - 2, filtered_name);
+
+      if (_page != LOCK) {
+        char filtered_name[sizeof(_node_prefs->node_name)];
+        display.translateUTF8ToBlocks(filtered_name, _node_prefs->node_name, sizeof(filtered_name));
+
+        // Only show the live-power readout when APC is actually controlling power —
+        // not merely when the pref is set. While repeating APC is suppressed and
+        // power is pinned to the ceiling, so apcActive() is false and the name bar
+        // drops the readout (matching the "--" lock in Settings).
+        if (the_mesh.apcActive()) {
+          char pwr_buf[8];
+          snprintf(pwr_buf, sizeof(pwr_buf), "%ddB", (int)radio_driver.getTxPower());
+          int pwr_w = display.getTextWidth(pwr_buf);
+          display.drawTextEllipsized(0, 0, rightEdge - 2 - pwr_w - 2, filtered_name);
+          display.drawTextRightAlign(rightEdge - 2, 0, pwr_buf);
+        } else {
+          display.drawTextEllipsized(0, 0, rightEdge - 2, filtered_name);
+        }
       }
     }
 
@@ -951,14 +956,14 @@ public:
         time_t t = (time_t)unix_ts;
         struct tm* ti = gmtime(&t);
         char buf[12];
-        const int clk_y = lh + 1;   // below the status bar line
         bool h12 = _node_prefs && _node_prefs->clock_12h;
-        int date_y = drawClockTime(display, clk_y, ti, h12, /*show_sec*/false);
+        int date_y = drawClockTime(display, 0, ti, h12, /*show_sec*/false);
         display.setTextSize(1);
         static const char* wd[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
         static const char* mo[] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
         snprintf(buf, sizeof(buf),"%s %d %s", wd[ti->tm_wday], ti->tm_mday, mo[ti->tm_mon]);
-        display.drawTextCentered(display.width() / 2, date_y, buf);
+        display.setCursor(0, date_y);
+        display.print(buf);
 
         // Two sensor values side by side (dashboard_fields[0] and [1])
         if (_node_prefs) {
@@ -1585,7 +1590,7 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
       if (f) { _waypoints.readFrom(f); f.close(); }
     }
   }
-  
+
   // Initialize ping state
   _ping_active = false;
   _ping_tag = 0;
