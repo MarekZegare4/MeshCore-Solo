@@ -539,7 +539,9 @@ struct NodePrefs {  // persisted to file
   // Lock-screen password, empty by default. If set, a password is required to
   // unlock the lock screen.
   static const uint8_t LOCK_PASSWORD_MAX_LEN = 32;
-  char lock_screen_password[LOCK_PASSWORD_MAX_LEN];
+  static const uint8_t lock_screen_password_salt_LEN = 16;
+  uint8_t lock_screen_password[LOCK_PASSWORD_MAX_LEN];
+  uint8_t lock_screen_password_salt[lock_screen_password_salt_LEN];
 
   // Single source of truth for the live-share option tables (shared by the Map
   // UI labels and the auto-send engine in UITask).
@@ -628,7 +630,7 @@ struct NodePrefs {  // persisted to file
   // repeat_* fields) instead of at the tail, which shifted every field after
   // them by 25 bytes when loading an older file. Never released, but a dev
   // build wrote it, so the number must not be reused for anything else.
-  static const uint32_t SCHEMA_SENTINEL = 0xC0DE002F;
+  static const uint32_t SCHEMA_SENTINEL = 0xC0DE0030;
 
   // Bit-index for each home page. Used by page_order (entries store bit+1) and
   // by home_pages_mask. Single source of truth — both HomeScreen::pageBit/bitToPage
@@ -784,7 +786,8 @@ struct NodePrefs {  // persisted to file
 // (ESP32) builds, sizeof unchanged at 2824. loc_share_duration_idx (0xC0DE002E)
 // likewise (sim build; see the check below).
 // 0xC0DE002F 32 byte bump for lock_screen_password
-static_assert(sizeof(NodePrefs) == 2856,
+// 0xC0DE0030 16 byte bump for lock_screen_password_salt
+static_assert(sizeof(NodePrefs) == 2872,
               "NodePrefs layout changed — sync DataStore save/load + clamp, bump "
               "SCHEMA_SENTINEL, then update this size (see steps above).");
 

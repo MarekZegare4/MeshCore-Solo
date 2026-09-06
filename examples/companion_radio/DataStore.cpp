@@ -1,3 +1,20 @@
+/*
+ * File: DataStore.cpp
+ * Project: companion_radio
+ * Created Date: 2026-09-26 12:03:18
+ * Author: 3urobeat
+ *
+ * Last Modified: 2026-09-26 12:16:49
+ * Modified By: 3urobeat
+ *
+ * Copyright (c) 2026 3urobeat <https://github.com/3urobeat>
+ *
+ * This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+ * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
+ * You should have received a copy of the GNU Affero General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+
 #include <Arduino.h>
 #include "DataStore.h"
 #include "Features.h"   // FEAT_JOYSTICK_ROTATION_SETTING (else `#if !FEAT_…` is always true)
@@ -624,8 +641,10 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
 
   // append the lock-screen password. Should be empty by default
   // since struct was zero initialized in begin(), meaning password is disabled
+  // → 0xC0DE002F: append the lock-screen password
+  // → 0xC0DE0030: append the per-device password salt
   rd(_prefs.lock_screen_password, sizeof(_prefs.lock_screen_password));
-  _prefs.lock_screen_password[sizeof(_prefs.lock_screen_password) - 1] = '\0';
+  rd(_prefs.lock_screen_password_salt, sizeof(_prefs.lock_screen_password_salt));
 
   // Schema sentinel: bumped on layout changes. Mismatch means an older file
   // (or a different schema); rd() and the clamps above already keep every
@@ -825,6 +844,7 @@ void DataStore::savePrefs(const NodePrefs& _prefs, double node_lat, double node_
     file.write((uint8_t *)&_prefs.loc_share_scope, sizeof(_prefs.loc_share_scope));
     file.write((uint8_t *)&_prefs.loc_share_duration_idx, sizeof(_prefs.loc_share_duration_idx));
     file.write((uint8_t *)_prefs.lock_screen_password, sizeof(_prefs.lock_screen_password));
+    file.write((uint8_t *)_prefs.lock_screen_password_salt, sizeof(_prefs.lock_screen_password_salt));
 
     // Tail sentinel — must be last. See NodePrefs::SCHEMA_SENTINEL. Its write is
     // the one we check: once the flash fills, writes return 0, so a good

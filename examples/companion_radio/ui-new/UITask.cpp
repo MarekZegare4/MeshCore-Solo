@@ -2224,6 +2224,39 @@ bool UITask::passwordLockEnabled() const {
   return _node_prefs && _node_prefs->lock_screen_password[0] != '\0';
 }
 
+void UITask::setNodeLockPassword(const char* plain) {
+  if (!_node_prefs || !plain) return;
+  if (plain[0] == '\0') { // Clear the password
+    memset(_node_prefs->lock_screen_password, 0, sizeof(_node_prefs->lock_screen_password));
+    memset(_node_prefs->lock_screen_password_salt, 0, sizeof(_node_prefs->lock_screen_password_salt));
+    return;
+  }
+  // Generate a fresh random salt and store salted SHA-256 digest
+  mesh::RNG* rng = the_mesh.getRNG();
+  if (rng) {
+    rng->random(_node_prefs->lock_screen_password_salt, sizeof(_node_prefs->lock_screen_password_salt));
+  } else {
+    // Time as fallback entropy source
+    uint32_t t = (uint32_t)millis() ^ (uint32_t)rtc_clock.getCurrentTime();
+    memcpy(_node_prefs->lock_screen_password_salt, &t, sizeof(t));
+  }
+  mesh::Utils::sha256((uint8_t*)_node_prefs->lock_screen_password,
+                      sizeof(_node_prefs->lock_screen_password),
+                      _node_prefs->lock_screen_password_salt,
+                      sizeof(_node_prefs->lock_screen_password_salt),
+                      (const uint8_t*)plain, (int)strlen(plain));
+}
+
+bool UITask::checkNodeLockPassword(const char* entered) const {
+  if (!_node_prefs || !entered) return false;
+  uint8_t digest[NodePrefs::LOCK_PASSWORD_MAX_LEN];
+  mesh::Utils::sha256(digest, sizeof(digest),
+                      _node_prefs->lock_screen_password_salt,
+                      sizeof(_node_prefs->lock_screen_password_salt),
+                      (const uint8_t*)entered, (int)strlen(entered));
+  return memcmp(digest, _node_prefs->lock_screen_password, sizeof(digest)) == 0;
+}
+
 void UITask::beginUnlockPrompt() {
   _unlock_kb = true; // Track that keyboard is visible and is waiting for input
   int max_len = _node_prefs ? (int)sizeof(_node_prefs->lock_screen_password) - 1 : 32;
@@ -2241,7 +2274,7 @@ void UITask::cancelUnlockPrompt() {
 void UITask::handleUnlockKey(char c) {
   auto res = _kb.handleInput(c);
   if (res == KeyboardWidget::DONE) { // Process input on submit
-    if (_node_prefs && strcmp(_kb.buf, _node_prefs->lock_screen_password) == 0) {
+    if (_node_prefs && checkNodeLockPassword(_kb.buf)) {
       // Match: Unlock
       _unlock_kb = false;
       _locked = false;

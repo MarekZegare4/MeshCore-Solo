@@ -306,6 +306,11 @@ private:
   void renderAlertOverlay();
 
 public:
+  // Stores new lock screen salted SHA-256 password
+  // `plain` is the raw user input, passing "" clears currently set password
+  void setNodeLockPassword(const char* plain);
+  // Verifies entered against the stored password hash. Returns match as bool
+  bool checkNodeLockPassword(const char* entered) const;
 
   UITask(mesh::MainBoard* board, BaseSerialInterface* serial) : AbstractUITask(board, serial), _display(NULL), _sensors(NULL), _node_prefs(NULL) {
     next_batt_chck = _next_refresh = 0;

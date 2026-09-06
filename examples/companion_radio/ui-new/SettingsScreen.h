@@ -873,8 +873,7 @@ public:
       auto res = _kb->handleInput(c);
       if (res == KeyboardWidget::DONE) {
         if (p) {
-          strncpy(p->lock_screen_password, _kb->buf, sizeof(p->lock_screen_password) - 1);
-          p->lock_screen_password[sizeof(p->lock_screen_password) - 1] = '\0';
+          _task->setNodeLockPassword(_kb->buf);
           _dirty = true;   // savePrefsIfDirty persists new password
         }
         _edit_lock_pass = false;
@@ -1137,7 +1136,7 @@ public:
     // LockPass: Clear password if defined or get input from keyboard
     if (_selected == LOCK_PASSWORD && p && enter) {
       if (p->lock_screen_password[0]) {
-        p->lock_screen_password[0] = '\0';
+        _task->setNodeLockPassword("");
         _dirty = true;
       } else {
         _edit_lock_pass = true;
