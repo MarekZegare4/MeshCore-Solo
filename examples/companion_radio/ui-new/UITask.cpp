@@ -2731,11 +2731,17 @@ void UITask::pollHallSensor() {
     digitalWrite(PIN_LED, LOW);   // same as the auto-off path -- one less thing lit under a closed cover
 #endif
   } else {   // cover opened
-    _locked = false;
-    syncLockToHome();
-    if (_display && !_display->isOn()) _display->turnOn();
-    uint32_t aoff = autoOffMillis();
-    if (aoff > 0) _auto_off = millis() + aoff;
+    if (passwordLockEnabled()) { // Redirect flow to usual unlock prompt when password is enabled
+      _locked = true;
+      if (_display) _display->turnOn();
+      beginUnlockPrompt();
+    } else {
+      _locked = false;
+      syncLockToHome();
+      if (_display && !_display->isOn()) _display->turnOn();
+      uint32_t aoff = autoOffMillis();
+      if (aoff > 0) _auto_off = millis() + aoff;
+    }
   }
   _next_refresh = 0;
 #endif
@@ -2750,7 +2756,7 @@ void UITask::loop() {
   uint8_t joy_rot = _node_prefs ? _node_prefs->joystick_rotation : JOYSTICK_ROTATION;
   int ev = user_btn.check();
   if (ev == BUTTON_EVENT_CLICK) {
-    if (back_btn.isPressed()) {
+    if (back_btn.isPressed() && !_unlock_kb) {
       // Enter clicked while Back is held — lock/unlock sequence
       if (_display && !_display->isOn()) {
         _display->turnOn();  // turn on display so hints are visible
@@ -2767,6 +2773,11 @@ void UITask::loop() {
       }
       // eat the Enter — don't pass to curr
     } else {
+      // While the password keyboard is open, Back+Enter is just typing
+      if (_unlock_kb) {
+        _lock_seq_count = 0;
+        _lock_seq_ms = 0;
+      }
       enqueueKey(checkDisplayOn(KEY_ENTER));
     }
   } else if (ev == BUTTON_EVENT_LONG_PRESS) {
