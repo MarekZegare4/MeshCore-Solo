@@ -58,6 +58,8 @@ class UITask : public AbstractUITask {
   int  _lock_seq_count;            // Enter presses while Back held (lock/unlock sequence)
   unsigned long _lock_seq_ms;      // millis() of last lock-sequence press (for timeout)
   bool _lock_seq_used;             // true = suppress next back_btn CLICK (post-sequence release)
+  // True while the lock screen shows the on-screen keyboard and waits for submission
+  bool _unlock_kb = false;
   char _alert[80];
   char _notif_mel_buf[220];  // persistent RTTTL buffer for custom notification melodies
   // Persistent RTTTL buffer for the bot !buzz command (see botBuzz()) -- sized
@@ -287,6 +289,15 @@ private:
   // the normal home render() path (top-right status bar included) instead of a
   // dedicated lock-screen code path in loop().
   void syncLockToHome();
+
+  // Whether a lockscreen password is set
+  bool passwordLockEnabled() const;
+  // Handles (un)locking and requesting password input when one is set
+  void toggleLock();
+  void beginUnlockPrompt();
+  void cancelUnlockPrompt();
+  // Handles shortcuts during lockscreen password input
+  void handleUnlockKey(char c);
 
   // Centred alert overlay (the showAlert() box). Wraps long text to up to
   // three lines inside the box instead of letting it overflow the border.
@@ -566,7 +577,7 @@ public:
 #endif
   }
 
-  bool isBuzzerQuiet() { 
+  bool isBuzzerQuiet() {
 #ifdef PIN_BUZZER
     return buzzer.isQuiet();
 #else
