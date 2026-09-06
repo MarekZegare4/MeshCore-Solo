@@ -68,7 +68,7 @@ Fully autonomous, independent of Auto-lock and of any key combo:
 
 ### Lock-screen password
 
-Enable **LockPass** in **Settings › Display** to require a password when unlocking the device.  
+Enable **LockPass** in **Settings › Display** to require a password when unlocking or powering up the device.
 
 Upon enabling the setting the keyboard will show, requiring you to submit a new password.  
 Attempting to unlock the device will then require the same password to be typed and submitted to reach the home screen.  

@@ -1592,6 +1592,13 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
   }
 #endif
 
+  // Lock device on boot if password is enabled to prevent bypassing it by resetting device
+  if (passwordLockEnabled()) {
+    _locked = true;
+    // Add BOOT_SCREEN_MILLIS to make sure splash screen still shows
+    _lock_wake_until = millis() + BOOT_SCREEN_MILLIS + 5000;
+  }
+
 #if defined(PIN_USER_BTN)
   user_btn.begin();
 #endif
@@ -2976,12 +2983,17 @@ void UITask::loop() {
       _next_refresh = millis() + delay_millis;
     } else if (_locked && millis() >= _next_refresh && home) {
       _display->startFrame();
-      home->render(*_display);
+      if (curr && curr != home) {
+        // Boot splash is still up on a boot-locked device
+        _next_refresh = millis() + curr->render(*_display);
+      } else {
+        home->render(*_display);
+        _next_refresh = millis() + Features::LOCKSCREEN_REFRESH_MS;
+      }
       // Alert overlay on top — without this a ringing alarm on a locked device
       // played its melody against a screen that never said what was ringing.
       if (millis() < _alert_expiry) renderAlertOverlay();
       _display->endFrame();
-      _next_refresh = millis() + Features::LOCKSCREEN_REFRESH_MS;
     } else if (!_locked && millis() >= _next_refresh && curr) {
       _display->startFrame();
       _kb.beginFrame();
