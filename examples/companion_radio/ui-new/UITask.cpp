@@ -3027,7 +3027,7 @@ void UITask::loop() {
       _next_refresh = millis() + delay_millis;
     } else if (_locked && millis() >= _next_refresh && home) {
       _display->startFrame();
-      if (curr && curr != home) {
+      if (curr && curr != home && (millis() - ui_started_at < BOOT_SCREEN_MILLIS)) {
         // Boot splash is still up on a boot-locked device
         _next_refresh = millis() + curr->render(*_display);
       } else {
