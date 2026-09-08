@@ -60,6 +60,7 @@ class UITask : public AbstractUITask {
   bool _lock_seq_used;             // true = suppress next back_btn CLICK (post-sequence release)
   // True while the lock screen shows the on-screen keyboard and waits for submission
   bool _unlock_kb = false;
+  uint8_t _lock_pin_restore_kb_type = 0; // remember keyboard set to restore setting after pin entry
   char _alert[80];
   char _notif_mel_buf[220];  // persistent RTTTL buffer for custom notification melodies
   // Persistent RTTTL buffer for the bot !buzz command (see botBuzz()) -- sized

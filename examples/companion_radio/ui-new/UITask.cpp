@@ -2260,7 +2260,8 @@ bool UITask::checkNodeLockPassword(const char* entered) const {
 void UITask::beginUnlockPrompt() {
   _unlock_kb = true; // Track that keyboard is visible and is waiting for input
   int max_len = _node_prefs ? (int)sizeof(_node_prefs->lock_screen_password) - 1 : 32;
-  _kb.begin("", max_len);
+  _lock_pin_restore_kb_type = _node_prefs ? _node_prefs->keyboard_type : 0;
+  _kb.beginPin("", max_len);
   _kb.clearPlaceholders();
   _lock_wake_until = millis() + 5000; // keep the display on while typing
   _next_refresh = 0;
@@ -2268,6 +2269,10 @@ void UITask::beginUnlockPrompt() {
 
 void UITask::cancelUnlockPrompt() {
   _unlock_kb = false;
+  if (_node_prefs) _node_prefs->keyboard_type = _lock_pin_restore_kb_type; // restore user setting
+  _kb.buf[0] = '\0'; // clear input
+  _kb.len = 0;
+  _kb.cursor_pos = 0;
   _next_refresh = 100;
 }
 
@@ -2278,6 +2283,7 @@ void UITask::handleUnlockKey(char c) {
       // Match: Unlock
       _unlock_kb = false;
       _locked = false;
+      if (_node_prefs) _node_prefs->keyboard_type = _lock_pin_restore_kb_type; // restore user setting
       if (_display && !_display->isOn()) _display->turnOn();
       uint32_t aoff = autoOffMillis();
       if (aoff > 0) _auto_off = millis() + aoff;

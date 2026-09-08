@@ -214,7 +214,8 @@ struct NodePrefs {  // persisted to file
   static const uint8_t PAGE_ORDER_MAGIC = 0xA5;
   // On-screen keyboard layout, shared across every text-entry screen (Settings >
   // Keyboard). 0=ABC grid, alphabetical order (default), 1=T9 multi-tap
-  // (phone-keypad groups, cycled with repeated Enter presses — see KeyboardWidget.h).
+  // (phone-keypad groups, cycled with repeated Enter presses — see KeyboardWidget.h),
+  // 3=PIN keyboard.
   uint8_t  keyboard_type;
   // Additional (non-Latin) keyboard alphabet, orthogonal to keyboard_type above
   // — either layout style (ABC grid or T9) can show any alphabet's characters.

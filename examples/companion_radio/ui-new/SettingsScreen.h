@@ -721,6 +721,7 @@ class SettingsScreen : public UIScreen {
   int            _edit_slot = -1;  // -1 = not editing, 0..9 = slot being edited
   bool           _edit_name = false;  // editing DEVICE_NAME via the keyboard
   bool           _edit_lock_pass = false; // editing the lock-screen password via the keyboard
+  uint8_t        _lock_pass_saved_type = 0; // remember keyboard set to restore setting after pin entry
   KeyboardWidget* _kb;
 
   // Scope list management (SCOPE_NAME row -> a full-screen add/rename/
@@ -877,8 +878,10 @@ public:
           _dirty = true;   // savePrefsIfDirty persists new password
         }
         _edit_lock_pass = false;
+        if (p) p->keyboard_type = _lock_pass_saved_type; // restore user setting
       } else if (res == KeyboardWidget::CANCELLED) {
         _edit_lock_pass = false;
+        if (p) p->keyboard_type = _lock_pass_saved_type; // restore user setting
       }
       return true;
     }
@@ -1140,7 +1143,8 @@ public:
         _dirty = true;
       } else {
         _edit_lock_pass = true;
-        _kb->begin("", (int)sizeof(p->lock_screen_password) - 1);
+        _lock_pass_saved_type = p ? p->keyboard_type : 0; // remember setting to restore after
+        _kb->beginPin("", (int)sizeof(p->lock_screen_password) - 1);
         _kb->clearPlaceholders();   // a password is literal, not a template message
       }
       return true;
