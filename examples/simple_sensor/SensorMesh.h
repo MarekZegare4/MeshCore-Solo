@@ -67,7 +67,7 @@ public:
   void setLoggingOn(bool enable) override {  }
   void eraseLogFile() override { }
   void dumpLogFile() override { }
-  void setTxPower(int8_t power_dbm) override;
+  int8_t setTxPower(int8_t power_dbm) override;
   void formatNeighborsReply(char *reply) override {
     strcpy(reply, "not supported");
   }

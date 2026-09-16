@@ -207,7 +207,11 @@ public:
   virtual void setLoggingOn(bool enable) = 0;
   virtual void eraseLogFile() = 0;
   virtual void dumpLogFile() = 0;
-  virtual void setTxPower(int8_t power_dbm) = 0;
+  // Returns the dBm the radio actually applied -- on a board with an
+  // external-PA gain curve this can differ from power_dbm (e.g. a request
+  // below the PA's floor gain still radiates at that floor), so callers
+  // should persist/report the return value, not the raw request.
+  virtual int8_t setTxPower(int8_t power_dbm) = 0;
   virtual void formatNeighborsReply(char *reply) = 0;
   virtual void removeNeighbor(const uint8_t* pubkey, int key_len) {
     // no op by default

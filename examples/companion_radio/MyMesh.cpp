@@ -2488,9 +2488,11 @@ void MyMesh::handleCmdFrame(size_t len) {
     if (power < -9 || power > MAX_LORA_TX_POWER) {
       writeErrFrame(ERR_CODE_ILLEGAL_ARG);
     } else {
-      _prefs.tx_power_dbm = power;
+      radio_driver.setTxPower(power);
+      // Store what the radio actually applied, not the raw request -- on a
+      // board with an external-PA gain curve those can differ (see setTxPower()).
+      _prefs.tx_power_dbm = radio_driver.getTxPower();
       savePrefs();
-      radio_driver.setTxPower(_prefs.tx_power_dbm);
       writeOKFrame();
     }
   } else if (cmd_frame[0] == CMD_SET_TUNING_PARAMS) {

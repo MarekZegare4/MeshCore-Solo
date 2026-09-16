@@ -52,8 +52,23 @@ uint32_t RadioLibWrapper::getRngSeed() {
 }
 
 void RadioLibWrapper::setTxPower(int8_t dbm) {
-  _tx_dbm = dbm;
+  _tx_dbm = dbm;   // logical/requested power -- what getTxPower(), the app and the CLI report
+#if defined(NUM_PA_POINTS) && defined(TX_GAIN_LORA)
+  // Per-board external-PA gain curve (radio_dbm -> measured gain in dB, from
+  // the vendor/GAT562-30S data cited in the upstream Meshtastic PR that added
+  // it, meshtastic/firmware#11212). The PA is always-on (no enable pin), so
+  // the SX1262 register alone decides real output; pick the lowest register
+  // setting whose (setting + its measured gain) reaches the requested dBm,
+  // clamping to the last entry once the PA saturates.
+  static const int8_t pa_gain[NUM_PA_POINTS] = { TX_GAIN_LORA };
+  int8_t radio_dbm = NUM_PA_POINTS - 1;
+  for (int i = 0; i < NUM_PA_POINTS; i++) {
+    if ((i + pa_gain[i]) >= dbm) { radio_dbm = i; break; }
+  }
+  _radio->setOutputPower(radio_dbm);
+#else
   _radio->setOutputPower(dbm);
+#endif
 }
 
 void RadioLibWrapper::idle() {

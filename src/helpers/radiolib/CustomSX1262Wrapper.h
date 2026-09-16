@@ -97,7 +97,7 @@ public:
       ((CustomSX1262 *)_radio)->setCodingRate(_wd_cr);
       updatePreamble(_wd_sf);
     }
-    _radio->setOutputPower(getTxPower());
+    setTxPower(getTxPower());   // re-run through the wrapper's own setter so any PA gain curve reapplies
     // Unconditional: std_init() may have just turned boosted gain back ON via
     // the board's SX126X_RX_BOOSTED_GAIN compile default, so the OFF case
     // needs reapplying just as much as ON.

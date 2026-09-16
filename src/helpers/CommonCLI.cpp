@@ -706,9 +706,10 @@ void CommonCLI::handleSetCmd(uint32_t sender_timestamp, char* command, char* rep
       strcpy(reply, "OK");
     }
   } else if (memcmp(config, "tx ", 3) == 0) {
-    _prefs->tx_power_dbm = atoi(&config[3]);
+    // Store what the radio actually applied, not the raw request -- on a
+    // board with an external-PA gain curve those can differ (see setTxPower()).
+    _prefs->tx_power_dbm = _callbacks->setTxPower(atoi(&config[3]));
     savePrefs();
-    _callbacks->setTxPower(_prefs->tx_power_dbm);
     strcpy(reply, "OK");
   } else if (sender_timestamp == 0 && memcmp(config, "freq ", 5) == 0) {
     _prefs->freq = atof(&config[5]);

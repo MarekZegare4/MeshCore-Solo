@@ -1095,8 +1095,9 @@ void MyMesh::dumpLogFile() {
   }
 }
 
-void MyMesh::setTxPower(int8_t power_dbm) {
+int8_t MyMesh::setTxPower(int8_t power_dbm) {
   radio_driver.setTxPower(power_dbm);
+  return radio_driver.getTxPower();
 }
 
 bool MyMesh::setRxBoostedGain(bool enable) {

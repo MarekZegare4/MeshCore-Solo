@@ -212,7 +212,7 @@ public:
   }
 
   void dumpLogFile() override;
-  void setTxPower(int8_t power_dbm) override;
+  int8_t setTxPower(int8_t power_dbm) override;
   void formatNeighborsReply(char *reply) override;
   void removeNeighbor(const uint8_t* pubkey, int key_len) override;
   void formatStatsReply(char *reply) override;
