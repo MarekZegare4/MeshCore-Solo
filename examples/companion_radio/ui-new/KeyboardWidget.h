@@ -297,6 +297,7 @@ struct KeyboardWidget {
   bool accent_active = false;   // true while the Hold-Enter accent popup is open
   int  accent_group  = -1;      // index into KB_ACCENT_VARIANTS for the held cell's base letter
   int  accent_sel    = 0;       // selected variant within that group
+  bool pin_kb_mask_enabled = false; // Whether pin keyboard should mask input
   int  row, col;
   int  page;        // see totalPages()/scriptAt()/pageIsSymbols() below
   bool caps;
@@ -438,6 +439,7 @@ struct KeyboardWidget {
     page = 0;
     caps = false;
     caps_lock = false;
+    pin_kb_mask_enabled = false;
     t9_cell = -1;
     t9_cycle = 0;
     _ph_menu.active = false;
@@ -451,9 +453,10 @@ struct KeyboardWidget {
   }
 
   // Open keyboard in PIN mode
-  void beginPin(const char* initial = "", int max = KB_MAX_LEN) {
+  void beginPin(const char* initial = "", int max = KB_MAX_LEN, bool mask = false) {
     if (prefs) prefs->keyboard_type = 2; // Force number input
     begin(initial, max);
+    pin_kb_mask_enabled = mask; // Mask input of number field
   }
 
   // Insert one UTF-8 codepoint (a grid cell's own glyph, or a picked accent
@@ -621,6 +624,19 @@ struct KeyboardWidget {
         snprintf(linebuf, sizeof(linebuf), "%.*s", line_end - ps, buf + ps);
       } else {
         linebuf[0] = '\0';
+      }
+      // Mask input when pin_kb_mask is enabled
+      if (pin_kb_mask_enabled) {
+        char masked[KB_PREVIEW_BYTES + 2];
+        int mi = 0;
+        int blen = (int)strlen(linebuf);
+        for (int bi = 0; bi < blen; ) {
+          int u = kbUtf8CharBytesAt(linebuf, bi, blen);
+          masked[mi++] = (u == 1 && linebuf[bi] == '_') ? '_' : '*';
+          bi += u;
+        }
+        masked[mi] = '\0';
+        strncpy(linebuf, masked, sizeof(linebuf));
       }
       char linebuf_t[KB_PREVIEW_BYTES + 2];
       display.translateUTF8ToBlocks(linebuf_t, linebuf, sizeof(linebuf_t));

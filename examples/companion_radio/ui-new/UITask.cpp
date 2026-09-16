@@ -2261,7 +2261,7 @@ void UITask::beginUnlockPrompt() {
   _unlock_kb = true; // Track that keyboard is visible and is waiting for input
   int max_len = _node_prefs ? (int)sizeof(_node_prefs->lock_screen_password) - 1 : 32;
   _lock_pin_restore_kb_type = _node_prefs ? _node_prefs->keyboard_type : 0;
-  _kb.beginPin("", max_len);
+  _kb.beginPin("", max_len, true); // Pass true to hide input
   _kb.clearPlaceholders();
   _lock_wake_until = millis() + 5000; // keep the display on while typing
   _next_refresh = 0;
