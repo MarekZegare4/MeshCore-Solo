@@ -1910,9 +1910,7 @@ void MyMesh::begin(bool has_display) {
 
   // load persisted prefs
   _store->loadPrefs(_prefs, sensors.node_lat, sensors.node_lon);
-  // True only on the first boot after upgrading a device that had the old
-  // single Scope field set -- acted on once the channels are loaded, below.
-  bool scope_migrated_legacy = _store->loadScopeList(_scope_list, _prefs);
+  _store->loadScopeList(_scope_list);
   rebuildRepeatScopes();
 
   // sanitise bad pref values. NaN/inf must be reset BEFORE constrain(): constrain
@@ -1962,20 +1960,6 @@ void MyMesh::begin(bool has_display) {
   // even after the user explicitly deleted it.
   if (!_store->loadChannels(this)) {
     addChannel("Public", PUBLIC_GROUP_PSK); // pre-configure Andy's public channel
-  }
-
-  // First boot after upgrading from the single device-wide Scope field: every
-  // channel now carries its own pick, and an unset pick means "*" == unscoped,
-  // not "inherit the default". Left alone, an upgrader's channel traffic would
-  // quietly go out unscoped while their DMs kept the old scope. Seed only the
-  // slots that actually hold a channel today -- a blanket fill would also hand
-  // the scope to whatever channel gets created in an empty slot later on.
-  if (scope_migrated_legacy && _scope_list.default_idx >= 1) {
-    for (uint8_t i = 0; i < NodePrefs::MAX_SCOPED_CHANNELS; i++) {
-      ChannelDetails ch;
-      if (getChannel(i, ch) && ch.name[0]) _prefs.ch_scope_idx[i] = _scope_list.default_idx;
-    }
-    savePrefs();
   }
 
   applyRepeaterRadio();   // companion params, or the repeater profile if relaying with one set

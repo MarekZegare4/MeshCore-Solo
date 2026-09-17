@@ -370,9 +370,8 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
   rd(&_prefs.bot_quiet_end,       sizeof(_prefs.bot_quiet_end));
   rd(_prefs.bot_trigger_ch,       sizeof(_prefs.bot_trigger_ch));
   rd(_prefs.user_radio_presets,   sizeof(_prefs.user_radio_presets));
-  // → 0xC0DE000E: repeater forwarding-filter knobs. On a pre-E file the bytes here are
-  // that file's own sentinel tail, so clamp every out-of-range value back to its
-  // "off" default (same stray-byte handling as the fields below).
+  // Repeater forwarding-filter knobs -- an older file's stray bytes here
+  // clamp back to their "off" defaults.
   rd(&_prefs.repeat_skip_adverts, sizeof(_prefs.repeat_skip_adverts));
   rd(&_prefs.repeat_max_hops,     sizeof(_prefs.repeat_max_hops));
   rd(&_prefs.repeat_delay_boost,  sizeof(_prefs.repeat_delay_boost));
@@ -392,12 +391,11 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
   rd(&_prefs.repeater_bw,          sizeof(_prefs.repeater_bw));
   rd(&_prefs.repeater_sf,          sizeof(_prefs.repeater_sf));
   rd(&_prefs.repeater_cr,          sizeof(_prefs.repeater_cr));
-  // → 0xC0DE0011: track_shared_loc. Pre-0x11 files leave a stray sentinel byte
-  // here; clamp so upgraders fall back to "off".
+  // Stray byte from an older file clamps to "off".
   rd(&_prefs.track_shared_loc,     sizeof(_prefs.track_shared_loc));
   if (_prefs.track_shared_loc > 1) _prefs.track_shared_loc = 0;
-  // → 0xC0DE0012: live location sharing. Pre-0x12 files leave stray bytes here;
-  // clamp each field back to its default so upgraders start with sharing off.
+  // Live location sharing. Stray bytes from an older file clamp each field
+  // back to its default (sharing off).
   rd(&_prefs.loc_share_enabled,     sizeof(_prefs.loc_share_enabled));
   rd(&_prefs.loc_share_target_type, sizeof(_prefs.loc_share_target_type));
   rd(&_prefs.loc_share_channel_idx, sizeof(_prefs.loc_share_channel_idx));
@@ -411,8 +409,8 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
   if (_prefs.loc_share_move_idx >= NodePrefs::LOC_SHARE_MOVE_COUNT)         _prefs.loc_share_move_idx = 1;
   if (_prefs.loc_share_interval_idx >= NodePrefs::LOC_SHARE_INTERVAL_COUNT) _prefs.loc_share_interval_idx = 1;
   if (_prefs.loc_share_heartbeat_idx >= NodePrefs::LOC_SHARE_HEARTBEAT_COUNT) _prefs.loc_share_heartbeat_idx = 0;
-  // → 0xC0DE0013: locator + trail auto-pause. Pre-0x13 files leave stray bytes
-  // here; clamp each back to its default so upgraders start with both off.
+  // Locator + trail auto-pause. Stray bytes from an older file clamp both
+  // back to off.
   rd(&_prefs.locator_enabled,    sizeof(_prefs.locator_enabled));
   rd(&_prefs.locator_has_target, sizeof(_prefs.locator_has_target));
   rd(&_prefs.locator_radius_idx, sizeof(_prefs.locator_radius_idx));
@@ -427,41 +425,41 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
   if (_prefs.locator_mode >= NodePrefs::LOCATOR_MODE_COUNT)         _prefs.locator_mode = 0;
   if (_prefs.trail_autopause_idx >= NodePrefs::TRAIL_AUTOPAUSE_COUNT)   _prefs.trail_autopause_idx = 0;
   _prefs.locator_label[sizeof(_prefs.locator_label) - 1] = '\0';
-  // → 0xC0DE0014: locator proximity beeper.
+  // Locator proximity beeper.
   rd(&_prefs.locator_beeper, sizeof(_prefs.locator_beeper));
   if (_prefs.locator_beeper > 1) _prefs.locator_beeper = 0;
-  // → 0xC0DE0015: locator can target a live contact (kind + pubkey prefix).
+  // Locator can target a live contact (kind + pubkey prefix).
   rd(&_prefs.locator_target_kind, sizeof(_prefs.locator_target_kind));
   rd(_prefs.locator_key,          sizeof(_prefs.locator_key));
   if (_prefs.locator_target_kind > 1) _prefs.locator_target_kind = 0;
-  // → 0xC0DE0016: GPS-averaging duration for waypoint marking.
+  // GPS-averaging duration for waypoint marking.
   rd(&_prefs.gps_avg_idx, sizeof(_prefs.gps_avg_idx));
   if (_prefs.gps_avg_idx >= NodePrefs::GPS_AVG_COUNT) _prefs.gps_avg_idx = 0;
-  // → 0xC0DE0017: one-shot alarm clock (local time-of-day + armed flag).
+  // One-shot alarm clock (local time-of-day + armed flag).
   rd(&_prefs.alarm_on,   sizeof(_prefs.alarm_on));
   rd(&_prefs.alarm_hour, sizeof(_prefs.alarm_hour));
   rd(&_prefs.alarm_min,  sizeof(_prefs.alarm_min));
   if (_prefs.alarm_on > 1)    _prefs.alarm_on = 0;
   if (_prefs.alarm_hour > 23) _prefs.alarm_hour = 0;
   if (_prefs.alarm_min > 59)  _prefs.alarm_min = 0;
-  // → 0xC0DE001A: keyboard type (QWERTY/T9). Pre-0x1A files leave stray sentinel
-  // tail bytes here; clamp back to the QWERTY default (0).
+  // Keyboard type (QWERTY/T9). Stray bytes from an older file clamp back to
+  // the QWERTY default.
   rd(&_prefs.keyboard_type, sizeof(_prefs.keyboard_type));
   if (_prefs.keyboard_type > 1) _prefs.keyboard_type = 0;
-  // Pre-0x10 files leave stray sentinel bytes here, same as a never-configured
-  // device. Either way there's no valid saved profile, so default to a profile
-  // in the same band as the companion's own network (_prefs.freq, already read
-  // above) rather than "Current" — a repeater silently following the companion
-  // onto whatever private network it later joins isn't the MeshCore community
-  // norm; that stays opt-in. Band-matched rather than a flat frequency so the
-  // default can't land outside what's legal where the companion is set up.
+  // A stray/garbage byte here means no valid saved profile, same as a
+  // never-configured device -- default to a profile in the same band as the
+  // companion's own network (_prefs.freq, already read above) rather than
+  // "Current" -- a repeater silently following the companion onto whatever
+  // private network it later joins isn't the MeshCore community norm; that
+  // stays opt-in. Band-matched rather than a flat frequency so the default
+  // can't land outside what's legal where the companion is set up.
   if (_prefs.repeater_use_profile > 1) _prefs.repeater_use_profile = 0;
   float rpt_lo, rpt_hi; radio_driver.getFreqBounds(rpt_lo, rpt_hi);
   if (!isValidRepeaterProfile(_prefs.repeater_freq, _prefs.repeater_bw, _prefs.repeater_sf, _prefs.repeater_cr, rpt_lo, rpt_hi)) {
     seedDefaultRepeaterProfile(_prefs);
   }
-  // → 0xC0DE000B: append bot_commands_enabled + quiet-hours. Older files leave
-  // stray bytes here; clamp so upgraders fall back to off / no quiet hours.
+  // Bot commands + quiet-hours. Stray bytes from an older file clamp to
+  // off / no quiet hours.
   if (_prefs.bot_commands_enabled > 1)  _prefs.bot_commands_enabled = 0;
   if (_prefs.bot_quiet_start > 23)      _prefs.bot_quiet_start = 0;
   if (_prefs.bot_quiet_end   > 23)      _prefs.bot_quiet_end   = 0;
@@ -481,42 +479,34 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
   // which is out of range — fall back to the default of 2 resends.
   if (_prefs.dm_resend_count > 5) _prefs.dm_resend_count = 2;
 
-  // → 0xC0DE0019: page_order grew 11 → 13 so Shutdown and Map become reorderable.
-  // The extra slots are appended here at the tail (not inline) so a pre-0x19 save,
-  // whose order ended right after the old 11 bytes, still loads without shifting
-  // every field after it. On such files these bytes are the old sentinel tail or
-  // EOF, so clamp anything out of range back to 0 (empty); ensurePageOrderInit
-  // then appends the missing pages into the freed slots.
+  // page_order grew 11 → 13 so Shutdown and Map become reorderable. The extra
+  // slots are appended here at the tail (not inline) so an older, shorter
+  // save still loads without shifting every field after it. Stray/EOF bytes
+  // here clamp to 0 (empty); ensurePageOrderInit then appends the missing
+  // pages into the freed slots.
   for (uint8_t i = NodePrefs::PAGE_ORDER_LEN_V1; i < NodePrefs::PAGE_ORDER_LEN; i++) {
     rd(&_prefs.page_order[i], sizeof(_prefs.page_order[i]));
     if (_prefs.page_order[i] > NodePrefs::HPB_COUNT) _prefs.page_order[i] = 0;
   }
 
-  // → 0xC0DE001B: append trail_autosave_lowbatt at the tail. A pre-0x1B file has
-  // the old sentinel bytes / EOF here; rd() zero-inits when absent and the clamp
-  // below turns any stray value into 0 (off), so upgraders default to off.
+  // trail_autosave_lowbatt. rd() zero-inits when absent and the clamp below
+  // turns any stray value into 0 (off).
   rd(&_prefs.trail_autosave_lowbatt, sizeof(_prefs.trail_autosave_lowbatt));
   if (_prefs.trail_autosave_lowbatt > 1) _prefs.trail_autosave_lowbatt = 0;
 
-  // → 0xC0DE001C: append alarm_repeat_mask at the tail. A pre-0x1C file has the
-  // old sentinel bytes / EOF here; any value that isn't one of the four presets
-  // clamps to 0 (no repeat / one-shot), matching the original alarm behaviour
-  // upgraders already had.
+  // alarm_repeat_mask. Any value that isn't one of the four presets (stray
+  // bytes from an older file included) clamps to 0 (no repeat / one-shot).
   rd(&_prefs.alarm_repeat_mask, sizeof(_prefs.alarm_repeat_mask));
   if (NodePrefs::alarmRepeatIdxForMask(_prefs.alarm_repeat_mask) == 0) _prefs.alarm_repeat_mask = 0;
 
-  // → 0xC0DE001D: append keyboard_alt_alphabet at the tail. A pre-0x1D file has
-  // the old sentinel bytes / EOF here; clamp anything out of range to 0 (Latin
-  // only), matching the keyboard's original (Latin-only) behaviour.
+  // keyboard_alt_alphabet. Stray/EOF bytes clamp to 0 (Latin only).
   rd(&_prefs.keyboard_alt_alphabet, sizeof(_prefs.keyboard_alt_alphabet));
   if (_prefs.keyboard_alt_alphabet >= NodePrefs::KB_ALPHABET_COUNT) _prefs.keyboard_alt_alphabet = 0;
 
-  // → 0xC0DE001E: append bot_dm_scope + the room-server bot fields at the
-  // tail. A pre-0x1E file has the old sentinel bytes / EOF here; rd() zero-
-  // inits when absent, so upgraders default to bot_dm_scope=0 (all DMs,
-  // matching the original bot_enabled behaviour) and the room bot fully
-  // disabled (bot_room_enabled clamps to 0; an empty trigger never matches
-  // even if somehow set).
+  // bot_dm_scope + the room-server bot fields. rd() zero-inits when absent,
+  // so an older file defaults to bot_dm_scope=0 (all DMs) and the room bot
+  // fully disabled (bot_room_enabled clamps to 0; an empty trigger never
+  // matches even if somehow set).
   rd(&_prefs.bot_dm_scope, sizeof(_prefs.bot_dm_scope));
   if (_prefs.bot_dm_scope > 1) _prefs.bot_dm_scope = 0;
 
@@ -526,26 +516,22 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
   rd(_prefs.bot_trigger_room, sizeof(_prefs.bot_trigger_room));
   rd(_prefs.bot_reply_room,   sizeof(_prefs.bot_reply_room));
 
-  // → 0xC0DE001F: split the shared bot_commands_enabled into a per-target
-  // toggle for channel/room too (DM keeps the original field). A pre-0x1F
-  // file has neither new byte; both clamp to 0 here and are seeded from the
-  // old shared value in the sentinel-mismatch migration below, so upgraders
-  // don't silently lose channel/room commands they already had answering.
+  // Per-target bot-commands toggle for channel/room too (DM keeps the
+  // original field). Stray/missing bytes clamp both to 0 (off) -- an
+  // upgrader from a version old enough to lack these re-enables channel/room
+  // bot commands manually rather than inheriting the old shared setting.
   rd(&_prefs.bot_commands_ch, sizeof(_prefs.bot_commands_ch));
   if (_prefs.bot_commands_ch > 1) _prefs.bot_commands_ch = 0;
   rd(&_prefs.bot_commands_room, sizeof(_prefs.bot_commands_room));
   if (_prefs.bot_commands_room > 1) _prefs.bot_commands_room = 0;
 
-  // → 0xC0DE0020: append keyboard_main_alphabet at the tail. A pre-0x20 file
-  // has the old sentinel bytes / EOF here; clamp anything out of range to 0
-  // (Latin), matching the keyboard's original always-Latin-main behaviour.
+  // keyboard_main_alphabet. Stray/EOF bytes clamp to 0 (Latin).
   rd(&_prefs.keyboard_main_alphabet, sizeof(_prefs.keyboard_main_alphabet));
   if (_prefs.keyboard_main_alphabet >= NodePrefs::KB_ALPHABET_COUNT) _prefs.keyboard_main_alphabet = 0;
 
-  // → 0xC0DE0021: append the per-target bot-actions toggles at the tail. A
-  // pre-0x21 file has neither byte here; clamp to 0 (off) -- these gate
-  // state-changing bot commands (!buzz/!gps/!advert), so an upgrader must
-  // opt in deliberately rather than get them silently enabled.
+  // Per-target bot-actions toggles. Stray/missing bytes clamp to 0 (off) --
+  // these gate state-changing bot commands (!buzz/!gps/!advert), so an
+  // upgrader must opt in deliberately rather than get them silently enabled.
   rd(&_prefs.bot_actions_dm, sizeof(_prefs.bot_actions_dm));
   if (_prefs.bot_actions_dm > 1) _prefs.bot_actions_dm = 0;
   rd(&_prefs.bot_actions_ch, sizeof(_prefs.bot_actions_ch));
@@ -553,11 +539,10 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
   rd(&_prefs.bot_actions_room, sizeof(_prefs.bot_actions_room));
   if (_prefs.bot_actions_room > 1) _prefs.bot_actions_room = 0;
 
-  // → 0xC0DE0022: user-assignable GPIO pin modes (0=Off 1=In 2=Out-low
-  // 3=Out-high 4=Analog). A pre-0x22 file has none of these bytes; clamp to
-  // 0 (off). gpio1/gpio2 (AIN0/AIN5) allow mode 4; gpio3/gpio4 have no ADC
-  // channel, so their clamp stops at 3 -- a stray 4 there (corrupt file,
-  // schema mismatch) falls back to Off rather than doing something undefined.
+  // User-assignable GPIO pin modes (0=Off 1=In 2=Out-low 3=Out-high
+  // 4=Analog). Stray/missing bytes clamp to 0 (off). gpio1/gpio2 (AIN0/AIN5)
+  // allow mode 4; gpio3/gpio4 have no ADC channel, so their clamp stops at 3
+  // -- a stray 4 there falls back to Off rather than doing something undefined.
   rd(&_prefs.gpio1_mode, sizeof(_prefs.gpio1_mode));
   if (_prefs.gpio1_mode > 4) _prefs.gpio1_mode = 0;
   rd(&_prefs.gpio2_mode, sizeof(_prefs.gpio2_mode));
@@ -567,144 +552,76 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
   rd(&_prefs.gpio4_mode, sizeof(_prefs.gpio4_mode));
   if (_prefs.gpio4_mode > 3) _prefs.gpio4_mode = 0;
 
-  // → 0xC0DE0023: append the external-keyboard compact-display toggle at the
-  // tail. A pre-0x23 file has no byte here; clamp to 0 (full grid, unchanged
-  // behaviour for upgraders).
+  // External-keyboard compact-display toggle. Missing byte clamps to 0
+  // (full grid, unchanged behaviour for upgraders).
   rd(&_prefs.keyboard_cardkb_compact, sizeof(_prefs.keyboard_cardkb_compact));
   if (_prefs.keyboard_cardkb_compact > 1) _prefs.keyboard_cardkb_compact = 0;
 
-  // → 0xC0DE0024: append interference_threshold + cad_enabled at the tail.
-  // A pre-0x24 file has no bytes here, so these read that file's own 4-byte
-  // sentinel tail (0xC0DE0023 → 23 00 DE C0) rather than zeroes; clamp both to
-  // 0/off, matching the getters' previous hardcoded behaviour for upgraders.
-  // interference_threshold is dB above the measured noise floor (see
-  // RadioLibWrapper::isChannelActive()); anything past ~30 dB would never
-  // trigger anyway, so treat it as a stray byte and fall back to off.
+  // interference_threshold + cad_enabled. An older, shorter file has no bytes
+  // here, so these can read that file's own sentinel tail rather than zeroes;
+  // clamp both to 0/off. interference_threshold is dB above the measured
+  // noise floor (see RadioLibWrapper::isChannelActive()); anything past
+  // ~30 dB would never trigger anyway, so treat it as a stray byte and fall
+  // back to off.
   rd(&_prefs.interference_threshold, sizeof(_prefs.interference_threshold));
   if (_prefs.interference_threshold > 30) _prefs.interference_threshold = 0;
   rd(&_prefs.cad_enabled, sizeof(_prefs.cad_enabled));
   if (_prefs.cad_enabled > 1) _prefs.cad_enabled = 0;
 
-  // → 0xC0DE0027: append repeat_scope_only + repeat_extra_scopes at the tail.
-  // (0xC0DE0026 had them mid-stream, which shifted every later field by 25
-  // bytes when reading an older file — see NodePrefs.h.) A pre-0x27 file has
-  // no bytes here; clamp the flag to 0 (off, unchanged forwarding behaviour)
-  // and leave the name list zero-initialised, which is already an empty string.
+  // repeat_scope_only + repeat_extra_scopes, read at the tail (an earlier,
+  // now-burned layout had them mid-stream, which shifted every later field
+  // when reading an older file — see NodePrefs.h). Missing bytes clamp the
+  // flag to 0 (off) and leave the name list zero-initialised (empty string).
   rd(&_prefs.repeat_scope_only, sizeof(_prefs.repeat_scope_only));
   if (_prefs.repeat_scope_only > 1) _prefs.repeat_scope_only = 0;
   rd(_prefs.repeat_extra_scopes, sizeof(_prefs.repeat_extra_scopes));
   _prefs.repeat_extra_scopes[sizeof(_prefs.repeat_extra_scopes) - 1] = '\0';
 
-  // → 0xC0DE0028: append favourite_kinds. A pre-0x28 file has that file's own
-  // 4-byte sentinel tail sitting here, so the first slots read back as 0x27/
-  // 0x00/0xDE/0xC0 — clamp anything unknown to CONTACT, which is what every
-  // slot saved before this bump actually was.
+  // favourite_kinds. An older, shorter file has its own sentinel tail
+  // sitting here instead -- clamp anything unknown to CONTACT, which is
+  // what every slot saved before this field existed actually was.
   rd(_prefs.favourite_kinds, sizeof(_prefs.favourite_kinds));
   for (uint8_t i = 0; i < NodePrefs::FAVOURITES_COUNT; i++) {
     if (_prefs.favourite_kinds[i] > NodePrefs::FAV_KIND_MAX)
       _prefs.favourite_kinds[i] = NodePrefs::FAV_KIND_CONTACT;
   }
 
-  // → 0xC0DE0029: append fav_sort_off. Inverted (see NodePrefs), so both a
-  // pre-0x29 file's stray sentinel byte here and a file that ends before this
-  // field clamp/zero to 0 = favourites on top, which is the default.
+  // fav_sort_off. Inverted (see NodePrefs), so both a stray byte from an
+  // older file and a file that ends before this field clamp/zero to 0 =
+  // favourites on top, the default.
   rd(&_prefs.fav_sort_off, sizeof(_prefs.fav_sort_off));
   if (_prefs.fav_sort_off > 1) _prefs.fav_sort_off = 0;
 
-  // → 0xC0DE002A: append msg_wake_screen_off. Inverted (see NodePrefs), so
-  // both a pre-0x2A file's stray sentinel byte here and a file that ends
-  // before this field clamp/zero to 0 = wake screen for incoming msgs,
-  // which is the existing default behaviour.
+  // msg_wake_screen_off. Inverted (see NodePrefs), so both a stray byte from
+  // an older file and a file that ends before this field clamp/zero to 0 =
+  // wake screen for incoming msgs, the default.
   rd(&_prefs.msg_wake_screen_off, sizeof(_prefs.msg_wake_screen_off));
   if (_prefs.msg_wake_screen_off > 1) _prefs.msg_wake_screen_off = 0;
 
-  // → 0xC0DE002B: append repeat_extra_scope_mask + ch_scope_idx. A pre-0x2B
-  // file has stray sentinel bytes from that file's own tail sitting here --
-  // read as-is for now, zeroed below once the sentinel mismatch confirms this
-  // really is a pre-0x2B file (can't range-clamp a mask/index here: every bit
-  // or byte value is technically "valid", so garbage can't be told apart from
-  // a real pick until we know which schema version wrote it).
+  // repeat_extra_scope_mask + ch_scope_idx. An older, shorter file has stray
+  // sentinel-tail bytes sitting here instead -- read as-is; unlike the fields
+  // above these can't be range-clamped (every bit/byte value is technically a
+  // "valid" mask or index), so an upgrade from a version old enough to lack
+  // these two fields may see them start on a stray pick rather than empty.
+  // Re-saving prefs (e.g. any Settings change) overwrites it for good.
   rd(&_prefs.repeat_extra_scope_mask, sizeof(_prefs.repeat_extra_scope_mask));
   rd(_prefs.ch_scope_idx, sizeof(_prefs.ch_scope_idx));
 
-  // → 0xC0DE002C: append contact_expiry_idx. A pre-0x2C file has a stray
-  // sentinel byte here; clamp anything outside the real option range (see
-  // NodePrefs::contactExpiryDays) back to 0/Off -- an upgrader must opt into
-  // pruning deliberately, not inherit a garbage index that happens to alias a
-  // real option.
+  // contact_expiry_idx. Stray byte from an older file clamps anything outside
+  // the real option range (see NodePrefs::contactExpiryDays) back to 0/Off --
+  // an upgrader must opt into pruning deliberately.
   rd(&_prefs.contact_expiry_idx, sizeof(_prefs.contact_expiry_idx));
   if (_prefs.contact_expiry_idx >= NodePrefs::CONTACT_EXPIRY_COUNT) _prefs.contact_expiry_idx = 0;
 
   // Schema sentinel: bumped on layout changes. Mismatch means an older file
-  // (or a different schema); rd() already zero-inits any fields not present,
-  // so we just log it — next savePrefs writes the current sentinel.
+  // (or a different schema); rd() and the clamps above already keep every
+  // field within its valid range regardless, so we just log it here —
+  // next savePrefs() writes the current sentinel.
   uint32_t sentinel = 0;
   rd(&sentinel, sizeof(sentinel));
   if (sentinel != NodePrefs::SCHEMA_SENTINEL) {
     MESH_DEBUG_PRINTLN("prefs schema sentinel mismatch: got 0x%08X, expected 0x%08X — re-saving on next change",
                        (unsigned)sentinel, (unsigned)NodePrefs::SCHEMA_SENTINEL);
-    // 0xC0DE0001 → 0xC0DE0002: FAVOURITES home page added. Only pre-0x0002 saves
-    // lack the bit; turn it on once so those upgraders see the new page by
-    // default. Must be gated to that transition — running it on every sentinel
-    // mismatch (as it did) re-enabled Favourites on each firmware update,
-    // clobbering a user who had deliberately hidden it.
-    if (sentinel < 0xC0DE0002 && _prefs.home_pages_mask != 0) {
-      _prefs.home_pages_mask |= NodePrefs::HP_FAVOURITES;
-    }
-    // 0xC0DE0017 → 0xC0DE0018: MAP home page moved into home_pages_mask (it was
-    // always-on before, with no visibility toggle). Turn its bit on once for
-    // pre-0x0018 saves so upgraders keep seeing the page; gated to this
-    // transition so a user who later hides it isn't overridden on the next update.
-    if (sentinel < 0xC0DE0018 && _prefs.home_pages_mask != 0) {
-      _prefs.home_pages_mask |= NodePrefs::HP_MAP;
-    }
-    // 0xC0DE001E → 0xC0DE001F: bot_commands_enabled split per target (see the
-    // rd() above). Seed the two new fields from the old shared one so a
-    // pre-0x1F upgrader's channel/room commands keep answering exactly as
-    // before; gated to this transition so a user who later splits them apart
-    // isn't overridden on a later update.
-    if (sentinel < 0xC0DE001F) {
-      _prefs.bot_commands_ch = _prefs.bot_commands_room = _prefs.bot_commands_enabled;
-    }
-    // 0xC0DE0003 → 0xC0DE0004: trail_units_idx added after trail_min_delta_idx.
-    // On a 0xC0DE0003 file the sentinel bytes sit where trail_units_idx is now,
-    // so rd() picks up 0x03 (low byte of the old sentinel) — reset just that
-    // case to default 0. Newer mismatches (e.g. 0xC0DE0005 → 0xC0DE0006) had
-    // the field saved correctly and must not be clobbered.
-    if (sentinel == 0xC0DE0003) {
-      _prefs.trail_units_idx = 0;
-    }
-    // → 0xC0DE0008: append advert_sound_scope after the existing 0xC0DE0007
-    // tail (notif_melody_ad + units_imperial + trail_show_pace). Older files
-    // leave stray/old bytes in these fields; they're clamped above, so
-    // upgraders fall back to built-in advert sound + metric + speed + All.
-    // → 0xC0DE0009: append tx_apc after rx_powersave. Clamped above, so
-    // upgraders fall back to APC off (fixed tx power).
-    // → 0xC0DE000C: split out a per-channel trigger (was shared with the DM
-    // trigger). Pre-0x0C files have no bot_trigger_ch; seed it from bot_trigger
-    // so an existing channel bot keeps reacting to the same word after upgrade.
-    if (_prefs.bot_trigger_ch[0] == '\0')
-      strncpy(_prefs.bot_trigger_ch, _prefs.bot_trigger, sizeof(_prefs.bot_trigger_ch) - 1);
-    // → 0xC0DE000D: append user_radio_presets. No clamping needed — rd() already
-    // zero-inits it on a pre-0x0D file, and name[0]=='\0' is exactly the "empty
-    // slot" sentinel the UI already expects.
-    // 0xC0DE002A → 0xC0DE002B: repeat_extra_scope_mask + ch_scope_idx appended.
-    // Unlike the fields above, these can't be left with whatever stray bytes
-    // rd() picked up from a pre-0x2B file's own sentinel tail: every bit/byte
-    // value is "valid" (any mask or index could be a real pick), so garbage
-    // here isn't caught by a range clamp -- it just silently masquerades as a
-    // real one, and can even reactivate later once the scope list grows long
-    // enough to reach an index that used to be out of range. Zero both
-    // outright on this one transition; a fresh scope list is empty anyway, so
-    // there's nothing genuine to lose.
-    if (sentinel < 0xC0DE002B) {
-      _prefs.repeat_extra_scope_mask = 0;
-      memset(_prefs.ch_scope_idx, 0, sizeof(_prefs.ch_scope_idx));
-    }
-    // 0xC0DE002B → 0xC0DE002C: contact_expiry_idx appended. Deliberately no
-    // entry here -- unlike the scope fields above it has a small closed set of
-    // legal values, so the unconditional range clamp at its rd() already turns
-    // any stray pre-0x2C byte back into 0/Off on every load.
   }
 
   file.close();
@@ -1120,48 +1037,33 @@ void DataStore::saveChannels(DataStoreHost* host) {
   }
 }
 
-bool DataStore::loadScopeList(ScopeList& list, const NodePrefs& prefs) {
+void DataStore::loadScopeList(ScopeList& list) {
   File file = openRead("/scopes1");
-  if (file) {
-    uint8_t hdr[2] = { 0, 0 };   // default_idx is read back below even if the header read fails
-    bool success = (file.read(hdr, 2) == 2);
-    uint8_t count = success ? hdr[1] : 0;
-    if (count > ScopeList::MAX_SCOPE_ENTRIES) count = 0;   // corrupt header -- start empty rather than overrun entries[]
-
-    uint8_t loaded = 0;
-    for (uint8_t i = 0; i < count; i++) {
-      ScopeEntry e;
-      bool ok = (file.read((uint8_t *)e.name, sizeof(e.name)) == sizeof(e.name));
-      ok = ok && (file.read(e.key, sizeof(e.key)) == sizeof(e.key));
-      if (!ok) break;   // truncated file -- keep whatever loaded fine so far
-      e.name[sizeof(e.name) - 1] = '\0';
-      list.entries[loaded++] = e;
-    }
-    file.close();
-    list.count = loaded;
-    list.default_idx = list.clamp(hdr[0]);
-    return false;   // the file was already there -- nothing migrated this boot
+  if (!file) {
+    // No /scopes1 -- fresh device, stays at the default-constructed ScopeList
+    // (empty, default_idx 0 == "*").
+    list.count = 0;
+    list.default_idx = 0;
+    return;
   }
 
-  // No /scopes1 yet -- one-time migration of an existing single
-  // default_scope_name/key (Settings > Radio > Scope, pre-list) into list
-  // entry 1 and mark it default, which covers DMs and the relay filter. The
-  // caller finishes the job for channels by seeding their per-channel picks
-  // once channels[] is loaded (see this function's return value). A
-  // never-configured device just stays at the default-constructed ScopeList
-  // (empty, default_idx 0 == "*").
-  list.count = 0;
-  list.default_idx = 0;
-  bool migrated = (prefs.default_scope_name[0] != '\0');
-  if (migrated) {
-    ScopeEntry& e = list.entries[0];
-    StrHelper::strncpy(e.name, prefs.default_scope_name, sizeof(e.name));
-    memcpy(e.key, prefs.default_scope_key, sizeof(e.key));   // already-derived key, no need to re-derive
-    list.count = 1;
-    list.default_idx = 1;
+  uint8_t hdr[2] = { 0, 0 };   // default_idx is read back below even if the header read fails
+  bool success = (file.read(hdr, 2) == 2);
+  uint8_t count = success ? hdr[1] : 0;
+  if (count > ScopeList::MAX_SCOPE_ENTRIES) count = 0;   // corrupt header -- start empty rather than overrun entries[]
+
+  uint8_t loaded = 0;
+  for (uint8_t i = 0; i < count; i++) {
+    ScopeEntry e;
+    bool ok = (file.read((uint8_t *)e.name, sizeof(e.name)) == sizeof(e.name));
+    ok = ok && (file.read(e.key, sizeof(e.key)) == sizeof(e.key));
+    if (!ok) break;   // truncated file -- keep whatever loaded fine so far
+    e.name[sizeof(e.name) - 1] = '\0';
+    list.entries[loaded++] = e;
   }
-  saveScopeList(list);   // write /scopes1 so this migration runs only once
-  return migrated;       // caller seeds the existing channels with entry 1
+  file.close();
+  list.count = loaded;
+  list.default_idx = list.clamp(hdr[0]);
 }
 
 void DataStore::saveScopeList(const ScopeList& list) {

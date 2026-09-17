@@ -317,7 +317,7 @@ struct NodePrefs {  // persisted to file
   uint8_t  buzzer_quiet;
   uint8_t  buzzer_volume;   // 0=min..4=max, default 4
   uint8_t  buzzer_auto;        // 0=manual (default), 1=auto-mute when BT connected
-  // Settings > Sound > "Msg wake". Stored inverted (same reason as
+  // Settings > Display > "Msg wake". Stored inverted (same reason as
   // fav_sort_off below) so both a fresh memset and an older prefs file (no
   // bytes here at all) mean "on" -- today's behaviour, where an incoming
   // message turns the display on (UITask::newMsg()) if it was off and no

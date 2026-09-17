@@ -497,7 +497,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE int sim_test_disable_screen_timeout() {
 }
 
 // Sets NodePrefs::msg_wake_screen_off directly (the same field Settings >
-// Sound > "Msg wake" toggles -- SettingsScreen.h's MSG_WAKE item), so a test
+// Display > "Msg wake" toggles -- SettingsScreen.h's MSG_WAKE item), so a test
 // harness can verify UITask::newMsg()'s wake-gating without scripting the
 // on-device Settings accordion navigation key-by-key.
 extern "C" EMSCRIPTEN_KEEPALIVE int sim_test_set_msg_wake_disabled(int disabled) {
