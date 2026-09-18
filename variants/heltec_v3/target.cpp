@@ -25,13 +25,17 @@ AutoDiscoverRTCClock rtc_clock(fallback_clock);
 
 #ifdef DISPLAY_CLASS
   DISPLAY_CLASS display;
-  MomentaryButton user_btn(PIN_USER_BTN, 1000, true);
   #if UI_HAS_JOYSTICK
     // Optional wired joystick — see the Heltec_v3_companion_solo_dual env for the
     // pin defines this needs. Unlike the Wio Tracker L1 (external pull-ups on
     // board) these pass pulldownup = true, so each contact only has to short its
-    // pin to GND; the internal pull-up does the rest. Back gets multiclick = true
-    // because the UI's triple-click buzzer toggle lives on it.
+    // pin to GND; the internal pull-up does the rest. user_btn (Enter) and the
+    // direction contacts all get multiclick = false — loop()'s UI_HAS_JOYSTICK
+    // branch never looks at DOUBLE_CLICK/TRIPLE_CLICK for Enter, so leaving
+    // multiclick on just adds a ~280ms wait-for-more-clicks delay and silently
+    // swallows a quick double-tap. Back gets multiclick = true because the UI's
+    // triple-click buzzer toggle lives on it.
+    MomentaryButton user_btn      (PIN_USER_BTN,   1000, true, true, false);
     MomentaryButton joystick_left (JOYSTICK_LEFT,  1000, true, true, false);
     MomentaryButton joystick_right(JOYSTICK_RIGHT, 1000, true, true, false);
     MomentaryButton back_btn      (PIN_BACK_BTN,   1000, true, true, true);
@@ -39,6 +43,8 @@ AutoDiscoverRTCClock rtc_clock(fallback_clock);
       MomentaryButton joystick_up  (JOYSTICK_UP,   1000, true, true, false);
       MomentaryButton joystick_down(JOYSTICK_DOWN, 1000, true, true, false);
     #endif
+  #else
+    MomentaryButton user_btn(PIN_USER_BTN, 1000, true);
   #endif
 #endif
 
