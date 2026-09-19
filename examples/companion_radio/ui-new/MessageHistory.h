@@ -134,7 +134,7 @@ public:
       _hist_head = (_hist_head + 1) % CH_HIST_MAX;
     }
     _hist[pos].ch_idx = ch_idx;
-    _hist[pos].timestamp = timestamp ? timestamp : rtc_clock.getCurrentTime();
+    _hist[pos].timestamp = displayTimestamp(timestamp, own_message);
     strncpy(_hist[pos].text, text, sizeof(_hist[pos].text) - 1);
     _hist[pos].text[sizeof(_hist[pos].text) - 1] = '\0';
     _hist[pos].relay_status = ACK_NONE;
@@ -256,6 +256,18 @@ public:
   // for incoming); resends = remaining auto-resends for an outgoing pending DM.
   // path/path_len_packed: the hop path this incoming DM actually took, or
   // nullptr/0 for outgoing (no path concept there -- see DmHistEntry).
+  // The timestamp an entry's age is measured from, on THIS device's clock.
+  // An outgoing message was sent just now, so its own send time is simply
+  // "now" -- taking the phone app's timestamp instead (CMD_SEND_*) put it on
+  // the phone's clock, and a phone running ahead of the device (or on local
+  // time) left the age reading "0s" until the device caught up. A sender
+  // timestamp that is unknown or still in the future is likewise clamped to
+  // receipt time, so it ages normally from here on instead of sticking at 0s.
+  static uint32_t displayTimestamp(uint32_t ts, bool outgoing) {
+    uint32_t now = rtc_clock.getCurrentTime();
+    return (outgoing || ts == 0 || ts > now) ? now : ts;
+  }
+
   void storeDMMsg(const uint8_t* pub_key, bool outgoing, const char* text,
                   uint32_t ack_tag = 0, uint32_t ack_deadline_ms = 0,
                   uint32_t msg_ts = 0, uint8_t resends = 0,
@@ -273,8 +285,9 @@ public:
     // Prefer the sender's own timestamp — a room-sync replay or an
     // offline-queued message held by a repeater can arrive long after it was
     // actually sent, so "now" would mislabel every backlog message as fresh.
-    // Fall back to receipt time only when the sender's timestamp is unknown.
-    _dm_hist[pos].timestamp = msg_ts ? msg_ts : rtc_clock.getCurrentTime();
+    // Fall back to receipt time when the sender's timestamp is unknown or
+    // ahead of our clock, and always use our own clock for outgoing.
+    _dm_hist[pos].timestamp = displayTimestamp(msg_ts, outgoing);
     strncpy(_dm_hist[pos].text, text, sizeof(DmHistEntry::text) - 1);
     _dm_hist[pos].text[sizeof(DmHistEntry::text) - 1] = '\0';
     _dm_hist[pos].ack_status      = (outgoing && ack_tag) ? ACK_PENDING : ACK_NONE;
