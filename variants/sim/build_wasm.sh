@@ -149,6 +149,15 @@ DEFINES=(
   -DUI_SENSORS_PAGE=1
 )
 
+# The on-device splash's "Solo <version>" bar shows FIRMWARE_VERSION. Without
+# it, MyMesh.h falls back to "dev-<compile date>" -- what the live demo showed
+# even for a tagged release. build-solo-sim.yml exports it (tag name for a
+# release, "dev-<commit>" otherwise), same as build-solo-firmwares.yml does
+# for the hardware builds; a local build with it unset keeps the old fallback.
+if [ -n "${FIRMWARE_VERSION:-}" ]; then
+  DEFINES+=("-DFIRMWARE_VERSION=\"${FIRMWARE_VERSION}\"")
+fi
+
 # -funsigned-char: carried over from Phase 1 verbatim -- real ARM cores
 # default `char` to unsigned; em++'s target (wasm32) defaults it to signed,
 # same mismatch Phase 1 hit on a native x86/ARM64 host, for the same reason

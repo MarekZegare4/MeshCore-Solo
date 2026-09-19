@@ -46,7 +46,17 @@ jobs:
             echo "emsdk 6.0.9 already cached"
           fi
 
+      - name: Resolve build version
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            echo "BUILD_VERSION=${GITHUB_REF_NAME}" >> $GITHUB_ENV
+          else
+            echo "BUILD_VERSION=dev-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          fi
+
       - name: Build companion WASM
+        env:
+          FIRMWARE_VERSION: ${{ env.BUILD_VERSION }}
         run: variants/sim/build_wasm.sh
 
       - name: Build repeater WASM
