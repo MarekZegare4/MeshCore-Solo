@@ -95,6 +95,21 @@ class ChannelsView {
     return true;
   }
 
+  // True if a *different* slot already holds this secret. The secret is the
+  // channel's identity on the air (the name is only a label), so a second slot
+  // with the same key would be the same channel listed twice -- with split
+  // history/unread state. Edit skips its own slot (_idx) so re-saving a channel
+  // under a new name still works.
+  bool secretInUse(const uint8_t secret[32]) const {
+    for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
+      if (i == _idx) continue;
+      ChannelDetails ch;
+      if (!the_mesh.getChannel(i, ch) || ch.name[0] == '\0') continue;
+      if (memcmp(ch.channel.secret, secret, 16) == 0) return true;
+    }
+    return false;
+  }
+
   bool saveChannel(const char* name, const uint8_t secret[32]) {
     ChannelDetails ch;
     memset(&ch, 0, sizeof(ch));
@@ -113,6 +128,7 @@ class ChannelsView {
     static const char PUBLIC_SECRET_HEX[] = "8b3387e9c5cdea6ac9e5edbaa115cd72";
     uint8_t secret[32];
     hexToSecret(PUBLIC_SECRET_HEX, secret);   // fixed, known-good constant -- can't fail
+    if (secretInUse(secret)) { _task->showAlert("Already added", 1200); _mode = OFF; return; }
     if (saveChannel("Public", secret)) _task->showAlert("Channel added", 1000);
     else                               _task->showAlert("Save failed", 1200);
     _mode = OFF;
@@ -135,6 +151,7 @@ class ChannelsView {
       _task->showAlert(_hex_mode ? "Invalid secret" : "Secret required", 1400);
       return;
     }
+    if (secretInUse(secret)) { _task->showAlert("Channel already exists", 1400); return; }
     if (saveChannel(_name, secret)) {
       _task->showAlert((_mode == ADD || _mode == ADD_HASHTAG) ? "Channel added" : "Channel updated", 1000);
       _mode = OFF;
