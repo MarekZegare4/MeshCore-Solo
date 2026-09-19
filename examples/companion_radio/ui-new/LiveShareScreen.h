@@ -18,14 +18,16 @@ class LiveShareScreen : public UIScreen {
   int        _sel    = 0;
   int        _scroll = 0;
 
-  enum Kind : uint8_t { K_TRACK, K_AUTO, K_TARGET, K_MOVE, K_GAP, K_HB };
+  enum Kind : uint8_t { K_TRACK, K_AUTO, K_DURATION, K_TARGET, K_SCOPE, K_MOVE, K_GAP, K_HB };
   struct Row { Kind kind; const char* label; };
-  static const int ROW_COUNT = 6;
+  static const int ROW_COUNT = 8;
   static Row rows(int i) {
     static const Row R[ROW_COUNT] = {
       { K_TRACK,  "Track loc" },
       { K_AUTO,   "Auto share" },
+      { K_DURATION, "Stop after" },
       { K_TARGET, "To" },
+      { K_SCOPE,  "Scope" },
       { K_MOVE,   "Move" },
       { K_GAP,    "Min gap" },
       { K_HB,     "Heartbeat" },
@@ -62,9 +64,20 @@ public:
       case K_AUTO:
         snprintf(buf, n, "%s", (_prefs && _prefs->loc_share_enabled) ? "ON" : "OFF");
         break;
+      case K_DURATION:
+        snprintf(buf, n, "%uh", (unsigned)(NodePrefs::locShareDurationMins(_prefs ? _prefs->loc_share_duration_idx : 0) / 60));
+        break;
       case K_TARGET:
         currentTargetName(buf, n);
         break;
+      case K_SCOPE: {
+        // 0 = follow the target; n>0 = scope-list index n-1 ("*" first).
+        uint8_t v = _prefs ? _prefs->loc_share_scope : 0;
+        const ScopeList& sl = the_mesh.scopeList();
+        if (v == 0 || v > sl.count + 1) snprintf(buf, n, "Target");
+        else                            snprintf(buf, n, "%s", sl.name(v - 1));
+        break;
+      }
       case K_MOVE:
         snprintf(buf, n, "%um", (unsigned)NodePrefs::locShareMoveMeters(_prefs ? _prefs->loc_share_move_idx : 1));
         break;
@@ -114,11 +127,27 @@ public:
     if (!_prefs) return;
     switch (rows(_sel).kind) {
       case K_TRACK: _prefs->track_shared_loc ^= 1; _dirty = true; break;
-      case K_AUTO:  _prefs->loc_share_enabled ^= 1; _dirty = true; break;
+      case K_AUTO:
+        _prefs->loc_share_enabled ^= 1;
+        if (_prefs->loc_share_enabled) _task->restartLocShareSession();
+        _dirty = true; break;
+      case K_DURATION:
+        _prefs->loc_share_duration_idx = (uint8_t)((_prefs->loc_share_duration_idx + (dir >= 0 ? 1 : NodePrefs::LOC_SHARE_DURATION_COUNT - 1)) % NodePrefs::LOC_SHARE_DURATION_COUNT);
+        _task->restartLocShareSession();   // a new length starts the session over
+        _dirty = true; break;
       case K_TARGET:
         if (enter) { _task->pickLocShareTarget(); return; }  // full chooser
         cycleTarget(dir); _dirty = true;                     // L/R quick cycle
         break;
+      case K_SCOPE: {
+        // Target, then every list entry ("*" included): count + 2 stops, wrapping.
+        int total = the_mesh.scopeList().count + 2;
+        int v = _prefs->loc_share_scope;
+        if (v >= total) v = 0;
+        v = (v + (dir >= 0 ? 1 : total - 1)) % total;
+        _prefs->loc_share_scope = (uint8_t)v;
+        _dirty = true; break;
+      }
       case K_MOVE:
         _prefs->loc_share_move_idx = (uint8_t)((_prefs->loc_share_move_idx + (dir >= 0 ? 1 : NodePrefs::LOC_SHARE_MOVE_COUNT - 1)) % NodePrefs::LOC_SHARE_MOVE_COUNT);
         _dirty = true; break;

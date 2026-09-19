@@ -126,6 +126,7 @@ class UITask : public AbstractUITask {
   int32_t  _loc_share_last_lat = 0, _loc_share_last_lon = 0;
   bool     _loc_share_has_last = false;
   bool     _loc_share_was_enabled = false;
+  uint32_t _loc_share_session_ms = 0;   // when the current auto-share session began (RAM only)
 
   // Trail auto-pause engine state. _trail_pause_ref is the last position the
   // device was considered "at"; if it doesn't move beyond the trail min-delta
@@ -334,6 +335,8 @@ public:
   void gotoDashboardConfig();
   void gotoAutoAdvertScreen();
   void gotoLiveShareScreen();
+  // Start the auto-share session clock afresh (next engine tick treats it as a new enable).
+  void restartLocShareSession() { _loc_share_was_enabled = false; }
   void gotoLocatorScreen();
   // Re-arm the locator state machine so the next evaluation initialises
   // silently (called by the Locator tool after the target/radius changes,

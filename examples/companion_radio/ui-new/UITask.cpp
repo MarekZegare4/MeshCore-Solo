@@ -3043,13 +3043,26 @@ void UITask::loop() {
     _livetrack.expire((uint32_t)rtc_clock.getCurrentTime());
   }
 
+  // A session always ends: switch off once the chosen duration has run out.
+  // Counted from enable / boot (RAM only), so a reboot starts a fresh session.
+  if (_node_prefs && _node_prefs->loc_share_enabled && _loc_share_was_enabled
+      && (uint32_t)(millis() - _loc_share_session_ms)
+         >= (uint32_t)NodePrefs::locShareDurationMins(_node_prefs->loc_share_duration_idx) * 60000UL) {
+    _node_prefs->loc_share_enabled = 0;
+    _loc_share_was_enabled = false;
+    the_mesh.savePrefs();
+    showAlert("Live share ended", 2500);
+  }
   // Live location sharing — periodically broadcast my [LOC] to the configured
   // target while moving (Map › Live share). Movement-gated so a stationary
   // device stays quiet unless a heartbeat is configured.
   if (_node_prefs && _node_prefs->loc_share_enabled
       && (int32_t)(millis() - _next_loc_share_check_ms) >= 0) {
     _next_loc_share_check_ms = millis() + 2000UL;
-    if (!_loc_share_was_enabled) _loc_share_has_last = false;  // re-announce on enable
+    if (!_loc_share_was_enabled) {
+      _loc_share_has_last = false;   // re-announce on enable
+      _loc_share_session_ms = millis();
+    }
     _loc_share_was_enabled = true;
     int32_t lat, lon;
     if (currentLocation(lat, lon)) {
@@ -3414,6 +3427,13 @@ void UITask::onSharedLocation(const uint8_t* pub_key, const char* name,
 
 bool UITask::sendLocationShare(int32_t lat, int32_t lon) {
   if (!_node_prefs) return false;
+  // Live Share's own scope, if set: applies to these sends only (0 = follow the
+  // target's usual scope). The sends below are synchronous, so bracketing works.
+  struct ScopeGuard {
+    bool on;
+    explicit ScopeGuard(uint8_t v) : on(v != 0) { if (on) the_mesh.setOneShotScope(v - 1); }
+    ~ScopeGuard() { if (on) the_mesh.clearOneShotScope(); }
+  } scope_guard(_node_prefs->loc_share_scope);
   char text[80];
   if (_node_prefs->loc_share_target_type == 0) {
     // Channel: sendGroupMessage prepends "<name>: ", so the payload already

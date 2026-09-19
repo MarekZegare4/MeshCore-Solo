@@ -396,6 +396,12 @@ public:
   // MyMesh -- edits go through setPrimaryScope()/addScope()/setChannelScope()/
   // setDefaultScope() so repeat_scopes[]/persistence stay in sync.
   const ScopeList& scopeList() const { return _scope_list; }
+  // Force the scope of the NEXT sends to list index idx (0 = "*", unscoped),
+  // beating the app's send_scope/send_unscoped and a channel's own pick, until
+  // clearOneShotScope(). Bracket a synchronous send with these -- used by Live
+  // Share so its [LOC] posts can go to a different region than the chat does.
+  void setOneShotScope(uint8_t idx) { _oneshot_scope = _scope_list.key(idx); _oneshot_scope_on = true; }
+  void clearOneShotScope() { _oneshot_scope_on = false; }
   // Adds a new named entry (see ScopeList::add()), persists the list, and
   // returns its list index (0 if the name's empty or the list's full).
   uint8_t addScope(const char* name);
@@ -610,6 +616,8 @@ private:
   void resetPendingBotActions();
 
   TransportKey send_scope;
+  TransportKey _oneshot_scope;      // see setOneShotScope()
+  bool         _oneshot_scope_on = false;
 
   // The shared named-scope list backing Settings > Radio > Scope, the
   // channel context menu's Scope: row, and Tools > Repeater > Extra scopes.

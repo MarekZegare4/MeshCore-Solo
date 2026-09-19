@@ -234,7 +234,7 @@ Periodically broadcasts a 0-hop advert with your GPS position. Configurable inte
 | :------------------------: | :------------------------: |
 | ![](./liveshare_oled.png) | ![](./liveshare_eink.png) |
 
-<!-- screenshot pending: Live Share screen — Track loc / Auto share / To / Move / Min gap / Heartbeat rows -->
+<!-- screenshot pending: Live Share screen — Track loc / Auto share / Stop after / To / Scope / Move / Min gap / Heartbeat rows -->
 
 Share your live position over the mesh **as ordinary chat messages**, and put other people who do the same on your map. A position is sent as a `[LOC]<lat>,<lon>` message — the same coordinate format waypoints use, so it stays readable on other firmware and the phone app (it just looks like a coordinate to anything that doesn't know the tag).
 
@@ -245,8 +245,10 @@ The tool holds both directions of sharing in one flat list. Navigate with **UP/D
 | Setting    | Options                     | Notes                                                                                          |
 | ---------- | --------------------------- | ---------------------------------------------------------------------------------------------- |
 | Track loc  | ON / OFF                    | Receive incoming `[LOC]` shares (DM, monitored channels, and room-server posts) and pin those senders on the map / in Nearby. Off by default. |
-| Auto share | ON / OFF                    | Periodically broadcast **your own** position to the target below while you move.                |
+| Auto share | ON / OFF                    | Periodically broadcast **your own** position to the target below while you move, for the length of **Stop after**. |
+| Stop after | 1 / 2 / 4 / 8 / 12 h        | **Length of one auto-share session** (default 1 h). When it runs out, Auto share switches itself off and shows `Live share ended` — sharing can never run indefinitely. The clock starts when you turn **Auto share** on (or change this value) and restarts if the device reboots while sharing is on. |
 | To         | channel or contact          | **Enter** opens the Messages recipient chooser to pick the target channel or DM contact.        |
+| Scope      | Target / `*` / a named scope | Region for these `[LOC]` posts **only**, independent of your chat. **Target** (default) follows the target as before — a channel's own scope pick, or the list default for a DM. Any other value (from the shared list in Settings › Radio › Scope; `*` = unscoped) overrides it for Live Share and never changes how your normal messages are sent. A DM that already has a known route goes direct, where a scope has no effect. |
 | Move       | 50 / 100 / 250 / 500 m      | Movement gate — only send after you've moved at least this far since the last share.            |
 | Min gap    | 30 s / 1 / 2 / 5 min        | Minimum time between sends, so fast movement can't flood the channel.                           |
 | Heartbeat  | OFF / 5 / 15 min            | Optional keep-alive: re-send even while stationary, so the other end knows you're still there.  |

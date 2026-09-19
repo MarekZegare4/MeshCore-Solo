@@ -613,6 +613,15 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
   rd(&_prefs.contact_expiry_idx, sizeof(_prefs.contact_expiry_idx));
   if (_prefs.contact_expiry_idx >= NodePrefs::CONTACT_EXPIRY_COUNT) _prefs.contact_expiry_idx = 0;
 
+  // loc_share_scope. 0 = follow the target. A stray byte from an older file is
+  // out of range (or is zeroed below on the sentinel transition) -> follow.
+  rd(&_prefs.loc_share_scope, sizeof(_prefs.loc_share_scope));
+  if (_prefs.loc_share_scope > ScopeList::MAX_SCOPE_ENTRIES + 1) _prefs.loc_share_scope = 0;
+
+  // loc_share_duration_idx. A stray byte from an older file is out of range -> 1 h.
+  rd(&_prefs.loc_share_duration_idx, sizeof(_prefs.loc_share_duration_idx));
+  if (_prefs.loc_share_duration_idx >= NodePrefs::LOC_SHARE_DURATION_COUNT) _prefs.loc_share_duration_idx = 0;
+
   // Schema sentinel: bumped on layout changes. Mismatch means an older file
   // (or a different schema); rd() and the clamps above already keep every
   // field within its valid range regardless, so we just log it here —
@@ -635,6 +644,9 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
       _prefs.repeat_extra_scope_mask = 0;
       memset(_prefs.ch_scope_idx, 0, sizeof(_prefs.ch_scope_idx));
     }
+    // 0xC0DE002C → 0xC0DE002D: loc_share_scope appended. A 0x2C file's sentinel
+    // tail (0x2C) lands here and is in range, so zero it explicitly.
+    if (sentinel < 0xC0DE002D) _prefs.loc_share_scope = 0;
   }
 
   file.close();
@@ -805,6 +817,8 @@ void DataStore::savePrefs(const NodePrefs& _prefs, double node_lat, double node_
     file.write((uint8_t *)&_prefs.repeat_extra_scope_mask, sizeof(_prefs.repeat_extra_scope_mask));
     file.write((uint8_t *)_prefs.ch_scope_idx, sizeof(_prefs.ch_scope_idx));
     file.write((uint8_t *)&_prefs.contact_expiry_idx, sizeof(_prefs.contact_expiry_idx));
+    file.write((uint8_t *)&_prefs.loc_share_scope, sizeof(_prefs.loc_share_scope));
+    file.write((uint8_t *)&_prefs.loc_share_duration_idx, sizeof(_prefs.loc_share_duration_idx));
 
     // Tail sentinel — must be last. See NodePrefs::SCHEMA_SENTINEL. Its write is
     // the one we check: once the flash fills, writes return 0, so a good

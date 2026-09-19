@@ -446,6 +446,14 @@ struct NodePrefs {  // persisted to file
   uint8_t  loc_share_move_idx;      // movement gate level (index into locShareMoveMeters)
   uint8_t  loc_share_interval_idx;  // min send interval (index into locShareIntervalSecs)
   uint8_t  loc_share_heartbeat_idx; // stationary heartbeat (index into locShareHeartbeatSecs)
+  // Scope used for these [LOC] sends only. 0 = follow the target (a channel's own
+  // scope pick / the list default for a DM -- the behaviour before this field);
+  // n>0 = scope-list index (n-1), so 1 is "*" (unscoped). [del→MyMesh::removeScope]
+  uint8_t  loc_share_scope;
+  // How long one auto-share session runs before it switches itself off (index into
+  // locShareDurationMins). There is deliberately no "never" option. 0 = the
+  // shortest/default, so a zeroed field is already valid.
+  uint8_t  loc_share_duration_idx;
   // Locator — a single geofence around a saved point. When enabled the device
   // watches its own GPS fix and beeps + shows an alert when it crosses into
   // (arrive) or out of (leave) the radius. The target coordinate/label is a
@@ -540,6 +548,11 @@ struct NodePrefs {  // persisted to file
     static const uint16_t S[LOC_SHARE_INTERVAL_COUNT] = { 30, 60, 120, 300 };
     return S[idx < LOC_SHARE_INTERVAL_COUNT ? idx : 1];
   }
+  static const uint8_t LOC_SHARE_DURATION_COUNT = 5;
+  static uint16_t locShareDurationMins(uint8_t idx) {
+    static const uint16_t D[LOC_SHARE_DURATION_COUNT] = { 60, 120, 240, 480, 720 };  // 1 / 2 / 4 / 8 / 12 h
+    return D[idx < LOC_SHARE_DURATION_COUNT ? idx : 0];
+  }
   static const uint8_t LOC_SHARE_HEARTBEAT_COUNT = 3;
   static uint16_t locShareHeartbeatSecs(uint8_t idx) {
     static const uint16_t H[LOC_SHARE_HEARTBEAT_COUNT] = { 0, 300, 900 };  // off / 5 min / 15 min
@@ -610,7 +623,7 @@ struct NodePrefs {  // persisted to file
   // repeat_* fields) instead of at the tail, which shifted every field after
   // them by 25 bytes when loading an older file. Never released, but a dev
   // build wrote it, so the number must not be reused for anything else.
-  static const uint32_t SCHEMA_SENTINEL = 0xC0DE002C;
+  static const uint32_t SCHEMA_SENTINEL = 0xC0DE002E;
 
   // Bit-index for each home page. Used by page_order (entries store bit+1) and
   // by home_pages_mask. Single source of truth — both HomeScreen::pageBit/bitToPage
@@ -759,6 +772,11 @@ struct NodePrefs {  // persisted to file
 // the struct -- confirmed via a real sim_companion_radio (native) build and a
 // real WioTrackerL1_companion_solo_dual (nRF52/ARM) build, sizeof unchanged
 // at 2824 on both.
+// loc_share_scope (0xC0DE002D) landed in existing padding next to the other
+// loc_share_* bytes -- confirmed via real sim_companion_radio (native),
+// WioTrackerL1_companion_solo_dual (nRF52/ARM) and Heltec_v3_companion_radio_ble
+// (ESP32) builds, sizeof unchanged at 2824. loc_share_duration_idx (0xC0DE002E)
+// likewise (sim build; see the check below).
 static_assert(sizeof(NodePrefs) == 2824,
               "NodePrefs layout changed — sync DataStore save/load + clamp, bump "
               "SCHEMA_SENTINEL, then update this size (see steps above).");

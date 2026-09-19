@@ -822,6 +822,12 @@ void MyMesh::removeScope(uint8_t idx) {
     if (ci == idx) _prefs.ch_scope_idx[i] = 0;
     else if (ci > idx) _prefs.ch_scope_idx[i] = ci - 1;
   }
+  // Live Share's own scope (stored as list index + 1; 0 = follow the target).
+  if (_prefs.loc_share_scope) {
+    uint8_t li = _prefs.loc_share_scope - 1;
+    if (li == idx)     _prefs.loc_share_scope = 0;
+    else if (li > idx) _prefs.loc_share_scope--;
+  }
   syncLegacyDefaultScope();   // ScopeList::remove() may have moved or cleared the default
   if (_store) _store->saveScopeList(_scope_list);
   // The fix-ups above live in NodePrefs, not in /scopes1, so both files have to
@@ -874,7 +880,9 @@ void MyMesh::sendFloodScoped(const TransportKey& scope, mesh::Packet* pkt, uint3
 
 void MyMesh::sendFloodScoped(const ContactInfo& recipient, mesh::Packet* pkt, uint32_t delay_millis) {
   // TODO: dynamic send_scope, depending on recipient and current 'home' Region
-  if (send_unscoped) {
+  if (_oneshot_scope_on) {
+    sendFloodScoped(_oneshot_scope, pkt, delay_millis);
+  } else if (send_unscoped) {
     sendFlood(pkt, delay_millis, _prefs.path_hash_mode + 1);  // app has explicitly requested un-scoped
   } else {
     TransportKey default_scope = _scope_list.key(_scope_list.default_idx);
@@ -885,7 +893,9 @@ void MyMesh::sendFloodScoped(const ContactInfo& recipient, mesh::Packet* pkt, ui
 void MyMesh::sendFloodScoped(const mesh::GroupChannel& channel, mesh::Packet* pkt, uint32_t delay_millis) {
   if (apcActive()) apcTrackFloodSend(pkt);   // listen for a repeater echo to drive APC (channels have no ACK)
   trackRelaySend(pkt);                          // and for the UI "relayed" marker
-  if (send_unscoped) {
+  if (_oneshot_scope_on) {
+    sendFloodScoped(_oneshot_scope, pkt, delay_millis);
+  } else if (send_unscoped) {
     sendFlood(pkt, delay_millis, _prefs.path_hash_mode + 1);  // app has explicitly requested un-scoped
   } else if (!send_scope.isNull()) {
     // App-driven per-send override (CMD_SET_FLOOD_SCOPE_KEY) still wins over
