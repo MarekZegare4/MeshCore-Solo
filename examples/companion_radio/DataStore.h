@@ -46,10 +46,20 @@ public:
   // deleted slot is simply absent from the file, not written as empty).
   bool loadChannels(DataStoreHost* host);
   void saveChannels(DataStoreHost* host);
-  // /scopes1: the shared named-scope list (see ScopeList.h). A device with no
-  // file yet just starts with the default-constructed ScopeList (empty,
-  // default_idx 0 == "*").
-  void loadScopeList(ScopeList& list);
+  // /scopes1: the shared named-scope list (see ScopeList.h). `prefs` is only
+  // read, for a one-time migration of a pre-existing single
+  // default_scope_name/key into list entry 1 -- the file is authoritative
+  // once it exists.
+  //
+  // Returns true ONLY when that legacy migration just ran, i.e. this boot is
+  // the first on a device that had a Scope configured the old way. The caller
+  // uses that to seed the channels that already exist with the migrated entry
+  // (see MyMesh::begin) -- channels carry their own scope now, so without the
+  // seed an upgrader's channel traffic would silently drop to unscoped even
+  // though their DMs kept the old scope. Returns false when /scopes1 was
+  // already there, and on a genuinely fresh device with nothing to migrate
+  // (list left empty, default_idx 0 == "*").
+  bool loadScopeList(ScopeList& list, const NodePrefs& prefs);
   void saveScopeList(const ScopeList& list);
   void migrateToSecondaryFS();
   uint8_t getBlobByKey(const uint8_t key[], int key_len, uint8_t dest_buf[]);
