@@ -1850,7 +1850,8 @@
 </tr>
 </tbody>
 </table>
-<p>Messages appear as chat bubbles sized to their content — <strong>right</strong>-anchored for outgoing, <strong>left</strong> for incoming — with sender name and a compact age indicator (<code>3m</code>, <code>2h</code>, <code>&gt;1d</code>) in the top-right corner. List runs <strong>newest at the bottom</strong>; opening a history starts at the latest message, scrolling up goes further back.</p>
+<p>Messages appear as chat bubbles sized to their content — <strong>right</strong>-anchored for outgoing, <strong>left</strong> for incoming — with sender name and a compact age indicator (<code>3m</code>, <code>2h</code>, <code>&gt;1d</code>) in the top-right corner. List runs <strong>newest at the bottom</strong>; opening a history starts at the latest message, scrolling up goes further back. The list wraps at both ends like every other list: <strong>UP</strong> at the oldest message jumps to the newest, and <strong>DOWN</strong> past the newest lands on the compose row and then wraps to the oldest.</p>
+<p>A tiny digit icon on a bubble is its hop count: on your own messages, how many repeaters echoed them back; on a <strong>received</strong> DM or channel post, how many hops it took to reach you. A received message always shows a time — if its timestamp is unknown or reads slightly ahead of this device's clock (sender/receiver clock skew, or the clock isn't synced yet), the receipt time is shown instead. In a channel history the title carries the channel's scope in brackets (<code>name [scope]</code>) whenever it is set to anything but <code>*</code>.</p>
 <p><strong>Short Enter</strong> on a message opens it in fullscreen. <strong>Hold Enter</strong> — on a history row or in fullscreen — opens the same options menu: Reply, plus <strong>Navigate</strong> / <strong>Save waypoint</strong> / <strong>Set as target</strong> when the message contains a location, and <strong>Path</strong> / <strong>Relayed by</strong> when hop data is available (see Fullscreen message view). You don't need to open the message first.</p>
 <hr />
 <h3 id="fullscreen-message-view">Fullscreen message view</h3>
@@ -2016,6 +2017,10 @@
 <tr>
 <td>Fav: ON / OFF</td>
 <td>Add or remove this channel from favourites — <strong>LEFT/RIGHT</strong> or <strong>Enter</strong> to toggle</td>
+</tr>
+<tr>
+<td>Scope: <name></td>
+<td><strong>Enter</strong> opens a picker over the shared scope list (Settings › Radio › Scope) — <code>*</code> sends this channel unscoped, any named scope tags its flood traffic with that region. Each channel keeps its own pick, matching the phone app's per-channel region picker.</td>
 </tr>
 <tr>
 <td>Pin to dial / Unpin (slot N)</td>

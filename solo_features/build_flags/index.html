@@ -969,6 +969,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#external-pa-tx-power-curve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        External PA / TX power curve
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#misc" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1618,6 +1629,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#external-pa-tx-power-curve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        External PA / TX power curve
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#misc" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1840,6 +1862,32 @@ layered on top of GPS support, not a requirement for it.</p>
 </tr>
 </tbody>
 </table>
+<hr />
+<h3 id="external-pa-tx-power-curve">External PA / TX power curve</h3>
+<p>For a board with an always-on external power amplifier after the SX1262. Both
+flags are needed together; leave them unset on a bare-SX1262 board.</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>LORA_TX_POWER=&lt;dBm&gt;</code> / <code>MAX_LORA_TX_POWER=&lt;dBm&gt;</code></td>
+<td>Default and ceiling for the TX power the app/CLI may request. The SX1262 alone tops out at 22; a board with a PA sets these to what the PA really delivers (the GAT562 30S sets 30).</td>
+</tr>
+<tr>
+<td><code>NUM_PA_POINTS=&lt;n&gt;</code> + <code>TX_GAIN_LORA=&lt;g0,g1,…&gt;</code></td>
+<td>The PA's measured gain in dB for each SX1262 register setting <code>0 … n-1</code>. Requesting <em>X</em> dBm picks the lowest register setting whose <code>setting + gain</code> reaches <em>X</em>, clamped at the last entry once the PA saturates — so the reported power matches the radiated one. A request below the PA's floor gain still radiates at that floor, and the value stored/reported back is the power actually applied.</td>
+</tr>
+</tbody>
+</table>
+<p>The GAT562 30S uses the vendor-measured 869 MHz curve from
+<a href="https://github.com/meshtastic/firmware/pull/11212">meshtastic/firmware#11212</a>.
+Note the on-device <strong>Settings › Radio › TX Pwr</strong> row is still capped at 22 dBm;
+values above that are set from the phone app or the CLI.</p>
 <hr />
 <h3 id="misc">Misc</h3>
 <table>

@@ -3230,12 +3230,12 @@ Mark the spot first with <strong>Tools › Trail → Hold Enter → Mark here</s
 <tr>
 <td>Scope only</td>
 <td>ON / OFF</td>
-<td>Only forward flood traffic matching this device's own <strong>Scope</strong> (Settings › Radio) or one of the <strong>Extra scopes</strong> below — drops unscoped floods and floods tagged for a different community. No-op while neither is set, so switching this on with no scope configured can't silently stop all relaying.</td>
+<td>Only forward flood traffic matching this device's own default <strong>Scope</strong> (Settings › Radio) or one of the <strong>Extra scopes</strong> below — drops unscoped floods and floods tagged for a different community. No-op while neither is set, so switching this on with no scope configured can't silently stop all relaying.</td>
 </tr>
 <tr>
 <td>Extra scopes</td>
-<td>text</td>
-<td>Comma-separated extra region names this repeater also relays for (e.g. <code>eu,de</code>), on top of its own Settings › Radio › <strong>Scope</strong> — relay-only, never changes what scope this device's own messages send under. <strong>Enter</strong> opens the keyboard.</td>
+<td>pick list</td>
+<td>Extra scopes this repeater also relays for, on top of its own Settings › Radio default <strong>Scope</strong> — relay-only, never changes what scope this device's own messages send under. Shows <code>N picked</code>. <strong>Enter</strong> opens a checklist of the Settings › Radio scope list (<strong>Enter</strong> toggles a row, <strong>Back</strong> closes); at most 4 are active. Shows <code>No scopes defined</code> until at least one named scope exists.</td>
 </tr>
 </tbody>
 </table>

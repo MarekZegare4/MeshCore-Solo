@@ -1803,6 +1803,11 @@
 <td>OFF / 5 / 10 / 20 / 30</td>
 <td>Partial refreshes between full clears; reduces ghosting on long sessions</td>
 </tr>
+<tr>
+<td>Msg wake</td>
+<td>ON / OFF</td>
+<td>Whether an incoming message turns the display back on when it was off and no phone/app is connected (default ON — today's behaviour either way).</td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -1846,11 +1851,6 @@
 <td>All / Zero-hop</td>
 <td>Filters the AD sound so it plays for every advert or only for local zero-hop adverts.</td>
 </tr>
-<tr>
-<td>Msg wake</td>
-<td>ON / OFF</td>
-<td>Whether an incoming message turns the display back on when it was off and no phone/app is connected (default ON — today's behaviour either way).</td>
-</tr>
 </tbody>
 </table>
 <p>Melody 1 and Melody 2 are custom sequences editable in <strong>Tools › Ringtone Editor</strong>.</p>
@@ -1890,7 +1890,7 @@
 <tr>
 <td>TX Pwr</td>
 <td>2–22 dBm</td>
-<td>LEFT/RIGHT. With <strong>Auto pwr</strong> on this is the <em>ceiling</em> — the radio may transmit lower.</td>
+<td>LEFT/RIGHT. With <strong>Auto pwr</strong> on this is the <em>ceiling</em> — the radio may transmit lower. On the <strong>GAT562 30S</strong> (external 30 dBm PA) the requested power maps through the PA's measured gain curve, so the stored value matches what is radiated; this row stays capped at 22, while the phone app / CLI can request up to 30 dBm — see <a href="../../build_flags/#external-pa--tx-power-curve">Build Flags › External PA</a>.</td>
 </tr>
 <tr>
 <td>Preset</td>
@@ -1929,8 +1929,8 @@
 </tr>
 <tr>
 <td>Scope</td>
-<td>text</td>
-<td>Names your device's radio "community" (e.g. <code>pl</code>) — typing a name derives a shared key the same way on every device, so any device that types the same name lands on the same scope automatically, no key exchange needed. Tags this device's own DM/channel sends so repeaters can tell your community's flood traffic apart from others sharing the same frequency; paired with <strong>Tools › Repeater › Scope only</strong>, it's also what this device relays for in repeater mode. Not encryption — message content is unaffected either way. <strong>Enter</strong> opens the keyboard; empty clears it (unscoped, the previous default).</td>
+<td>list</td>
+<td>Shows the list's <strong>default</strong> scope. <strong>Enter</strong> opens the <strong>SCOPE</strong> list: <code>*</code> (wildcard = unscoped, always first, can't be renamed or deleted) plus up to 8 named scopes of your own (e.g. <code>pl</code>). Typing a name derives a shared key the same way on every device, so any device that types the same name lands on the same scope automatically, no key exchange needed. <strong>Enter</strong> on a row opens <strong>Set as default</strong> / <strong>Rename</strong> / <strong>Delete</strong> (delete confirms first); <strong>+ Add scope</strong> at the bottom opens the keyboard. The <strong>default</strong> scope (marked <code>[default]</code>) governs <strong>DMs</strong> and the <strong>repeater's own relay slot</strong>; each <strong>channel</strong> carries its own pick — set from the channel's context menu (see <a href="../../message_screen/message_screen/">Message Screen</a>) — and a channel left on <code>*</code> sends unscoped. Scopes tag flood traffic so repeaters can tell your community's messages apart from others sharing the same frequency; paired with <strong>Tools › Repeater › Scope only</strong> it's also what this device relays for in repeater mode. The default also syncs both ways with the phone app's default-scope setting. Not encryption — message content is unaffected either way. Upgrading from a build with the old single Scope field carries it over as the default entry and seeds every existing channel with it, so nothing changes on the air.</td>
 </tr>
 </tbody>
 </table>
@@ -2060,10 +2060,21 @@
 <td>ON / OFF</td>
 <td>Sort favourites to the top of every list (default ON)</td>
 </tr>
+<tr>
+<td>Expire</td>
+<td>Off / 7d / 30d / 90d</td>
+<td>Age after which a contact with no advert/update counts as inactive (default Off). Only used by <strong>Prune now</strong> — nothing is ever deleted automatically.</td>
+</tr>
+<tr>
+<td>Prune now</td>
+<td>action (<strong>Enter</strong>)</td>
+<td>Counts the contacts older than <strong>Expire</strong>, then asks <code>Remove N contacts?</code> (defaults to Cancel) before deleting anything. Shows <code>Expire is Off</code> / <code>No inactive contacts</code> instead when there is nothing to do.</td>
+</tr>
 </tbody>
 </table>
 <p>Favourites are set per item in its context menu (<strong>Hold Enter</strong> › <strong>Fav: ON / OFF</strong>) — see <a href="../../message_screen/message_screen/">Message Screen</a>, and the same row exists in Tools › Nodes. A contact's or room's favourite flag is the same one the companion app shows as a starred contact, so it syncs both ways; a channel's is device-only.</p>
 <p>A favourite is marked with a ★ on its row wherever it is listed, and — unless <strong>Favs top</strong> is off — sorted above everything else. The three filters above are independent of that: they control what's <em>listed at all</em>, the sort only controls the order.</p>
+<p><strong>Pruning.</strong> A contact is inactive when its last advert/update is older than <strong>Expire</strong>. <strong>Favourites are never pruned</strong>, and neither is a contact with no timestamp or one that reads ahead of the device's own clock (e.g. the clock isn't set yet) — the rule only ever errs on the side of keeping data.</p>
 <hr />
 <h3 id="messages">Messages</h3>
 <table>
