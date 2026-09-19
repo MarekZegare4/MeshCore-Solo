@@ -65,7 +65,7 @@ Lists all available home screen pages. For each entry:
 
 | Setting   | Options    | Notes                                                                                                                                                              |
 | --------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| TX Pwr    | 2–22 dBm   | LEFT/RIGHT. With **Auto pwr** on this is the *ceiling* — the radio may transmit lower. |
+| TX Pwr    | 2–22 dBm   | LEFT/RIGHT. With **Auto pwr** on this is the *ceiling* — the radio may transmit lower. On the **GAT562 30S** (external 30 dBm PA) the requested power maps through the PA's measured gain curve, so the stored value matches what is radiated; this row stays capped at 22, while the phone app / CLI can request up to 30 dBm — see [Build Flags › External PA](../build_flags.md#external-pa--tx-power-curve). |
 | Preset    | named presets | LEFT/RIGHT cycles community RF presets (region frequency + bandwidth/SF/CR). **Enter** opens a popup to pick one, save the current settings as a named preset, or delete a saved one — deleting confirms first (defaults to Cancel). Applies frequency, bandwidth, SF and CR together. |
 | Freq      | chip range | **Enter** opens a digit-by-digit editor: LEFT/RIGHT moves between decimal places, UP/DOWN steps that digit. Bounds come from the radio chip's own validated range, so a value the radio would reject can't be entered. |
 | SF        | 5–12       | LEFT/RIGHT. Spreading factor. |
@@ -73,7 +73,7 @@ Lists all available home screen pages. For each entry:
 | CR        | 5–8        | LEFT/RIGHT. Coding rate (4/5–4/8). |
 | Pwr save  | ON / OFF   | **Battery saver.** Hardware duty-cycle receive (SX126x only): cycles RX↔sleep, wakes on preamble, cuts average RX current at the cost of some latency. **Forced off (`--`) while the repeater is on** — restored once it's switched off. A background watchdog auto-recovers if the sequencer gets stuck (soft re-arm, then a full reset) — see Tools › Diagnostics for the counts. |
 | Auto pwr  | ON / OFF   | **Adaptive Power Control.** Lowers TX power on strong links, ramps back to the **TX Pwr** ceiling on weak/lost ones. Link quality from DM ACK SNR, or — for channels (no ACK) — a repeater's rebroadcast. Live power shown on the radio page/name bar. Default OFF. **Suppressed (`--`) while the repeater is on** — restored once it's switched off. |
-| Scope     | text       | Names your device's radio "community" (e.g. `pl`) — typing a name derives a shared key the same way on every device, so any device that types the same name lands on the same scope automatically, no key exchange needed. Tags this device's own DM/channel sends so repeaters can tell your community's flood traffic apart from others sharing the same frequency; paired with **Tools › Repeater › Scope only**, it's also what this device relays for in repeater mode. Not encryption — message content is unaffected either way. **Enter** opens the keyboard; empty clears it (unscoped, the previous default). |
+| Scope     | list       | Shows the list's **default** scope. **Enter** opens the **SCOPE** list: `*` (wildcard = unscoped, always first, can't be renamed or deleted) plus up to 8 named scopes of your own (e.g. `pl`). Typing a name derives a shared key the same way on every device, so any device that types the same name lands on the same scope automatically, no key exchange needed. **Enter** on a row opens **Set as default** / **Rename** / **Delete** (delete confirms first); **+ Add scope** at the bottom opens the keyboard. The **default** scope (marked `[default]`) governs **DMs** and the **repeater's own relay slot**; each **channel** carries its own pick — set from the channel's context menu (see [Message Screen](../message_screen/message_screen.md)) — and a channel left on `*` sends unscoped. Scopes tag flood traffic so repeaters can tell your community's messages apart from others sharing the same frequency; paired with **Tools › Repeater › Scope only** it's also what this device relays for in repeater mode. The default also syncs both ways with the phone app's default-scope setting. Not encryption — message content is unaffected either way. Upgrading from a build with the old single Scope field carries it over as the default entry and seeds every existing channel with it, so nothing changes on the air. |
 
 |           OLED            |           E-Ink           |
 | :-----------------------: | :-----------------------: |
@@ -121,10 +121,14 @@ European Latin-diacritic letters (Polish, Czech, Slovak, German, French, Spanish
 | Channels | All / Fav | Show all channels or only favourited ones      |
 | Rooms    | All / Fav | Show all room servers or only favourited ones  |
 | Favs top | ON / OFF  | Sort favourites to the top of every list (default ON) |
+| Expire   | Off / 7d / 30d / 90d | Age after which a contact with no advert/update counts as inactive (default Off). Only used by **Prune now** — nothing is ever deleted automatically. |
+| Prune now | action (**Enter**) | Counts the contacts older than **Expire**, then asks `Remove N contacts?` (defaults to Cancel) before deleting anything. Shows `Expire is Off` / `No inactive contacts` instead when there is nothing to do. |
 
 Favourites are set per item in its context menu (**Hold Enter** › **Fav: ON / OFF**) — see [Message Screen](../message_screen/message_screen.md), and the same row exists in Tools › Nodes. A contact's or room's favourite flag is the same one the companion app shows as a starred contact, so it syncs both ways; a channel's is device-only.
 
 A favourite is marked with a ★ on its row wherever it is listed, and — unless **Favs top** is off — sorted above everything else. The three filters above are independent of that: they control what's *listed at all*, the sort only controls the order.
+
+**Pruning.** A contact is inactive when its last advert/update is older than **Expire**. **Favourites are never pruned**, and neither is a contact with no timestamp or one that reads ahead of the device's own clock (e.g. the clock isn't set yet) — the rule only ever errs on the side of keeping data.
 
 ---
 

@@ -62,7 +62,9 @@ Posting to a **room server** needs a login handshake — the device does this on
 | :-----------------------: | :-----------------------: |
 | ![](./history_oled.png) | ![](./history_eink.png) |
 
-Messages appear as chat bubbles sized to their content — **right**-anchored for outgoing, **left** for incoming — with sender name and a compact age indicator (`3m`, `2h`, `>1d`) in the top-right corner. List runs **newest at the bottom**; opening a history starts at the latest message, scrolling up goes further back.
+Messages appear as chat bubbles sized to their content — **right**-anchored for outgoing, **left** for incoming — with sender name and a compact age indicator (`3m`, `2h`, `>1d`) in the top-right corner. List runs **newest at the bottom**; opening a history starts at the latest message, scrolling up goes further back. The list wraps at both ends like every other list: **UP** at the oldest message jumps to the newest, and **DOWN** past the newest lands on the compose row and then wraps to the oldest.
+
+A tiny digit icon on a bubble is its hop count: on your own messages, how many repeaters echoed them back; on a **received** DM or channel post, how many hops it took to reach you. A received message always shows a time — if its timestamp is unknown or reads slightly ahead of this device's clock (sender/receiver clock skew, or the clock isn't synced yet), the receipt time is shown instead. In a channel history the title carries the channel's scope in brackets (`name [scope]`) whenever it is set to anything but `*`.
 
 **Short Enter** on a message opens it in fullscreen. **Hold Enter** — on a history row or in fullscreen — opens the same options menu: Reply, plus **Navigate** / **Save waypoint** / **Set as target** when the message contains a location, and **Path** / **Relayed by** when hop data is available (see Fullscreen message view). You don't need to open the message first.
 
@@ -146,6 +148,7 @@ In the **Rooms** list the context menu instead offers:
 | Notif: Default / OFF / ON | Per-channel notification override — **LEFT/RIGHT** or **Enter** to cycle           |
 | Melody: Global / M1 / M2  | Per-channel melody override — **LEFT/RIGHT** or **Enter** to cycle                 |
 | Fav: ON / OFF             | Add or remove this channel from favourites — **LEFT/RIGHT** or **Enter** to toggle |
+| Scope: <name>             | **Enter** opens a picker over the shared scope list (Settings › Radio › Scope) — `*` sends this channel unscoped, any named scope tags its flood traffic with that region. Each channel keeps its own pick, matching the phone app's per-channel region picker. |
 | Pin to dial / Unpin (slot N) | Pin this channel to a [Favourites Dial](../favourites_dial/favourites_dial.md) slot |
 | Edit                      | Opens the Add/Edit form below, pre-filled with the channel's name    |
 | Delete                    | Removes the channel — confirms first (defaults to Cancel)             |

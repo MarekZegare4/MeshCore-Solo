@@ -91,6 +91,23 @@ layered on top of GPS support, not a requirement for it.
 
 ---
 
+### External PA / TX power curve
+
+For a board with an always-on external power amplifier after the SX1262. Both
+flags are needed together; leave them unset on a bare-SX1262 board.
+
+| Flag | Meaning |
+| --- | --- |
+| `LORA_TX_POWER=<dBm>` / `MAX_LORA_TX_POWER=<dBm>` | Default and ceiling for the TX power the app/CLI may request. The SX1262 alone tops out at 22; a board with a PA sets these to what the PA really delivers (the GAT562 30S sets 30). |
+| `NUM_PA_POINTS=<n>` + `TX_GAIN_LORA=<g0,g1,…>` | The PA's measured gain in dB for each SX1262 register setting `0 … n-1`. Requesting *X* dBm picks the lowest register setting whose `setting + gain` reaches *X*, clamped at the last entry once the PA saturates — so the reported power matches the radiated one. A request below the PA's floor gain still radiates at that floor, and the value stored/reported back is the power actually applied. |
+
+The GAT562 30S uses the vendor-measured 869 MHz curve from
+[meshtastic/firmware#11212](https://github.com/meshtastic/firmware/pull/11212).
+Note the on-device **Settings › Radio › TX Pwr** row is still capped at 22 dBm;
+values above that are set from the phone app or the CLI.
+
+---
+
 ### Misc
 
 | Flag | Meaning |

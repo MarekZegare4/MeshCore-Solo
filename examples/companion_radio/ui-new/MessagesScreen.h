@@ -505,10 +505,20 @@ class MessagesScreen : public UIScreen {
   // bubble sits on shows who sent it, the same convention as a typical
   // messenger. Everything else in the row (sender, age, ack glyph, body) is
   // then drawn relative to this box's own x instead of the screen edge.
+  //
+  // A bubble never fills the whole row: max_w leaves a gutter on the side the
+  // sender's bubble is anchored away from (see bubbleMaxW), so even a long
+  // message still shows which side it came from.
   struct BubbleBox { int x, w; };
-  static BubbleBox computeBubbleBox(int full_avail, bool outgoing, int header_w, int body_w) {
+  static int bubbleMaxW(DisplayDriver& d, int full_avail) {
+    int gutter = d.getCharWidth() * 2;
+    if (gutter < 8) gutter = 8;
+    int w = full_avail - gutter;
+    return w < 1 ? 1 : w;
+  }
+  static BubbleBox computeBubbleBox(int full_avail, int max_w, bool outgoing, int header_w, int body_w) {
     int w = header_w > body_w ? header_w : body_w;
-    if (w > full_avail) w = full_avail;
+    if (w > max_w) w = max_w;
     if (w < 1) w = 1;
     return { outgoing ? (full_avail - w) : 0, w };
   }
@@ -1582,6 +1592,7 @@ public:
         // computeBubbleBox): the header (sender+ack+age) vs the body, measured
         // once here and reused below instead of re-wrapping.
         int full_avail = display.width() - reserve;
+        int max_w = bubbleMaxW(display, full_avail);
         // Incoming: the hop count the DM actually took to reach us, shown as
         // the same tiny digit icon an outgoing send uses for its relay/echo
         // count -- no ack glyph exists for incoming (there's nothing to
@@ -1593,15 +1604,15 @@ public:
         int body_w, nl = 0;
         if (portrait_expand) {
           display.translateUTF8ToBlocks(s_wrap_trans, body, sizeof(s_wrap_trans));
-          nl = FullscreenMsgView::wrapLines(display, s_wrap_trans, full_avail - 6, s_wrap_lines, 8);
+          nl = FullscreenMsgView::wrapLines(display, s_wrap_trans, max_w - 6, s_wrap_lines, 8);
           body_w = 0;
           for (int li = 0; li < nl; li++) { int w = display.getTextWidth(s_wrap_lines[li]); if (w > body_w) body_w = w; }
           body_w += 6;
         } else {
           int raw_w = display.getTextWidth(body);
-          body_w = (raw_w > full_avail - 6 ? full_avail - 6 : raw_w) + 6;
+          body_w = (raw_w > max_w - 6 ? max_w - 6 : raw_w) + 6;
         }
-        BubbleBox box = computeBubbleBox(full_avail, e.outgoing, header_w, body_w);
+        BubbleBox box = computeBubbleBox(full_avail, max_w, e.outgoing, header_w, body_w);
 
         drawHistRowFrame(display, box.x, box.w, y, bh, lh, sel);
         // Only the body marquees, not the sender too: both share the single
@@ -1805,21 +1816,22 @@ public:
         // the same way an outgoing post's repeater-echo count is.
         int in_hop_count = !outgoing ? (_history.chAtPos(ring_pos).path_len & 63) : 0;
         int full_avail = display.width() - reserve;
+        int max_w = bubbleMaxW(display, full_avail);
         int ack_w = show_ack ? (3 + ackGlyphWidth(display, ACK_OK, 1, relay_count))
                   : (in_hop_count > 0 ? (3 + miniIconNumberWidth(display, in_hop_count)) : 0);
         int header_w = 3 + display.getTextWidth(sender) + ack_w + age_w + 3;
         int body_w, nl = 0;
         if (portrait_expand) {
           display.translateUTF8ToBlocks(s_wrap_trans, body, sizeof(s_wrap_trans));
-          nl = FullscreenMsgView::wrapLines(display, s_wrap_trans, full_avail - 6, s_wrap_lines, 8);
+          nl = FullscreenMsgView::wrapLines(display, s_wrap_trans, max_w - 6, s_wrap_lines, 8);
           body_w = 0;
           for (int li = 0; li < nl; li++) { int w = display.getTextWidth(s_wrap_lines[li]); if (w > body_w) body_w = w; }
           body_w += 6;
         } else {
           int raw_w = display.getTextWidth(body);
-          body_w = (raw_w > full_avail - 6 ? full_avail - 6 : raw_w) + 6;
+          body_w = (raw_w > max_w - 6 ? max_w - 6 : raw_w) + 6;
         }
-        BubbleBox box = computeBubbleBox(full_avail, outgoing, header_w, body_w);
+        BubbleBox box = computeBubbleBox(full_avail, max_w, outgoing, header_w, body_w);
 
         drawHistRowFrame(display, box.x, box.w, y, bh, lh, sel);
         // Only the body marquees, not the sender — see the DM history block above.
