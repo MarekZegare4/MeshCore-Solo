@@ -1600,7 +1600,9 @@ public:
         int in_hop_count = !e.outgoing ? (e.path_len & 63) : 0;
         int ack_w = e.outgoing ? (3 + ackGlyphWidth(display, _history.dmEffectiveStatus(e), e.attempt + 1))
                   : (in_hop_count > 0 ? (3 + miniIconNumberWidth(display, in_hop_count)) : 0);
-        int header_w = 3 + display.getTextWidth(sender) + ack_w + age_w + 3;
+        // A little air between a marker and the age, so "12" + "1s" doesn't read as "121s".
+        int mk_gap = (ack_w > 0 && age_w > 0) ? 2 : 0;
+        int header_w = 3 + display.getTextWidth(sender) + ack_w + mk_gap + age_w + 3;
         int body_w, nl = 0;
         if (portrait_expand) {
           display.translateUTF8ToBlocks(s_wrap_trans, body, sizeof(s_wrap_trans));
@@ -1618,12 +1620,19 @@ public:
         // Only the body marquees, not the sender too: both share the single
         // marquee slot on DisplayDriver, and if two texts in the same row both
         // qualified they'd keep resetting each other's animation every frame.
-        display.drawTextEllipsized(box.x + 3, y + 1, box.w - 6 - age_w, sender);
+        // The name gives way to the ack/hop marker and the age (a long name is
+        // ellipsized), and the marker sits right after whatever width the name
+        // actually got -- not after its full width, which would run it into the age.
+        int name_avail = box.w - 6 - age_w - ack_w - mk_gap;
+        if (name_avail < display.getCharWidth()) name_avail = display.getCharWidth();
+        int name_w = display.getTextWidth(sender);
+        if (name_w > name_avail) name_w = name_avail;
+        display.drawTextEllipsized(box.x + 3, y + 1, name_avail, sender);
         if (e.outgoing) {                       // delivery marker after "Me"
-          int gx = box.x + 3 + display.getTextWidth(sender) + 3;
+          int gx = box.x + 3 + name_w + 3;
           drawAckGlyph(display, gx, y + 1, _history.dmEffectiveStatus(e), e.attempt + 1);
         } else if (in_hop_count > 0) {          // hop count after the sender name
-          int gx = box.x + 3 + display.getTextWidth(sender) + 3;
+          int gx = box.x + 3 + name_w + 3;
           miniIconDrawNumber(display, gx, y + 1, in_hop_count);
         }
         if (age[0]) { display.setCursor(box.x + box.w - age_w, y + 1); display.print(age); }
@@ -1819,7 +1828,9 @@ public:
         int max_w = bubbleMaxW(display, full_avail);
         int ack_w = show_ack ? (3 + ackGlyphWidth(display, ACK_OK, 1, relay_count))
                   : (in_hop_count > 0 ? (3 + miniIconNumberWidth(display, in_hop_count)) : 0);
-        int header_w = 3 + display.getTextWidth(sender) + ack_w + age_w + 3;
+        // A little air between a marker and the age, so "12" + "1s" doesn't read as "121s".
+        int mk_gap = (ack_w > 0 && age_w > 0) ? 2 : 0;
+        int header_w = 3 + display.getTextWidth(sender) + ack_w + mk_gap + age_w + 3;
         int body_w, nl = 0;
         if (portrait_expand) {
           display.translateUTF8ToBlocks(s_wrap_trans, body, sizeof(s_wrap_trans));
@@ -1835,12 +1846,17 @@ public:
 
         drawHistRowFrame(display, box.x, box.w, y, bh, lh, sel);
         // Only the body marquees, not the sender — see the DM history block above.
-        display.drawTextEllipsized(box.x + 3, y + 1, box.w - 6 - age_w, sender);
+        // Name yields to the marker and age -- see the DM history block above.
+        int name_avail = box.w - 6 - age_w - ack_w - mk_gap;
+        if (name_avail < display.getCharWidth()) name_avail = display.getCharWidth();
+        int name_w = display.getTextWidth(sender);
+        if (name_w > name_avail) name_w = name_avail;
+        display.drawTextEllipsized(box.x + 3, y + 1, name_avail, sender);
         if (show_ack) {
-          int gx = box.x + 3 + display.getTextWidth(sender) + 3;
+          int gx = box.x + 3 + name_w + 3;
           drawAckGlyph(display, gx, y + 1, ACK_OK, 1, relay_count);
         } else if (in_hop_count > 0) {
-          int gx = box.x + 3 + display.getTextWidth(sender) + 3;
+          int gx = box.x + 3 + name_w + 3;
           miniIconDrawNumber(display, gx, y + 1, in_hop_count);
         }
         if (age[0]) { display.setCursor(box.x + box.w - age_w, y + 1); display.print(age); }
