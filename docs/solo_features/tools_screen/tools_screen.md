@@ -498,9 +498,10 @@ A circular tab carousel of live device and mesh stats, refreshed once a second (
 | Pool free    | Free entries in the packet pool                                                                     |
 | Queue        | Packets waiting in the outbound queue                                                               |
 | Errors       | Radio error flags since boot/reset — `OK`, or tokens `F` (queue full), `C` (CAD timeout), `R` (RX-start timeout) |
-| RXPS wd s/h  | RX duty-cycle watchdog recovery count, `soft/hard` — how many times the background watchdog has re-armed (soft) or fully reset (hard) a stuck duty-cycle sequencer. Stays `0/0` unless Settings › Radio › **Pwr save** is on and something actually went wrong. |
 
-The packet counters, **Forwarded**, **Errors** and **RXPS wd s/h** are cumulative since boot. On the **Live** tab, **Hold Enter** opens a *Reset counters?* confirm (defaults to Cancel); the live readings (noise, RSSI/SNR, pool, queue, uptime) are not affected. **Cancel/Back** returns to the Tools list.
+The packet counters, **Forwarded** and **Errors**, are cumulative since boot. On the **Live** tab, **Hold Enter** opens a *Reset counters?* confirm (defaults to Cancel); the live readings (noise, RSSI/SNR, pool, queue, uptime) are not affected. **Cancel/Back** returns to the Tools list.
+
+There is no "RXPS wd s/h" row: it belongs to hardware RX duty-cycle receive, which is currently disabled (see the Settings screen doc and `docs/development/roadmap.md`) — nothing to watchdog.
 
 The counters make the repeater behaviour observable: **Forwarded** confirms the node is actually relaying (not just configured to), and **Pool free** / **Queue** show whether forwarding is exhausting the packet pool. See **Tools › Repeater** for the relaying options.
 
@@ -551,7 +552,7 @@ The flood filters (**Skip advert** through **Scope only**) are **opt-in** (defau
 
 **Same network vs. separate network.** With **Network = Current** (or a Custom profile matching your companion settings) the repeater stays on your own network — you keep messaging while relaying. A *different* Custom profile moves the device entirely onto that network while relaying (one radio can't be on two at once), returning to your own network when switched off. The profile re-applies after a reboot if the repeater was left on.
 
-While on, a **»** indicator appears in the status bar (same blink convention as auto-advert/trail markers). Two radio settings are overridden and restored afterwards: **Pwr save** forced off (must listen continuously) and **Auto pwr** forced off (full TX power for relay reach). Both show `--` in Settings while active.
+While on, a **»** indicator appears in the status bar (same blink convention as auto-advert/trail markers). **Auto pwr** is overridden off and restored afterwards (full TX power for relay reach) — shows `--` in Settings while active. (Pwr save, hardware RX duty-cycle, is currently disabled outright — see above — so there's nothing left for repeater mode to override there.)
 
 Live forwarding stats — **Forwarded**, **Pool free**, **Queue** — are shown on **Tools › Diagnostics** (this screen is config-only).
 

@@ -144,12 +144,14 @@ class DiagnosticsScreen : public UIScreen {
     }
     addRow("Errors", buf);
 
+#if FEAT_RX_POWERSAVE
     // RX duty-cycle watchdog recovery counts since boot/reset (soft re-arm /
     // hard chip reset). Always 0/0 on radios or profiles that never arm
     // duty-cycle power-save (repeaters force it off — see applyPowerSave()).
     snprintf(buf, sizeof(buf), "%lu/%lu", (unsigned long)radio_driver.getRxPsWatchdogSoftCount(),
              (unsigned long)radio_driver.getRxPsWatchdogHardCount());
     addRow("RXPS wd s/h", buf);
+#endif
   }
 
   void buildSystemLines() {

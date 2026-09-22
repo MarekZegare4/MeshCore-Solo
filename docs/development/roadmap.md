@@ -344,7 +344,7 @@ if pursued.
 **On branch `feat/power-saving`** — two independent toggles under Settings ›
 Radio, both **default OFF**. Under field testing; not yet merged.
 
-**✅ Done — hardware duty-cycle RX ("Pwr save")**
+**⛔ Disabled (2026-09-22) — hardware duty-cycle RX ("Pwr save")**
 - Uses the SX126x's own **RX duty-cycle** (`SetRxDutyCycle`, datasheet 13.1.7) via
   RadioLib `startReceiveDutyCycleAuto(preamble, 8)`: the chip's sequencer cycles
   RX↔sleep, latches a preamble and stays in RX to receive the packet (RX_DONE on
@@ -352,20 +352,60 @@ Radio, both **default OFF**. Under field testing; not yet merged.
   continuous RX. `armRecv()` arms duty-cycle when power-save is on, else a normal
   `startReceive()`; `loop()` re-arms only on a toggle. Falls back to continuous RX
   if the modem doesn't support duty-cycle (non-SX126x). `state` stays `STATE_RX`
-  so the dispatcher's not-in-RX watchdog never trips.
-- Duty-cycle engages when the configured preamble ≥ 2·8+1 symbols. At SF≤8 the
-  preamble is 32 → full duty-cycle; at SF9–12 it is 16 → RadioLib transparently
-  stays on continuous RX (no power saving on the slow SFs).
-- Companion: `rx_powersave` pref (schema `0xC0DE0009`), **Settings › Radio ›
-  "Pwr save"**, applied at boot (MyMesh) and on change (UITask). Noise-floor
-  sampling is skipped while on (chip is asleep most of the time) — the radio page
-  shows "Noise floor: n/a".
+  so the dispatcher's not-in-RX watchdog never trips. Duty-cycle engages when the
+  *assumed sender* preamble ≥ 2·8+1 symbols; using our own outgoing preamble
+  (`preambleLengthForSF(sf)`: 32 at SF≤8, 16 at SF9-12) as that assumption meant
+  duty-cycle only ever actually engaged at SF≤8.
+- **Field report + investigation:** a user on the stock "EU/UK (Narrow)" preset
+  (SF8) saw reception drop from ~1-5 msg/min to ~1/3h with Pwr save on, unaffected
+  by a better antenna. Root cause, confirmed against the SX1262 datasheet and
+  RadioLib's own maintainers ([jgromes/RadioLib#1597](https://github.com/jgromes/RadioLib/issues/1597),
+  closed as inherent chip behaviour, not a library bug): the SX126x's duty-cycle
+  preamble-detection state machine restarts every sleep/wake cycle and needs the
+  *actual transmitted* preamble to closely match what we've configured our
+  receiver to expect — tolerance in that issue's own testing was only 1-2 symbols
+  either way, well short of covering e.g. a repeater still on pre-v1.16 firmware
+  (16 symbols vs. our 32). A mismatch isn't a gradual sensitivity hit, it
+  deterministically drops every packet from that sender no matter the signal
+  strength — and a lone node mostly hears repeater rebroadcasts, exactly the
+  nodes least likely to be freshly updated. There is no software workaround:
+  RadioLib's own parameters only trade which senders you're blind to (shortening
+  `minSymbols` to tolerate a shorter assumed preamble directly shortens the
+  wake-window's correlator dwell time, trading the preamble-mismatch failure mode
+  for a marginal-signal one instead). A network-wide capability negotiation (e.g.
+  via the still-unused `ADV_FEAT1_MASK`/`ADV_FEAT2_MASK` fields already reserved
+  in `AdvertDataHelpers.h`) could plausibly gate this safely, but is a real
+  feature, not a quick fix — rejected for now as out of scope. Checked whether
+  IoTThinks' MeshCore fork (github.com/IoTThinks/MeshCore) had solved this: it
+  hasn't, and doesn't hit the problem at all, because its "power saving" never
+  touches the radio — `ESP32Board::sleep()`/NRF52 `board.sleep(0)` only light-sleep
+  the **MCU**, waking on the radio's own DIO1 GPIO interrupt while the radio itself
+  stays in plain continuous RX the whole time. That's the same MCU-idle mechanism
+  already noted below (native NRF52 companion power-saving from the v1.16
+  upstream merge) — safe, but doesn't touch the dominant power draw (the radio in
+  continuous RX), unlike a real duty-cycle.
+- **Resolution:** `examples/companion_radio/MyMesh.h` now defines
+  `FEAT_RX_POWERSAVE 0`, gating out the Settings row (`SettingsScreen.h`), the
+  Diagnostics RXPS watchdog row (`DiagnosticsScreen.h`), and every call site that
+  would apply `_prefs.rx_powersave` to the radio or to CAD auto-enable
+  (`MyMesh.cpp`, `UITask::applyPowerSave()`) — including forcing
+  `setPowerSaving(false)` unconditionally so a *stale* `rx_powersave=1` byte left
+  over in an existing prefs file from before this change can't do anything either.
+  The real duty-cycle implementation itself
+  (`RadioLibWrapper`/`CustomSX1262Wrapper::startPowerSaveRecv()`) is left in place,
+  unneutered, matching our own preamble convention — it's simply unreachable now.
+  Flipping `FEAT_RX_POWERSAVE` back on requires solving the network-compatibility
+  problem above first, not just re-adding the toggle.
+- Companion: `rx_powersave` pref (schema `0xC0DE0009`) still exists in
+  `NodePrefs`/`DataStore` purely for file-format stability; nothing reads it
+  anywhere behavior-relevant while `FEAT_RX_POWERSAVE` is 0.
 
   > **History:** an earlier attempt used a *software* CAD state machine (scan →
   > warm-sleep window → on-detect full RX, with `standbyXOSC`/burst windows). It
   > fought the hardware — querying a warm-sleeping chip from `checkSend()` gave a
   > phantom-busy channel that stalled TX for ~4 s, and ACKs dropped in the scan
-  > gaps. Replaced wholesale by the hardware duty-cycle above, which fixed both.
+  > gaps. Replaced wholesale by the hardware duty-cycle above, which turned out to
+  > have its own, deeper problem (see above).
 
 **✅ Done — Adaptive Power Control ("Auto pwr")**
 - `tx_power_dbm` becomes a *ceiling*; APC drives the radio's actual power within

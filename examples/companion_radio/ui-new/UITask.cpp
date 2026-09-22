@@ -3805,10 +3805,14 @@ void UITask::applyTxPower() {
 
 void UITask::applyPowerSave() {
   if (_node_prefs == NULL) return;
+#if FEAT_RX_POWERSAVE
   // A repeater must hear every packet to relay it, so duty-cycle RX (which sleeps
   // between preamble checks) is forced off while repeating — the user's pref is
   // kept and restored when the repeater is switched off.
   radio_driver.setPowerSaving(_node_prefs->rx_powersave && !_node_prefs->client_repeat);
+#else
+  radio_driver.setPowerSaving(false);   // see MyMesh.h FEAT_RX_POWERSAVE -- ignore any stale persisted rx_powersave byte
+#endif
 }
 
 void UITask::applyApc() {

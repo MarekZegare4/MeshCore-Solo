@@ -11,6 +11,20 @@ class UITask;
 /*------------ Frame Protocol --------------*/
 #define FIRMWARE_VER_CODE 13
 
+// Hardware RX duty-cycle ("Pwr save") is disabled: the SX126x's duty-cycle
+// preamble detection needs the *actual transmitted* preamble to exactly match
+// what we're configured to expect (confirmed hardware behaviour, see SX1262
+// datasheet 6.1.3 and https://github.com/jgromes/RadioLib/issues/1597) --
+// something we can't guarantee across a mesh with mixed firmware. A mismatch
+// doesn't cost a little sensitivity, it silently drops every packet from that
+// sender regardless of signal strength (2026-09-22 field report: near-total
+// reception loss, unaffected by antenna). The real duty-cycle implementation
+// (RadioLibWrapper::armRecv()/CustomSX1262Wrapper::startPowerSaveRecv()) is
+// left in place for if a network-wide compatibility mechanism ever lands --
+// flipping this back to 1 requires solving that first, not just re-adding the
+// Settings toggle. See docs/development/roadmap.md for the full writeup.
+#define FEAT_RX_POWERSAVE 0
+
 // Fallback only -- every real build (local or CI) goes through build.sh, which
 // always injects its own FIRMWARE_BUILD_DATE (today's date at build time).
 // __DATE__ is the compiler's own "Mmm dd yyyy" build-date macro, so a

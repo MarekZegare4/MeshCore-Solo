@@ -61,7 +61,9 @@ class SettingsScreen : public UIScreen {
     TX_POWER,
     RADIO_PRESET,
     CUSTOM_FREQ, CUSTOM_SF, CUSTOM_BW, CUSTOM_CR,
+#if FEAT_RX_POWERSAVE
     POWER_SAVE,
+#endif
     TX_APC,
     SCOPE_NAME,
     // System section
@@ -556,12 +558,14 @@ class SettingsScreen : public UIScreen {
       snprintf(buf, sizeof(buf), "%d", p ? (int)p->cr : 0);
       display.setCursor(valCol(display), y);
       display.print(buf);
+#if FEAT_RX_POWERSAVE
     } else if (item == POWER_SAVE) {
       display.print("Pwr save");
       display.setCursor(valCol(display), y);
       // Forced off (and locked) while the repeater is on — it must hear all traffic.
       if (p && p->client_repeat) display.print("--");
       else display.print((p && p->rx_powersave) ? "ON" : "OFF");
+#endif
     } else if (item == TX_APC) {
       display.print("Auto pwr");
       display.setCursor(valCol(display), y);
@@ -1078,6 +1082,7 @@ public:
     if (_selected == CUSTOM_SF && p && dir && RadioParamsEditor::stepSF(p->sf, dir)) { _task->applyRadioParams(); _dirty = true; return true; }
     if (_selected == CUSTOM_BW && p && dir && RadioParamsEditor::stepBW(p->bw, dir)) { _task->applyRadioParams(); _dirty = true; return true; }
     if (_selected == CUSTOM_CR && p && dir && RadioParamsEditor::stepCR(p->cr, dir)) { _task->applyRadioParams(); _dirty = true; return true; }
+#if FEAT_RX_POWERSAVE
     if (_selected == POWER_SAVE && p && (left || right || enter)) {
       if (p->client_repeat) { _task->showAlert("Off while repeating", 900); return true; }
       p->rx_powersave ^= 1;
@@ -1085,6 +1090,7 @@ public:
       _dirty = true;
       return true;
     }
+#endif
     if (_selected == TX_APC && p && (left || right || enter)) {
       if (p->client_repeat) { _task->showAlert("Off while repeating", 900); return true; }
       p->tx_apc ^= 1;

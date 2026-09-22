@@ -46,6 +46,13 @@ protected:
   // stays in RX to receive the packet (RX_DONE on DIO1) — no MCU state machine,
   // average RX current cut several-fold. Driven from armRecv()/loop(); falls back
   // to continuous RX if the modem doesn't support it.
+  // Companion-side gating: FEAT_RX_POWERSAVE (examples/companion_radio/MyMesh.h)
+  // is 0, so nothing on that target ever calls setPowerSaving(true) and this
+  // path never actually runs there -- the SX126x duty-cycle's preamble
+  // detection needs the sender's actual preamble to exactly match what we
+  // configure (confirmed hardware behaviour, not a bug here), which can't be
+  // guaranteed across a mesh with mixed firmware. See that file before
+  // re-enabling it anywhere.
   bool _power_save = false;
   bool _ps_active = false;       // is the radio currently armed in duty-cycle mode
   int8_t _tx_dbm = 0;            // last TX power applied (tracks APC's live value)
