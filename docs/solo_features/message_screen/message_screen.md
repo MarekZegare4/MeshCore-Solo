@@ -10,6 +10,8 @@
 
 The Messages screen is split into three modes — **DMs**, **Channels**, and **Rooms** — selectable with UP/DOWN on the mode-select screen. Each mode shows the corresponding list of conversations with unread counters.
 
+DM and channel history are each kept in a fixed-size on-device ring (32 DM / 48 channel entries). A busy conversation that outpaces reading can fill its ring — new messages keep arriving, evicting the oldest ones, including unread ones that were never opened. When that's happened, the unread badge for that conversation (and the DM/Channels row on the mode-select screen, and the clock/lock screen's Msgs field) gets a trailing **+** — e.g. `48+` — meaning the count is honest for what's still on the device but understates how many actually came in; the rest are gone for good. Rooms aren't ring-limited the same way, so they never show a **+**.
+
 ---
 
 ### Sending messages

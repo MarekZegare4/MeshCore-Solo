@@ -44,7 +44,7 @@ Up to three data fields are shown below the date separator. Each field displays 
 | Luminosity  | Lux   | lux from onboard sensor                                                   |
 | CO₂         | CO2   | ppm from onboard sensor                                                   |
 | Contacts    | Nodes | Total contacts in the mesh                                                |
-| Messages    | Msgs  | Total unread message count                                                |
+| Messages    | Msgs  | Total unread message count. A trailing **+** (e.g. `48+`) means at least one channel or DM has filled its on-device history ring while unread — the real total is higher than shown, but that's everything still recoverable; the rest was evicted before ever being seen. |
 | Satellites  | Sats  | GPS satellite count (or `--` without GPS)                                 |
 | Altitude (GPS) | AltG | metres/feet (per Settings › System › Units) from the GPS fix (or `no fix`) |
 

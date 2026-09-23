@@ -90,6 +90,7 @@ public:
   MessageHistory()
     : _hist_head(0), _hist_count(0), _dm_hist_head(0), _dm_hist_count(0) {
     memset(_ch_unread, 0, sizeof(_ch_unread));
+    memset(_ch_unread_overflow, 0, sizeof(_ch_unread_overflow));
   }
 
   // ── Channel ring ──────────────────────────────────────────────────────────
@@ -130,6 +131,10 @@ public:
       if (evicted < MAX_GROUP_CHANNELS && _ch_unread[evicted] > 0 &&
           _ch_unread[evicted] >= histCountForChannel(evicted)) {
         _ch_unread[evicted]--;
+        // The entry just evicted was itself still unread (every held entry for
+        // this channel was) -- it's gone for good, so the badge can never again
+        // show the true total. Sticky until chUnread() reads back down to 0.
+        _ch_unread_overflow[evicted] = true;
       }
       _hist_head = (_hist_head + 1) % CH_HIST_MAX;
     }
@@ -229,10 +234,26 @@ public:
     int held = histCountForChannel(ch);
     return _ch_unread[ch] < held ? _ch_unread[ch] : (uint8_t)held;
   }
-  void setChUnread(int ch, uint8_t v) {
-    if (ch >= 0 && ch < MAX_GROUP_CHANNELS) _ch_unread[ch] = v;
+  // True once an unread entry for this channel has been evicted off the ring
+  // (see addChannelMsg) -- the count above is honest but understates the real
+  // total. Clears itself once the user reads back down to 0 (setChUnread(ch,0)
+  // below): at that point there's no backlog left to warn about.
+  bool chUnreadOverflow(int ch) const {
+    return ch >= 0 && ch < MAX_GROUP_CHANNELS && _ch_unread_overflow[ch];
   }
-  void clearAllChannelUnread() { memset(_ch_unread, 0, sizeof(_ch_unread)); }
+  bool anyChannelUnreadOverflow() const {
+    for (int i = 0; i < MAX_GROUP_CHANNELS; i++) if (_ch_unread_overflow[i]) return true;
+    return false;
+  }
+  void setChUnread(int ch, uint8_t v) {
+    if (ch < 0 || ch >= MAX_GROUP_CHANNELS) return;
+    _ch_unread[ch] = v;
+    if (v == 0) _ch_unread_overflow[ch] = false;
+  }
+  void clearAllChannelUnread() {
+    memset(_ch_unread, 0, sizeof(_ch_unread));
+    memset(_ch_unread_overflow, 0, sizeof(_ch_unread_overflow));
+  }
   int  getTotalChannelUnread() const {
     // Same clamp as chUnread(), but counting ring occupancy for every channel
     // in one pass instead of re-walking the ring once per channel.
@@ -415,6 +436,7 @@ private:
   ChHistEntry _hist[CH_HIST_MAX];
   int _hist_head, _hist_count;
   uint8_t _ch_unread[MAX_GROUP_CHANNELS];
+  bool    _ch_unread_overflow[MAX_GROUP_CHANNELS];
 
   DmHistEntry _dm_hist[DM_HIST_MAX];
   int _dm_hist_head, _dm_hist_count;

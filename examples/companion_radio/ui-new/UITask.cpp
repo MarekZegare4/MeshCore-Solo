@@ -299,7 +299,7 @@ static int drawClockTime(DisplayDriver& d, int top_y, const struct tm* ti,
 // ── HomeScreen ────────────────────────────────────────────────────────────────
 // Forward declaration to be able to call formatDashVal from HomeScreen::render()
 static void formatDashVal(uint8_t field, char* val, int val_len, uint16_t batt_mv,
-                          uint16_t low_batt_mv, int unread, bool imperial, CayenneLPP* lpp = nullptr);
+                          uint16_t low_batt_mv, int unread, bool unread_overflow, bool imperial, CayenneLPP* lpp = nullptr);
 
 // Altitude (baro or GPS) respects Settings > System > Units, same as every
 // other distance in the UI -- unlike geo::fmtDist, never switches to km/mi
@@ -925,7 +925,10 @@ public:
             } else if (field == DASH_MSGS) {
               strcpy(label, "Msgs");
               int unread = _task->getDMUnreadTotal() + _task->getChannelUnreadCount() + _task->getRoomUnreadCount();
-              snprintf(val, sizeof(val), "%d", unread);
+              // "+" when the true total is understated -- at least one unread
+              // message has already been evicted off a ring before ever being
+              // seen (see UITask::getAnyUnreadOverflow()).
+              snprintf(val, sizeof(val), _task->getAnyUnreadOverflow() ? "%d+" : "%d", unread);
             } else {
               uint8_t lpp_type = 0;
               switch (field) {
@@ -1002,11 +1005,13 @@ public:
           if (isLPP(f0) || isLPP(f1)) {
             sensors_lpp.reset(); sensors.querySensors(0xFF, sensors_lpp); lpp_ptr = &sensors_lpp;
           }
-          int unread = (f0 == DASH_MSGS || f1 == DASH_MSGS)
+          bool show_msgs = f0 == DASH_MSGS || f1 == DASH_MSGS;
+          int unread = show_msgs
                      ? _task->getDMUnreadTotal() + _task->getChannelUnreadCount() + _task->getRoomUnreadCount() : 0;
+          bool unread_overflow = show_msgs && _task->getAnyUnreadOverflow();
           uint16_t batt_mv = _task->getBattMilliVolts();
-          formatDashVal(f0, v0, sizeof(v0), batt_mv, _node_prefs->low_batt_mv, unread, _node_prefs->units_imperial, lpp_ptr);
-          formatDashVal(f1, v1, sizeof(v1), batt_mv, _node_prefs->low_batt_mv, unread, _node_prefs->units_imperial, lpp_ptr);
+          formatDashVal(f0, v0, sizeof(v0), batt_mv, _node_prefs->low_batt_mv, unread, unread_overflow, _node_prefs->units_imperial, lpp_ptr);
+          formatDashVal(f1, v1, sizeof(v1), batt_mv, _node_prefs->low_batt_mv, unread, unread_overflow, _node_prefs->units_imperial, lpp_ptr);
           if (v0[0] || v1[0]) {
             int sv_y = date_y + step;
             display.setColor(DisplayDriver::LIGHT);
@@ -1268,7 +1273,7 @@ public:
       int total_unread = _task->getDMUnreadTotal() + _task->getChannelUnreadCount() + _task->getRoomUnreadCount();
       if (total_unread > 0) {
         char badge[20];
-        snprintf(badge, sizeof(badge), "%d unread", total_unread);
+        snprintf(badge, sizeof(badge), _task->getAnyUnreadOverflow() ? "%d+ unread" : "%d unread", total_unread);
         display.drawTextCentered(display.width() / 2, content_y + step, badge);
       }
       display.drawTextCentered(display.width() / 2, content_y + step * 2, PRESS_LABEL " to open");
@@ -1303,6 +1308,7 @@ public:
         const uint8_t* prefix = favSlotPrefix(i);
         char    name[26];
         uint8_t unread   = 0;
+        bool    overflow = false;
         bool    resolved = false;
 
         if (prefix && _task->favouriteSlotKind(i) == NodePrefs::FAV_KIND_CHANNEL) {
@@ -1314,6 +1320,7 @@ public:
             name[0] = '#';
             display.translateUTF8ToBlocks(name + 1, ch.name, sizeof(name) - 1);
             unread   = _task->getChannelUnread(ch_idx);
+            overflow = unread > 0 && _task->getChannelUnreadOverflow(ch_idx);
             resolved = true;
           }
         } else if (prefix) {
@@ -1323,6 +1330,7 @@ public:
             if (memcmp(c.id.pub_key, prefix, NodePrefs::FAVOURITE_PREFIX_LEN) == 0) {
               display.translateUTF8ToBlocks(name, c.name, sizeof(name));
               unread   = _task->getDMUnread(c.id.pub_key);
+              overflow = unread > 0 && _task->getDMUnreadOverflow(c.id.pub_key);
               resolved = true;
               break;
             }
@@ -1341,14 +1349,14 @@ public:
         if (resolved) {
           // Reserve space for the unread badge so the name's ellipsis lands
           // before it instead of underneath. Badge and name share one baseline.
-          int  bw = unread > 0 ? display.unreadBadgeWidth(unread) + 3 : 0;  // badge + 3 px gap
+          int  bw = unread > 0 ? display.unreadBadgeWidth(unread, overflow) + 3 : 0;  // badge + 3 px gap
           int name_y     = cy + (cell_h - line_h) / 2;
           int name_max_w = cell_w - 4 - bw;
           if (name_max_w < 6) name_max_w = 6;
           int r = display.drawTextEllipsized(cx + 2, name_y, name_max_w, name, sel);
           if (sel && r > 0) mq_delay = r;
           if (unread > 0)
-            display.drawUnreadBadge(cx + cell_w - 2, name_y, unread, sel);
+            display.drawUnreadBadge(cx + cell_w - 2, name_y, unread, sel, overflow);
         } else {
           int plus_y = cy + (cell_h - line_h) / 2;
           display.drawTextCentered(cx + cell_w / 2, plus_y, "+");
@@ -1960,6 +1968,18 @@ uint8_t UITask::getChannelUnread(uint8_t channel_idx) const {
   return ((MessagesScreen*)messages_screen)->chUnread(channel_idx);
 }
 
+bool UITask::getChannelUnreadOverflow(uint8_t channel_idx) const {
+  return ((MessagesScreen*)messages_screen)->chUnreadOverflow(channel_idx);
+}
+
+bool UITask::getAnyChannelUnreadOverflow() const {
+  return ((MessagesScreen*)messages_screen)->anyChannelUnreadOverflow();
+}
+
+bool UITask::getAnyUnreadOverflow() const {
+  return getAnyChannelUnreadOverflow() || getAnyDMUnreadOverflow();
+}
+
 void UITask::onMsgAck(uint32_t ack_crc) {
   ((MessagesScreen*)messages_screen)->markDmDelivered(ack_crc);
 }
@@ -2015,8 +2035,10 @@ uint8_t UITask::getDMUnread(const uint8_t* pub_key) const {
 void UITask::reconcileDMUnread() {
   for (int i = 0; i < DM_UNREAD_TABLE_SIZE; i++) {
     if (_dm_unread_table[i].count == 0) continue;
-    if (((MessagesScreen*)messages_screen)->dmHistCountForContact(_dm_unread_table[i].prefix) == 0)
+    if (((MessagesScreen*)messages_screen)->dmHistCountForContact(_dm_unread_table[i].prefix) == 0) {
       _dm_unread_table[i].count = 0;   // ring no longer holds anything for this sender -- free the slot
+      _dm_unread_table[i].overflow = false;
+    }
   }
 }
 
@@ -2091,6 +2113,21 @@ void UITask::newMsg(uint8_t path_len, const char* from_name, const char* text, i
     } else if (empty_slot >= 0) {
       memcpy(_dm_unread_table[empty_slot].prefix, pub_key, 4);
       _dm_unread_table[empty_slot].count = 1;
+      _dm_unread_table[empty_slot].overflow = false;   // fresh contact -- don't inherit a stale flag from whoever held this slot before
+      slot = empty_slot;
+    }
+    // The DM ring (unlike the channel ring) doesn't proactively decrement this
+    // counter as it evicts old entries, so it can only be caught here: if the
+    // raw count now claims more unread than the ring actually still holds for
+    // this contact, an unread entry for them was just evicted (this insert, by
+    // definition, can only have evicted at most one entry). Clamp back to the
+    // honest value and flag it -- mirrors MessageHistory's channel-side fix.
+    if (slot >= 0) {
+      int held = ((MessagesScreen*)messages_screen)->dmHistCountForContact(pub_key);
+      if (_dm_unread_table[slot].count > held) {
+        _dm_unread_table[slot].count = (uint8_t)held;
+        _dm_unread_table[slot].overflow = true;
+      }
     }
   }
 
@@ -2260,7 +2297,7 @@ bool UITask::isButtonPressed() const {
 }
 
 static void formatDashVal(uint8_t field, char* val, int val_len, uint16_t batt_mv,
-                          uint16_t low_batt_mv, int unread, bool imperial, CayenneLPP* lpp) {
+                          uint16_t low_batt_mv, int unread, bool unread_overflow, bool imperial, CayenneLPP* lpp) {
   val[0] = '\0';
   switch (field) {
     case DASH_NONE: return;
@@ -2276,7 +2313,7 @@ static void formatDashVal(uint8_t field, char* val, int val_len, uint16_t batt_m
       snprintf(val, val_len, "%d nodes", the_mesh.getNumContacts());
       return;
     case DASH_MSGS:
-      snprintf(val, val_len, "%d msgs", unread);
+      snprintf(val, val_len, unread_overflow ? "%d+ msgs" : "%d msgs", unread);
       return;
 #if ENV_INCLUDE_GPS == 1
     case DASH_GPS: {

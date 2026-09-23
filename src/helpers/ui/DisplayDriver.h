@@ -187,8 +187,16 @@ public:
 
   // Format a small unread count into buf: "1".."99", then "99+". count >= 1.
   // No stdio — DisplayDriver.h only pulls stdint/string.
-  static void fmtBadgeCount(char* buf, int count) {
+  // overflow: the count itself is honest (how many still-held entries are
+  // unread) but the underlying ring is capped, and at least one unread entry
+  // has already been evicted off the end before ever being seen -- there were
+  // genuinely more than this. Appends "+" (still within the 4-char buffer) so
+  // the badge doesn't silently understate a permanently-lost backlog as an
+  // exact count.
+  static void fmtBadgeCount(char* buf, int count, bool overflow = false) {
     if (count > 99)       { buf[0]='9'; buf[1]='9'; buf[2]='+'; buf[3]=0; }
+    else if (overflow && count >= 10) { buf[0]=(char)('0'+count/10); buf[1]=(char)('0'+count%10); buf[2]='+'; buf[3]=0; }
+    else if (overflow)    { buf[0]=(char)('0'+count); buf[1]='+'; buf[2]=0; }
     else if (count >= 10) { buf[0]=(char)('0'+count/10); buf[1]=(char)('0'+count%10); buf[2]=0; }
     else                  { buf[0]=(char)('0'+count); buf[1]=0; }
   }
@@ -203,8 +211,8 @@ public:
   virtual int textWidthTrailingGap() const { return 0; }
   // Pixel width the pill from drawUnreadBadge(count) occupies — for reserving
   // the name column before it. Mirrors the pill's horizontal padding.
-  int unreadBadgeWidth(int count) {
-    char buf[5]; fmtBadgeCount(buf, count);
+  int unreadBadgeWidth(int count, bool overflow = false) {
+    char buf[5]; fmtBadgeCount(buf, count, overflow);
     int pad = sepH() + 1;
     return getTextWidth(buf) - textWidthTrailingGap() + pad * 2;
   }
@@ -213,9 +221,10 @@ public:
   // knocked out. On a selected/inverted row pass sel=true so the pill inverts
   // too (paper capsule + ink digits) and stays visible. The four corners are
   // knocked back to the surrounding colour for a rounded-capsule look.
+  // overflow: see fmtBadgeCount -- appends "+" for a ring-capped, understated count.
   // Restores ink to LIGHT. Returns the pill width.
-  int drawUnreadBadge(int right_x, int y, int count, bool sel) {
-    char buf[5]; fmtBadgeCount(buf, count);
+  int drawUnreadBadge(int right_x, int y, int count, bool sel, bool overflow = false) {
+    char buf[5]; fmtBadgeCount(buf, count, overflow);
     int pad = sepH() + 1;
     int pw = getTextWidth(buf) - textWidthTrailingGap() + pad * 2;
     int ph = getLineHeight();

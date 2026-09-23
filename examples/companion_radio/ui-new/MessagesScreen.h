@@ -1108,6 +1108,7 @@ public:
   }
 
   int getTotalChannelUnread() const { return _history.getTotalChannelUnread(); }
+  bool anyChannelUnreadOverflow() const { return _history.anyChannelUnreadOverflow(); }
 
   // How many DM ring entries this contact/room currently holds -- lets UITask
   // clamp its separate _dm_unread_table counters to what the shared 32-slot DM
@@ -1334,6 +1335,7 @@ public:
   }
 
   uint8_t chUnread(uint8_t channel_idx) const { return _history.chUnread(channel_idx); }
+  bool chUnreadOverflow(uint8_t channel_idx) const { return _history.chUnreadOverflow(channel_idx); }
 
   int render(DisplayDriver& display) override {
     int mq_delay = 0;   // >0 while a selected row's text is marquee-scrolling
@@ -1372,6 +1374,8 @@ public:
         _task->getChannelUnreadCount(),
         _task->getRoomUnreadCount()
       };
+      // Rooms have no local ring to overflow the same way (see UITask::getAnyUnreadOverflow).
+      bool overflow[3] = { _task->getAnyDMUnreadOverflow(), anyChannelUnreadOverflow(), false };
       for (int i = 0; i < 3; i++) {
         int y = start_y + i * item_h;
         bool sel = (i == _mode_sel);
@@ -1379,7 +1383,7 @@ public:
         display.setCursor(2, y);
         display.print(opts[i]);
         if (badges[i] > 0)
-          display.drawUnreadBadge(display.width() - 1, y, badges[i], sel);
+          display.drawUnreadBadge(display.width() - 1, y, badges[i], sel, overflow[i]);
       }
       display.setColor(DisplayDriver::LIGHT);
       // Fold the popup's own suggested redraw delay into mq_delay -- otherwise
@@ -1406,7 +1410,8 @@ public:
           char filtered[sizeof(c.name)];
           display.translateUTF8ToBlocks(filtered, c.name, sizeof(filtered));
           uint8_t dm_unread = _task->getDMUnread(c.id.pub_key);
-          int bw = dm_unread > 0 ? display.unreadBadgeWidth(dm_unread) + 2 : 0;
+          bool dm_overflow = dm_unread > 0 && _task->getDMUnreadOverflow(c.id.pub_key);
+          int bw = dm_unread > 0 ? display.unreadBadgeWidth(dm_unread, dm_overflow) + 2 : 0;
           int sw = (c.flags & 0x01) ? favStarWidth(display) : 0;
           // See the channel/DM history bodies' identical comment: suppress this
           // row's own marquee while a context menu covers it, so the two don't
@@ -1416,7 +1421,7 @@ public:
           if (name_marquee && r > 0) mq_delay = r;
           if (sw) drawFavStar(display, display.width() - reserve - bw - sw + 1, y);
           if (dm_unread > 0)
-            display.drawUnreadBadge(display.width() - reserve, y, dm_unread, sel);
+            display.drawUnreadBadge(display.width() - reserve, y, dm_unread, sel, dm_overflow);
         }
       });
 
@@ -1450,7 +1455,8 @@ public:
         ChannelDetails ch;
         if (the_mesh.getChannel(_channel_indices[list_idx], ch)) {
           uint8_t unread = _history.chUnread(_channel_indices[list_idx]);
-          int bw = unread > 0 ? display.unreadBadgeWidth(unread) + 2 : 0;
+          bool ch_overflow = unread > 0 && _history.chUnreadOverflow(_channel_indices[list_idx]);
+          int bw = unread > 0 ? display.unreadBadgeWidth(unread, ch_overflow) + 2 : 0;
           int sw = chIsFav(_channel_indices[list_idx]) ? favStarWidth(display) : 0;
           // See the channel/DM history bodies' identical comment: suppress this
           // row's own marquee while a context menu covers it, so the two don't
@@ -1460,7 +1466,7 @@ public:
           if (name_marquee && r > 0) mq_delay = r;
           if (sw) drawFavStar(display, display.width() - reserve - bw - sw + 1, y);
           if (unread > 0)
-            display.drawUnreadBadge(display.width() - reserve, y, unread, sel);
+            display.drawUnreadBadge(display.width() - reserve, y, unread, sel, ch_overflow);
         }
       });
 
