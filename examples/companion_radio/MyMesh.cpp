@@ -288,7 +288,7 @@ bool MyMesh::getCADEnabled() const {
   // (unlike simple_repeater's CommonCLI `cad` command) — it's wired and
   // persisted for a future manual override, but always 0 today.
   // rx_powersave is never actually applied to the radio while FEAT_RX_POWERSAVE
-  // is 0 (see MyMesh.h) -- don't let a stale persisted byte from before that
+  // is 0 (see Features.h) -- don't let a stale persisted byte from before that
   // still auto-enable CAD here for a duty-cycle mode that isn't running.
 #if FEAT_RX_POWERSAVE
   return _prefs.cad_enabled || (_prefs.rx_powersave && !_prefs.client_repeat);
@@ -2001,7 +2001,7 @@ void MyMesh::begin(bool has_display) {
 #if FEAT_RX_POWERSAVE
   radio_driver.setPowerSaving(_prefs.rx_powersave && !_prefs.client_repeat);   // duty-cycle RX off while repeating (must hear all traffic)
 #else
-  radio_driver.setPowerSaving(false);   // see MyMesh.h FEAT_RX_POWERSAVE -- ignore any stale persisted rx_powersave byte
+  radio_driver.setPowerSaving(false);   // see Features.h FEAT_RX_POWERSAVE -- ignore any stale persisted rx_powersave byte
 #endif
   board.setLoRaFemLnaEnabled(_prefs.radio_fem_rxgain);
   board.setLoRaFemPaGainEnabled(_prefs.radio_fem_txgain);
@@ -2496,7 +2496,7 @@ void MyMesh::handleCmdFrame(size_t len) {
 #if FEAT_RX_POWERSAVE
       radio_driver.setPowerSaving(_prefs.rx_powersave && !_prefs.client_repeat);
 #else
-      radio_driver.setPowerSaving(false);   // see MyMesh.h FEAT_RX_POWERSAVE -- ignore any stale persisted rx_powersave byte
+      radio_driver.setPowerSaving(false);   // see Features.h FEAT_RX_POWERSAVE -- ignore any stale persisted rx_powersave byte
 #endif
       applyApc();   // pins power to the ceiling; apcActive() keeps it there while repeating
       MESH_DEBUG_PRINTLN("OK: CMD_SET_RADIO_PARAMS: f=%d, bw=%d, sf=%d, cr=%d", freq, bw, (uint32_t)sf,

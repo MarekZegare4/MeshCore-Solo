@@ -133,7 +133,7 @@ public:
         _dirty = true; break;
       case K_DURATION:
         _prefs->loc_share_duration_idx = (uint8_t)((_prefs->loc_share_duration_idx + (dir >= 0 ? 1 : NodePrefs::LOC_SHARE_DURATION_COUNT - 1)) % NodePrefs::LOC_SHARE_DURATION_COUNT);
-        _task->restartLocShareSession();   // a new length starts the session over
+        _task->restartLocShareClock();   // a new length starts the clock over (no extra [LOC] send)
         _dirty = true; break;
       case K_TARGET:
         if (enter) { _task->pickLocShareTarget(); return; }  // full chooser

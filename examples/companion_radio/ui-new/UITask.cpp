@@ -3856,7 +3856,7 @@ void UITask::applyPowerSave() {
   // kept and restored when the repeater is switched off.
   radio_driver.setPowerSaving(_node_prefs->rx_powersave && !_node_prefs->client_repeat);
 #else
-  radio_driver.setPowerSaving(false);   // see MyMesh.h FEAT_RX_POWERSAVE -- ignore any stale persisted rx_powersave byte
+  radio_driver.setPowerSaving(false);   // see Features.h FEAT_RX_POWERSAVE -- ignore any stale persisted rx_powersave byte
 #endif
 }
 

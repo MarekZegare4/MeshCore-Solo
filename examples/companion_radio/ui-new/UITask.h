@@ -340,6 +340,10 @@ public:
   void gotoLiveShareScreen();
   // Start the auto-share session clock afresh (next engine tick treats it as a new enable).
   void restartLocShareSession() { _loc_share_was_enabled = false; }
+  // Restart only the session's duration clock -- unlike restartLocShareSession(),
+  // no re-announce. For a changed "Stop after" length, where position hasn't
+  // changed. No-op before the engine has started a session (it sets the clock then).
+  void restartLocShareClock() { if (_loc_share_was_enabled) _loc_share_session_ms = millis(); }
   void gotoLocatorScreen();
   // Re-arm the locator state machine so the next evaluation initialises
   // silently (called by the Locator tool after the target/radius changes,

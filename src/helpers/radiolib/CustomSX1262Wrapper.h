@@ -62,7 +62,7 @@ public:
   // configured preamble is too short for a real duty-cycle (senderPreamble <
   // 2*minSymbols+1), RadioLib transparently falls back to a continuous receive.
   //
-  // NOT CURRENTLY REACHABLE: FEAT_RX_POWERSAVE (MyMesh.h) is 0, so nothing ever
+  // NOT CURRENTLY REACHABLE: FEAT_RX_POWERSAVE (companion Features.h) is 0, so nothing ever
   // calls setPowerSaving(true) and this never runs. Left implemented (matching
   // our own preambleLengthForSF(sf) convention, so it's correct for nodes on
   // this same convention) rather than removed, because the reason it's disabled
@@ -74,7 +74,7 @@ public:
   // guarantee we can't currently make. A mismatch doesn't cost a little
   // sensitivity, it silently drops every packet from that sender regardless of
   // signal strength (2026-09-22 field report: near-total reception loss on a
-  // stock SF8 preset, unaffected by antenna gain). See MyMesh.h and
+  // stock SF8 preset, unaffected by antenna gain). See companion Features.h and
   // docs/development/roadmap.md before ever flipping FEAT_RX_POWERSAVE back on.
   int16_t startPowerSaveRecv() override {
     return ((SX126x *)_radio)->startReceiveDutyCycleAuto(preambleLengthForSF(_preamble_sf), 8);

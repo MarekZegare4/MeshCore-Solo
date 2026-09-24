@@ -46,7 +46,7 @@ protected:
   // stays in RX to receive the packet (RX_DONE on DIO1) — no MCU state machine,
   // average RX current cut several-fold. Driven from armRecv()/loop(); falls back
   // to continuous RX if the modem doesn't support it.
-  // Companion-side gating: FEAT_RX_POWERSAVE (examples/companion_radio/MyMesh.h)
+  // Companion-side gating: FEAT_RX_POWERSAVE (examples/companion_radio/Features.h)
   // is 0, so nothing on that target ever calls setPowerSaving(true) and this
   // path never actually runs there -- the SX126x duty-cycle's preamble
   // detection needs the sender's actual preamble to exactly match what we

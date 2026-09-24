@@ -384,7 +384,7 @@ Radio, both **default OFF**. Under field testing; not yet merged.
   already noted below (native NRF52 companion power-saving from the v1.16
   upstream merge) — safe, but doesn't touch the dominant power draw (the radio in
   continuous RX), unlike a real duty-cycle.
-- **Resolution:** `examples/companion_radio/MyMesh.h` now defines
+- **Resolution:** `examples/companion_radio/Features.h` now defines
   `FEAT_RX_POWERSAVE 0`, gating out the Settings row (`SettingsScreen.h`), the
   Diagnostics RXPS watchdog row (`DiagnosticsScreen.h`), and every call site that
   would apply `_prefs.rx_powersave` to the radio or to CAD auto-enable
