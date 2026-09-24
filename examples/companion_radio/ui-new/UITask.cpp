@@ -2010,6 +2010,22 @@ void UITask::addDMMsg(const uint8_t* pub_key, bool outgoing, const char* text, u
                       uint32_t ack_tag, uint32_t ack_deadline_ms, uint8_t resends,
                       const uint8_t* path, uint8_t path_len) {
   ((MessagesScreen*)messages_screen)->addDMMsg(pub_key, outgoing, text, sender_timestamp, ack_tag, ack_deadline_ms, resends, path, path_len);
+  // The DM ring (unlike the channel ring) doesn't proactively decrement the
+  // unread counters as it evicts old entries, so catch it here, right after
+  // the insert: a raw count claiming more unread than the ring still holds
+  // for that contact means one of their unread entries was just evicted. Any
+  // contact can lose one -- not just this sender -- so check every slot.
+  // Clamp back to the honest value and flag it (mirrors MessageHistory's
+  // channel-side fix). Must run after the insert, not in newMsg() (called
+  // before it), or the new message itself reads as evicted.
+  for (int i = 0; i < DM_UNREAD_TABLE_SIZE; i++) {
+    if (_dm_unread_table[i].count == 0) continue;
+    int held = ((MessagesScreen*)messages_screen)->dmHistCountForContact(_dm_unread_table[i].prefix);
+    if (_dm_unread_table[i].count > held) {
+      _dm_unread_table[i].count = (uint8_t)held;
+      _dm_unread_table[i].overflow = held > 0;   // held == 0 frees the slot -- nothing left to flag
+    }
+  }
 }
 
 int UITask::getDMUnreadTotal() const {
@@ -2114,21 +2130,8 @@ void UITask::newMsg(uint8_t path_len, const char* from_name, const char* text, i
       memcpy(_dm_unread_table[empty_slot].prefix, pub_key, 4);
       _dm_unread_table[empty_slot].count = 1;
       _dm_unread_table[empty_slot].overflow = false;   // fresh contact -- don't inherit a stale flag from whoever held this slot before
-      slot = empty_slot;
     }
-    // The DM ring (unlike the channel ring) doesn't proactively decrement this
-    // counter as it evicts old entries, so it can only be caught here: if the
-    // raw count now claims more unread than the ring actually still holds for
-    // this contact, an unread entry for them was just evicted (this insert, by
-    // definition, can only have evicted at most one entry). Clamp back to the
-    // honest value and flag it -- mirrors MessageHistory's channel-side fix.
-    if (slot >= 0) {
-      int held = ((MessagesScreen*)messages_screen)->dmHistCountForContact(pub_key);
-      if (_dm_unread_table[slot].count > held) {
-        _dm_unread_table[slot].count = (uint8_t)held;
-        _dm_unread_table[slot].overflow = true;
-      }
-    }
+    // Eviction/overflow is checked in addDMMsg(), after the ring insert.
   }
 
   char alert_buf[80];
@@ -3466,9 +3469,14 @@ bool UITask::sendLocationShare(int32_t lat, int32_t lon) {
   if (!_node_prefs) return false;
   // Live Share's own scope, if set: applies to these sends only (0 = follow the
   // target's usual scope). The sends below are synchronous, so bracketing works.
+  // A value past the list's end (list shrunk other than via removeScope())
+  // follows the target, as LiveShareScreen shows it -- ScopeList::key() would
+  // otherwise clamp it to "*" and send unscoped.
   struct ScopeGuard {
     bool on;
-    explicit ScopeGuard(uint8_t v) : on(v != 0) { if (on) the_mesh.setOneShotScope(v - 1); }
+    explicit ScopeGuard(uint8_t v) : on(v != 0 && v <= the_mesh.scopeList().count + 1) {
+      if (on) the_mesh.setOneShotScope(v - 1);
+    }
     ~ScopeGuard() { if (on) the_mesh.clearOneShotScope(); }
   } scope_guard(_node_prefs->loc_share_scope);
   char text[80];

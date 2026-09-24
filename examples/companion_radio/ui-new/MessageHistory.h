@@ -241,8 +241,13 @@ public:
   bool chUnreadOverflow(int ch) const {
     return ch >= 0 && ch < MAX_GROUP_CHANNELS && _ch_unread_overflow[ch];
   }
+  // Only channels that still show unread count: eviction alone can take a
+  // channel's counter down to 0 with the flag left set (nothing then calls
+  // setChUnread(ch, 0) to clear it), and a "+" on the aggregate must not come
+  // from a channel contributing nothing to it (e.g. a dashboard "0+ msgs").
   bool anyChannelUnreadOverflow() const {
-    for (int i = 0; i < MAX_GROUP_CHANNELS; i++) if (_ch_unread_overflow[i]) return true;
+    for (int i = 0; i < MAX_GROUP_CHANNELS; i++)
+      if (_ch_unread_overflow[i] && chUnread(i) > 0) return true;
     return false;
   }
   void setChUnread(int ch, uint8_t v) {
