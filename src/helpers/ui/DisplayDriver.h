@@ -30,6 +30,14 @@ protected:
   unsigned long _marquee_next_at = 0;
   DisplayDriver(int w, int h) { _w = w; _h = h; }
   void setDimensions(int w, int h) { _w = w; _h = h; }
+
+  // Registered via setBusyPumpFn() below; drivers whose underlying vendor
+  // library exposes a hook for its blocking hardware wait (e.g. GxEPD2's
+  // setBusyCallback()) call this from it. Default no-op, so any driver/board
+  // that never wires one up behaves exactly as before.
+  void (*_busy_pump_fn)(void*) = nullptr;
+  void* _busy_pump_ctx = nullptr;
+  void callBusyPump() { if (_busy_pump_fn) _busy_pump_fn(_busy_pump_ctx); }
 public:
   enum Color { DARK=0, LIGHT, RED, GREEN, BLUE, YELLOW, ORANGE }; // on b/w screen, colors will be !=0 synonym of light
 
@@ -498,6 +506,14 @@ public:
   virtual void setDisplayRotation(uint8_t rot) { }  // 0-3, no-op for fixed-orientation displays
   virtual void setFullRefreshInterval(uint8_t n) { }  // e-ink: do full refresh every n partial refreshes (0=never)
   virtual void endFrame() = 0;
+
+  // Called from board setup to run safe background work during a blocking
+  // hardware wait (currently: an e-ink panel's BUSY-pin poll, which can run
+  // for over a second on a full refresh and would otherwise stall the whole
+  // main loop -- see RadioLibWrapper::pumpRecvDuringBlockingWait(), the
+  // motivating use). fn must not touch this display or any UI state: it can
+  // run reentrantly, nested inside the very call it's servicing.
+  void setBusyPumpFn(void (*fn)(void*), void* ctx) { _busy_pump_fn = fn; _busy_pump_ctx = ctx; }
 
 #ifdef ENABLE_SCREENSHOT
   // Screenshot support — return raw framebuffer and its size in bytes.

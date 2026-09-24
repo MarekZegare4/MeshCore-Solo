@@ -84,6 +84,10 @@ bool GxEPDDisplay::begin() {
   SPI1.begin();
 #endif
   display.init(115200, true, 2, false);
+  // Runs ~every 1ms while _waitWhileBusy() polls the panel's BUSY pin, i.e.
+  // for as long as a refresh blocks the main loop. See busyCallbackTrampoline
+  // and callBusyPump()/setBusyPumpFn() (DisplayDriver.h).
+  display.epd2.setBusyCallback(busyCallbackTrampoline, this);
   display.setRotation(DISPLAY_ROTATION);
   setTextSize(1);
   display.setPartialWindow(0, 0, display.width(), display.height());

@@ -253,6 +253,23 @@ bool RadioLibWrapper::isInRecvMode() const {
 }
 
 int RadioLibWrapper::recvRaw(uint8_t* bytes, int sz) {
+  if (_pump_count > 0) {
+    // pumpRecvDuringBlockingWait() already pulled this off the chip while
+    // the main loop was stuck (e-ink refresh) -- hand over the staged copy.
+    // Any packet that has landed since stays flagged and is read live once
+    // the queue is empty.
+    uint8_t slot = _pump_head;
+    int len = _pump_len[slot];
+    if (len > sz) len = sz;
+    memcpy(bytes, _pump_data[slot], len);
+    _pumped_pop_snr = _pump_snr[slot];
+    _pumped_pop_rssi = _pump_rssi[slot];
+    _last_recv_was_pumped = true;
+    _pump_head = (_pump_head + 1) % PUMP_QUEUE_SIZE;
+    _pump_count--;
+    return len;
+  }
+
   int len = 0;
   if (state & STATE_INT_READY) {
     len = _radio->getPacketLength();
@@ -268,6 +285,7 @@ int RadioLibWrapper::recvRaw(uint8_t* bytes, int sz) {
         n_recv++;
       }
     }
+    _last_recv_was_pumped = false;
     #if defined(USE_LR2021)
     state = STATE_RX;     // LR2021 stays in Rx after readData, calling startReceive while still in Rx throws -706 errors
     #else
@@ -279,6 +297,49 @@ int RadioLibWrapper::recvRaw(uint8_t* bytes, int sz) {
     armRecv();   // continuous RX, or re-arm the duty-cycle in power-save mode
   }
   return len;
+}
+
+// See the class comment in RadioLibWrappers.h. STATE_INT_READY is shared by
+// the TX-done and RX-done interrupts, so the base state disambiguates them;
+// anything else (mid-TX, idle) is left alone.
+void RadioLibWrapper::pumpRecvDuringBlockingWait() {
+  if (state == (uint8_t)(STATE_TX_WAIT | STATE_INT_READY)) {
+    // After TX_DONE the chip falls back to standby: deaf until the main loop
+    // reaches isSendComplete()/onSendFinished(). Do the radio side of
+    // onSendFinished() now and go straight back to RX; those two then only
+    // report it (see _tx_done_early).
+    _radio->finishTransmit();
+    _board->onAfterTransmit();
+    n_sent++;
+    _tx_done_early = true;
+    state = STATE_IDLE;
+    armRecv();
+    return;
+  }
+  if (state != (uint8_t)(STATE_RX | STATE_INT_READY)) return;
+  if (_pump_count >= PUMP_QUEUE_SIZE) return;   // staging full -- let the main loop drain it via recvRaw() first
+
+  uint8_t slot = (_pump_head + _pump_count) % PUMP_QUEUE_SIZE;
+  int len = _radio->getPacketLength();
+  if (len > 0) {
+    if (len > MAX_TRANS_UNIT) len = MAX_TRANS_UNIT;
+    int err = _radio->readData(_pump_data[slot], len);
+    if (err == RADIOLIB_ERR_NONE) {
+      _pump_len[slot] = (uint8_t)len;
+      _pump_snr[slot] = readLiveSNR();
+      _pump_rssi[slot] = readLiveRSSI();
+      _pump_count++;
+      n_recv++;
+    } else {
+      n_recv_errors++;
+    }
+  }
+  #if defined(USE_LR2021)
+  state = STATE_RX;
+  #else
+  state = STATE_IDLE;
+  #endif
+  armRecv();
 }
 
 uint32_t RadioLibWrapper::getEstAirtimeFor(int len_bytes) {
@@ -299,6 +360,9 @@ bool RadioLibWrapper::startSendRaw(const uint8_t* bytes, int len) {
 }
 
 bool RadioLibWrapper::isSendComplete() {
+  // Already finished by pumpRecvDuringBlockingWait(): state now belongs to
+  // the re-armed RX (and may flag a newly received packet), so don't touch it.
+  if (_tx_done_early) return true;
   if (state & STATE_INT_READY) {
     state = STATE_IDLE;
     n_sent++;
@@ -308,6 +372,10 @@ bool RadioLibWrapper::isSendComplete() {
 }
 
 void RadioLibWrapper::onSendFinished() {
+  if (_tx_done_early) {
+    _tx_done_early = false;
+    return;
+  }
   _radio->finishTransmit();
   _board->onAfterTransmit();
   state = STATE_IDLE;
@@ -336,10 +404,13 @@ bool RadioLibWrapper::isChannelActive() {
 }
 
 float RadioLibWrapper::getLastRSSI() const {
-  return _radio->getRSSI();
+  // A packet handed back via the pump-queue path (recvRaw()) needs the
+  // reading captured when it was pulled off the chip, not whatever's newest
+  // in the registers now -- see the field comments in RadioLibWrappers.h.
+  return _last_recv_was_pumped ? _pumped_pop_rssi : readLiveRSSI();
 }
 float RadioLibWrapper::getLastSNR() const {
-  return _radio->getSNR();
+  return _last_recv_was_pumped ? _pumped_pop_snr : readLiveSNR();
 }
 
 float RadioLibWrapper::packetScoreInt(float snr, int sf, int packet_len) {

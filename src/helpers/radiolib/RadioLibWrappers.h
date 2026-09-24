@@ -89,6 +89,47 @@ protected:
   // firmware defaults (frequency/bandwidth/SF/CR/TX power/preamble/gain).
   virtual bool radioHardReset() { return false; }
 
+  // --- Busy-wait packet pump (see pumpRecvDuringBlockingWait() below) ---
+  // A display driver's e-ink busy-wait can block the main loop for over a
+  // second per refresh (GxEPD2 setBusyCallback()). The radio stays in
+  // continuous RX meanwhile, but only the latest packet is readable: the
+  // chip reports a single length/offset, so if a second packet completes
+  // before the loop gets back to recvRaw(), the first is lost -- and IRQ
+  // flags are sticky, so a later CRC-failed packet makes readData() reject
+  // a good one still waiting. pumpRecvDuringBlockingWait() pulls each packet
+  // into this small staging queue as it lands, deliberately WITHOUT touching
+  // packet parsing/dispatch (Dispatcher::checkRecv() does that later, back
+  // on the main loop) -- reaching into routing/UI from here would reenter
+  // the very display code that's blocked calling us.
+  // A TX finishing mid-refresh is worse: after TX_DONE the chip falls back to
+  // standby and hears nothing at all until re-armed -- so the pump also
+  // finishes the TX and resumes RX right away.
+  static const uint8_t PUMP_QUEUE_SIZE = 2;
+  uint8_t _pump_data[PUMP_QUEUE_SIZE][MAX_TRANS_UNIT];
+  uint8_t _pump_len[PUMP_QUEUE_SIZE];
+  float   _pump_snr[PUMP_QUEUE_SIZE];
+  float   _pump_rssi[PUMP_QUEUE_SIZE];
+  uint8_t _pump_count = 0, _pump_head = 0;
+  // Set whenever recvRaw() hands back a packet that pumpRecvDuringBlockingWait()
+  // already pulled off the chip, so getLastRSSI()/getLastSNR() (below) report
+  // the reading captured at THAT read -- not whatever's newest in the chip's
+  // registers if another packet has landed (live or pumped) since.
+  bool  _last_recv_was_pumped = false;
+  float _pumped_pop_snr = 0, _pumped_pop_rssi = 0;
+  // The pump already did onSendFinished()'s radio work and re-armed RX, so
+  // isSendComplete() reports done and onSendFinished() skips the radio part
+  // (it would drop the chip back to standby and clobber a pending RX flag).
+  // A subclass onSendFinished() extension then runs with RX already armed.
+  bool  _tx_done_early = false;
+
+  // Chip-specific SNR/RSSI register reads. Implemented per radio type
+  // (renamed from what used to be each subclass's getLastRSSI()/getLastSNR()
+  // override) so the base class can route getLastRSSI()/getLastSNR() through
+  // the pumped-packet cache above instead of every subclass needing to know
+  // about it.
+  virtual float readLiveRSSI() const = 0;
+  virtual float readLiveSNR() const = 0;
+
 public:
   RadioLibWrapper(PhysicalLayer& radio, mesh::MainBoard& board) : _radio(&radio), _board(&board), _preamble_sf(0) { n_recv = n_sent = 0; }
 
@@ -143,6 +184,12 @@ public:
   void resetAGC() override;
 
   void loop() override;
+
+  // Called only from a display driver's busy-wait callback (see
+  // DisplayDriver::setBusyPumpFn()) while the main loop is blocked -- see
+  // the class comment above. Never call this from anywhere that could end
+  // up back inside display/UI code.
+  void pumpRecvDuringBlockingWait();
 
   uint32_t getPacketsRecv() const { return n_recv; }
   uint32_t getPacketsRecvErrors() const { return n_recv_errors; }

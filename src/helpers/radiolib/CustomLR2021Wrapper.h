@@ -88,8 +88,8 @@ public:
     _radio->setPreambleLength(preambleLengthForSF(getSpreadingFactor())); // overcomes weird issues with small and big pkts
   }
 
-  float getLastRSSI() const override { return ((CustomLR2021 *)_radio)->getRSSI(); }
-  float getLastSNR() const override { return ((CustomLR2021 *)_radio)->getSNR(); }
+  float readLiveRSSI() const override { return ((CustomLR2021 *)_radio)->getRSSI(); }
+  float readLiveSNR() const override { return ((CustomLR2021 *)_radio)->getSNR(); }
 
   uint8_t getSpreadingFactor() const override { return ((CustomLR2021 *)_radio)->getSpreadingFactor(); }
   

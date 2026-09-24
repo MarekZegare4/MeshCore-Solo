@@ -15,6 +15,16 @@
 static bool g_sim_ready = false;
 #endif
 
+#ifdef DISPLAY_HAS_BUSY_PUMP
+// Run from the e-ink driver's BUSY-pin wait (DisplayDriver::setBusyPumpFn(),
+// wired in setup() below) so packets landing during a refresh are pulled off
+// the radio as they arrive, and a TX that finishes mid-refresh goes straight
+// back to listening -- see RadioLibWrapper::pumpRecvDuringBlockingWait().
+static void pumpRadioDuringDisplayBusyWait(void*) {
+  radio_driver.pumpRecvDuringBlockingWait();
+}
+#endif
+
 // Believe it or not, this std C function is busted on some platforms!
 static uint32_t _atoi(const char* sp) {
   uint32_t n = 0;
@@ -293,6 +303,9 @@ void setup() {
   if (disp && the_mesh.getNodePrefs())
     disp->setBrightness(the_mesh.getNodePrefs()->display_brightness);
   ui_task.begin(disp, &sensors, the_mesh.getNodePrefs());  // still want to pass this in as dependency, as prefs might be moved
+#ifdef DISPLAY_HAS_BUSY_PUMP
+  if (disp) disp->setBusyPumpFn(pumpRadioDuringDisplayBusyWait, nullptr);
+#endif
 #endif
 
 #ifdef NRF52_PLATFORM

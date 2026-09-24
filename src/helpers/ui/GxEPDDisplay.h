@@ -24,6 +24,11 @@
 #include "DisplayDriver.h"
 #include "MiscFixedFont.h"
 
+// This driver calls callBusyPump() during its BUSY-pin waits; app code keys
+// its setBusyPumpFn() wiring off this so it isn't compiled for displays (or
+// the sim, whose radio isn't a RadioLibWrapper) that never would.
+#define DISPLAY_HAS_BUSY_PUMP 1
+
 #ifndef DISPLAY_ROTATION
   #define DISPLAY_ROTATION 0
 #endif
@@ -67,6 +72,18 @@ class GxEPDDisplay : public DisplayDriver {
   int16_t drawGlyph(int16_t x, int16_t y, uint32_t cp, int sc);
   uint8_t glyphXAdvance(uint32_t cp, int sc);
   int scale() const { return (width() >= height()) ? 2 : 1; }
+
+  // GxEPD2_EPD::setBusyCallback() wants a plain function pointer with a
+  // void* param, not a member function -- this trampolines back into the
+  // instance so callBusyPump() (DisplayDriver.h) can reach whatever board
+  // setup registered via setBusyPumpFn(). _waitWhileBusy() calls the callback
+  // *instead of* its own delay(1), so keep that delay here: without it the
+  // wait becomes a hard spin that starves the RTOS idle task (no CPU sleep)
+  // and equal-priority tasks for the whole refresh.
+  static void busyCallbackTrampoline(const void* param) {
+    ((GxEPDDisplay*)param)->callBusyPump();
+    delay(1);
+  }
 
 public:
 #if defined(EINK_DISPLAY_MODEL)
