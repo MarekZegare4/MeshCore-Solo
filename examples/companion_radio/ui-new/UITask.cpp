@@ -1592,6 +1592,13 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
   }
 #endif
 
+  // Lock device on boot if password is enabled to prevent bypassing it by resetting device
+  if (passwordLockEnabled()) {
+    _locked = true;
+    // Add BOOT_SCREEN_MILLIS to make sure splash screen still shows
+    _lock_wake_until = millis() + BOOT_SCREEN_MILLIS + 5000;
+  }
+
 #if defined(PIN_USER_BTN)
   user_btn.begin();
 #endif
@@ -2212,6 +2219,112 @@ void UITask::syncLockToHome() {
   if (home) static_cast<HomeScreen*>(home)->setLocked(_locked);
 }
 
+bool UITask::passwordLockEnabled() const {
+  // Is lock_screen_password setting not empty?
+  return _node_prefs && _node_prefs->lock_screen_password[0] != '\0';
+}
+
+void UITask::setNodeLockPassword(const char* plain) {
+  if (!_node_prefs || !plain) return;
+  if (plain[0] == '\0') { // Clear the password
+    memset(_node_prefs->lock_screen_password, 0, sizeof(_node_prefs->lock_screen_password));
+    memset(_node_prefs->lock_screen_password_salt, 0, sizeof(_node_prefs->lock_screen_password_salt));
+    return;
+  }
+  // Generate a fresh random salt and store salted SHA-256 digest
+  mesh::RNG* rng = the_mesh.getRNG();
+  if (rng) {
+    rng->random(_node_prefs->lock_screen_password_salt, sizeof(_node_prefs->lock_screen_password_salt));
+  } else {
+    // Time as fallback entropy source
+    uint32_t t = (uint32_t)millis() ^ (uint32_t)rtc_clock.getCurrentTime();
+    memcpy(_node_prefs->lock_screen_password_salt, &t, sizeof(t));
+  }
+  mesh::Utils::sha256((uint8_t*)_node_prefs->lock_screen_password,
+                      sizeof(_node_prefs->lock_screen_password),
+                      _node_prefs->lock_screen_password_salt,
+                      sizeof(_node_prefs->lock_screen_password_salt),
+                      (const uint8_t*)plain, (int)strlen(plain));
+}
+
+bool UITask::checkNodeLockPassword(const char* entered) const {
+  if (!_node_prefs || !entered) return false;
+  uint8_t digest[NodePrefs::LOCK_PASSWORD_MAX_LEN];
+  mesh::Utils::sha256(digest, sizeof(digest),
+                      _node_prefs->lock_screen_password_salt,
+                      sizeof(_node_prefs->lock_screen_password_salt),
+                      (const uint8_t*)entered, (int)strlen(entered));
+  return memcmp(digest, _node_prefs->lock_screen_password, sizeof(digest)) == 0;
+}
+
+void UITask::beginUnlockPrompt() {
+  _unlock_kb = true; // Track that keyboard is visible and is waiting for input
+  int max_len = _node_prefs ? (int)sizeof(_node_prefs->lock_screen_password) - 1 : 32;
+  _lock_pin_restore_kb_type = _node_prefs ? _node_prefs->keyboard_type : 0;
+  _kb.beginPin("", max_len, true); // Pass true to hide input
+  _kb.clearPlaceholders();
+  _lock_wake_until = millis() + 5000; // keep the display on while typing
+  _next_refresh = 0;
+}
+
+void UITask::cancelUnlockPrompt() {
+  _unlock_kb = false;
+  if (_node_prefs) _node_prefs->keyboard_type = _lock_pin_restore_kb_type; // restore user setting
+  _kb.buf[0] = '\0'; // clear input
+  _kb.len = 0;
+  _kb.cursor_pos = 0;
+  _next_refresh = 100;
+}
+
+void UITask::handleUnlockKey(char c) {
+  auto res = _kb.handleInput(c);
+  if (res == KeyboardWidget::DONE) { // Process input on submit
+    if (_node_prefs && checkNodeLockPassword(_kb.buf)) {
+      // Match: Unlock
+      _unlock_kb = false;
+      _locked = false;
+      if (_node_prefs) _node_prefs->keyboard_type = _lock_pin_restore_kb_type; // restore user setting
+      if (_display && !_display->isOn()) _display->turnOn();
+      uint32_t aoff = autoOffMillis();
+      if (aoff > 0) _auto_off = millis() + aoff;
+      syncLockToHome();
+    } else {
+      // Invalid: Clear input and reset keyboard
+      _kb.len = 0;
+      _kb.buf[0] = '\0';
+      _kb.cursor_pos = 0;
+      _kb.page = _kb.row = _kb.col = 0;
+      _kb.caps = _kb.caps_lock = false;
+      _next_refresh = 0;
+    }
+  } else if (res == KeyboardWidget::CANCELLED) {
+    cancelUnlockPrompt();
+  }
+  _lock_wake_until = millis() + 5000; // keep the display on while typing
+}
+
+void UITask::toggleLock() {
+  if (_unlock_kb) {
+    cancelUnlockPrompt();
+    return;
+  }
+  if (_locked) {
+    if (passwordLockEnabled()) { // Prompt for password
+      beginUnlockPrompt();
+    } else {                     // ...or unlock instantly
+      _locked = false;
+      if (_display && !_display->isOn()) _display->turnOn();
+      uint32_t aoff = autoOffMillis();
+      if (aoff > 0) _auto_off = millis() + aoff;
+    }
+  } else { // Device is currently unlocked -> lock it
+    _locked = true;
+    _lock_wake_until = millis() + 2000; // Briefly show lockscreen before blanking
+  }
+  syncLockToHome();
+  _next_refresh = 0;
+}
+
 bool UITask::savePrefsIfDirty(bool& dirty) {
   if (!dirty) return false;
   the_mesh.savePrefs();
@@ -2561,15 +2674,7 @@ void UITask::pollCardKB() {
     // two-key combo, so it doesn't need the physical combo's extra 3x
     // repetition to guard against accidental triggering.
     if (_display && !_display->isOn()) _display->turnOn();
-    _locked = !_locked;
-    if (_locked) {
-      _lock_wake_until = millis() + 2000;
-    } else {
-      uint32_t aoff = autoOffMillis();
-      if (aoff > 0) _auto_off = millis() + aoff;
-    }
-    syncLockToHome();
-    _next_refresh = 0;
+    toggleLock();
     return;
   } else if (raw >= 0x80 && raw <= 0xAF) {   // Fn+<letter> -- open its accent popup
     char base = CARDKB_FN_BASE[raw - 0x80];
@@ -2623,6 +2728,7 @@ void UITask::pollHallSensor() {
   _hall_magnet_present = present;
 
   if (present) {   // cover closed
+    cancelUnlockPrompt();   // a cover can't be over the password prompt
     _locked = true;
     syncLockToHome();
     _lock_wake_until = 0;
@@ -2631,11 +2737,17 @@ void UITask::pollHallSensor() {
     digitalWrite(PIN_LED, LOW);   // same as the auto-off path -- one less thing lit under a closed cover
 #endif
   } else {   // cover opened
-    _locked = false;
-    syncLockToHome();
-    if (_display && !_display->isOn()) _display->turnOn();
-    uint32_t aoff = autoOffMillis();
-    if (aoff > 0) _auto_off = millis() + aoff;
+    if (passwordLockEnabled()) { // Redirect flow to usual unlock prompt when password is enabled
+      _locked = true;
+      if (_display) _display->turnOn();
+      beginUnlockPrompt();
+    } else {
+      _locked = false;
+      syncLockToHome();
+      if (_display && !_display->isOn()) _display->turnOn();
+      uint32_t aoff = autoOffMillis();
+      if (aoff > 0) _auto_off = millis() + aoff;
+    }
   }
   _next_refresh = 0;
 #endif
@@ -2650,7 +2762,7 @@ void UITask::loop() {
   uint8_t joy_rot = _node_prefs ? _node_prefs->joystick_rotation : JOYSTICK_ROTATION;
   int ev = user_btn.check();
   if (ev == BUTTON_EVENT_CLICK) {
-    if (back_btn.isPressed()) {
+    if (back_btn.isPressed() && !_unlock_kb) {
       // Enter clicked while Back is held — lock/unlock sequence
       if (_display && !_display->isOn()) {
         _display->turnOn();  // turn on display so hints are visible
@@ -2663,18 +2775,15 @@ void UITask::loop() {
       if (_lock_seq_count >= 3) {
         _lock_seq_count = 0;
         _lock_seq_used = true;  // suppress Back release click
-        _locked = !_locked;
-        if (_locked) {
-          _lock_wake_until = millis() + 2000;
-        } else {
-          if (_display && !_display->isOn()) _display->turnOn();
-          uint32_t aoff = autoOffMillis();
-          if (aoff > 0) _auto_off = millis() + aoff;
-        }
-        syncLockToHome();
+        toggleLock();
       }
       // eat the Enter — don't pass to curr
     } else {
+      // While the password keyboard is open, Back+Enter is just typing
+      if (_unlock_kb) {
+        _lock_seq_count = 0;
+        _lock_seq_ms = 0;
+      }
       enqueueKey(checkDisplayOn(KEY_ENTER));
     }
   } else if (ev == BUTTON_EVENT_LONG_PRESS) {
@@ -2864,7 +2973,12 @@ void UITask::loop() {
   }
 
   if (_kq_head != _kq_tail) {
-    if (!_locked && curr) {
+    if (_unlock_kb) {
+      // Lock-screen password keyboard: Consume every key press
+      char k;
+      while (dequeueKey(k)) handleUnlockKey(k);
+      _next_refresh = 100;  // redraw immediately after key press
+    } else if (!_locked && curr) {
       // Apply the whole queued burst, then redraw once — N taps captured during
       // a blocking refresh become N navigation steps at the cost of one refresh.
       char k;
@@ -2901,16 +3015,35 @@ void UITask::loop() {
   tickClockTools();
 
   if (_display != NULL && _display->isOn()) {
-    if (_locked && (int32_t)(millis() - _lock_wake_until) >= 0) {
+    // Lock-screen password prompt
+    if (_locked && _unlock_kb && (int32_t)(millis() - _lock_wake_until) >= 0) {
+      cancelUnlockPrompt(); // Cancel unlock attempt on idle
+      _next_refresh = 0;
+    }
+    if (_locked && !_unlock_kb && (int32_t)(millis() - _lock_wake_until) >= 0) {
       _display->turnOff();
+    } else if (_locked && _unlock_kb && millis() >= _next_refresh) {
+      // While the prompt is up the password keyboard replaces the lockscreen view
+      _display->startFrame();
+      _kb.beginFrame();
+      int delay_millis = _kb.render(*_display);
+      // Alert overlay on top // TODO: Is this necessary here?
+      // if (millis() < _alert_expiry) renderAlertOverlay();
+      _display->endFrame();
+      _next_refresh = millis() + delay_millis;
     } else if (_locked && millis() >= _next_refresh && home) {
       _display->startFrame();
-      home->render(*_display);
+      if (curr && curr != home && (millis() - ui_started_at < BOOT_SCREEN_MILLIS)) {
+        // Boot splash is still up on a boot-locked device
+        _next_refresh = millis() + curr->render(*_display);
+      } else {
+        home->render(*_display);
+        _next_refresh = millis() + Features::LOCKSCREEN_REFRESH_MS;
+      }
       // Alert overlay on top — without this a ringing alarm on a locked device
       // played its melody against a screen that never said what was ringing.
       if (millis() < _alert_expiry) renderAlertOverlay();
       _display->endFrame();
-      _next_refresh = millis() + Features::LOCKSCREEN_REFRESH_MS;
     } else if (!_locked && millis() >= _next_refresh && curr) {
       _display->startFrame();
       _kb.beginFrame();
@@ -2950,6 +3083,7 @@ void UITask::loop() {
       digitalWrite(PIN_LED, LOW);  // turn off status LED with display to save power
 #endif
       if (_node_prefs && _node_prefs->auto_lock) {
+        cancelUnlockPrompt();   // idle-lock isn't a password prompt
         _locked = true;
         _lock_wake_until = 0;
         syncLockToHome();

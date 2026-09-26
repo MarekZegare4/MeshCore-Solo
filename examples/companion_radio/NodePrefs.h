@@ -214,7 +214,8 @@ struct NodePrefs {  // persisted to file
   static const uint8_t PAGE_ORDER_MAGIC = 0xA5;
   // On-screen keyboard layout, shared across every text-entry screen (Settings >
   // Keyboard). 0=ABC grid, alphabetical order (default), 1=T9 multi-tap
-  // (phone-keypad groups, cycled with repeated Enter presses — see KeyboardWidget.h).
+  // (phone-keypad groups, cycled with repeated Enter presses — see KeyboardWidget.h),
+  // 3=PIN keyboard.
   uint8_t  keyboard_type;
   // Additional (non-Latin) keyboard alphabet, orthogonal to keyboard_type above
   // — either layout style (ABC grid or T9) can show any alphabet's characters.
@@ -536,6 +537,13 @@ struct NodePrefs {  // persisted to file
   // ── Custom messages ────────────────────────────────────────────────────
   char custom_msgs[10][140];   // user-defined quick messages (supports {loc}, {time})
 
+  // Lock-screen password, empty by default. If set, a password is required to
+  // unlock the lock screen.
+  static const uint8_t LOCK_PASSWORD_MAX_LEN = 32;
+  static const uint8_t lock_screen_password_salt_LEN = 16;
+  uint8_t lock_screen_password[LOCK_PASSWORD_MAX_LEN];
+  uint8_t lock_screen_password_salt[lock_screen_password_salt_LEN];
+
   // Single source of truth for the live-share option tables (shared by the Map
   // UI labels and the auto-send engine in UITask).
   static const uint8_t LOC_SHARE_MOVE_COUNT = 4;
@@ -623,7 +631,7 @@ struct NodePrefs {  // persisted to file
   // repeat_* fields) instead of at the tail, which shifted every field after
   // them by 25 bytes when loading an older file. Never released, but a dev
   // build wrote it, so the number must not be reused for anything else.
-  static const uint32_t SCHEMA_SENTINEL = 0xC0DE002E;
+  static const uint32_t SCHEMA_SENTINEL = 0xC0DE0030;
 
   // Bit-index for each home page. Used by page_order (entries store bit+1) and
   // by home_pages_mask. Single source of truth — both HomeScreen::pageBit/bitToPage
@@ -763,6 +771,7 @@ struct NodePrefs {  // persisted to file
 // msg_wake_screen_off (0xC0DE002A) landed in the 1 byte of padding the
 // 0xC0DE0029 bump left over -- confirmed via a real sim_companion_radio
 // (native) build, sizeof unchanged at 2760.
+
 // repeat_extra_scope_mask + ch_scope_idx[64] (0xC0DE002B) added 64 bytes,
 // not 66 -- the struct had 2 bytes of spare tail padding left over from an
 // earlier bump -- confirmed via a real sim_companion_radio (native) build
@@ -777,7 +786,9 @@ struct NodePrefs {  // persisted to file
 // WioTrackerL1_companion_solo_dual (nRF52/ARM) and Heltec_v3_companion_radio_ble
 // (ESP32) builds, sizeof unchanged at 2824. loc_share_duration_idx (0xC0DE002E)
 // likewise (sim build; see the check below).
-static_assert(sizeof(NodePrefs) == 2824,
+// 0xC0DE002F 32 byte bump for lock_screen_password
+// 0xC0DE0030 16 byte bump for lock_screen_password_salt
+static_assert(sizeof(NodePrefs) == 2872,
               "NodePrefs layout changed — sync DataStore save/load + clamp, bump "
               "SCHEMA_SENTINEL, then update this size (see steps above).");
 

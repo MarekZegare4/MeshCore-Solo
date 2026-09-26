@@ -63,3 +63,15 @@ Fully autonomous, independent of Auto-lock and of any key combo:
 
 - **Magnet near (cover closed)** — locks and blanks the display immediately, no wake grace.
 - **Magnet away (cover opened)** — unlocks and wakes the display right away.
+
+---
+
+### Lock-screen password
+
+Enable **LockPass** in **Settings › Display** to require a password when unlocking or powering up the device.
+
+Upon enabling the setting the keyboard will show, requiring you to submit a new password.  
+Attempting to unlock the device will then require the same password to be typed and submitted to reach the home screen.  
+Submitting an incorrect password clears the keyboard input.
+
+Disabling the setting clears the stored password and allows an instant unlock again.

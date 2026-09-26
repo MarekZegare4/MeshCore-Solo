@@ -22,6 +22,7 @@ class SettingsScreen : public UIScreen {
     AUTO_OFF,
 #endif
     AUTO_LOCK,
+    LOCK_PASSWORD,
     BATT_DISPLAY,
 #if FEAT_CLOCK_SECONDS_SETTING
     CLOCK_SECONDS,
@@ -589,6 +590,10 @@ class SettingsScreen : public UIScreen {
       display.print("Auto lock");
       display.setCursor(valCol(display), y);
       display.print((p && p->auto_lock) ? "ON" : "OFF");
+    } else if (item == LOCK_PASSWORD) {
+      display.print("LockPass");
+      display.setCursor(valCol(display), y);
+      display.print((p && p->lock_screen_password[0]) ? "ON" : "OFF");
     } else if (item == TIMEZONE) {
       display.print("Time zone");
       char buf[8];
@@ -715,6 +720,8 @@ class SettingsScreen : public UIScreen {
   // Keyboard state for editing message slots
   int            _edit_slot = -1;  // -1 = not editing, 0..9 = slot being edited
   bool           _edit_name = false;  // editing DEVICE_NAME via the keyboard
+  bool           _edit_lock_pass = false; // editing the lock-screen password via the keyboard
+  uint8_t        _lock_pass_saved_type = 0; // remember keyboard set to restore setting after pin entry
   KeyboardWidget* _kb;
 
   // Scope list management (SCOPE_NAME row -> a full-screen add/rename/
@@ -786,6 +793,7 @@ public:
     _scope_action_menu.active = false;
     _scope_delete_confirm_active = false;
     _prune_confirm.active = false;
+    _edit_lock_pass = false;
     resetList();
     _editor.freq.active = false;
   }
@@ -793,7 +801,7 @@ public:
   int render(DisplayDriver& display) override {
     display.setTextSize(1);
 
-    if (_edit_slot >= 0 || _edit_name || _scope_rename_idx != -2 || _picker.saving) {
+    if (_edit_slot >= 0 || _edit_name || _edit_lock_pass || _scope_rename_idx != -2 || _picker.saving) {
       return _kb->render(display);
     }
 
@@ -857,6 +865,23 @@ public:
         _edit_name = false;
       } else if (res == KeyboardWidget::CANCELLED) {
         _edit_name = false;
+      }
+      return true;
+    }
+
+    // Keyboard editing mode for the lock-screen password
+    if (_edit_lock_pass) {
+      auto res = _kb->handleInput(c);
+      if (res == KeyboardWidget::DONE) {
+        if (p) {
+          _task->setNodeLockPassword(_kb->buf);
+          _dirty = true;   // savePrefsIfDirty persists new password
+        }
+        _edit_lock_pass = false;
+        if (p) p->keyboard_type = _lock_pass_saved_type; // restore user setting
+      } else if (res == KeyboardWidget::CANCELLED) {
+        _edit_lock_pass = false;
+        if (p) p->keyboard_type = _lock_pass_saved_type; // restore user setting
       }
       return true;
     }
@@ -1109,6 +1134,19 @@ public:
     if (_selected == AUTO_LOCK && p && (left || right || enter)) {
       p->auto_lock ^= 1;
       _dirty = true;
+      return true;
+    }
+    // LockPass: Clear password if defined or get input from keyboard
+    if (_selected == LOCK_PASSWORD && p && enter) {
+      if (p->lock_screen_password[0]) {
+        _task->setNodeLockPassword("");
+        _dirty = true;
+      } else {
+        _edit_lock_pass = true;
+        _lock_pass_saved_type = p ? p->keyboard_type : 0; // remember setting to restore after
+        _kb->beginPin("", (int)sizeof(p->lock_screen_password) - 1);
+        _kb->clearPlaceholders();   // a password is literal, not a template message
+      }
       return true;
     }
     if (_selected == TIMEZONE && p) {
