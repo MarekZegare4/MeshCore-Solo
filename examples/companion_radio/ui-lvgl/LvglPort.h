@@ -876,9 +876,9 @@ static void setTrailsOn(bool on) { nvs::putBool("mc_ui", "trails", on); }
 static bool vectorOn() { return nvs::getBool("mc_ui", "vector", false); }
 static void setVectorOn(bool on) { nvs::putBool("mc_ui", "vector", on); }
 
-// Screen-lock PIN (Settings > Display & power > Screen PIN): digits, "" = none.
+// Screen-lock PIN (Settings > Display > Screen PIN): digits, "" = none.
 
-// Accent colour (Settings > Display & power): an index into theme::ACCENTS.
+// Accent colour (Settings > Display): an index into theme::ACCENTS.
 static int loadAccent() { return nvs::getU8("mc_ui", "accent", 0); }
 static void saveAccent(int idx) { nvs::putU8("mc_ui", "accent", idx); }
 // Settings > Storage > Kept per conversation (an index into histstore::KEEP).
@@ -887,7 +887,7 @@ static void saveHistKeep(int idx) { nvs::putI8("mc_ui", "hkeep", idx); }
 // Settings > Storage > Live map tiles: index into mapview::LIVE_CAP_MB, -1 = default.
 static int loadLiveCap() { return nvs::getI8("mc_ui", "ltcap", -1); }
 static void saveLiveCap(int idx) { nvs::putI8("mc_ui", "ltcap", idx); }
-// Settings > Display & power > Tap to wake: a touch turns the dark screen on
+// Settings > Display > Tap to wake: a touch turns the dark screen on
 // (off: only the top button does).
 static bool loadTapWake() { return nvs::getBool("mc_ui", "tapwake", true); }
 static void saveTapWake(bool on) { nvs::putBool("mc_ui", "tapwake", on); }

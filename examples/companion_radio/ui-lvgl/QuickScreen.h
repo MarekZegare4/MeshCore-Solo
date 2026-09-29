@@ -1,5 +1,5 @@
 // Quick messages and placeholders (the compose bar's "+", Settings > Messages
-// & contacts > Quick messages), Settings > Send advert and > Bluetooth, and
+// & contacts > Quick messages), the advert button in Nodes' header, Settings > Bluetooth, and
 // Messages' "Read all". The text side is ui-core/MessageText.h.
 // Included by UITask.cpp (single translation unit).
 

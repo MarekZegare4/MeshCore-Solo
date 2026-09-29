@@ -201,7 +201,7 @@ public:
   void showScopes();
   void scopeMenu(int idx);
   void scopeAction(uint8_t act);
-  // Settings > Repeater (RepeaterScreen.h)
+  // Home > Repeater (RepeaterScreen.h)
   void showRepeater();
   void repeaterSet(int which, int v);
   void repeaterScopesPopup();
@@ -273,11 +273,11 @@ public:
   void usbTap(bool drive);     // that popup's buttons
   bool locked() const;
   void pinKey(const char* key);        // the lock screen's keypad
-  void pinSetupPopup();                // Settings > Display & power > Screen PIN
+  void pinSetupPopup();                // Settings > Display > Screen PIN
   void pinSetupKey(const char* key);
   void pinRemove();
   void pinRowRefresh();
-  void accentRow(lv_obj_t* body);   // Settings > Display & power > Accent colour
+  void accentRow(lv_obj_t* body);   // Settings > Display > Accent colour
   void setAccent(int idx);
   void showDiag();
   void diagTab(int tab);

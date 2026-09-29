@@ -1,5 +1,5 @@
 #pragma once
-// Home > GPS (also Settings > System > GPS details): what the receiver sees.
+// Home > GPS (also Settings > Connections > GPS): what the receiver sees.
 // A sky plot of the satellites in view (centre = overhead, rings at 30 and 60
 // degrees elevation, filled = used in the fix, colour = signal), the fix
 // state with time to first fix and the dilutions of precision, and a bar per

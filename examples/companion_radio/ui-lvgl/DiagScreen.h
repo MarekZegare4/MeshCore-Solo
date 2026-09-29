@@ -1,5 +1,5 @@
 #pragma once
-// Settings > Diagnostics -- ui-new's Tools > Diagnostics. Tabs Live / System /
+// Home > Diagnostics -- ui-new's Tools > Diagnostics. Tabs Live / System /
 // Font / Noise; the rows come from ui-core/Diagnostics.h. Live refreshes every second
 // and its header button resets the counters (after a confirm).
 //

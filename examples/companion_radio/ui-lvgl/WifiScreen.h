@@ -5,7 +5,7 @@
 // a password. Scan lists nearby networks to pick from; the password field uses
 // the same keyboard as compose. Saved through lvport::saveWifi() (NVS on the
 // board). WiFi itself stays off except while a download or scan runs;
-// Settings > CONNECTIVITY's WiFi switch forbids even that.
+// Settings > Connections' WiFi switch forbids even that.
 //
 // Single-TU fragment: included by ui-lvgl/UITask.cpp after MapScreen.h.
 
@@ -172,7 +172,7 @@ void UITask::wifiKeyboardHide() {
   if (_body) lv_obj_set_height(_body, lv_obj_get_height(_body) + lv_obj_get_height(_wifi_kb));
 }
 
-// Settings > CONNECTIVITY > WiFi, as the Bluetooth row: the switch turns it
+// Settings > Connections > WiFi, as the Bluetooth row: the switch turns it
 // on / off, the row opens the network settings.
 static void wifiRow(lv_obj_t* body) {
   char sub[48];

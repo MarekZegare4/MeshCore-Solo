@@ -792,7 +792,7 @@ static bool localTime(const NodePrefs* p, struct tm& out, uint32_t utc = rtc_clo
 static const char* const MONTHS[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
                                       "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
 // "14:05", or "2:05" (+ " PM" with suffix) with Settings > 12-hour clock;
-// with `seconds`, ":09" follows unless Settings > Clock seconds is off.
+// with `seconds`, ":09" follows unless Settings > Time > Clock seconds is off.
 static void fmtClock(char* b, size_t n, const struct tm& ti, const NodePrefs* p, bool suffix, bool seconds = false) {
   char sec[4] = "";
   if (seconds && p && !p->clock_hide_seconds) snprintf(sec, sizeof(sec), ":%02d", ti.tm_sec);
@@ -1172,7 +1172,7 @@ void UITask::shutdown(bool restart) {
   }
 }
 
-// Settings > Display & power > Battery shutdown (NodePrefs::low_batt_mv), as
+// Settings > Power > Battery shutdown (NodePrefs::low_batt_mv), as
 // ui-new does it: a smoothed reading every 8 s, never while on USB power.
 void UITask::checkLowBattery() {
   if ((int32_t)(millis() - _next_batt_ms) < 0) return;
@@ -1240,7 +1240,7 @@ void UITask::drainCoreEvents() {
       if (!_buzzer.isQuiet()) playMelody(ev.flag ? soundctl::MEL_ARRIVE : soundctl::MEL_LEAVE);
 #endif
       break;
-    case UiEventType::LocatorBeep:   // Settings > Proximity beeper
+    case UiEventType::LocatorBeep:   // Settings > Map > Proximity beeper
       playMelody(soundctl::MEL_TICK);
       break;
     case UiEventType::AdvertHeard:
@@ -1453,7 +1453,7 @@ void UITask::refreshStatusBar() {
     setText(_status_time, "--:--");
   }
 
-  // Battery: the icon, then % or volts per Settings > Battery display. The
+  // Battery: the icon, then % or volts per Settings > Power > Battery display. The
   // smoothed reading (checkLowBattery): an ADC read blocks the loop for 10 ms.
   uint16_t mv = _batt_mv ? _batt_mv : getBattMilliVolts();
   int pct = battery::percent(mv, _prefs ? _prefs->low_batt_mv : 0);

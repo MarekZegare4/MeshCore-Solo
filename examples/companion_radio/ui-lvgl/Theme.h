@@ -2,7 +2,7 @@
 // Design tokens for ui-lvgl -- the one place colours, spacing and type live --
 // and the rules every widget follows (install() below).
 //
-// The accent (amber by default; Settings > Display & power > Accent colour)
+// The accent (amber by default; Settings > Display > Accent colour)
 // on near-black, soft corners. The accent means one of three things:
 //  - ACCENT fill, dark text: the primary action of a screen or popup
 //    (Download, Install, Save, Go) -- stylePrimary() in UITask.cpp;

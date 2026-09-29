@@ -37,7 +37,7 @@ static lv_obj_t* s_target_ring = nullptr;
 static lv_obj_t* s_target_dot = nullptr;
 static const int RING_D = 30;   // clear of a 12 px marker dot inside it
 static navview::EtaTracker s_eta;
-static GpsAverager s_avg;   // "mark here" with Settings > Waypoint averaging
+static GpsAverager s_avg;   // "mark here" with Settings > Map > Waypoint averaging
 static TrackBack   s_tb;    // walking the trail back: its breadcrumb is the target
 static const uint32_t TRAIL_COLOR = 0x4FA3FF;
 

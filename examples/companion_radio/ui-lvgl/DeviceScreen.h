@@ -1,7 +1,7 @@
 #pragma once
 // Device-level pieces from ui-new's Settings > System and Home:
-//  - node name (Settings > Node), reboot / power off (Settings > System);
-//  - lock screen (Settings > Display & power > Lock screen, NodePrefs::auto_lock):
+//  - node name (Settings > System > Name), reboot / power off (Settings > System);
+//  - lock screen (Settings > Display > Lock screen, NodePrefs::auto_lock):
 //    once the screen turns off, waking shows a clock card and nothing reacts
 //    until "slide to unlock" -- against touches in a pocket; with a screen PIN
 //    (NodePrefs, ui-core/ScreenLock.h) the card always comes up, also after a reboot, and
@@ -332,7 +332,7 @@ void UITask::pinKey(const char* key) {
   }
 }
 
-// Settings > Display & power > Screen PIN: a new PIN typed twice; with one
+// Settings > Display > Screen PIN: a new PIN typed twice; with one
 // set, "Remove" in the header too.
 void UITask::pinSetupPopup() {
   using namespace devview;
@@ -387,7 +387,7 @@ void UITask::pinRemove() {
   pinRowRefresh();
 }
 
-// Display & power rebuilt for the Screen PIN row, still at its bottom.
+// Settings > Display rebuilt for the Screen PIN row, still at its bottom.
 void UITask::pinRowRefresh() {
   if (_screen != SCR_SETTINGS_NAV) return;
   buildSchemaSettings();
