@@ -139,9 +139,11 @@ static lv_obj_t* s_imgs[COLS * ROWS];
 static lv_obj_t* s_hint = nullptr;
 static lv_obj_t* s_caption = nullptr;
 static const int MAX_PTS = LiveTrackStore::CAPACITY + 2;
-struct Pt { int32_t lat, lon; lv_obj_t* obj; };
+enum : uint8_t { P_ME, P_LAST, P_TARGET, P_LIVE };   // how a point's dot looks
+struct Pt { int32_t lat, lon; uint8_t kind; lv_obj_t* obj; };
 static Pt s_pts[MAX_PTS];   // [0] you, then the target, then live shares
 static int s_npts = 0;
+static bool s_fitted = false;   // homeMapFit() ran for this map
 static int s_z = mapview::DEFAULT_Z;
 static double s_cx = 0, s_cy = 0;   // centre, in tiles at s_z
 static bool s_pending = false;
@@ -150,7 +152,13 @@ static mapview::Grid s_grid;   // under the tiles, as on the map
 
 static void onTap(lv_event_t* e) { (void)e; s_ui->openMap(true); }
 
-static lv_obj_t* dot(int d, uint32_t col, uint32_t border) {
+static lv_obj_t* dot(uint8_t kind) {
+  static const struct { uint8_t d; uint32_t col, border; } LOOK[] = {
+    { 14, theme::ACCENT, theme::BG }, { 14, theme::BG, theme::ACCENT },   // you; no fix: the last position, hollow
+    { 12, theme::BG, theme::ACCENT }, { 12, theme::OK, theme::BG },       // the target; live shares
+  };
+  int d = LOOK[kind].d;
+  uint32_t col = LOOK[kind].col, border = LOOK[kind].border;
   lv_obj_t* o = lv_obj_create(s_area);
   lv_obj_remove_style_all(o);
   lv_obj_set_size(o, d, d);
@@ -589,6 +597,7 @@ void UITask::buildHomeMap(lv_obj_t* box) {
     lv_image_set_pivot(s_imgs[i], 0, 0);
   }
   s_npts = 0;
+  s_fitted = false;
   s_hint = label(s_area, "", THEME_FONT_SMALL, theme::TEXT);
   lv_obj_set_style_bg_color(s_hint, lv_color_hex(theme::BG), 0);
   lv_obj_set_style_bg_opa(s_hint, LV_OPA_80, 0);
@@ -612,42 +621,64 @@ void UITask::buildHomeMap(lv_obj_t* box) {
   homeMapLayout();
 }
 
-// Picks the points, the centre and the zoom that fits them.
-void UITask::homeMapFit() {
+// Picks the points, the centre and the zoom that fits them. False when
+// nothing changed since the last call (no re-layout, no redraw): the dots
+// stay, moved or restyled only when their points did.
+bool UITask::homeMapFit() {
   using namespace home::mini;
-  if (!s_area) return;
-  for (int i = 0; i < s_npts; i++) if (s_pts[i].obj) lv_obj_delete(s_pts[i].obj);
-  s_npts = 0;
+  if (!s_area) return false;
+  Pt pts[MAX_PTS];
+  int np = 0;
   int32_t lat, lon;
   bool me = _core->course.currentLocation(lat, lon);
   int live = 0;
   bool target = false;
   bool last = false;   // no fix: the saved / app-set position, hollow
-  if (me) s_pts[s_npts++] = { lat, lon, dot(14, theme::ACCENT, theme::BG) };
+  if (me) pts[np++] = { lat, lon, P_ME, nullptr };
   else if (_sensors && (_sensors->node_lat != 0 || _sensors->node_lon != 0)) {
     last = true;
-    s_pts[s_npts++] = { (int32_t)lround(_sensors->node_lat * 1e6), (int32_t)lround(_sensors->node_lon * 1e6), dot(14, theme::BG, theme::ACCENT) };
+    pts[np++] = { (int32_t)lround(_sensors->node_lat * 1e6), (int32_t)lround(_sensors->node_lon * 1e6), P_LAST, nullptr };
   }
   if (_core->locator.activeTargetPos(lat, lon)) {
     target = true;
-    s_pts[s_npts++] = { lat, lon, dot(12, theme::BG, theme::ACCENT) };
+    pts[np++] = { lat, lon, P_TARGET, nullptr };
   }
   const LiveTrackStore& lt = _core->live_share.track();
   uint32_t now = rtc_clock.getCurrentTime();
-  for (int i = 0; i < LiveTrackStore::CAPACITY && s_npts < MAX_PTS; i++) {
+  for (int i = 0; i < LiveTrackStore::CAPACITY && np < MAX_PTS; i++) {
     if (!lt.isActive(i, now)) continue;
     const LiveTrackStore::Entry& e = lt.slotAt(i);
-    s_pts[s_npts++] = { e.lat_1e6, e.lon_1e6, dot(12, theme::OK, theme::BG) };
+    pts[np++] = { e.lat_1e6, e.lon_1e6, P_LIVE, nullptr };
     live++;
   }
+  bool same = np == s_npts;
+  for (int i = 0; i < np && same; i++)
+    same = pts[i].kind == s_pts[i].kind && pts[i].lat == s_pts[i].lat && pts[i].lon == s_pts[i].lon && s_pts[i].obj;
+  if (same && s_fitted) return false;
+  s_fitted = true;
+  bool made = false;
+  for (int i = 0; i < np; i++) {   // the same dot where the kind matches
+    lv_obj_t* o = i < s_npts && s_pts[i].kind == pts[i].kind ? s_pts[i].obj : nullptr;
+    if (!o) {
+      if (i < s_npts && s_pts[i].obj) lv_obj_delete(s_pts[i].obj);
+      o = dot(pts[i].kind);
+      made = true;
+    }
+    pts[i].obj = o;
+  }
+  for (int i = np; i < s_npts; i++) if (s_pts[i].obj) lv_obj_delete(s_pts[i].obj);
+  memcpy(s_pts, pts, np * sizeof(Pt));
+  s_npts = np;
+  if (made) {
   lv_obj_move_foreground(s_hint);
   lv_obj_move_foreground(s_caption);
+  }
 
   char cap[48];
   int o = snprintf(cap, sizeof(cap), "%s", me ? "You" : last ? "Last position" : "No position yet");
   if (live) o += snprintf(cap + o, sizeof(cap) - o, "  " LV_SYMBOL_GPS " %d sharing", live);
   if (target) snprintf(cap + o, sizeof(cap) - o, "  " UI_SYMBOL_FLAG " target");
-  lv_label_set_text(s_caption, cap);
+  setText(s_caption, cap);
 
   if (s_npts == 0) {   // nothing to show: where the map was left, else the default view
     if (_map_z) {
@@ -659,7 +690,7 @@ void UITask::homeMapFit() {
       s_cx = mapview::lonToTileX(mapview::DEFAULT_LON, s_z);
       s_cy = mapview::latToTileY(mapview::DEFAULT_LAT, s_z);
     }
-    return;
+    return true;
   }
   // Bounds in world units (tiles at z 0), then the deepest zoom they fit at.
   double x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
@@ -675,6 +706,7 @@ void UITask::homeMapFit() {
   }
   s_cx = (x0 + x1) / 2 * (1 << s_z);
   s_cy = (y0 + y1) / 2 * (1 << s_z);
+  return true;
 }
 
 // Places tiles and points; notes whether a tile still has to be decoded.
@@ -740,8 +772,7 @@ void UITask::homeMapLoop() {
   if (!s_area || home::s_touching) return;
   if ((int32_t)(millis() - s_next_fit_ms) >= 0) {
     s_next_fit_ms = millis() + 5000;
-    homeMapFit();
-    homeMapLayout();
+    if (homeMapFit()) homeMapLayout();
   }
   if (!s_pending) return;
   int w = lv_obj_get_width(s_area), h = lv_obj_get_height(s_area);

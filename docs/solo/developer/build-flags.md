@@ -28,6 +28,9 @@ per-user. Listed here so the rest of this page can assume them.
 | `MAX_CONTACTS=<n>` | Size of the contact table. Default is 32 if unset; solo builds set 350. |
 | `MAX_GROUP_CHANNELS=<n>` | Size of the channel list. Required for channel support to compile in at all — not optional the way the rest of this page is. |
 | `OFFLINE_QUEUE_SIZE=<n>` | How many messages queue for later delivery while the phone app is disconnected. Default 16; solo builds set 256. |
+| `TRAIL_CAPACITY=<n>` | Points the GPS trail holds (16 B each). Default 512 for the nRF52's RAM; the L2 sets 32768 in PSRAM. At most 65535 (the save format's count). |
+| `TRAIL_SIMPLIFY=0` | Keeps every trail sample instead of storing straight stretches as their two ends. For boards with the memory for it (the L2). |
+| `TRAIL_FIXED_MIN_DELTA_M=<m>` | A fixed distance between trail points instead of the Point spacing setting, which is then hidden (the L2: 5 m, against GPS jitter). |
 | `UI_SENSORS_PAGE=1` | Enables the on-device sensors dashboard page. |
 | `BLE_PIN_CODE=<n>` | See below — not a plain fixed value in practice. |
 | `DISPLAY_CLASS=<Class>` | Selects the display driver (e.g. `SSD1306Display`, `GxEPDDisplay`, `ST7789Display` — see `src/helpers/ui/` for the full set). Fixed by whatever panel the board actually has; only relevant if you're wiring on a *different* display than stock, in which case the matching driver's `.cpp` also needs adding to `build_src_filter`. |

@@ -18,19 +18,34 @@ namespace navmap {
 
 enum : uint8_t { WP_NAV, WP_RENAME, WP_SHARE, WP_DELETE };
 
-// Trail: normalised Web-Mercator coords (0..1) cached when the trail is
-// re-read, so a pan only scales and offsets them. One lv_line per recorded
-// segment (a pause starts a new one); extra segments join the last.
-static const int TRAIL_SEGS = 32;   // pauses / saves split the trail; beyond this, segments join
+// Trail: normalised Web-Mercator coords (0..1) cached as points are added, so
+// a redraw only scales and offsets them. Drawn by one object as a single
+// polyline with breaks (LV_DRAW_LINE_POINT_NONE) where a pause starts a new
+// segment and where a stretch lies outside the view: an lv_line per stretch
+// would make LVGL queue one draw task per point, the queue walked to its end
+// for each -- tens of thousands of points made every frame crawl.
+static const int TRAIL_SEGS = 256;   // pauses / saves split the trail; beyond this, segments join
 // Stored as float offsets from the first point (s_ox/s_oy): a float holds a
 // small offset exactly enough, but not a whole 0..1 coordinate at street zoom
 // (2^18 * 256 px across -- a float is off by pixels there).
 static float* s_nx = nullptr;   // TrailStore::CAPACITY each, in PSRAM (first trail drawn)
 static float* s_ny = nullptr;
 static double s_ox = 0, s_oy = 0;
+// Bounding box of each CHUNK points (and the next chunk's first, so the line
+// joining them is inside too): a chunk off the view is skipped whole.
+static const int CHUNK = 64;
+static const int CHUNKS = (TrailStore::CAPACITY + CHUNK - 1) / CHUNK;
+static float* s_cb = nullptr;   // min x, min y, max x, max y per chunk
+// Screen points of the visible stretches, with breaks.
+static const int PTS_MAX = TrailStore::CAPACITY + 2 * CHUNKS + TRAIL_SEGS + 4;
 static lv_point_precise_t* s_pts = nullptr;
-static int s_seg_first[TRAIL_SEGS], s_seg_len[TRAIL_SEGS], s_segs = 0;
-static lv_obj_t* s_trail[TRAIL_SEGS];
+static int s_pts_n = 0;
+static int32_t s_pts_x0 = 0, s_pts_y0 = 0;   // the trail object's screen origin s_pts was made for
+static int s_seg_first[TRAIL_SEGS], s_segs = 0;
+// What navTrailSync() has converted so far (s_sync_gen reset: all of it again).
+static uint32_t s_sync_gen = 0xFFFFFFFF, s_sync_seq = 0, s_sync_full_at = 0;
+static int s_sync_n = 0;
+static lv_obj_t* s_trail = nullptr;
 static lv_obj_t* s_target_line = nullptr;
 static lv_point_precise_t s_target_pts[2];
 static lv_obj_t* s_target_ring = nullptr;
@@ -51,6 +66,30 @@ static double normX(int32_t lon_e6) { return (lon_e6 / 1e6 + 180.0) / 360.0; }
 static double normY(int32_t lat_e6) {
   double r = lat_e6 / 1e6 * M_PI / 180.0;
   return (1.0 - asinh(tan(r)) / M_PI) / 2.0;
+}
+
+// The trail object's draw: s_pts in one draw task (the software renderer
+// walks it a segment at a time, clipped to the band being drawn).
+static void onTrailDraw(lv_event_t* e) {
+  if (s_pts_n < 2) return;
+  lv_obj_t* obj = lv_event_get_current_target_obj(e);
+  lv_area_t a;
+  lv_obj_get_coords(obj, &a);
+  if (a.x1 != s_pts_x0 || a.y1 != s_pts_y0) {   // moved since the points were made
+    for (int i = 0; i < s_pts_n; i++) {
+      if (s_pts[i].x == LV_DRAW_LINE_POINT_NONE) continue;
+      s_pts[i].x += a.x1 - s_pts_x0;
+      s_pts[i].y += a.y1 - s_pts_y0;
+    }
+    s_pts_x0 = a.x1; s_pts_y0 = a.y1;
+  }
+  lv_draw_line_dsc_t d;
+  lv_draw_line_dsc_init(&d);
+  lv_obj_init_draw_line_dsc(obj, LV_PART_MAIN, &d);
+  d.base.layer = lv_event_get_layer(e);
+  d.points = s_pts;
+  d.point_cnt = s_pts_n;
+  lv_draw_line(d.base.layer, &d);
 }
 
 // Waypoint labels are 11 bytes of UTF-8 (Waypoint.h): reject input past that,
@@ -77,16 +116,16 @@ static void onNavRenameKb(lv_event_t* e) { s_ui->navRenameDone(lv_event_get_code
 // ── Layers and controls (built by buildMap in nav mode) ───────────────────────
 
 void UITask::buildNavLayers() {
-  for (int i = 0; i < navmap::TRAIL_SEGS; i++) {
-    lv_obj_t* l = lv_line_create(_map_marks);
-    lv_obj_set_size(l, LV_PCT(100), LV_PCT(100));   // clip to the view, whatever the points
-    lv_obj_set_style_line_width(l, 3, 0);
-    lv_obj_set_style_line_color(l, lv_color_hex(navmap::TRAIL_COLOR), 0);
-    lv_obj_set_style_line_rounded(l, true, 0);
-    lv_obj_remove_flag(l, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_flag(l, LV_OBJ_FLAG_HIDDEN);
-    navmap::s_trail[i] = l;
-  }
+  lv_obj_t* tr = lv_obj_create(_map_marks);
+  lv_obj_remove_style_all(tr);
+  lv_obj_set_size(tr, LV_PCT(100), LV_PCT(100));   // clip to the view, whatever the points
+  lv_obj_set_style_line_width(tr, 3, 0);
+  lv_obj_set_style_line_color(tr, lv_color_hex(navmap::TRAIL_COLOR), 0);
+  lv_obj_set_style_line_rounded(tr, true, 0);
+  lv_obj_remove_flag(tr, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_event_cb(tr, navmap::onTrailDraw, LV_EVENT_DRAW_MAIN, nullptr);
+  navmap::s_trail = tr;
+  navmap::s_pts_n = 0;
   navmap::s_target_line = lv_line_create(_map_marks);
   lv_obj_set_size(navmap::s_target_line, LV_PCT(100), LV_PCT(100));
   lv_obj_set_style_line_width(navmap::s_target_line, 2, 0);
@@ -115,6 +154,7 @@ void UITask::buildNavLayers() {
   lv_obj_remove_flag(navmap::s_target_dot, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_center(navmap::s_target_dot);
   navmap::s_segs = 0;
+  navmap::s_sync_gen = 0xFFFFFFFF;   // a new map: the whole trail converted again
 }
 
 void UITask::buildNavControls(lv_obj_t* body) {
@@ -188,56 +228,110 @@ void UITask::rebuildNavMarkers() {
     addMapMark(mapview::MK_LIVE, i, e.lat_1e6, e.lon_1e6, theme::OK, t);
   }
 
-  // Trail -> normalised points in segments.
+  navTrailSync();
+}
+
+// Trail -> normalised points in segments, for layoutNav(). Only the points
+// added since the last call are converted (the trail runs to tens of
+// thousands of points); all of them when it was replaced (reset, load) or
+// its ring, full, dropped its oldest -- at most every 10 s then.
+bool UITask::navTrailSync() {
+  using namespace navmap;
   TrailStore& ts = _core->trail.store();
-  navmap::s_segs = 0;
+  if (!s_pts) {
+    s_nx = psramBuf<float>(TrailStore::CAPACITY);
+    s_ny = psramBuf<float>(TrailStore::CAPACITY);
+    s_cb = psramBuf<float>(4 * CHUNKS);
+    s_pts = psramBuf<lv_point_precise_t>(PTS_MAX);
+  }
+  if (!s_nx || !s_ny || !s_cb || !s_pts) { s_segs = 0; s_sync_n = 0; return false; }
   int n = ts.count();
-  if (!navmap::s_pts) {
-    navmap::s_nx = psramBuf<float>(TrailStore::CAPACITY);
-    navmap::s_ny = psramBuf<float>(TrailStore::CAPACITY);
-    navmap::s_pts = psramBuf<lv_point_precise_t>(TrailStore::CAPACITY);
-  }
-  if (!navmap::s_nx || !navmap::s_ny || !navmap::s_pts) n = 0;
-  for (int i = 0; i < n; i++) {
+  if (ts.gen() == s_sync_gen && ts.seq() == s_sync_seq && n == s_sync_n) return false;
+  bool all = ts.gen() != s_sync_gen || n < s_sync_n || n - s_sync_n != (int)(ts.seq() - s_sync_seq);
+  if (all && ts.gen() == s_sync_gen && n == TrailStore::CAPACITY && millis() - s_sync_full_at < 10000) return false;
+  int from = all ? 0 : s_sync_n;
+  if (all) { s_segs = 0; s_sync_full_at = millis(); }
+  for (int i = from; i < n; i++) {
     const TrailPoint& p = ts.at(i);
-    if (i == 0) { navmap::s_ox = navmap::normX(p.lon_1e6); navmap::s_oy = navmap::normY(p.lat_1e6); }
-    navmap::s_nx[i] = (float)(navmap::normX(p.lon_1e6) - navmap::s_ox);
-    navmap::s_ny[i] = (float)(navmap::normY(p.lat_1e6) - navmap::s_oy);
-    bool new_seg = i == 0 || ((p.flags & TRAIL_FLAG_SEG_START) && navmap::s_segs < navmap::TRAIL_SEGS);
-    if (new_seg) {
-      navmap::s_seg_first[navmap::s_segs] = i;
-      navmap::s_seg_len[navmap::s_segs] = 0;
-      navmap::s_segs++;
+    if (i == 0) { s_ox = normX(p.lon_1e6); s_oy = normY(p.lat_1e6); }
+    float x = s_nx[i] = (float)(normX(p.lon_1e6) - s_ox);
+    float y = s_ny[i] = (float)(normY(p.lat_1e6) - s_oy);
+    float* b = &s_cb[4 * (i / CHUNK)];
+    if (i % CHUNK == 0) { b[0] = b[2] = x; b[1] = b[3] = y; }
+    for (int k = i % CHUNK == 0 && i > 0 ? 2 : 1; k > 0; k--, b -= 4) {   // this chunk; a first point also closes the last
+      if (x < b[0]) b[0] = x;
+      if (y < b[1]) b[1] = y;
+      if (x > b[2]) b[2] = x;
+      if (y > b[3]) b[3] = y;
     }
-    navmap::s_seg_len[navmap::s_segs - 1]++;
+    if (i == 0 || ((p.flags & TRAIL_FLAG_SEG_START) && s_segs < TRAIL_SEGS)) s_seg_first[s_segs++] = i;
   }
+  s_sync_gen = ts.gen();
+  s_sync_seq = ts.seq();
+  s_sync_n = n;
+  return true;
+}
+
+// The trail's screen points for layoutNav(): only the chunks whose box meets
+// the view, and of those only points 2 px or more from the last kept one
+// (zoomed out, thousands of points shrink to the few hundred that show). A
+// point dropped that way still ends its stretch, so the line reaches it.
+static void layoutNavTrail(double scale) {
+  using namespace navmap;
+  s_pts_n = 0;
+  if (!s_trail) return;
+  lv_obj_invalidate(s_trail);
+  int n = s_sync_n;
+  if (!s_pts || n < 2) return;
+  lv_area_t a;
+  lv_obj_get_coords(s_trail, &a);
+  s_pts_x0 = a.x1; s_pts_y0 = a.y1;
+  const double M = 8;   // past the edge: the line's width, rounded caps
+  float fs = (float)scale;
+  float ox = (float)(s_ox * scale - mapview::s_left) + a.x1;
+  float oy = (float)(s_oy * scale - mapview::s_top) + a.y1;
+  float vx0 = (float)((mapview::s_left - M) / scale - s_ox), vx1 = (float)((mapview::s_left + lv_area_get_width(&a) + M) / scale - s_ox);
+  float vy0 = (float)((mapview::s_top - M) / scale - s_oy),  vy1 = (float)((mapview::s_top + lv_area_get_height(&a) + M) / scale - s_oy);
+
+  bool open = false, held = false;   // a stretch is being drawn; a thinned-out point is owed at its end
+  lv_point_precise_t hold = {0, 0}, last = {0, 0};
+  auto push = [&](lv_value_precise_t x, lv_value_precise_t y) { s_pts[s_pts_n].x = x; s_pts[s_pts_n].y = y; s_pts_n++; };
+  auto endRun = [&]() {
+    if (held) push(hold.x, hold.y);
+    if (open) push(LV_DRAW_LINE_POINT_NONE, LV_DRAW_LINE_POINT_NONE);
+    open = held = false;
+  };
+  auto emit = [&](int i) {
+    lv_value_precise_t x = (lv_value_precise_t)lroundf(s_nx[i] * fs + ox);
+    lv_value_precise_t y = (lv_value_precise_t)lroundf(s_ny[i] * fs + oy);
+    if (open && fabsf((float)(x - last.x)) < 2 && fabsf((float)(y - last.y)) < 2) { hold.x = x; hold.y = y; held = true; return; }
+    push(x, y);
+    last.x = x; last.y = y;
+    open = true; held = false;
+  };
+  int seg = 1;   // s_seg_first[0] is the first point
+  for (int i0 = 0; i0 < n; i0 += CHUNK) {
+    int i1 = i0 + CHUNK < n ? i0 + CHUNK : n;
+    const float* b = &s_cb[4 * (i0 / CHUNK)];
+    bool starts = seg < s_segs && s_seg_first[seg] == i0;
+    if (b[2] < vx0 || b[0] > vx1 || b[3] < vy0 || b[1] > vy1) {   // off the view
+      if (open && !starts) emit(i0);   // the last chunk's line to this one's first point
+      endRun();
+      while (seg < s_segs && s_seg_first[seg] < i1) seg++;
+      continue;
+    }
+    for (int i = i0; i < i1; i++) {
+      if (seg < s_segs && s_seg_first[seg] == i) { endRun(); seg++; }
+      emit(i);
+    }
+  }
+  endRun();
 }
 
 void UITask::layoutNav() {
   if (!navmap::s_target_line) return;
   double scale = (double)(1 << _map_z) * mapview::TILE_PX;
-  for (int s = 0; s < navmap::TRAIL_SEGS; s++) {
-    lv_obj_t* l = navmap::s_trail[s];
-    if (s >= navmap::s_segs || navmap::s_seg_len[s] < 2) { lv_obj_add_flag(l, LV_OBJ_FLAG_HIDDEN); continue; }
-    // Points closer than 2 px to the last kept one are dropped (the last
-    // point always stays): zoomed out, thousands of points shrink to the few
-    // hundred that show, so a long trail doesn't slow every map redraw.
-    int f = navmap::s_seg_first[s], len = navmap::s_seg_len[s], k = 0;
-    for (int i = f; i < f + len; i++) {
-      lv_value_precise_t x = (lv_value_precise_t)lround((navmap::s_ox + navmap::s_nx[i]) * scale - mapview::s_left);
-      lv_value_precise_t y = (lv_value_precise_t)lround((navmap::s_oy + navmap::s_ny[i]) * scale - mapview::s_top);
-      if (k > 0 && i < f + len - 1) {
-        lv_point_precise_t& last = navmap::s_pts[f + k - 1];
-        if (fabsf((float)(x - last.x)) < 2 && fabsf((float)(y - last.y)) < 2) continue;
-      }
-      navmap::s_pts[f + k].x = x;
-      navmap::s_pts[f + k].y = y;
-      k++;
-    }
-    if (k < 2) { lv_obj_add_flag(l, LV_OBJ_FLAG_HIDDEN); continue; }
-    lv_line_set_points(l, &navmap::s_pts[f], k);
-    lv_obj_remove_flag(l, LV_OBJ_FLAG_HIDDEN);
-  }
+  layoutNavTrail(scale);
 
   int32_t tlat, tlon, mlat, mlon;
   char name[8];
@@ -819,6 +913,7 @@ static void scanTrails() {
   while (struct dirent* de = readdir(d)) {
     size_t l = strlen(de->d_name);
     if (l < 5 || l >= sizeof(s_st_names[0]) || strcmp(de->d_name + l - 4, ".trl") != 0) continue;
+    if (de->d_name[0] == '.') continue;   // the live trail's own copy (.live.trl)
     if (s_st_n < ST_MAX) snprintf(s_st_names[s_st_n++], sizeof(s_st_names[0]), "%s", de->d_name);
   }
   closedir(d);
@@ -1013,6 +1108,75 @@ bool UITask::saveTrailToCard(char* name_out, size_t n) {
   if (!ok) remove(path);
   snprintf(name_out, n, "%s", strrchr(path, '/') + 1);
   return ok;
+}
+
+// ── The live trail's copy on the card ──
+// While there's a trail, /sdcard/trails/.live.trl holds a copy of it: the new
+// points appended once a minute and at power-off, so a flat battery, a crash
+// or a reboot doesn't lose the route. At boot the copy comes back, recording
+// again if it was. A saved trail's format, the header's reserved byte (5)
+// saying "recording"; count and time (6, 8) are patched in place. A full
+// ring (the oldest points dropping off) is rewritten, at most every 10 min.
+namespace navmap {
+static const char* const LIVE_TRAIL = "/sdcard/trails/.live.trl";
+static const long LIVE_HDR = 12;   // magic, version, reserved, count (uint16), time (uint32)
+static uint32_t s_j_gen = 0xFFFFFFFF, s_j_seq = 0, s_j_next = 0, s_j_full_at = 0;
+static int s_j_n = 0;
+static uint8_t s_j_rec = 0;   // the "recording" byte last written
+}
+
+bool UITask::trailJournalTick(bool now) {
+  using namespace navmap;
+  if (!now && (int32_t)(millis() - s_j_next) < 0) return true;
+  s_j_next = millis() + 60000;
+  TrailStore& ts = _core->trail.store();
+  int n = ts.count();
+  uint8_t rec = ts.isActive() ? 1 : 0;
+  bool same = ts.gen() == s_j_gen && ts.seq() == s_j_seq && n == s_j_n;
+  if (same && (n == 0 || (!rec && s_j_rec == rec))) return true;   // nothing to write (and no card mount tried)
+  if (!lvport::mountStorage()) return false;
+  if (n == 0) {   // reset: no copy
+    if (s_j_n) remove(LIVE_TRAIL);   // only a copy this run wrote (or restored)
+    s_j_gen = ts.gen(); s_j_seq = ts.seq(); s_j_n = 0;
+    return true;
+  }
+  bool all = ts.gen() != s_j_gen || n < s_j_n || n - s_j_n != (int)(ts.seq() - s_j_seq);
+  if (all && ts.gen() == s_j_gen && n == TrailStore::CAPACITY && !now && millis() - s_j_full_at < 600000) return true;
+  FILE* f = all ? nullptr : fopen(LIVE_TRAIL, "r+b");
+  bool ok;
+  if (!f) {   // the whole trail
+    mapview::makeParents(LIVE_TRAIL);
+    f = fopen(LIVE_TRAIL, "wb");
+    if (!f) return false;
+    navmap::FileRW io{ f };
+    ok = ts.writeTo(io);
+    s_j_full_at = millis();
+  } else {    // just what's new
+    ok = fseek(f, 0, SEEK_END) == 0;
+    for (int i = s_j_n; ok && i < n; i++) ok = fwrite(&ts.at(i), sizeof(TrailPoint), 1, f) == 1;
+  }
+  uint16_t cnt = (uint16_t)n;
+  uint32_t accum = ts.currentAccumulatedMs();
+  ok = ok && fseek(f, 5, SEEK_SET) == 0 && fwrite(&rec, 1, 1, f) == 1 && fwrite(&cnt, 2, 1, f) == 1 && fwrite(&accum, 4, 1, f) == 1;
+  ok = (fclose(f) == 0) && ok;
+  if (ok) { s_j_gen = ts.gen(); s_j_seq = ts.seq(); s_j_n = n; s_j_rec = rec; }
+  else s_j_gen = 0xFFFFFFFF;   // next time the whole trail again
+  return ok;
+}
+
+void UITask::trailJournalRestore() {
+  using namespace navmap;
+  TrailStore& ts = _core->trail.store();
+  if (!ts.empty() || !lvport::mountStorage()) return;
+  FILE* f = fopen(LIVE_TRAIL, "rb");
+  if (!f) return;
+  uint8_t rec = 0;
+  navmap::FileRW io{ f };
+  bool ok = ts.readFrom(io) && fseek(f, 5, SEEK_SET) == 0 && fread(&rec, 1, 1, f) == 1;
+  fclose(f);
+  if (!ok || ts.empty()) return;
+  if (rec & 1) ts.setActive(true);   // it was recording: carries on (a gap for the time off)
+  s_j_gen = ts.gen(); s_j_seq = ts.seq(); s_j_n = ts.count(); s_j_rec = rec & 1;
 }
 
 // Map tools > Load, with a card: the saved trails, newest first, and the

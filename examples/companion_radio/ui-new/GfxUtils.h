@@ -57,6 +57,13 @@ static void drawTrail(DisplayDriver& d, TrailStore& tr, Project project, OnBreak
     else                                  drawLine(d, x0, y0, x1, y1);
     x0 = x1; y0 = y1;
   }
+  // The simplifier's pending point: the straight stretch walked since the
+  // last vertex, so the line reaches where you are instead of lagging behind.
+  TrailPoint pend;
+  if (tr.pendingPoint(pend)) {
+    int x1, y1; project(pend.lat_1e6, pend.lon_1e6, x1, y1);
+    drawLine(d, x0, y0, x1, y1);
+  }
 }
 
 }  // namespace gfx

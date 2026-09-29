@@ -121,22 +121,21 @@ public:
   }
 
   // A window of the conversation, oldest first: `n` records ending `skip`
-  // before the newest. Returns how many were read.
+  // before the newest. Returns how many were read; *total = records in the
+  // file (0 when missing or unreadable).
   template <typename E>
-  int window(const char* path, int skip, int n, E* out) {
+  int window(const char* path, int skip, int n, E* out, int* total) {
+    *total = 0;
     FILE* f = fopen(path, "rb");
     if (!f) return 0;
     Hdr h;
     int got = 0;
-    if (readHdr<E>(f, h) && skip < (int)h.count) {
-      int avail = (int)h.count - skip;
-      int m = n < avail ? n : avail;
-      uint32_t k0 = h.count - skip - m;   // index from the oldest
-      for (int i = 0; i < m; i++) {
-        uint32_t slot = (h.head + k0 + i) % h.cap;
-        if (fseek(f, sizeof(Hdr) + (long)slot * sizeof(E), SEEK_SET) != 0) break;
-        if (fread(&out[got], sizeof(E), 1, f) != 1) break;
-        got++;
+    if (readHdr<E>(f, h)) {
+      *total = (int)h.count;
+      if (skip < (int)h.count) {
+        int avail = (int)h.count - skip;
+        int m = n < avail ? n : avail;
+        got = (int)readRun(f, h, h.count - skip - m, (uint32_t)m, out);
       }
     }
     fclose(f);
@@ -184,15 +183,34 @@ private:
     if (fseek(f, 0, SEEK_SET) != 0 || fread(&h, sizeof(h), 1, f) != 1) return false;
     return h.magic == MAGIC && h.ver == VERSION && h.rec_size == sizeof(E) && h.cap > 0 && h.count <= h.cap;
   }
+  // `m` records from the k0-th oldest into `out`: one read, two where the
+  // ring wraps. Returns how many were read.
+  template <typename E>
+  static uint32_t readRun(FILE* f, const Hdr& h, uint32_t k0, uint32_t m, E* out) {
+    uint32_t got = 0;
+    while (got < m) {
+      uint32_t slot = (h.head + k0 + got) % h.cap;
+      uint32_t run = m - got < h.cap - slot ? m - got : h.cap - slot;
+      if (fseek(f, sizeof(Hdr) + (long)slot * sizeof(E), SEEK_SET) != 0) break;
+      size_t r = fread(&out[got], sizeof(E), run, f);
+      got += (uint32_t)r;
+      if (r != run) break;
+    }
+    return got;
+  }
   static bool writeHdr(FILE* f, const Hdr& h) {
     return fseek(f, 0, SEEK_SET) == 0 && fwrite(&h, sizeof(h), 1, f) == 1;
   }
 
   template <typename E>
   void append(const char* path, E& e) {
-    resize<E>(path, _keep);   // the setting changed since this file was written
     FILE* f = fopen(path, "r+b");
     Hdr h;
+    if (f && readHdr<E>(f, h) && h.cap != _keep) {   // the setting changed since this file was written
+      fclose(f);
+      resize<E>(path, _keep);
+      f = fopen(path, "r+b");
+    }
     if (!f || !readHdr<E>(f, h)) {   // new (or unreadable: start it again)
       if (f) fclose(f);
       f = fopen(path, "w+b");
@@ -233,13 +251,7 @@ private:
     uint32_t m = h.count < cap ? h.count : cap;
     E* buf = m ? (E*)malloc((size_t)m * sizeof(E)) : nullptr;   // PSRAM on the L2 (large block)
     if (m && !buf) { fclose(f); return; }
-    uint32_t k0 = h.count - m;
-    uint32_t got = 0;
-    for (uint32_t i = 0; i < m; i++) {
-      uint32_t slot = (h.head + k0 + i) % h.cap;
-      if (fseek(f, sizeof(Hdr) + (long)slot * sizeof(E), SEEK_SET) != 0 || fread(&buf[got], sizeof(E), 1, f) != 1) break;
-      got++;
-    }
+    uint32_t got = m ? readRun(f, h, h.count - m, m, buf) : 0;
     fclose(f);
     char tmp[72];
     snprintf(tmp, sizeof(tmp), "%s.tmp", path);
@@ -323,20 +335,33 @@ private:
         fclose(f);
       }
       std::stable_sort(picks, picks + np, [](const Pick& a, const Pick& b) { return a.ts < b.ts; });
-      int from = np > ring ? np - ring : 0;
-      for (int i = from; i < np; i++) {
-        FILE* f = fopen(paths[picks[i].file], "rb");
-        if (!f) continue;
-        Hdr h;
-        E e;
-        if (readHdr<E>(f, h)) {
-          uint32_t first = h.next_id - h.count;
-          uint32_t slot = (h.head + (picks[i].id - first)) % h.cap;
-          if (fseek(f, sizeof(Hdr) + (long)slot * sizeof(E), SEEK_SET) == 0 && fread(&e, sizeof(E), 1, f) == 1)
-            put(hist, e, slot_of[picks[i].file]);
+      int from = np > ring ? np - ring : 0, cnt = np - from;
+      // The chosen records read file by file (each opened once), then put
+      // back in time order.
+      E* recs = cnt ? (E*)malloc((size_t)cnt * sizeof(E)) : nullptr;
+      bool* ok = cnt ? (bool*)calloc(cnt, 1) : nullptr;
+      int* order = cnt ? (int*)malloc((size_t)cnt * sizeof(int)) : nullptr;
+      if (recs && ok && order) {
+        for (int i = 0; i < cnt; i++) order[i] = from + i;
+        std::sort(order, order + cnt, [&](int a, int b) { return picks[a].file != picks[b].file ? picks[a].file < picks[b].file : picks[a].id < picks[b].id; });
+        for (int j = 0; j < cnt;) {
+          int fi = picks[order[j]].file, j1 = j;
+          while (j1 < cnt && picks[order[j1]].file == fi) j1++;
+          FILE* f = fopen(paths[fi], "rb");
+          Hdr h;
+          if (f && readHdr<E>(f, h)) {
+            uint32_t first = h.next_id - h.count;
+            for (; j < j1; j++) {
+              int k = order[j];
+              ok[k - from] = picks[k].id >= first && readRun(f, h, picks[k].id - first, 1, &recs[k - from]) == 1;
+            }
+          }
+          if (f) fclose(f);
+          j = j1;
         }
-        fclose(f);
+        for (int i = 0; i < cnt; i++) if (ok[i]) put(hist, recs[i], slot_of[picks[from + i].file]);
       }
+      free(recs); free(ok); free(order);
     }
     free(picks);
     free(paths);

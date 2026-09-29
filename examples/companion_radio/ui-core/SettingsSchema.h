@@ -61,9 +61,11 @@ struct Setting {
 };
 
 // ── Value labels ──────────────────────────────────────────────────────────────
+#ifndef TRAIL_FIXED_MIN_DELTA_M
 static void optMinDelta(uint8_t v, char* b, int n, const NodePrefs& p) {
   snprintf(b, n, "%s", TrailStore::minDeltaLabel(v, p.units_imperial));
 }
+#endif
 static void optAutoPause(uint8_t v, char* b, int n, const NodePrefs&) {
   uint16_t s = NodePrefs::trailAutoPauseSecs(v);
   if (s == 0) snprintf(b, n, "Off"); else snprintf(b, n, "%u min", (unsigned)(s / 60));
@@ -160,8 +162,10 @@ static void applySound(UiCore& c)        { c.host()->applySoundPrefs(); }
 #define SW(label, hint, sec, f, chg)             { label, hint, sec, NP_OFF(f), 2, nullptr, chg, nullptr, 1 }
 #define MAP(label, hint, sec, f, vals, opt, chg) { label, hint, sec, NP_OFF(f), COUNT_OF(vals), opt, chg, vals, NP_SIZE(f) }
 static const Setting ALL[] = {
+#ifndef TRAIL_FIXED_MIN_DELTA_M   // else every sample past a fixed jitter gate is kept
   IDX("Point spacing", "Between trail points", SEC_TRAIL, trail_min_delta_idx,
       TrailStore::MIN_DELTA_COUNT, optMinDelta, nullptr),
+#endif
   IDX("Auto-pause", "Pause when standing still", SEC_TRAIL, trail_autopause_idx,
       NodePrefs::TRAIL_AUTOPAUSE_COUNT, optAutoPause, nullptr),
   SW("Save on low battery", "Save it on low battery", SEC_TRAIL, trail_autosave_lowbatt, nullptr),

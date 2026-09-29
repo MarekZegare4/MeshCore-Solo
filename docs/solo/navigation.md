@@ -36,7 +36,11 @@ Chrome or Edge and click **Connect device**, then on the device choose
 it's connected over USB.
 
 > [!NOTE]
-> **Wio Tracker L2:** the trail holds 4096 points and is drawn on the map.
+> **Wio Tracker L2:** the trail holds 32,768 points, every GPS fix 5 m or
+> more from the last one (no simplification and no Min dist setting), about
+> 160 km on foot. A copy on the SD card is updated every minute, so a restart
+> or a flat battery doesn't lose it: the trail comes back at power-on, still
+> recording if it was. It is drawn on the map and keeps up with your position.
 > Its controls (start / stop, save, load, track back, reset) are in the map's
 > **Map tools**, the settings in Settings › Map. **GPX** writes the trail to
 > `trails/` on the SD card; take it off with the card as a USB drive

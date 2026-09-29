@@ -198,15 +198,22 @@ enum : uint8_t { T_CLEAR, T_WAYPOINT, T_TRAILSTART, T_LIVE };
 static int code(uint8_t type, int idx) { return (type << 8) | (idx & 0xFF); }
 }  // namespace navmap
 
+// A press only pans once it has moved DRAG_SLOP px: a tap's jitter (a pixel
+// or two on the touch panel) would otherwise stop the map following you.
+static const int DRAG_SLOP = 8;
 static void onMapPress(lv_event_t* e) {
+  static lv_point_t held;   // movement within the slop, applied once it's a pan
   lv_event_code_t code = lv_event_get_code(e);
-  if (code == LV_EVENT_PRESSED) { mapview::s_drag = 0; return; }
+  if (code == LV_EVENT_PRESSED) { mapview::s_drag = 0; held = { 0, 0 }; return; }
   lv_point_t v;
   lv_indev_get_vect(lv_indev_active(), &v);
   if (v.x == 0 && v.y == 0) return;
   mapview::s_drag += abs(v.x) + abs(v.y);
+  held.x += v.x; held.y += v.y;
+  if (mapview::s_drag <= DRAG_SLOP) return;
   mapview::s_last_pan_ms = millis();
-  s_ui->mapPan(v.x, v.y);
+  s_ui->mapPan(held.x, held.y);
+  held = { 0, 0 };
 }
 static void onMapLongPress(lv_event_t* e) {
   if (mapview::s_drag > 8) return;   // held after a pan: not a long-press on a spot
@@ -231,6 +238,14 @@ static void onMapCredits(lv_event_t* e) { (void)e; s_ui->showToast(creditText(ma
 static void onMapMarker(lv_event_t* e) {
   if (mapview::s_drag > 8) return;   // the press was a pan that ended on a marker
   s_ui->mapOpenMarker((int)(uintptr_t)lv_event_get_user_data(e));
+}
+
+// The centre-on-me button in the accent colour while the map follows you.
+static void followShown(lv_obj_t* btn, bool on) {
+  if (!btn) return;
+  lv_obj_t* l = lv_obj_get_child(btn, 0);
+  lv_color_t c = lv_color_hex(on ? theme::ACCENT : theme::TEXT);
+  if (!lv_color_eq(lv_obj_get_style_text_color(l, LV_PART_MAIN), c)) lv_obj_set_style_text_color(l, c, 0);
 }
 
 static lv_obj_t* mapButton(lv_obj_t* parent, const char* text, lv_event_cb_t cb) {
@@ -351,7 +366,8 @@ void UITask::buildMap() {
   if (_map_nav) lv_obj_align(mapButton(body, LV_SYMBOL_BARS, onNavTools), LV_ALIGN_TOP_LEFT, 6, 98);
   else lv_obj_align(mapButton(body, LV_SYMBOL_DOWNLOAD, onMapDownload), LV_ALIGN_TOP_RIGHT, -6, 98);
   int bottom = _map_nav ? navmap::BAR_H : 0;   // the nav bar takes the bottom edge
-  lv_obj_align(mapButton(body, LV_SYMBOL_GPS, onMapCenter), LV_ALIGN_BOTTOM_RIGHT, -6, -6 - bottom);
+  _map_center_btn = mapButton(body, LV_SYMBOL_GPS, onMapCenter);
+  lv_obj_align(_map_center_btn, LV_ALIGN_BOTTOM_RIGHT, -6, -6 - bottom);
   _map_dl_pill = mapPill(body, "");   // tap: the download popup
   lv_obj_set_style_text_color(_map_dl_pill, lv_color_hex(theme::ACCENT), 0);
   lv_obj_set_style_pad_ver(_map_dl_pill, 3, 0);
@@ -485,6 +501,7 @@ void UITask::layoutMap() {
   } else {
     lv_obj_add_flag(_map_me, LV_OBJ_FLAG_HIDDEN);
   }
+  followShown(_map_center_btn, _map_follow);
   const int half = mapview::MARK_D / 2;
   for (int k = 0; k < mapview::s_mark_count; k++) {
     const mapview::Mark& m = mapview::s_marks[k];
@@ -515,18 +532,20 @@ void UITask::layoutMap() {
 
 // One tile decode per call, nearest to the centre first.
 void UITask::mapLoop() {
+  if (_map_follow && (int32_t)(millis() - _next_follow_ms) >= 0) {   // following you: every fix
+    _next_follow_ms = millis() + 1000;
+    int32_t lat, lon;
+    if (_core->course.currentLocation(lat, lon)) {
+      double cx = mapview::lonToTileX(lon / 1e6, _map_z), cy = mapview::latToTileY(lat / 1e6, _map_z) + mapCenterBias();
+      if (cx != _map_cx || cy != _map_cy) { _map_cx = cx; _map_cy = cy; layoutMap(); }
+    }
+  }
   if ((int32_t)(millis() - _next_map_marks_ms) >= 0) {
     _next_map_marks_ms = millis() + 3000;
-    if (_map_follow) {
-      int32_t lat, lon;
-      if (_core->course.currentLocation(lat, lon)) {
-        _map_cx = mapview::lonToTileX(lon / 1e6, _map_z);
-        _map_cy = mapview::latToTileY(lat / 1e6, _map_z) + mapCenterBias();
-      }
-    }
     rebuildMapMarkers();
     layoutMap();
   }
+  if (_map_nav && navTrailSync()) layoutMap();   // a new trail point: the line keeps up with you
   if (_map_nav) navPollAveraging();
   if (_map_nav && (int32_t)(millis() - _next_nav_bar_ms) >= 0) {
     _next_nav_bar_ms = millis() + 1000;
@@ -668,7 +687,7 @@ void UITask::mapZoom(int delta) {
 
 void UITask::mapCenterOnMe() {
   int32_t lat, lon;
-  if (!ensureGps() || !_core->course.currentLocation(lat, lon)) { _map_follow = true; return; }   // centres once a fix comes
+  if (!ensureGps() || !_core->course.currentLocation(lat, lon)) { _map_follow = true; followShown(_map_center_btn, true); return; }   // centres once a fix comes
   _map_follow = true;
   _map_cx = mapview::lonToTileX(lon / 1e6, _map_z);
   _map_cy = mapview::latToTileY(lat / 1e6, _map_z) + mapCenterBias();

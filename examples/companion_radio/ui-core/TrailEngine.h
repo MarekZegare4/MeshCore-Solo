@@ -21,7 +21,11 @@ public:
     _next_sample_ms = millis() + (uint32_t)TrailStore::SAMPLING_SECS * 1000UL;
     int32_t la, lo;
     if (!_course->currentLocation(la, lo)) return;
+#ifdef TRAIL_FIXED_MIN_DELTA_M   // no point spacing setting: a fixed GPS-jitter gate (the L2)
+    uint16_t md = TRAIL_FIXED_MIN_DELTA_M;
+#else
     uint16_t md = TrailStore::minDeltaMeters(_prefs->trail_min_delta_idx, _prefs->units_imperial);
+#endif
     // Auto-pause: freeze the trail once the device has stayed within
     // TRAIL_AUTOPAUSE_MOVE_M of one spot for the configured delay; resume on
     // the next real move. Its own coarse gate (not the trail min-delta) so

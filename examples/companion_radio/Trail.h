@@ -23,10 +23,16 @@
 // turn still gets a vertex roughly every min-delta of deviation — so CAPACITY
 // covers a much longer route than CAPACITY × min-delta would suggest.
 
-// Boards with PSRAM raise it (the L2: -D TRAIL_CAPACITY=4096, 64 KB, since
+// Boards with PSRAM raise it (the L2: -D TRAIL_CAPACITY=32768, 512 KB, since
 // UiCore is heap-allocated there, in PSRAM); the default stays for the nRF52.
 #ifndef TRAIL_CAPACITY
 #define TRAIL_CAPACITY 512
+#endif
+// Straight-run simplification (addPoint()): on by default, for the nRF52's
+// 512 points. A board with room for every sample turns it off
+// (-D TRAIL_SIMPLIFY=0): each sample past the min-delta gate is a vertex.
+#ifndef TRAIL_SIMPLIFY
+#define TRAIL_SIMPLIFY 1
 #endif
 
 struct TrailPoint {
@@ -140,7 +146,18 @@ public:
     _session_start_ms  = 0;
     _paused            = false;
     _has_pending       = false;
+    _dist_m            = 0;
+    _gen++;
   }
+
+  // For whoever mirrors the trail (the map's line, the L2's card copy): gen()
+  // changes when the points are replaced (clear, load), seq() counts every
+  // point ever added -- the newest seq() - old_seq points are new, unless the
+  // ring has also dropped its oldest (count() == CAPACITY).
+  uint32_t gen() const { return _gen; }
+  uint32_t seq() const { return _seq; }
+  // The simplifier's uncommitted candidate: where the trail really ends now.
+  bool pendingPoint(TrailPoint& out) const { if (_has_pending) out = _pending; return _has_pending; }
 
   // Returns true if the sample was accepted (passed the min-delta gate) —
   // whether that landed it as a new committed vertex right away, or just
@@ -192,6 +209,10 @@ public:
       return true;
     }
 
+#if !TRAIL_SIMPLIFY
+    commitPoint(lat_1e6, lon_1e6, ts, 0);
+    return true;
+#endif
     TrailPoint sample{ lat_1e6, lon_1e6, ts, 0 };
     if (!_has_pending) {
       _pending     = sample;   // last in-corridor sample (the commit candidate)
@@ -215,13 +236,10 @@ public:
   // uncommitted candidate (_pending) is counted too, so the live total doesn't
   // stall over a long straight run — where simplification holds the whole
   // stretch as one pending point until a bend forces a commit (see addPoint()).
+  // Kept as a running total (commitPoint()), not summed on every call: the
+  // L2's trail runs to tens of thousands of points.
   uint32_t totalDistanceMeters() const {
-    float d = 0;
-    for (int i = 1; i < _count; i++) {
-      if (at(i).flags & TRAIL_FLAG_SEG_START) continue;
-      d += haversineMeters(at(i - 1).lat_1e6, at(i - 1).lon_1e6,
-                            at(i).lat_1e6,     at(i).lon_1e6);
-    }
+    float d = _dist_m;
     if (_has_pending && _count > 0)
       d += haversineMeters(last().lat_1e6, last().lon_1e6,
                             _pending.lat_1e6, _pending.lon_1e6);
@@ -305,6 +323,11 @@ public:
     }
     _accumulated_ms = accum;
     _pending_seg_break = true;
+    _dist_m = 0;
+    for (int i = 1; i < _count; i++)
+      if (!(_buf[i].flags & TRAIL_FLAG_SEG_START))
+        _dist_m += haversineMeters(_buf[i - 1].lat_1e6, _buf[i - 1].lon_1e6, _buf[i].lat_1e6, _buf[i].lon_1e6);
+    _gen++;
     return true;
   }
 
@@ -464,6 +487,9 @@ private:
   bool     _pending_seg_break = false;  // next addPoint flags itself SEG_START
   uint32_t _accumulated_ms   = 0;       // banked active time across previous sessions
   uint32_t _session_start_ms = 0;       // millis() of the current active session, 0 if none
+  float    _dist_m           = 0;       // totalDistanceMeters() without the pending candidate
+  uint32_t _gen              = 0;       // see gen() / seq()
+  uint32_t _seq              = 0;
 
   // Streaming simplification: a sample that passed the min-delta gate but
   // hasn't been committed as a real vertex yet — see addPoint(). _dir is the
@@ -474,14 +500,20 @@ private:
   TrailPoint _dir;
 
   void commitPoint(int32_t lat_1e6, int32_t lon_1e6, uint32_t ts, uint8_t flags) {
+    if (_count > 0 && !(flags & TRAIL_FLAG_SEG_START))
+      _dist_m += haversineMeters(last().lat_1e6, last().lon_1e6, lat_1e6, lon_1e6);
     int pos;
     if (_count < CAPACITY) {
       pos = (_head + _count) % CAPACITY;
       _count++;
-    } else {
+    } else {   // full: the oldest point goes, and the stretch from it to the next
+      if (!(at(1).flags & TRAIL_FLAG_SEG_START))
+        _dist_m -= haversineMeters(at(0).lat_1e6, at(0).lon_1e6, at(1).lat_1e6, at(1).lon_1e6);
+      if (_dist_m < 0) _dist_m = 0;
       pos = _head;
       _head = (_head + 1) % CAPACITY;
     }
+    _seq++;
     _buf[pos].lat_1e6 = lat_1e6;
     _buf[pos].lon_1e6 = lon_1e6;
     _buf[pos].ts      = ts;

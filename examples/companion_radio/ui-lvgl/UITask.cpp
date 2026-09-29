@@ -893,6 +893,7 @@ void UITask::begin(DisplayDriver* display_drv, SensorManager* sensors, NodePrefs
     s_archive.restore(_core->history);
     _core->history.setArchive(&s_archive);
   }
+  trailJournalRestore();   // a trail cut off by a restart or a flat battery
   _tap_wake = lvport::loadTapWake();
   msgtext::seedQuick(node_prefs);   // "OK" in quick message 1 on first boot
   _nearby = new NearbyModel();
@@ -1080,6 +1081,7 @@ void UITask::loop() {
   checkLowBattery();
   mapDownloadTick();   // a map download keeps running on any screen, and asleep
   otaTick();           // so does a firmware update
+  trailJournalTick();   // the live trail's copy on the card, once a minute
   if ((int32_t)(millis() - _next_trackback_ms) >= 0) {   // walking the trail back, on any screen
     _next_trackback_ms = millis() + 1000;
     navPollTrackBack();
@@ -1152,7 +1154,7 @@ void UITask::shutdown(bool restart) {
   the_mesh.savePrefs();
   the_mesh.saveRTCTime();
   the_mesh.flushDirtyContacts();
-  _core->trail.onShutdown();
+  if (!trailJournalTick(true)) _core->trail.onShutdown();   // no card: the internal slot, if enabled
 #ifdef PIN_BUZZER
   _buzzer.shutdown();   // the goodbye sound, unless muted
 #ifndef SIM_PLATFORM   // the sim's single thread would freeze the page
@@ -1667,16 +1669,19 @@ static uint32_t s_wifi_test_ms = 0;   // Settings > WiFi checking a just-saved n
 
 namespace home { static void leave(); }   // HomeScreen.h
 
+static int s_th_rows_n = 0;   // conversation bubbles built (refreshThread)
+
 lv_obj_t* UITask::newScreen(const char* title, bool with_back) {
   _home_clock = _home_date = _home_unread = nullptr;
   _thread_list = _compose_ta = _keyboard = nullptr;
+  s_th_rows_n = 0;   // the bubbles went with the screen
   if (_shown_screen == SCR_SETTINGS && _body) s_settings_y = lv_obj_get_scroll_y(_body);
   pickerClose();
   _header = _body = nullptr;
   _nearby_list = _nearby_status = _nearby_sort_lbl = _nearby_chips = nullptr;
   _node_info = _node_ping = _node_delete_lbl = nullptr;
   _scan_overlay = _scan_list = _scan_status = nullptr;   // the popup went with the old screen
-  _map_area = _map_marks = _map_me = _map_zoom_lbl = _map_hint = _map_dl_pill = nullptr;
+  _map_area = _map_marks = _map_me = _map_zoom_lbl = _map_hint = _map_dl_pill = _map_center_btn = nullptr;
   _dl_overlay = _dl_info = _dl_zoom_lbl = _dl_start_lbl = _dl_job_row = _dl_job_lbl = nullptr;
   _nav_bar = _nav_title = _nav_info = _nav_clear = nullptr;
   _nav_overlay = _nav_ta = _nav_kb = _nav_del_lbl = _nav_rec = _nav_avg_pill = nullptr;
@@ -2343,8 +2348,12 @@ void UITask::refreshNearbyList() {
   if (sig == _nearby_sig) return;
   _nearby_sig = sig;
 
+  // The same number of nodes (the usual case: ages, distances, signal
+  // change): the rows rewritten in place, not built again.
+  bool in_place = n > 0 && (int)lv_obj_get_child_count(_nearby_list) == n
+                  && lv_obj_check_type(lv_obj_get_child(_nearby_list, 0), &lv_button_class);
   int32_t scroll = lv_obj_get_scroll_y(_nearby_list);
-  lv_obj_clean(_nearby_list);
+  if (!in_place) lv_obj_clean(_nearby_list);
   uint32_t now = rtc_clock.getCurrentTime();
   bool imperial = _prefs && _prefs->units_imperial;
   for (int i = 0; i < n; i++) {
@@ -2359,13 +2368,33 @@ void UITask::refreshNearbyList() {
     const char* kind = e.contact_idx >= 0 ? NearbyModel::typeName(e.type) : "not a contact";
     snprintf(sub, sizeof(sub), "%s%s%s%s", kind, e.is_live ? "  -  live" : "",
              (e.dist_km >= 0.0f && age[0]) ? "  -  " : "", (e.dist_km >= 0.0f && age[0]) ? age : "");
+    uint32_t right_col = e.is_live ? theme::OK : theme::TEXT_MUTED;
+    if (in_place) {
+      lv_obj_t* row = lv_obj_get_child(_nearby_list, i);
+      lv_obj_t* t = rowTitle(row);
+      setText(t, title);
+      lv_color_t tc = lv_color_hex(e.fav ? theme::ACCENT : theme::TEXT);
+      if (!lv_color_eq(lv_obj_get_style_text_color(t, LV_PART_MAIN), tc)) lv_obj_set_style_text_color(t, tc, 0);
+      setText(rowSub(row), sub);
+      lv_obj_t* r = lv_obj_get_child(row, 2);
+      if (!r && right[0]) {
+        r = label(row, right, THEME_FONT_SMALL, right_col);
+        lv_obj_align(r, LV_ALIGN_RIGHT_MID, -theme::PAD, 0);
+      } else if (r) {
+        setText(r, right);
+        lv_color_t rc = lv_color_hex(right_col);
+        if (!lv_color_eq(lv_obj_get_style_text_color(r, LV_PART_MAIN), rc)) lv_obj_set_style_text_color(r, rc, 0);
+      }
+      continue;
+    }
     lv_obj_t* row = listRow(_nearby_list, title, sub, onNearbyRow, (void*)(uintptr_t)i);
     if (e.fav) lv_obj_set_style_text_color(rowTitle(row), lv_color_hex(theme::ACCENT), 0);
     if (right[0]) {
-      lv_obj_t* r = label(row, right, THEME_FONT_SMALL, e.is_live ? theme::OK : theme::TEXT_MUTED);
+      lv_obj_t* r = label(row, right, THEME_FONT_SMALL, right_col);
       lv_obj_align(r, LV_ALIGN_RIGHT_MID, -theme::PAD, 0);
     }
   }
+  if (in_place) return;
   if (n == 0) {
     lv_obj_t* l = label(_nearby_list, "Nobody here yet. Tap Scan to look around.",
                         THEME_FONT_BODY, theme::TEXT_MUTED);
@@ -2672,6 +2701,7 @@ void UITask::buildThread() {
   }
 
   _thread_list = scrollList(body);
+  s_th_rows_n = 0;
   lv_obj_set_style_pad_all(_thread_list, theme::PAD, 0);
 
   _compose_ta = nullptr;
@@ -2750,25 +2780,33 @@ static ChHistEntry* s_th_ch = psramBuf<ChHistEntry>(THREAD_MAX_SHOWN);
 static DmHistEntry* s_th_dm = psramBuf<DmHistEntry>(THREAD_MAX_SHOWN);
 
 // What a held bubble is about: its entry (index into s_th_ch / s_th_dm),
-// sender, position slot.
+// sender, position slot. One per shown message, at its index.
 struct MsgMeta { int pos; bool channel; bool own; int loc; char from[32]; };
 static MsgMeta* s_msg_meta = psramBuf<MsgMeta>(THREAD_MAX_SHOWN);
 static int     s_msg_meta_n = 0;
 
-static int noteMsgMeta(int pos, bool channel, bool own, int loc, const char* from) {
-  if (s_msg_meta_n >= THREAD_MAX_SHOWN) return -1;
-  MsgMeta& m = s_msg_meta[s_msg_meta_n];
-  m.pos = pos; m.channel = channel; m.own = own; m.loc = loc;
-  snprintf(m.from, sizeof(m.from), "%s", from ? from : "");
-  return s_msg_meta_n++;
+// The bubbles built, one per shown message: which message (key), its
+// delivery state, its row and age label. A refresh that only adds messages
+// or changes a delivery mark touches just those bubbles -- rebuilding all 50
+// on every repeater echo made the conversation stutter.
+struct ThreadRow { uint32_t key, state; lv_obj_t* row; lv_obj_t* age; };
+static ThreadRow* s_th_rows = psramBuf<ThreadRow>(THREAD_MAX_SHOWN);
+static lv_obj_t* s_older_lbl = nullptr;   // "Older messages (n)" on the page's top
+static bool      s_th_rows_newest = false;   // built for the newest page (the one patched)
+
+// The shown message a bubble (or a button in it) belongs to, or -1.
+static int threadRowOf(lv_obj_t* o) {
+  for (; o; o = lv_obj_get_parent(o))
+    for (int r = 0; r < s_th_rows_n; r++) if (s_th_rows[r].row == o) return r;
+  return -1;
 }
 
 static void onMsgLoc(lv_event_t* e) {
-  uintptr_t v = (uintptr_t)lv_event_get_user_data(e);
-  s_ui->messageLocationAction((int)(v >> 1), (v & 1) != 0);
+  int r = threadRowOf((lv_obj_t*)lv_event_get_current_target(e));
+  if (r >= 0) s_ui->messageLocationAction(s_msg_meta[r].loc, (uintptr_t)lv_event_get_user_data(e) != 0);
 }
 
-static void msgLocButton(lv_obj_t* parent, const char* text, int idx, bool save, bool accent) {
+static void msgLocButton(lv_obj_t* parent, const char* text, bool save, bool accent) {
   lv_obj_t* b = lv_button_create(parent);
   lv_obj_set_size(b, LV_SIZE_CONTENT, 28);
   lv_obj_set_style_pad_hor(b, 10, 0);
@@ -2776,7 +2814,7 @@ static void msgLocButton(lv_obj_t* parent, const char* text, int idx, bool save,
   lv_obj_set_style_radius(b, LV_RADIUS_CIRCLE, 0);
   lv_obj_set_style_shadow_width(b, 0, 0);
   lv_obj_set_style_bg_color(b, lv_color_hex(accent ? theme::ACCENT : theme::SURFACE_2), 0);
-  lv_obj_add_event_cb(b, onMsgLoc, LV_EVENT_CLICKED, (void*)(uintptr_t)((idx << 1) | (save ? 1 : 0)));
+  lv_obj_add_event_cb(b, onMsgLoc, LV_EVENT_CLICKED, (void*)(uintptr_t)(save ? 1 : 0));
   lv_obj_center(label(b, text, THEME_FONT_SMALL, accent ? theme::BG : theme::TEXT));
 }
 
@@ -2834,10 +2872,11 @@ static lv_obj_t* msgText(lv_obj_t* parent, const char* text, bool own, int max_w
 }
 
 // One message bubble. Own messages right-aligned in amber, others left.
-// loc_idx >= 0: the text carries a position (s_msg_locs[loc_idx]).
-static void bubble(lv_obj_t* list, const char* from, const char* text, bool own,
-                   uint32_t ts, const char* status, uint32_t status_col, int loc_idx = -1, int meta_idx = -1,
-                   int relays = 0) {
+// loc: the text carries a position (Go / Save buttons); hold: a long press
+// opens the message menu. Returns its row; *age_out = the age label.
+static lv_obj_t* bubble(lv_obj_t* list, const char* from, const char* text, bool own,
+                        uint32_t ts, const char* status, uint32_t status_col, bool loc, bool hold,
+                        int relays, lv_obj_t** age_out) {
   // Full-width row that pushes the bubble to its side.
   lv_obj_t* row = lv_obj_create(list);
   styleSurface(row, theme::BG);
@@ -2851,8 +2890,8 @@ static void bubble(lv_obj_t* list, const char* from, const char* text, bool own,
 
   lv_obj_t* b = lv_obj_create(row);
   lv_obj_remove_flag(b, LV_OBJ_FLAG_SCROLLABLE);
-  if (meta_idx >= 0) {   // hold: reply / path / target (ConversationScreen.h)
-    lv_obj_add_event_cb(b, onMsgHold, LV_EVENT_LONG_PRESSED, (void*)(uintptr_t)meta_idx);
+  if (hold) {   // hold: reply / path / target (ConversationScreen.h)
+    lv_obj_add_event_cb(b, onMsgHold, LV_EVENT_LONG_PRESSED, nullptr);
     lv_obj_set_style_bg_color(b, lv_color_hex(theme::SURFACE_2), LV_STATE_PRESSED);
   } else {
     lv_obj_remove_flag(b, LV_OBJ_FLAG_CLICKABLE);
@@ -2877,7 +2916,7 @@ static void bubble(lv_obj_t* list, const char* from, const char* text, bool own,
     lv_obj_t* hdr = flexBox(b, LV_FLEX_FLOW_ROW);
     lv_obj_set_style_pad_column(hdr, 8, 0);
     label(hdr, from, THEME_FONT_SMALL, theme::ACCENT);   // names are <= 31 chars: fits the bubble
-    if (meta_in_header) label(hdr, meta, THEME_FONT_SMALL, theme::TEXT_MUTED);
+    if (meta_in_header) *age_out = label(hdr, meta, THEME_FONT_SMALL, theme::TEXT_MUTED);
   }
   bool mentions_me;
   msgText(b, text, own, 238, &mentions_me);
@@ -2886,19 +2925,19 @@ static void bubble(lv_obj_t* list, const char* from, const char* text, bool own,
     lv_obj_set_style_border_color(b, lv_color_hex(theme::ACCENT), 0);
   }
 
-  if (loc_idx >= 0) {   // position: navigate there / keep it as a waypoint
+  if (loc) {   // position: navigate there / keep it as a waypoint
     lv_obj_t* acts = flexBox(b, LV_FLEX_FLOW_ROW);
     lv_obj_set_style_pad_column(acts, 6, 0);
     lv_obj_set_style_pad_top(acts, 2, 0);
-    msgLocButton(acts, UI_SYMBOL_COMPASS " Go", loc_idx, false, true);
-    msgLocButton(acts, UI_SYMBOL_FLAG " Save", loc_idx, true, false);
+    msgLocButton(acts, UI_SYMBOL_COMPASS " Go", false, true);
+    msgLocButton(acts, UI_SYMBOL_FLAG " Save", true, false);
   }
 
   if (!meta_in_header) {   // the age, then the delivery mark in its colour (as L1)
     lv_obj_t* line = flexBox(b, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(line, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(line, 6, 0);
-    label(line, meta, THEME_FONT_SMALL, theme::TEXT_MUTED);
+    *age_out = label(line, meta, THEME_FONT_SMALL, theme::TEXT_MUTED);
     if (relays > 0) {   // as L1: the count alone says it got out, no check beside it
       lv_obj_t* c = lv_obj_create(line);
       lv_obj_remove_style_all(c);
@@ -2916,16 +2955,16 @@ static void bubble(lv_obj_t* list, const char* from, const char* text, bool own,
       label(line, status, THEME_FONT_SMALL, status_col);
     }
   }
+  return row;
 }
 
-// Remember the position in `text` (if any) for its bubble's buttons; label
-// from a [WAY] tag, else the sender. Returns the slot or -1.
-static int noteMsgLocation(const char* text, const char* sender) {
-  if (s_msg_loc_n >= THREAD_MAX_SHOWN) return -1;
-  MsgLoc& m = s_msg_locs[s_msg_loc_n];
+// Remember the position in `text` (if any) for its bubble's buttons, in
+// slot r; label from a [WAY] tag, else the sender. Returns r or -1.
+static int noteMsgLocation(int r, const char* text, const char* sender) {
+  MsgLoc& m = s_msg_locs[r];
   if (!geo::parseLatLon(text, m.lat, m.lon, m.label, sizeof(m.label))) return -1;
   if (!m.label[0]) snprintf(m.label, sizeof(m.label), "%s", sender && sender[0] ? sender : "Msg loc");
-  return s_msg_loc_n++;
+  return r;
 }
 
 void UITask::messageLocationAction(int idx, bool save) {
@@ -2956,11 +2995,12 @@ int UITask::loadThreadPage(int& total) {
   char path[64];
   if (_thread_is_channel) {
     int ring = h.histCountForChannel(_thread_channel);
-    int arc = s_archive.ready() && s_archive.chPath(_thread_channel, path, sizeof(path))
-            ? s_archive.total<ChHistEntry>(path) : 0;
+    int arc = 0;
+    int got = s_archive.ready() && s_archive.chPath(_thread_channel, path, sizeof(path))
+            ? s_archive.window(path, _thread_skip, THREAD_MAX_SHOWN, s_th_ch, &arc) : 0;
     if (arc > 0 && arc >= ring) {
       total = arc;
-      return s_archive.window(path, _thread_skip, THREAD_MAX_SHOWN, s_th_ch);
+      return got;
     }
     total = ring;
     int m = ring - _thread_skip;
@@ -2969,14 +3009,14 @@ int UITask::loadThreadPage(int& total) {
     return m > 0 ? m : 0;
   }
   int ring = h.dmHistCountForContact(_thread_key);
-  int arc = 0;
+  int arc = 0, got = 0;
   if (s_archive.ready()) {
     histstore::SdArchive::dmPath(_thread_key, path, sizeof(path));
-    arc = s_archive.total<DmHistEntry>(path);
+    got = s_archive.window(path, _thread_skip, THREAD_MAX_SHOWN, s_th_dm, &arc);
   }
   if (arc > 0 && arc >= ring) {
     total = arc;
-    return s_archive.window(path, _thread_skip, THREAD_MAX_SHOWN, s_th_dm);
+    return got;
   }
   total = ring;
   int m = ring - _thread_skip;
@@ -3007,23 +3047,36 @@ void UITask::refreshThread() {
   if (!_thread_list) return;
   _thread_dirty = false;
   _thread_sig = threadSignature();
-  lv_obj_clean(_thread_list);
   const MessageHistory& h = _core->history;
-  s_msg_loc_n = 0;
-  s_msg_meta_n = 0;
   int total = 0;
   int n = loadThreadPage(total);
   if (n == 0 && _thread_skip > 0) {   // the page went away (history trimmed)
     _thread_skip = 0;
     n = loadThreadPage(total);
-  }  if (total > _thread_skip + n) {
-    char t[40];
-    snprintf(t, sizeof(t), LV_SYMBOL_UP "  Older messages (%d)", total - _thread_skip - n);
-    pageButton(_thread_list, t, 1);
   }
+  ContactInfo tc;
+  bool room = !_thread_is_channel && MessageHistory::contactByPrefix(_thread_key, tc) && tc.type == ADV_TYPE_ROOM;
 
-  if (_thread_is_channel) {
-    for (int i = 0; i < n; i++) {   // oldest first
+  // Which message entry i is, and the delivery state its bubble shows.
+  auto keyOf = [&](int i) {
+    uint32_t ts = _thread_is_channel ? s_th_ch[i].timestamp : s_th_dm[i].timestamp;
+    const char* t = _thread_is_channel ? s_th_ch[i].text : s_th_dm[i].text;
+    uint32_t k = 2166136261u ^ ts;
+    for (; *t; t++) k = (k ^ (uint8_t)*t) * 16777619u;
+    return k;
+  };
+  auto stateOf = [&](int i) -> uint32_t {
+    if (_thread_is_channel) return s_th_ch[i].relay_status | (uint32_t)s_th_ch[i].path_len << 8;
+    return s_th_dm[i].outgoing ? 0x100u | h.dmEffectiveStatus(s_th_dm[i]) : 0;
+  };
+  // Entry i's bubble (at the list's end) and its menu / position slots.
+  auto build = [&](int i) {
+    MsgMeta& m = s_msg_meta[i];
+    const char* st = NULL; uint32_t col = theme::TEXT_MUTED;
+    int nrel = 0;
+    lv_obj_t* age = nullptr;
+    lv_obj_t* row;
+    if (_thread_is_channel) {
       const ChHistEntry& e = s_th_ch[i];
       // Channel text is "Sender: body"; our own posts are filed as "Me: body".
       char from[40] = "";
@@ -3038,22 +3091,16 @@ void UITask::refreshThread() {
       // Own posts: once a repeater echoed it, how many distinct repeaters did
       // (markChannelRelayed), or a check if that's unknown; nothing before --
       // no echo is normal.
-      const char* st = NULL; uint32_t col = theme::TEXT_MUTED;
-      int nrel = 0;
       if (own && e.relay_status == ACK_OK) {
         nrel = e.path_len & 63;
         st = LV_SYMBOL_OK; col = theme::OK;
       } else if (own) st = "";
-      int loc = own ? -1 : noteMsgLocation(body, from);
-      bubble(_thread_list, own ? NULL : from, body, own, e.timestamp, st, col,
-             loc, noteMsgMeta(i, true, own, loc, own ? "" : from), nrel);
-    }
-  } else {
-    ContactInfo tc;
-    bool room = MessageHistory::contactByPrefix(_thread_key, tc) && tc.type == ADV_TYPE_ROOM;
-    for (int i = 0; i < n; i++) {
+      int loc = own ? -1 : noteMsgLocation(i, body, from);
+      m = { i, true, own, loc, "" };
+      if (!own) snprintf(m.from, sizeof(m.from), "%s", from);
+      row = bubble(_thread_list, own ? NULL : from, body, own, e.timestamp, st, col, loc >= 0, true, nrel, &age);
+    } else {
       const DmHistEntry& e = s_th_dm[i];
-      const char* st = NULL; uint32_t col = theme::TEXT_MUTED;
       if (e.outgoing) {
         switch (h.dmEffectiveStatus(e)) {
           case ACK_OK:      st = LV_SYMBOL_OK; col = theme::OK; break;
@@ -3067,11 +3114,71 @@ void UITask::refreshThread() {
       const char* text = e.text;
       if (!e.outgoing && room) text = contactctl::splitRoomPost(e.text, who, sizeof(who));
       else if (!e.outgoing) contactName(_thread_key, who, sizeof(who));
-      int loc = e.outgoing ? -1 : noteMsgLocation(text, who);
-      bubble(_thread_list, room && !e.outgoing ? who : NULL, text, e.outgoing, e.timestamp, st, col,
-             loc, e.outgoing ? -1 : noteMsgMeta(i, false, false, loc, who));   // nothing to show for our own DM
+      int loc = e.outgoing ? -1 : noteMsgLocation(i, text, who);
+      m = { i, false, false, loc, "" };
+      snprintf(m.from, sizeof(m.from), "%s", who);
+      row = bubble(_thread_list, room && !e.outgoing ? who : NULL, text, e.outgoing, e.timestamp, st, col,
+                   loc >= 0, !e.outgoing, 0, &age);   // nothing to show for our own DM
     }
+    s_th_rows[i] = { keyOf(i), stateOf(i), row, age };
+  };
+  auto olderText = [&](char* t, int sz) { snprintf(t, sz, LV_SYMBOL_UP "  Older messages (%d)", total - _thread_skip - n); };
+
+  // The same page as built, with messages added at the end (the oldest
+  // dropping off the top) and delivery marks changed: patch it.
+  int kept = -1;   // bubbles still shown, after `drop` gone from the top
+  int drop = 0;
+  if (s_th_rows_newest && s_th_rows_n > 0 && n > 0 && _thread_skip == 0 && (total > n) == (s_older_lbl != nullptr)) {
+    for (drop = 0; drop < s_th_rows_n && kept < 0; drop++) {
+      int m = s_th_rows_n - drop;
+      if (m > n) continue;
+      bool same = true;
+      for (int r = 0; r < m && same; r++) same = s_th_rows[drop + r].key == keyOf(r);
+      if (same) kept = m;
+    }
+    drop--;
   }
+  if (kept > 0) {
+    for (int r = 0; r < drop; r++) lv_obj_delete(s_th_rows[r].row);
+    memmove(s_th_rows, s_th_rows + drop, kept * sizeof(ThreadRow));
+    memmove(s_msg_meta, s_msg_meta + drop, kept * sizeof(MsgMeta));
+    for (int r = 0; r < kept; r++) {
+      if (s_th_rows[r].state == stateOf(r)) {   // unchanged: its slots, and a fresh age
+        const ChHistEntry* ce = _thread_is_channel ? &s_th_ch[r] : nullptr;
+        char meta[32];
+        fmtMsgAge(meta, sizeof(meta), rtc_clock.getCurrentTime(), ce ? ce->timestamp : s_th_dm[r].timestamp, _prefs);
+        if (s_th_rows[r].age) setText(s_th_rows[r].age, meta);
+        s_msg_meta[r].pos = r;
+        if (s_msg_meta[r].loc >= 0 && drop > 0) { s_msg_locs[r] = s_msg_locs[r + drop]; s_msg_meta[r].loc = r; }
+        continue;
+      }
+      lv_obj_t* old = s_th_rows[r].row;   // a delivery mark changed: that bubble anew, in its place
+      build(r);
+      lv_obj_move_to_index(s_th_rows[r].row, lv_obj_get_index(old));
+      lv_obj_delete(old);
+    }
+    for (int r = kept; r < n; r++) build(r);
+    if (s_older_lbl) { char t[40]; olderText(t, sizeof(t)); setText(s_older_lbl, t); }
+    s_th_rows_n = s_msg_meta_n = s_msg_loc_n = n;
+    if (n > kept) {   // new messages: down to them
+      lv_obj_update_layout(_thread_list);
+      lv_obj_scroll_to_y(_thread_list, LV_COORD_MAX, LV_ANIM_OFF);
+    }
+    return;
+  }
+
+  lv_obj_clean(_thread_list);
+  s_th_rows_n = 0;
+  s_older_lbl = nullptr;
+  if (total > _thread_skip + n) {
+    char t[40];
+    olderText(t, sizeof(t));
+    pageButton(_thread_list, t, 1);
+    s_older_lbl = lv_obj_get_child(lv_obj_get_child(_thread_list, -1), 0);
+  }
+  for (int i = 0; i < n; i++) build(i);   // oldest first
+  s_th_rows_n = s_msg_meta_n = s_msg_loc_n = n;
+  s_th_rows_newest = _thread_skip == 0;   // a page back is built whole each time
   if (_thread_skip > 0) pageButton(_thread_list, LV_SYMBOL_DOWN "  Newer messages", -1);
   if (n == 0) label(_thread_list, "No messages yet", THEME_FONT_BODY, theme::TEXT_MUTED);
   lv_obj_update_layout(_thread_list);
@@ -3521,6 +3628,12 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_open(const char* name) {
   if (!strcmp(name, "regions")) { s_ui->mapRegionsPopup(); return; }
   if (!strcmp(name, "region0")) { s_ui->mapRegionPopup(0); return; }
   if (!strcmp(name, "advert")) { s_ui->advertPopup(); return; }
+  if (!strncmp(name, "trail@", 6)) {   // "trail@name.trl" from /sdcard/trails: Load, as the saved-trail popup does
+    navmap::scanTrails();
+    for (int i = 0; i < navmap::s_st_n; i++)
+      if (!strcmp(navmap::s_st_names[i], name + 6)) { navmap::s_st_sel = i; s_ui->savedTrailAction(navmap::TL_ST_LOAD); }
+    return;
+  }
 }
 // Scrolls the screen's (or a popup's) main list by dy; returns what was left to scroll.
 static void dbgScrollable(lv_obj_t* o, lv_obj_t*& best, int& h) {

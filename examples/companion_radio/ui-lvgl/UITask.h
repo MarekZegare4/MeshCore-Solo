@@ -312,7 +312,7 @@ private:
   void buildHomeClock(lv_obj_t* box);
   void buildHomeMap(lv_obj_t* box);
   void homeFieldText(uint8_t field, char* buf, int n);
-  void homeMapFit();
+  bool homeMapFit();
   void homeMapLayout();
   void homeMapLoop();
   void refreshHome();
@@ -349,6 +349,9 @@ private:
   void buildNavLayers();
   void buildNavControls(lv_obj_t* body);
   void rebuildNavMarkers();
+  bool navTrailSync();
+  bool trailJournalTick(bool now = false);   // NavMap.h: the live trail's copy on the card
+  void trailJournalRestore();
   void layoutNav();
   void refreshNavBar();
   void navFrameTarget();
@@ -534,6 +537,8 @@ private:
   lv_obj_t* _map_marks = nullptr;
   lv_obj_t* _map_me = nullptr;
   lv_obj_t* _map_zoom_lbl = nullptr;
+  lv_obj_t* _map_center_btn = nullptr;   // accent while the map follows you
+  uint32_t  _next_follow_ms = 0;
   lv_obj_t* _map_hint = nullptr;
   lv_obj_t* _map_dl_pill = nullptr;     // download progress over the map
   lv_obj_t* _dl_overlay = nullptr;      // download popup

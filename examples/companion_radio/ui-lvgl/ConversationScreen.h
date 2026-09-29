@@ -50,7 +50,7 @@ static void onRoomRowHold(lv_event_t* e) {
 static void onConvThreadMenu(lv_event_t* e) { (void)e; s_ui->conversationMenu(nullptr); }
 static void onMsgHold(lv_event_t* e) {
   lv_indev_wait_release(lv_indev_active());
-  s_ui->messageMenu((int)(uintptr_t)lv_event_get_user_data(e));
+  s_ui->messageMenu(threadRowOf((lv_obj_t*)lv_event_get_current_target(e)));
 }
 static void onChatFilter(lv_event_t* e) { s_ui->toggleChatFilter((uint8_t)(uintptr_t)lv_event_get_user_data(e)); }
 
