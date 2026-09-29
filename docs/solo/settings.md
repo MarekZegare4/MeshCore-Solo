@@ -37,4 +37,4 @@ A few notes:
 > - **Connections**: Radio, Bluetooth, WiFi, GPS.
 > - **Map & data**: Map (trail, live sharing and arrival alert options),
 >   Storage.
-> - **System**: Name, Time, Firmware update, About; Reboot and Power off.
+> - **System**: Name, Time, Units, Firmware update, About; Reboot and Power off.

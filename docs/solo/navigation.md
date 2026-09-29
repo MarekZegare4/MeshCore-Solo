@@ -39,8 +39,8 @@ it's connected over USB.
 > **Wio Tracker L2:** the trail holds 4096 points and is drawn on the map.
 > Its controls (start / stop, save, load, track back, reset) are in the map's
 > **Map tools**, the settings in Settings › Map. **GPX** writes the trail to
-> the SD card; take it off with the card as a USB drive
-> ([Hardware](./hardware.md)).
+> `trails/` on the SD card; take it off with the card as a USB drive
+> ([Hardware](./hardware.md)) and open it in the USB tools for a preview.
 
 ## Waypoints
 

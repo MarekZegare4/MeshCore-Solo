@@ -78,7 +78,9 @@ spare the panel.
 ## Wio Tracker L2
 
 - **Buttons**: the top one turns the screen off and on; the side one goes
-  home, and held and let go mutes the sound. Side + top takes a screenshot.
+  home, and held and let go mutes the sound. Side + top takes a screenshot
+  (a BMP in `screenshots/` on the SD card); the site's USB tools take one over
+  USB.
   Holding the side button in the first seconds after power-on starts the CLI
   rescue on USB serial.
 - **SD card**: holds the message history, maps, GPX trails and live map tiles.

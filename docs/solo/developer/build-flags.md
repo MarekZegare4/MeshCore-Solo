@@ -84,7 +84,7 @@ layered on top of GPS support, not a requirement for it.
 | --- | --- |
 | `OLED_MISC_FIXED_FONT=1` | Pulls in a full Latin/Greek/Cyrillic 6×9 fixed font (~14 KB flash) so typed text in those alphabets renders as itself instead of block placeholders. Worth it on any board with a keyboard; skip it on space-constrained builds without one. |
 | `DISPLAY_ROTATION=<0-3>` | Rotates the panel in 90° steps, for a board mounted sideways or upside down. |
-| `ENABLE_SCREENSHOT` | Lets Solo Tools read the framebuffer over USB to capture a screenshot. |
+| `ENABLE_SCREENSHOT` | Lets the site's [USB tools](https://solo.marekzegarek.com/#pc-tools) (or `tools/screenshot.py`) capture the screen over USB. A colour screen (the L2) renders a fresh frame and sends it as RGB565. |
 | `KEEP_DISPLAY_ON_USB` | Refreshes the auto-off deadline continuously while externally (USB) powered, so the auto-off timer only starts counting once power is actually removed. Off by default because OLED panels burn in quickly with a permanently-lit screen — only worth enabling for an LCD/e-ink target, or a display you don't mind replacing. |
 | `AUTO_OFF_MILLIS=<ms>` | How long the display stays on before auto-off. Default 15000 (15s); `0` disables auto-off entirely. |
 | `UI_RECENT_LIST_SIZE=<n>` | How many entries the recent-activity lists show before scrolling. Default 4. |
