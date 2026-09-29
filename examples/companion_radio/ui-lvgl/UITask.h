@@ -419,6 +419,7 @@ private:
   bool _wake_down = false;
   uint32_t autoOffMillis() const;
   uint32_t idleMillis(uint32_t lv_next);
+  bool cpuNeeded();
   void checkLowBattery();
 
 #ifdef PIN_BUZZER

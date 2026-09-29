@@ -52,6 +52,11 @@ public:
   bool isClientConnected() const override { return isBLEConnected(); }
 #endif
 
+  // USB can't tell without reading it.
+  bool hasPendingFrames() const override {
+    return (_ble_enabled && _ble.isConnected()) ? _ble.hasPendingFrames() : true;
+  }
+
   bool isWriteBusy() const override {
     return (_ble_enabled && _ble.isConnected()) ? _ble.isWriteBusy() : _usb.isWriteBusy();
   }

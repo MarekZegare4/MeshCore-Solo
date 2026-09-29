@@ -116,11 +116,12 @@ static void drawGrid(lv_event_t* e) {
 // Markers, remembered so layout can reposition them. `idx` is the Nearby row
 // (MK_NODE), the waypoint index (MK_WAYPOINT) or the live-share slot (MK_LIVE).
 enum : uint8_t { MK_NODE, MK_WAYPOINT, MK_LIVE };
-struct Mark { int32_t lat_e6, lon_e6; int idx; uint8_t kind; lv_obj_t* obj; lv_obj_t* dot; };
+struct Mark { int32_t lat_e6, lon_e6; int idx; uint8_t kind; uint32_t col, text_hash; lv_obj_t* obj; lv_obj_t* dot; };
 static const int MAX_MARKS = NearbyModel::MAX_NEARBY > WaypointStore::CAPACITY + LiveTrackStore::CAPACITY
                              ? NearbyModel::MAX_NEARBY : WaypointStore::CAPACITY + LiveTrackStore::CAPACITY;   // Nearby map, or waypoints + live shares
 static Mark* s_marks = psramBuf<Mark>(MAX_MARKS);
 static int  s_mark_count = 0;
+static int  s_mark_prev = 0;   // during a rebuild: how many the last one left, reused where unchanged
 static int  s_drag = 0;   // px moved in the current press: a drag isn't a tap
 static bool s_available = false;   // provider has data; checked when the map opens, not per frame
 static double s_left = 0, s_top = 0;   // world px (at the current zoom) of the view's top-left
@@ -419,7 +420,7 @@ void UITask::layoutMap() {
     double lat = atan(sinh(M_PI * (1 - 2 * _map_cy / (double)(1 << _map_z)))) * 180.0 / M_PI;
     mapview::s_grid = { left, top, mapview::gridStep(_map_z, lat, _prefs && _prefs->units_imperial, 56, sl, sizeof(sl)) };
     if (mapview::s_scale_lbl) {
-      lv_label_set_text(mapview::s_scale_lbl, sl);
+      setText(mapview::s_scale_lbl, sl);
       lv_obj_set_width(mapview::s_scale_bar, (int)lround(mapview::s_grid.step_px));
     }
     lv_obj_invalidate(_map_area);
@@ -494,20 +495,20 @@ void UITask::layoutMap() {
   }
   if (_map_nav) layoutNav();
 
-  if (over) lv_label_set_text_fmt(_map_zoom_lbl, "z%d  (map z%d)", _map_z, _map_z - over);   // magnified
+  if (over) setTextFmt(_map_zoom_lbl, "z%d  (map z%d)", _map_z, _map_z - over);   // magnified
   else if (mapview::s_provider == &mapview::s_vector)   // spike: how long a tile takes
   {
     uint32_t ld, fl, ln;
     mapview::s_vector.lastSplit(ld, fl, ln);
-    lv_label_set_text_fmt(_map_zoom_lbl, "z%d  vt %lu ms (r%lu a%lu l%lu)", _map_z, (unsigned long)mapview::s_vector.lastMs(),
+    setTextFmt(_map_zoom_lbl, "z%d  vt %lu ms (r%lu a%lu l%lu)", _map_z, (unsigned long)mapview::s_vector.lastMs(),
                           (unsigned long)ld, (unsigned long)fl, (unsigned long)ln);
   }
-  else lv_label_set_text_fmt(_map_zoom_lbl, "z%d", _map_z);
+  else setTextFmt(_map_zoom_lbl, "z%d", _map_z);
   const char* hint = !have_provider ? "No map on the SD card.\nPut tiles in /maps (tools/maps)."
                    : mapview::s_dl.liveQueued() > 0 ? nullptr   // being fetched
                    : (!_map_pending && shown == 0 && missing > 0)
                        ? "No map here at this zoom -\nzoom out or download the area" : nullptr;
-  if (hint && !areaSelecting()) { lv_label_set_text(_map_hint, hint); lv_obj_remove_flag(_map_hint, LV_OBJ_FLAG_HIDDEN); }
+  if (hint && !areaSelecting()) { setText(_map_hint, hint); lv_obj_remove_flag(_map_hint, LV_OBJ_FLAG_HIDDEN); }
   else lv_obj_add_flag(_map_hint, LV_OBJ_FLAG_HIDDEN);
   areaLayout();
 }
@@ -585,10 +586,12 @@ void UITask::mapLoop() {
 
 void UITask::rebuildMapMarkers() {
   if (!_map_marks) return;
-  for (int k = 0; k < mapview::s_mark_count; k++) lv_obj_delete(mapview::s_marks[k].obj);
+  mapview::s_mark_prev = mapview::s_mark_count;
   mapview::s_mark_count = 0;
   if (_map_nav) rebuildNavMarkers();
   else rebuildNodeMarkers();
+  for (int k = mapview::s_mark_count; k < mapview::s_mark_prev; k++) lv_obj_delete(mapview::s_marks[k].obj);
+  mapview::s_mark_prev = 0;
   lv_obj_update_layout(_map_marks);   // so layoutMap() knows where each dot sits in its marker
 }
 
@@ -604,9 +607,22 @@ void UITask::rebuildNodeMarkers() {
 
 // One clickable object per marker: a dot plus the name beside it. The object
 // is placed so the dot's centre is on the spot, from where layout actually put
-// the dot inside it (Mark::dot) -- the name may be taller than the dot.
+// the dot inside it (Mark::dot) -- the name may be taller than the dot. The
+// markers are rebuilt every few seconds: one the same as the last time in its
+// slot is kept as it is, so an unchanged map isn't redrawn under it.
 void UITask::addMapMark(uint8_t kind, int idx, int32_t lat_e6, int32_t lon_e6, uint32_t col, const char* text) {
   if (!_map_marks || mapview::s_mark_count >= mapview::MAX_MARKS) return;
+  uint32_t h = 2166136261u;   // FNV-1a of the name
+  for (const char* c = text; *c; c++) h = (h ^ (uint8_t)*c) * 16777619u;
+  int k = mapview::s_mark_count;
+  if (k < mapview::s_mark_prev) {
+    mapview::Mark& old = mapview::s_marks[k];
+    if (old.kind == kind && old.idx == idx && old.lat_e6 == lat_e6 && old.lon_e6 == lon_e6 && old.col == col && old.text_hash == h) {
+      mapview::s_mark_count++;
+      return;
+    }
+    lv_obj_delete(old.obj);
+  }
   lv_obj_t* m = lv_obj_create(_map_marks);
   lv_obj_remove_style_all(m);
   lv_obj_set_size(m, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -628,7 +644,7 @@ void UITask::addMapMark(uint8_t kind, int idx, int32_t lat_e6, int32_t lon_e6, u
   lv_obj_remove_flag(name, LV_OBJ_FLAG_CLICKABLE);
 
   mapview::Mark& mk = mapview::s_marks[mapview::s_mark_count++];
-  mk.lat_e6 = lat_e6; mk.lon_e6 = lon_e6; mk.idx = idx; mk.kind = kind; mk.obj = m; mk.dot = dot;
+  mk.lat_e6 = lat_e6; mk.lon_e6 = lon_e6; mk.idx = idx; mk.kind = kind; mk.col = col; mk.text_hash = h; mk.obj = m; mk.dot = dot;
 }
 
 void UITask::mapPan(int dx, int dy) {
@@ -968,24 +984,24 @@ void UITask::mapDownloadTick() {
   next_ui = millis() + 500;
   if (_map_dl_pill) {
     if (dl.state() == mapview::TileDownloader::CONNECTING) {
-      lv_label_set_text(_map_dl_pill, LV_SYMBOL_WIFI " Connecting...");
+      setText(_map_dl_pill, LV_SYMBOL_WIFI " Connecting...");
       lv_obj_remove_flag(_map_dl_pill, LV_OBJ_FLAG_HIDDEN);
     } else if (dl.active()) {
       if (dl.failed())
-        lv_label_set_text_fmt(_map_dl_pill, LV_SYMBOL_DOWNLOAD " %lu / %lu  " LV_SYMBOL_WARNING " %lu",
+        setTextFmt(_map_dl_pill, LV_SYMBOL_DOWNLOAD " %lu / %lu  " LV_SYMBOL_WARNING " %lu",
                               (unsigned long)dl.processed(), (unsigned long)dl.total(), (unsigned long)dl.failed());
       else
-        lv_label_set_text_fmt(_map_dl_pill, LV_SYMBOL_DOWNLOAD " %lu / %lu", (unsigned long)dl.processed(),
+        setTextFmt(_map_dl_pill, LV_SYMBOL_DOWNLOAD " %lu / %lu", (unsigned long)dl.processed(),
                               (unsigned long)dl.total());
       lv_obj_remove_flag(_map_dl_pill, LV_OBJ_FLAG_HIDDEN);
     } else if (dl.liveConnecting()) {
-      lv_label_set_text(_map_dl_pill, LV_SYMBOL_WIFI " Connecting...");
+      setText(_map_dl_pill, LV_SYMBOL_WIFI " Connecting...");
       lv_obj_remove_flag(_map_dl_pill, LV_OBJ_FLAG_HIDDEN);
     } else if (dl.liveQueued() > 0) {
-      lv_label_set_text_fmt(_map_dl_pill, LV_SYMBOL_DOWNLOAD " live %d", dl.liveQueued());
+      setTextFmt(_map_dl_pill, LV_SYMBOL_DOWNLOAD " live %d", dl.liveQueued());
       lv_obj_remove_flag(_map_dl_pill, LV_OBJ_FLAG_HIDDEN);
     } else if (mapview::s_available && dl.savedJob(s_job_tmp)) {
-      lv_label_set_text(_map_dl_pill, LV_SYMBOL_DOWNLOAD " Resume?");
+      setText(_map_dl_pill, LV_SYMBOL_DOWNLOAD " Resume?");
       lv_obj_remove_flag(_map_dl_pill, LV_OBJ_FLAG_HIDDEN);
     } else {
       lv_obj_add_flag(_map_dl_pill, LV_OBJ_FLAG_HIDDEN);

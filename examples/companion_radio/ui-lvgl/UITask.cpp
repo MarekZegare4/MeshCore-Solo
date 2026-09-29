@@ -133,6 +133,23 @@ static lv_obj_t* label(lv_obj_t* parent, const char* text, const lv_font_t* font
   lv_obj_set_style_text_color(l, lv_color_hex(color), 0);
   return l;
 }
+// A label's text, set only when it differs: LVGL redraws a label on every
+// set_text, the same text or not, and the refreshes that run every second
+// mostly write back what's already there.
+static void setText(lv_obj_t* l, const char* text) {
+  const char* cur = lv_label_get_text(l);
+  if (cur && strcmp(cur, text) == 0) return;
+  lv_label_set_text(l, text);
+}
+static void setTextFmt(lv_obj_t* l, const char* fmt, ...) __attribute__((format(printf, 2, 3)));
+static void setTextFmt(lv_obj_t* l, const char* fmt, ...) {
+  char b[160];
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf(b, sizeof(b), fmt, ap);
+  va_end(ap);
+  setText(l, b);
+}
 // A sentence across the parent's width, wrapping: a hint, a note, a status.
 static lv_obj_t* noteLabel(lv_obj_t* parent, const char* text, const lv_font_t* font = THEME_FONT_SMALL,
                            uint32_t color = theme::TEXT_MUTED) {
@@ -296,7 +313,7 @@ static void infoSet(lv_obj_t* value, const char* text) {
   lv_obj_t* row = lv_obj_get_parent(value);
   if (!text || !text[0]) { lv_obj_add_flag(row, LV_OBJ_FLAG_HIDDEN); return; }
   lv_obj_remove_flag(row, LV_OBJ_FLAG_HIDDEN);
-  lv_label_set_text(value, text);
+  setText(value, text);
 }
 
 // A bare flex row / column sized to its content, taps passing through.
@@ -828,9 +845,9 @@ static void clockFaceSet(lv_obj_t* f, const struct tm* ti, const NodePrefs* p) {
   lv_obj_t* ap = lv_obj_get_child(f, 1);
   char clk[12] = "--:--";
   if (ti) fmtClock(clk, sizeof(clk), *ti, p, false, true);
-  lv_label_set_text(lv_obj_get_child(f, 0), clk);
+  setText(lv_obj_get_child(f, 0), clk);
   bool h12 = ti && p && p->clock_12h;
-  if (h12) lv_label_set_text(ap, ti->tm_hour < 12 ? "AM" : "PM");
+  if (h12) setText(ap, ti->tm_hour < 12 ? "AM" : "PM");
   if (h12 != !lv_obj_has_flag(ap, LV_OBJ_FLAG_HIDDEN)) {
     if (h12) lv_obj_remove_flag(ap, LV_OBJ_FLAG_HIDDEN);
     else lv_obj_add_flag(ap, LV_OBJ_FLAG_HIDDEN);
@@ -1110,6 +1127,7 @@ void UITask::loop() {
       uint32_t sig = threadSignature();
       if (_thread_dirty || sig != _thread_sig) refreshThread();
     }
+    lvport::cpuSlow(!cpuNeeded());
     lv_next = lv_timer_handler();
   }
   lvport::idle(idleMillis(lv_next));
@@ -1117,13 +1135,14 @@ void UITask::loop() {
 
 // How long loop() may sleep: nothing is due before then. Not at all while the
 // mesh has packets queued; briefly while a melody plays (its notes are timed
-// here) or the app is connected (its frames are read one a pass).
+// here) or frames to or from the app wait (read one a pass, sent spaced out).
+// A frame arriving from the app over BLE wakes the loop (serialFrameArrived).
 uint32_t UITask::idleMillis(uint32_t lv_next) {
   if (the_mesh.hasPendingWork()) return 0;
 #ifdef PIN_BUZZER
   if (_buzzer.isPlaying()) return 1;
 #endif
-  if (isClientConnected()) return 2;
+  if (isClientConnected() && _serial->hasPendingFrames()) return 2;
   if (_asleep) return 50;   // as often as the buttons and tap to wake are polled
   return lv_next < 10 ? lv_next : 10;   // LVGL's next timer: a refresh, an animation, input
 }
@@ -1429,9 +1448,9 @@ void UITask::refreshStatusBar() {
   if (localTime(_prefs, ti)) {
     char clk[12];
     fmtClock(clk, sizeof(clk), ti, _prefs, true);
-    lv_label_set_text(_status_time, clk);
+    setText(_status_time, clk);
   } else {
-    lv_label_set_text(_status_time, "--:--");
+    setText(_status_time, "--:--");
   }
 
   // Battery: the icon, then % or volts per Settings > Battery display. The
@@ -1446,7 +1465,7 @@ void UITask::refreshStatusBar() {
     case battery::VOLTAGE: snprintf(level, sizeof(level), " %u.%02u V", mv / 1000, (mv % 1000) / 10); break;
     default: break;
   }
-  lv_label_set_text_fmt(_status_batt, "%s%s", batt, level);
+  setTextFmt(_status_batt, "%s%s", batt, level);
   lv_obj_t* left_of = _status_batt;   // the icons pack up to this
   if (_board->isExternalPowered()) {
     lv_obj_remove_flag(_status_chg, LV_OBJ_FLAG_HIDDEN);
@@ -2246,8 +2265,8 @@ void UITask::refreshScanPopup() {
   if (!_scan_list) return;
   _scan->refreshScan();
   int n = _scan->count();
-  if (_scanning) lv_label_set_text_fmt(_scan_status, LV_SYMBOL_REFRESH "  Listening for replies... %d", n);
-  else lv_label_set_text_fmt(_scan_status, "%d node%s answered the discover request", n, n == 1 ? "" : "s");
+  if (_scanning) setTextFmt(_scan_status, LV_SYMBOL_REFRESH "  Listening for replies... %d", n);
+  else setTextFmt(_scan_status, "%d node%s answered the discover request", n, n == 1 ? "" : "s");
 
   uint32_t sig = (uint32_t)n + (_scanning ? 0x10000u : 0);
   for (int i = 0; i < n; i++) {
@@ -2309,10 +2328,10 @@ void UITask::refreshNearbyList() {
   int n = _nearby->count();
 
   if (_nearby_sort_lbl)
-    lv_label_set_text(_nearby_sort_lbl, _nearby->sortMode() == NearbyModel::SORT_TIME ? "Recent" : "Dist");
+    setText(_nearby_sort_lbl, _nearby->sortMode() == NearbyModel::SORT_TIME ? "Recent" : "Dist");
   int32_t lat, lon;
   bool gps = _nearby->ownPosition(lat, lon);
-  lv_label_set_text_fmt(_nearby_status, "%d node%s%s", n, n == 1 ? "" : "s",
+  setTextFmt(_nearby_status, "%d node%s%s", n, n == 1 ? "" : "s",
                         gps ? "" : "  -  no GPS fix, distances unknown");
   if (sig == _nearby_sig) return;
   _nearby_sig = sig;
@@ -2455,12 +2474,12 @@ void UITask::refreshNode() {
     int16_t out = 0, back = 0; uint32_t rtt = 0;
     _core->ping.getResult(out, back, rtt);
     if (!_core->ping.isActive() && (out || back || rtt)) {
-      lv_label_set_text_fmt(_node_ping, "Ping %lu ms  -  SNR out %.1f  back %.1f", (unsigned long)rtt,
+      setTextFmt(_node_ping, "Ping %lu ms  -  SNR out %.1f  back %.1f", (unsigned long)rtt,
                             out / 4.0f, back / 4.0f);
       _pinging = false;
     } else if (millis() - _ping_started_ms > 3000) {
       _core->ping.clear();
-      lv_label_set_text(_node_ping, "Ping: no reply");
+      setText(_node_ping, "Ping: no reply");
       _pinging = false;
     }
   }
@@ -3458,6 +3477,19 @@ void UITask::setKeyboardAlphabets(int main_idx, int alt_sel) {
 #include "OtaScreen.h"
 #include "StorageScreen.h"
 #include "Splash.h"
+
+// The screen on, the full CPU clock while it's worth having: touched in the
+// last CPU_IDLE_MS, something moving, map tiles to decode, a download or an
+// update on WiFi. Otherwise 80 MHz (lvport::cpuSlow) -- a clock ticking over,
+// a message being read.
+static constexpr uint32_t CPU_IDLE_MS = 2000;
+bool UITask::cpuNeeded() {
+  if (lv_display_get_inactive_time(NULL) < CPU_IDLE_MS || lv_anim_count_running() > 0) return true;
+  if (wifiInUse() || mapview::s_dl.liveQueued() > 0) return true;
+  if (_screen == SCR_MAP && _map_pending) return true;
+  if (_screen == SCR_HOME && home::mini::s_area && home::mini::s_pending) return true;
+  return false;
+}
 
 #if defined(SIM_PLATFORM) && defined(__EMSCRIPTEN__)
 // Sim tests: straight to a screen by name.

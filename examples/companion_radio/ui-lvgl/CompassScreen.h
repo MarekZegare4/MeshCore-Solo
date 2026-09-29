@@ -127,14 +127,14 @@ void UITask::refreshCompass() {
     lv_obj_invalidate(s_dial);
   }
   if (have) {
-    lv_label_set_text_fmt(s_deg, "%03d", cog);
-    lv_label_set_text(s_degsign, "\xC2\xB0");
-    lv_label_set_text(s_card, geo::bearingCardinal(cog));
-    lv_label_set_text(s_hint, "Course over ground");
+    setTextFmt(s_deg, "%03d", cog);
+    setText(s_degsign, "\xC2\xB0");
+    setText(s_card, geo::bearingCardinal(cog));
+    setText(s_hint, "Course over ground");
   } else {
-    lv_label_set_text(s_deg, "");
-    lv_label_set_text(s_degsign, "");
-    lv_label_set_text(s_card, "--");
-    lv_label_set_text(s_hint, hint);
+    setText(s_deg, "");
+    setText(s_degsign, "");
+    setText(s_card, "--");
+    setText(s_hint, hint);
   }
 }

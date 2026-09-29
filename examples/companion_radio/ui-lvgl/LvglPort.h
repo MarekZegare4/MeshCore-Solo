@@ -101,6 +101,19 @@ static lgfx::LGFX_Device* s_gfx = nullptr;
 static bool s_swallow = false;   // ignore the touch that woke the display until it lifts
 static uint32_t s_flush_us = 0;  // UI_PERF_TEST: time spent in flushCb
 
+// The CPU clock down to 80 MHz (LoRa, BLE and WiFi all run at that) with the
+// screen off (powerSave()), and with it on while nobody touches it and nothing
+// moves (the loop decides); a touch brings the full clock back before the
+// frame it causes is drawn.
+static uint32_t s_full_mhz = 0;
+static bool s_cpu_slow = false;
+static void cpuSlow(bool on) {
+  if (on == s_cpu_slow) return;
+  if (!s_full_mhz) s_full_mhz = getCpuFrequencyMhz();
+  s_cpu_slow = on;
+  setCpuFrequencyMhz(on ? 80 : s_full_mhz);
+}
+
 static void flushCb(lv_display_t* disp, const lv_area_t* area, uint8_t* px_map) {
 #ifdef UI_PERF_TEST
   uint32_t t = micros();
@@ -128,6 +141,7 @@ static void touchCb(lv_indev_t* indev, lv_indev_data_t* data) {
     return;
   }
   if (down) {
+    cpuSlow(false);   // the frame this touch causes: at the full clock
     data->state = LV_INDEV_STATE_PRESSED;
     data->point.x = tp.x;
     data->point.y = tp.y;
@@ -139,6 +153,7 @@ static void touchCb(lv_indev_t* indev, lv_indev_data_t* data) {
 static bool begin() {
   s_gfx = display.lgfxDevice();
   s_gfx->setColorDepth(16);
+  display.releaseFrameBuffer();
 
   lv_display_t* disp = lv_display_create(s_gfx->width(), s_gfx->height());
   lv_display_set_flush_cb(disp, flushCb);
@@ -169,19 +184,22 @@ static bool touched() {
 static void swallowTouch() { s_swallow = true; }
 
 // ── Power ────────────────────────────────────────────────────────────────────
-// Screen off: the CPU clock down (LoRa, BLE and WiFi all run at 80 MHz) and
-// the touch panel asleep unless a tap is to wake the screen. Screen on: back.
+// Screen off: the clock down and the touch panel asleep unless a tap is to
+// wake the screen. Screen on: back.
 static bool s_touch_asleep = false;
 static void powerSave(bool on, bool keep_touch) {
-  static uint32_t full_mhz = 0;
-  if (!full_mhz) full_mhz = getCpuFrequencyMhz();
-  setCpuFrequencyMhz(on ? 80 : full_mhz);
+  cpuSlow(on);
   if (on && !keep_touch) { board.touchSleep(); s_touch_asleep = true; }
   else if (!on && s_touch_asleep) { board.touchWake(); s_touch_asleep = false; }
 }
 // Nothing due for `ms`: the loop task blocks and the core idles, clock-gated,
-// instead of spinning.
-static void idle(uint32_t ms) { if (ms) vTaskDelay(pdMS_TO_TICKS(ms)); }
+// instead of spinning -- woken early by a frame from the app (below).
+static TaskHandle_t s_loop_task = nullptr;
+static void idle(uint32_t ms) {
+  if (!ms) return;
+  if (!s_loop_task) s_loop_task = xTaskGetCurrentTaskHandle();
+  ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(ms));
+}
 
 // Backlight 1-100 % (the brightness slider), on the LP5814 PWM.
 static void setBacklightPct(uint8_t pct) {
@@ -496,10 +514,12 @@ static int netState() {
     default:                return NET_CONNECTING;
   }
 }
+static void fetchFreeBuffer();
 static void netEnd() {
   if (s_net_scanning) { s_net_scanning = false; WiFi.scanDelete(); }
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
+  fetchFreeBuffer();
 }
 // The network joined (Settings > WiFi marks it), "" when not connected.
 static void netSsid(char* out, size_t n) {
@@ -651,6 +671,14 @@ static void fetchAbandon() {
   else fetchRelease();
 }
 static const char* fetchError() { return s_ferr; }
+// WiFi off: the response buffer (grown to the biggest tile or update chunk,
+// up to 512 KB of PSRAM) given back, unless a request is still finishing.
+static void fetchFreeBuffer() {
+  if (s_fstate != F_IDLE) return;
+  heap_caps_free(s_fbuf);
+  s_fbuf = nullptr;
+  s_fcap = s_flen = 0;
+}
 
 #elif defined(SIM_PLATFORM) && defined(__EMSCRIPTEN__)
 // Browser simulator (variants/sim/build_wasm_lvgl.sh): SimLcdDisplay blits to
@@ -719,6 +747,7 @@ static bool begin() {
 static bool touched() { return SimLcdDisplay::touchState().down; }
 static void swallowTouch() { s_swallow = true; }
 static void powerSave(bool, bool) {}   // the browser's page loop runs the sim
+static void cpuSlow(bool) {}
 static void idle(uint32_t) {}
 static void setBacklightPct(uint8_t pct) { (void)pct; }   // the browser canvas has no backlight
 
@@ -870,3 +899,11 @@ static void loadHomeApps(char* out, size_t n) { nvs::getStr("mc_ui", "apps", out
 static void saveHomeApps(const char* v) { nvs::putStr("mc_ui", "apps", v); }
 
 }  // namespace lvport
+
+#if defined(SEEED_WIO_TRACKER_L2)
+// A frame from the app (SerialBLEInterface, the BLE stack's task): the loop,
+// blocked in lvport::idle(), reads it now rather than at the next timeout.
+void serialFrameArrived() {
+  if (TaskHandle_t t = lvport::s_loop_task) xTaskNotifyGive(t);
+}
+#endif

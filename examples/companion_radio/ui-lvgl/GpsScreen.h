@@ -324,13 +324,13 @@ void UITask::refreshGps() {
   char pos[32] = "", alt[16] = "", speed[16] = "", dop[32] = "";
   bool fix = false;
   if (!g) {
-    lv_label_set_text(s_status, "Not available");
+    setText(s_status, "Not available");
     lv_obj_set_style_text_color(s_status, lv_color_hex(theme::TEXT_MUTED), 0);
   } else if (off) {
-    lv_label_set_text(s_status, "GPS is off");
+    setText(s_status, "GPS is off");
     lv_obj_set_style_text_color(s_status, lv_color_hex(theme::TEXT_MUTED), 0);
   } else if (!data) {
-    lv_label_set_text(s_status, "No data");
+    setText(s_status, "No data");
     lv_obj_set_style_text_color(s_status, lv_color_hex(theme::FAIL), 0);
 #if defined(SEEED_WIO_TRACKER_L2)
     snprintf(used, sizeof(used), "Nothing from the receiver (%lu B)", (unsigned long)gps.rxChars());
@@ -342,10 +342,10 @@ void UITask::refreshGps() {
     for (int i = 0; i < s_n; i++) { if (s_sats[i].snr >= 0) tracked++; if (s_used_flag[i]) used_n++; }
     fix = g->hasFix();
     if (fix) {
-      lv_label_set_text(s_status, g->fix_mode == 2 ? "2D fix" : "3D fix");
+      setText(s_status, g->fix_mode == 2 ? "2D fix" : "3D fix");
       lv_obj_set_style_text_color(s_status, lv_color_hex(theme::OK), 0);
     } else {
-      lv_label_set_text(s_status, "Searching");
+      setText(s_status, "Searching");
       lv_obj_set_style_text_color(s_status, lv_color_hex(theme::ACCENT), 0);
     }
     snprintf(used, sizeof(used), "%d of %d used", fix ? (used_n ? used_n : g->sats_used) : 0, s_n);
@@ -362,7 +362,7 @@ void UITask::refreshGps() {
     }
     if (fix && g->hdop > 0) snprintf(dop, sizeof(dop), "H %.1f  V %.1f  P %.1f", g->hdop, g->vdop, g->pdop);
   }
-  lv_label_set_text(s_used, used);
+  setText(s_used, used);
   infoSet(s_inview, inview);
   infoSet(s_search, search);
   infoSet(s_ttff, ttff);
@@ -378,7 +378,7 @@ void UITask::refreshGps() {
     int n = 0, u = 0;
     for (int i = 0; i < s_n; i++) if (s_sats[i].sys == k) { n++; if (s_used_flag[i]) u++; }
     if (!n) { lv_obj_add_flag(s_sys_pill[k], LV_OBJ_FLAG_HIDDEN); continue; }
-    lv_label_set_text_fmt(s_sys_pill[k], "%c  %s  %d/%d", GpsSky::sysLetter(k), GpsSky::sysName(k), u, n);
+    setTextFmt(s_sys_pill[k], "%c  %s  %d/%d", GpsSky::sysLetter(k), GpsSky::sysName(k), u, n);
     lv_obj_remove_flag(s_sys_pill[k], LV_OBJ_FLAG_HIDDEN);
   }
 

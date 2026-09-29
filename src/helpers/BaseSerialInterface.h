@@ -25,6 +25,10 @@ public:
   // isConnected() so single-transport interfaces are unchanged.
   virtual bool isClientConnected() const { return isConnected(); }
 
+  // For a loop that sleeps between passes: frames waiting to be read or sent.
+  // An interface that can't tell says true (poll it often).
+  virtual bool hasPendingFrames() const { return true; }
+
   virtual bool isWriteBusy() const = 0;
   virtual size_t writeFrame(const uint8_t src[], size_t len) = 0;
   virtual size_t checkRecvFrame(uint8_t dest[]) = 0;

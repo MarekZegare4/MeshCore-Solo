@@ -269,7 +269,7 @@ void UITask::pollWifiScan() {
     lv_obj_center(label(b, text, THEME_FONT_SMALL, known ? theme::ACCENT : theme::TEXT));
   }
   if (n > 0) lv_obj_remove_flag(_wifi_list, LV_OBJ_FLAG_HIDDEN);
-  lv_label_set_text(_wifi_status, n > 0 ? "Tap a network, then enter its password." : "No networks found.");
+  setText(_wifi_status, n > 0 ? "Tap a network, then enter its password." : "No networks found.");
   if (!wifiInUse()) lvport::netEnd();   // the scan switched the radio on
 }
 

@@ -226,16 +226,16 @@ void UITask::refreshClock() {
     if (s_big) {
       char b[16];
       fmtRemaining(b, sizeof(b), _core->clock.timerRemainingMs());
-      lv_label_set_text(s_big, b);
+      setText(s_big, b);
     }
-    if (s_go_lbl) lv_label_set_text(s_go_lbl, running ? LV_SYMBOL_STOP " Stop" : LV_SYMBOL_PLAY " Start");
+    if (s_go_lbl) setText(s_go_lbl, running ? LV_SYMBOL_STOP " Stop" : LV_SYMBOL_PLAY " Start");
   } else if (s_tab == TAB_STOPWATCH) {
     if (s_big) {
       char b[16];
       fmtStopwatch(b, sizeof(b), swElapsed());
-      lv_label_set_text(s_big, b);
+      setText(s_big, b);
     }
-    if (s_go_lbl) lv_label_set_text(s_go_lbl, s_sw_running ? LV_SYMBOL_PAUSE " Stop" : LV_SYMBOL_PLAY " Start");
+    if (s_go_lbl) setText(s_go_lbl, s_sw_running ? LV_SYMBOL_PAUSE " Stop" : LV_SYMBOL_PLAY " Start");
   }
 }
 

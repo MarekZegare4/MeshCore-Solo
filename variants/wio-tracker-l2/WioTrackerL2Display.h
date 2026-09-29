@@ -182,6 +182,9 @@ public:
 
   // direct access to the LGFX device (LVGL flush/touch glue)
   lgfx::LGFX_Device* lgfxDevice() { return &disp; }
+  // LVGL draws straight to the panel: the frame sprite (76 KB of PSRAM) only
+  // carried the boot "Loading..." -- given back once LVGL takes over.
+  void releaseFrameBuffer() { buffer.deleteSprite(); }
 
   // reliable touch read in logical (UI_ZOOM-scaled) coords; returns false when
   // not touched (LGFXDisplay::getTouch reads an uninitialized point on release)

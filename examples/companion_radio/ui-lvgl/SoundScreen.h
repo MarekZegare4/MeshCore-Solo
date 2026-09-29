@@ -350,7 +350,7 @@ void UITask::refreshMelody() {
   lightNote(s_play_all ? melodyNote() : -1);
   if (!s_play_lbl || playing == s_playing_shown) return;
   s_playing_shown = playing;
-  lv_label_set_text(s_play_lbl, playing ? LV_SYMBOL_STOP "  Stop" : LV_SYMBOL_PLAY "  Play");
+  setText(s_play_lbl, playing ? LV_SYMBOL_STOP "  Stop" : LV_SYMBOL_PLAY "  Play");
 }
 
 void UITask::melodySave() {

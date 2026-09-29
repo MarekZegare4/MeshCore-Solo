@@ -288,21 +288,21 @@ void UITask::refreshLock() {
     clockFaceSet(s_lock_clock, &ti, _prefs);
     char date[48];
     fmtDate(date, sizeof(date), ti);
-    if (s_lock_date) lv_label_set_text(s_lock_date, date);
+    if (s_lock_date) setText(s_lock_date, date);
   }
   int unread = unreadTotal();
   if (!s_lock_date) {   // PIN card: the count next to the clock, the keypad's line
-    if (unread > 0) lv_label_set_text_fmt(s_lock_unread, LV_SYMBOL_ENVELOPE " %d", unread);
-    else lv_label_set_text(s_lock_unread, "");
+    if (unread > 0) setTextFmt(s_lock_unread, LV_SYMBOL_ENVELOPE " %d", unread);
+    else setText(s_lock_unread, "");
     if (!s_pin_msg) return;
     bool was = _pin_tries.block_until != 0;
-    if (_pin_tries.blocked()) lv_label_set_text_fmt(s_pin_msg, "Too many tries - wait %lu s", (unsigned long)_pin_tries.secondsLeft());
-    else if (was) lv_label_set_text(s_pin_msg, "Enter PIN");
-    else if (!lv_label_get_text(s_pin_msg)[0]) lv_label_set_text(s_pin_msg, "Enter PIN");
+    if (_pin_tries.blocked()) setTextFmt(s_pin_msg, "Too many tries - wait %lu s", (unsigned long)_pin_tries.secondsLeft());
+    else if (was) setText(s_pin_msg, "Enter PIN");
+    else if (!lv_label_get_text(s_pin_msg)[0]) setText(s_pin_msg, "Enter PIN");
     return;
   }
-  if (unread > 0) lv_label_set_text_fmt(s_lock_unread, LV_SYMBOL_ENVELOPE "  %d new message%s", unread, unread == 1 ? "" : "s");
-  else lv_label_set_text(s_lock_unread, "");
+  if (unread > 0) setTextFmt(s_lock_unread, LV_SYMBOL_ENVELOPE "  %d new message%s", unread, unread == 1 ? "" : "s");
+  else setText(s_lock_unread, "");
 }
 
 // ── Screen PIN ────────────────────────────────────────────────────────────────

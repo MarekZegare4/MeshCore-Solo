@@ -91,13 +91,13 @@ static void setLive(int i, const diag::Row& r) {
     const char* slash = strchr(r.value, '/');
     char a[12];
     snprintf(a, sizeof(a), "%.*s", slash ? (int)(slash - r.value) : (int)strlen(r.value), r.value);
-    lv_label_set_text(lv.in, a);
-    lv_label_set_text(lv.out, slash ? slash + 1 : "");
+    setText(lv.in, a);
+    setText(lv.out, slash ? slash + 1 : "");
     return;
   }
   char v[40];
   showValue(r.label, r.value, v, sizeof(v));
-  lv_label_set_text(lv.val, v);
+  setText(lv.val, v);
   if (!strcmp(r.label, "Errors")) lv_obj_set_style_text_color(lv.val, lv_color_hex(strcmp(r.value, "OK") ? theme::FAIL : theme::OK), 0);
 }
 

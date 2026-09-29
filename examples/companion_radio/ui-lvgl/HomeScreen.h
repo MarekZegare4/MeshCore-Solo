@@ -729,7 +729,7 @@ void UITask::homeMapLayout() {
   }
   const char* hint = !mapview::s_available ? "No map on the SD card"
                    : !shown && !s_pending ? "No map tiles for this area" : nullptr;
-  if (hint) { lv_label_set_text(s_hint, hint); lv_obj_remove_flag(s_hint, LV_OBJ_FLAG_HIDDEN); }
+  if (hint) { setText(s_hint, hint); lv_obj_remove_flag(s_hint, LV_OBJ_FLAG_HIDDEN); }
   else lv_obj_add_flag(s_hint, LV_OBJ_FLAG_HIDDEN);
 }
 
@@ -786,14 +786,14 @@ void UITask::refreshHome() {
   if (known) {
     char date[48];
     fmtDate(date, sizeof(date), ti);
-    lv_label_set_text(_home_date, date);
+    setText(_home_date, date);
   } else {
-    lv_label_set_text(_home_date, "time not synced");
+    setText(_home_date, "time not synced");
   }
   for (int i = 0; i < FIELDS; i++) {
     if (!s_field_val[i] || !_prefs) continue;
     char v[24];
     homeFieldText(_prefs->dashboard_fields[i], v, sizeof(v));
-    lv_label_set_text(s_field_val[i], v);
+    setText(s_field_val[i], v);
   }
 }

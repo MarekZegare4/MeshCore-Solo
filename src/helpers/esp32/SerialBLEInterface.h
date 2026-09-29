@@ -8,6 +8,10 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 
+// A frame from the app was queued (the BLE stack's task). Weak, empty by
+// default: a firmware whose loop blocks between passes defines it to wake it.
+void serialFrameArrived();
+
 class SerialBLEInterface : public BaseSerialInterface, BLESecurityCallbacks, BLEServerCallbacks, BLECharacteristicCallbacks {
   BLEServer *pServer;
   BLEService *pService;
@@ -102,6 +106,7 @@ public:
 
   bool isConnected() const override;
 
+  bool hasPendingFrames() const override { return send_queue_len > 0 || uxQueueMessagesWaiting(recv_queue) > 0; }
   bool isWriteBusy() const override;
   size_t writeFrame(const uint8_t src[], size_t len) override;
   size_t checkRecvFrame(uint8_t dest[]) override;

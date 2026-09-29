@@ -290,7 +290,7 @@ void UITask::refreshNavBar() {
       navmap::fmtDuration(left, sizeof(left), _core->live_share.remainingSecs());
       o += snprintf(t + o, sizeof(t) - o, "%sLIVE %s", o ? "  " : "", left);
     }
-    lv_label_set_text(_nav_rec, t);
+    setText(_nav_rec, t);
     if (o) lv_obj_remove_flag(_nav_rec, LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(_nav_rec, LV_OBJ_FLAG_HIDDEN);
   }
   int32_t tlat, tlon;
@@ -298,23 +298,23 @@ void UITask::refreshNavBar() {
   bool person = false, set = false;
   bool pos = navCurrentTarget(tlat, tlon, name, sizeof(name), person, set);
   if (!set) {
-    lv_label_set_text(_nav_title, "No target");
+    setText(_nav_title, "No target");
     lv_obj_set_style_text_color(_nav_title, lv_color_hex(theme::TEXT_MUTED), 0);
-    lv_label_set_text(_nav_info, "Tap here to pick a target, or hold the map on a spot");
+    setText(_nav_info, "Tap here to pick a target, or hold the map on a spot");
     lv_obj_add_flag(_nav_clear, LV_OBJ_FLAG_HIDDEN);
     return;
   }
   lv_obj_set_style_text_color(_nav_title, lv_color_hex(theme::ACCENT), 0);
   lv_obj_remove_flag(_nav_clear, LV_OBJ_FLAG_HIDDEN);
-  lv_label_set_text_fmt(_nav_title, "%s %s", navmap::s_tb.active() ? LV_SYMBOL_LOOP : person ? UI_SYMBOL_USERS : UI_SYMBOL_FLAG,
+  setTextFmt(_nav_title, "%s %s", navmap::s_tb.active() ? LV_SYMBOL_LOOP : person ? UI_SYMBOL_USERS : UI_SYMBOL_FLAG,
                         name);
   if (!pos) {
-    lv_label_set_text(_nav_info, "Position unknown (not shared recently)");
+    setText(_nav_info, "Position unknown (not shared recently)");
     return;
   }
   int32_t lat, lon;
   if (!_core->course.currentLocation(lat, lon)) {
-    lv_label_set_text(_nav_info, _core->gpsEnabled() || !_core->gpsAvailable()
+    setText(_nav_info, _core->gpsEnabled() || !_core->gpsAvailable()
                                  ? "Waiting for a GPS fix..." : "GPS is off  -  tap the crosshair to turn it on");
     return;
   }
@@ -327,9 +327,9 @@ void UITask::refreshNavBar() {
   int cog;
   if (_core->course.currentCourse(cog)) snprintf(hdg, sizeof(hdg), "  -  you %d\xC2\xB0", cog);
   if (navmap::s_eta.eta(km, eta, sizeof(eta)))
-    lv_label_set_text_fmt(_nav_info, "%s  %d\xC2\xB0 %s%s  -  ETA %s", dist, to, geo::bearingCardinal(to), hdg, eta);
+    setTextFmt(_nav_info, "%s  %d\xC2\xB0 %s%s  -  ETA %s", dist, to, geo::bearingCardinal(to), hdg, eta);
   else
-    lv_label_set_text_fmt(_nav_info, "%s  %d\xC2\xB0 %s%s", dist, to, geo::bearingCardinal(to), hdg);
+    setTextFmt(_nav_info, "%s  %d\xC2\xB0 %s%s", dist, to, geo::bearingCardinal(to), hdg);
 }
 
 // ── Target selection ──────────────────────────────────────────────────────────

@@ -10,6 +10,8 @@
 
 #define ADVERT_RESTART_DELAY  1000   // millis
 
+__attribute__((weak)) void serialFrameArrived() {}
+
 // As the nRF52 interface: 20-30 ms for the first 30 s (the app finds it at
 // once), then 152.5 ms. Left alone, the library advertises every 30-60 ms
 // for as long as nothing is connected. Units of 0.625 ms.
@@ -187,6 +189,7 @@ void SerialBLEInterface::onWrite(BLECharacteristic* pCharacteristic, esp_ble_gat
     if (xQueueSend(recv_queue, &frame, 0) != pdTRUE) {
       BLE_DEBUG_PRINTLN("ERROR: onWrite(), recv_queue is full!");
     }
+    serialFrameArrived();
   }
 }
 

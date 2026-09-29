@@ -313,7 +313,7 @@ void UITask::pollStorage() {
   if (s_sd_bar && !s_sd_read) {
     s_sd_read = true;
     s_sd_ok = lvport::sdInfo(s_sd_total, s_sd_used, s_sd_card);
-    if (!s_sd_ok) lv_label_set_text(s_sd_lbl, "Can't read the card");
+    if (!s_sd_ok) setText(s_sd_lbl, "Can't read the card");
     else if (s_sd_card > s_sd_total + s_sd_total / 4) {   // most of the card sits outside the partition
       char c[16], t[16], line[160];
       fmtBytes(c, sizeof(c), s_sd_card);
@@ -337,7 +337,7 @@ void UITask::pollStorage() {
     fmtBytes(b, sizeof(b), mapview::s_live_cache.bytes());
     if (mapview::s_live_cache.clearing()) snprintf(t, sizeof(t), "Deleting... %lu left", (unsigned long)mapview::s_live_cache.count());
     else snprintf(t, sizeof(t), "%lu tiles, %s", (unsigned long)mapview::s_live_cache.count(), b);
-    lv_label_set_text(s_live_info, t);
+    setText(s_live_info, t);
   }
 }
 
