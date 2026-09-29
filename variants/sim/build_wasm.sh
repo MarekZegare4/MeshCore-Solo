@@ -55,9 +55,11 @@ fi
 # Which frontend: SIM_UI=new (default, 128x64 OLED-style ui-new) or
 # SIM_UI=lvgl (320x240 touch ui-lvgl, Wio Tracker L2 shape -> web/lvgl.html).
 # The lvgl build takes the LVGL 9 sources from PlatformIO's libdeps of the L2
-# env, so run `pio run -e Wio_Tracker_L2_companion_solo_lvgl` once first.
+# env, so run `pio run -e Wio_Tracker_L2_companion_solo_lvgl` once first, or
+# point LVGL_DIR at a checkout of the same version (CI does, see
+# .github/workflows/build-solo-sim.yml).
 SIM_UI="${SIM_UI:-new}"
-LVGL_DIR="$REPO_ROOT/.pio/libdeps/Wio_Tracker_L2_companion_solo_lvgl/lvgl"
+LVGL_DIR="${LVGL_DIR:-$REPO_ROOT/.pio/libdeps/Wio_Tracker_L2_companion_solo_lvgl/lvgl}"
 if [ "$SIM_UI" = "lvgl" ] && [ ! -f "$LVGL_DIR/lvgl.h" ]; then
   echo "error: LVGL sources not found at $LVGL_DIR" >&2
   echo "Fetch them first: pio run -e Wio_Tracker_L2_companion_solo_lvgl" >&2

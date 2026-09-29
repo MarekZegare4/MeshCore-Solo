@@ -1,7 +1,8 @@
 name: Build Solo Sim (WASM)
 
 # Builds the companion_radio browser sim (real firmware compiled to WASM via
-# Emscripten, see variants/sim/) and attaches it to the same draft release
+# Emscripten, see variants/sim/) -- the OLED ui-new build, the Wio Tracker L2
+# ui-lvgl build and the repeater -- and attaches it to the same draft release
 # build-solo-firmwares.yml creates for this tag, as a single fixed-name
 # asset: solo-sim-wasm.zip. Fixed name (no version in it) so
 # meshcore-solo-site's server-side deploy script can always fetch it from
@@ -59,13 +60,29 @@ jobs:
           FIRMWARE_VERSION: ${{ env.BUILD_VERSION }}
         run: variants/sim/build_wasm.sh
 
+      # LVGL at the version the L2 firmware pins, straight from its repo --
+      # no PlatformIO needed just for the sources.
+      - name: Fetch LVGL
+        run: |
+          LV_VER="$(grep -m1 -oE 'lvgl/lvgl @ [0-9.]+' solo/wio-tracker-l2/platformio.ini | awk '{print $3}')"
+          echo "LVGL $LV_VER"
+          git clone --depth 1 --branch "v$LV_VER" https://github.com/lvgl/lvgl.git "$RUNNER_TEMP/lvgl"
+
+      - name: Build L2 (LVGL) WASM
+        env:
+          FIRMWARE_VERSION: ${{ env.BUILD_VERSION }}
+          SIM_UI: lvgl
+          LVGL_DIR: ${{ runner.temp }}/lvgl
+        run: variants/sim/build_wasm.sh
+
       - name: Build repeater WASM
         run: variants/sim/build_wasm_repeater.sh
 
       - name: Package
         run: |
-          mkdir -p out/wasm/companion out/wasm/repeater
+          mkdir -p out/wasm/companion out/wasm/lvgl out/wasm/repeater
           cp variants/sim/web/build/meshcore_sim.js variants/sim/web/build/meshcore_sim.wasm out/wasm/companion/
+          cp variants/sim/web/build/meshcore_sim_lvgl.js variants/sim/web/build/meshcore_sim_lvgl.wasm out/wasm/lvgl/
           cp variants/sim/web/build/repeater/meshcore_sim_repeater.js variants/sim/web/build/repeater/meshcore_sim_repeater.wasm out/wasm/repeater/
           cd out && zip -r solo-sim-wasm.zip wasm
 
