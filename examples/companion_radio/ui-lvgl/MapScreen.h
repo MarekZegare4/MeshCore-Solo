@@ -34,12 +34,17 @@ static TileDownloader     s_dl("/sdcard/maps");
 static AreaStore          s_areas("/sdcard/maps");
 static const uint32_t     AVG_TILE_BYTES = 22 * 1024;   // OpenTopoMap-ish, for the size estimate
 
-// Decode a tile into the cache; with live tiles on, a base tile shown without
-// its trails overlay has the overlay fetched.
-static TileCache::Slot* loadTile(int z, int x, int y) {
-  TileCache::Slot* s = s_cache.load(*s_provider, z, x, y);
-  if (s_trails_on && s_provider == &s_raster && s_raster.overlayMissed()) s_dl.liveRequest(z, x, y, true);
-  return s;
+// Hand a tile to the decoder (on the other core); false while one is in flight.
+static bool loadTile(int z, int x, int y) { return s_cache.request(*s_provider, z, x, y); }
+
+// A decoded tile placed in the cache: true when a view has something new.
+// With live tiles on, a base tile shown without its trails overlay has the
+// overlay fetched.
+static bool pollTiles() {
+  TileCache::Done d;
+  if (!s_cache.poll(d)) return false;
+  if (s_trails_on && d.src == &s_raster && d.overlay_missed) s_dl.liveRequest(d.z, d.x, d.y, true);
+  return true;
 }
 
 static const int MIN_Z = 3, MAX_Z = 18;
@@ -278,6 +283,32 @@ static lv_obj_t* mapPill(lv_obj_t* parent, const char* text) {
 double UITask::mapCenterBias() const {
   return _map_nav ? navmap::BAR_H / 2.0 / mapview::TILE_PX : 0.0;
 }
+
+#ifdef UI_PERF_TEST
+// UI_PERF_TEST (UITask::loop): reset = before the map opens; else report the
+// tiles decoded since, then time a drag and a full redraw.
+void UITask::perfMap(bool reset) {
+  using namespace mapview;
+  if (reset) { s_perf_tile_us = s_perf_tile_max = s_perf_tile_n = 0; return; }
+  while (s_cache.busy()) { delay(5); pollTiles(); }   // a prefetch still decoding would share PSRAM with the drawing
+  Serial.printf("PERF tiles %lu decoded, avg %5.1f ms, max %5.1f ms (pending %d)\n", (unsigned long)s_perf_tile_n,
+                s_perf_tile_n ? s_perf_tile_us / 1000.0f / s_perf_tile_n : 0.0f, s_perf_tile_max / 1000.0f, (int)_map_pending);
+  if (s_perf_tile_n) Serial.printf("PERF   of which read %5.1f ms (%lu B), decode %5.1f ms\n", s_raster.perf_read_us / 1000.0f / s_perf_tile_n,
+                                  (unsigned long)(s_raster.perf_bytes / s_perf_tile_n), s_raster.perf_dec_us / 1000.0f / s_perf_tile_n);
+  s_raster.perf_read_us = s_raster.perf_dec_us = s_raster.perf_bytes = 0;
+  uint32_t fl0 = lvport::s_flush_us, t = micros();
+  for (int i = 0; i < 20; i++) {   // a drag: 4 px a frame, tiles already decoded
+    _map_cx += (i < 10 ? 4.0 : -4.0) / TILE_PX;
+    layoutMap();
+    lv_refr_now(NULL);
+  }
+  Serial.printf("PERF map pan frame %5.1f ms, flush %5.1f ms\n", (micros() - t) / 20000.0f, (lvport::s_flush_us - fl0) / 20000.0f);
+  fl0 = lvport::s_flush_us; t = micros();
+  for (int i = 0; i < 10; i++) { lv_obj_invalidate(lv_screen_active()); lv_refr_now(NULL); }
+  Serial.printf("PERF map full redraw %5.1f ms, flush %5.1f ms\n", (micros() - t) / 10000.0f, (lvport::s_flush_us - fl0) / 10000.0f);
+  s_perf_tile_us = s_perf_tile_max = s_perf_tile_n = 0;
+}
+#endif
 
 void UITask::openMap(bool nav) {
   _map_nav = nav;
@@ -552,9 +583,11 @@ void UITask::mapLoop() {
     refreshNavBar();
   }
   if (!_map_area) return;
+  if (mapview::pollTiles()) layoutMap();   // a tile decoded on the other core
   uint32_t since_pan = millis() - mapview::s_last_pan_ms;
   if (since_pan < mapview::PAN_SETTLE_MS) return;   // mid-drag: keep it smooth, decode after
   if (mapview::labels::loadOne()) { layoutMap(); return; }   // names of the view first: a small file
+  if (mapview::s_cache.busy()) return;   // one tile at a time
   int w = lv_obj_get_width(_map_area), h = lv_obj_get_height(_map_area);
   double left = _map_cx * mapview::TILE_PX - w / 2.0, top = _map_cy * mapview::TILE_PX - h / 2.0;
   if (!_map_pending) {   // view complete: when idle, decode the next tile a pan would reveal
@@ -599,8 +632,8 @@ void UITask::mapLoop() {
       }
     }
     if (bz >= 0) mapview::loadTile(bz, best_x, best_y);
+    else layoutMap();   // nothing left to decode: pending settles
   }
-  layoutMap();
 }
 
 void UITask::rebuildMapMarkers() {

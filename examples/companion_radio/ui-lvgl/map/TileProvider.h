@@ -93,6 +93,7 @@ public:
   virtual bool available() = 0;                                   // anything to draw at all
   virtual bool renderTile(int z, int x, int y, uint16_t* out) = 0; // false: no tile there
   virtual const char* attribution() const = 0;
+  virtual bool overlayMissed() const { return false; }   // the last renderTile() went without its trails overlay
 };
 
 // Raster tiles under <root>/{z}/{x}/{y}.png -- the Meshtastic MUI layout, so
@@ -123,17 +124,30 @@ public:
     return true;
   }
 
+#ifdef UI_PERF_TEST
+  uint32_t perf_read_us = 0, perf_dec_us = 0, perf_bytes = 0;
+#endif
   bool renderTile(int z, int x, int y, uint16_t* out) override {
     _overlay_missed = false;
+#ifdef UI_PERF_TEST
+    uint32_t t0 = micros();
+#endif
     uint32_t len = 0;
     uint8_t* png = readLoose(_root, z, x, y, len);
     if (!png) png = readPacked(z, x, y, len);
     if (!png && _live) png = readLoose(_live, z, x, y, len);
     if (!png) return false;
+#ifdef UI_PERF_TEST
+    uint32_t t1 = micros();
+    perf_read_us += t1 - t0; perf_bytes += len;
+#endif
 
     lv_draw_buf_t* db = decodePng(png, len);
     lv_free(png);
     if (!db) return false;
+#ifdef UI_PERF_TEST
+    perf_dec_us += micros() - t1;
+#endif
 
     for (int row = 0; row < TILE_PX; row++) {
       const uint8_t* p = db->data + row * db->header.stride;   // R, G, B, A
@@ -147,7 +161,7 @@ public:
   }
 
   // The last renderTile() found no trails file for its tile (not fetched yet).
-  bool overlayMissed() const { return _overlay_missed; }
+  bool overlayMissed() const override { return _overlay_missed; }
 
   const char* attribution() const override {
     const char* base = _attr[0] ? _attr : "\xC2\xA9 OpenStreetMap contributors";

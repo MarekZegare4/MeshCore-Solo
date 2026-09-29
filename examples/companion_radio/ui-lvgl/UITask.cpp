@@ -82,6 +82,7 @@ template <class T> static T* psramBuf(size_t n) {
 #include "Theme.h"
 #include "Anim.h"
 #include "LvglPort.h"
+#include "lv_mem_psram.h"
 #include "HistoryStore.h"
 #include "map/LiveCache.h"
 static histstore::SdArchive s_archive;   // message history on the SD card
@@ -1031,6 +1032,10 @@ void UITask::loop() {
   // display refresh took during the transition that followed (render+flush).
   {
     static uint32_t next = 15000, sum_us = 0, max_us = 0, frames = 0, t0 = 0;
+    static uint32_t last_pass_us = 0, max_gap_us = 0;   // the longest the loop was away (a blocked UI)
+    uint32_t now_us = micros();
+    if (last_pass_us && now_us - last_pass_us > max_gap_us) max_gap_us = now_us - last_pass_us;
+    last_pass_us = now_us;
     static int step = 0;
     static const char* name = "";
     static bool hooked = false;
@@ -1047,19 +1052,25 @@ void UITask::loop() {
     if (millis() >= next) {
       if (*name) Serial.printf("PERF %-10s frames %2lu avg %5.1f ms max %5.1f ms\n", name, (unsigned long)frames,
                                frames ? sum_us / 1000.0f / frames : 0.0f, max_us / 1000.0f);
-      if (*name) Serial.printf("PERF   flush %5.1f ms per frame\n", frames ? lvport::s_flush_us / 1000.0f / frames : 0.0f);
+      if (*name) Serial.printf("PERF   flush %5.1f ms per frame, longest loop pass %5.1f ms\n",
+                               frames ? lvport::s_flush_us / 1000.0f / frames : 0.0f, max_gap_us / 1000.0f);
       sum_us = max_us = frames = 0;
       lvport::s_flush_us = 0;
+      max_gap_us = 0;
       lv_display_trigger_activity(NULL);   // no sleeping mid-test
       next = millis() + 1200;
       if (step == 0) unlockScreen();   // a PIN lock would be drawn over everything
-      if (step % 8 == 0 && step > 0) {   // a static full-screen redraw of Home, for the baseline
+      if (step % 10 == 0 && step > 0) {   // a static full-screen redraw of Home, for the baseline
         uint32_t fl0 = lvport::s_flush_us, t = micros();
         for (int i = 0; i < 10; i++) { lv_obj_invalidate(lv_screen_active()); lv_refr_now(NULL); }
         Serial.printf("PERF full redraw (Home) %5.1f ms, flush %5.1f ms\n", (micros() - t) / 10000.0f,
                       (lvport::s_flush_us - fl0) / 10000.0f);
       }
-      switch (step++ % 8) {
+      if (step % 10 == 9) perfMap();   // the map: tiles decoded while it opened, panning, a full redraw
+      uint32_t tb = micros();
+      switch (step++ % 10) {
+        case 8: name = "map"; perfMap(true); openMap(true); next = millis() + 8000; break;
+        case 9: name = "back-home"; back(); break;
         case 0: name = "settings"; showSettings(); break;
         case 1: name = "back-home"; back(); break;
         case 2: name = "messages"; showChats(); break;
@@ -1069,6 +1080,7 @@ void UITask::loop() {
         case 6: name = "page-2"; setHomePage(1); break;
         case 7: name = "page-1"; setHomePage(0); break;
       }
+      Serial.printf("PERF build %-10s %5.1f ms\n", name, (micros() - tb) / 1000.0f);
     }
   }
 #endif
@@ -3598,6 +3610,9 @@ void UITask::setKeyboardAlphabets(int main_idx, int alt_sel) {
 // a message being read.
 static constexpr uint32_t CPU_IDLE_MS = 2000;
 bool UITask::cpuNeeded() {
+#ifdef UI_PERF_TEST
+  return true;   // measured at the full clock
+#endif
   if (lv_display_get_inactive_time(NULL) < CPU_IDLE_MS || lv_anim_count_running() > 0) return true;
   if (wifiInUse() || mapview::s_dl.liveQueued() > 0) return true;
   if (_screen == SCR_MAP && _map_pending) return true;

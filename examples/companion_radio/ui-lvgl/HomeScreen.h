@@ -765,8 +765,8 @@ void UITask::homeMapLayout() {
   else lv_obj_add_flag(s_hint, LV_OBJ_FLAG_HIDDEN);
 }
 
-// From loop() while the map page is up: one tile decode per pass, a re-frame
-// every few seconds.
+// From loop() while the map page is up: tiles one at a time (decoded on the
+// other core, placed here), a re-frame every few seconds.
 void UITask::homeMapLoop() {
   using namespace home::mini;
   if (!s_area || home::s_touching) return;
@@ -774,7 +774,8 @@ void UITask::homeMapLoop() {
     s_next_fit_ms = millis() + 5000;
     if (homeMapFit()) homeMapLayout();
   }
-  if (!s_pending) return;
+  if (mapview::pollTiles()) homeMapLayout();
+  if (!s_pending || mapview::s_cache.busy()) return;
   int w = lv_obj_get_width(s_area), h = lv_obj_get_height(s_area);
   double left = s_cx * mapview::TILE_PX - w / 2.0, top = s_cy * mapview::TILE_PX - h / 2.0;
   int tx0 = (int)floor(left / mapview::TILE_PX), ty0 = (int)floor(top / mapview::TILE_PX);
@@ -785,12 +786,11 @@ void UITask::homeMapLoop() {
       int px = (int)lround(tx * (double)mapview::TILE_PX - left), py = (int)lround(ty * (double)mapview::TILE_PX - top);
       if (ty < 0 || ty >= n || px >= w || py >= h) continue;
       mapview::TileCache::Slot* s = mapview::s_cache.find(s_z, wx, ty);
-      if (!s) { mapview::s_cache.load(*mapview::s_provider, s_z, wx, ty); homeMapLayout(); return; }
+      if (!s) { mapview::loadTile(s_z, wx, ty); return; }
       if (s->present) continue;
       int k, wz, ax, ay;
       if (!mapview::ancestorFor(s_z, wx, ty, k, wz, ax, ay) && wz >= 0) {
-        mapview::s_cache.load(*mapview::s_provider, wz, ax, ay);
-        homeMapLayout();
+        mapview::loadTile(wz, ax, ay);
         return;
       }
     }

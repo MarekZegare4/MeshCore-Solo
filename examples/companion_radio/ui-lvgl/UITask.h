@@ -313,6 +313,9 @@ private:
   void buildHomeMap(lv_obj_t* box);
   void homeFieldText(uint8_t field, char* buf, int n);
   bool homeMapFit();
+#ifdef UI_PERF_TEST
+  void perfMap(bool reset = false);
+#endif
   void homeMapLayout();
   void homeMapLoop();
   void refreshHome();

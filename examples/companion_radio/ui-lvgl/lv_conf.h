@@ -6,18 +6,20 @@
 
 #define LV_COLOR_DEPTH 16
 
-// Memory: LVGL's own allocator over one pool. On ESP32-S3 the pool lives in
-// PSRAM so widgets / text never compete with BLE and the radio for internal RAM.
-#define LV_USE_STDLIB_MALLOC    LV_STDLIB_BUILTIN
+// Memory. On ESP32-S3: the PSRAM heap (lv_mem_psram.h), thread-safe -- map
+// tiles decode on the other core. Elsewhere (the sim): LVGL's own pool.
+#if defined(ESP32)
+  #define LV_USE_STDLIB_MALLOC  LV_STDLIB_CUSTOM
+#else
+  #define LV_USE_STDLIB_MALLOC  LV_STDLIB_BUILTIN
+  #define LV_MEM_SIZE           (2048U * 1024U)   // map tiles decode through it (~0.5 MB peak per PNG)
+#endif
 #define LV_USE_STDLIB_STRING    LV_STDLIB_CLIB
 #define LV_USE_STDLIB_SPRINTF   LV_STDLIB_CLIB
-#define LV_MEM_SIZE             (2048U * 1024U)   // map tiles decode through it (~0.5 MB peak per PNG)
-#if defined(ESP32)
-  #define LV_MEM_ADR            0
-  #define LV_MEM_POOL_INCLUDE   "lv_psram_pool.h"
-  #define LV_MEM_POOL_ALLOC     lv_psram_pool_alloc
-#endif
 
+// No OS: the loop draws. LV_OS_FREERTOS with two software draw units was
+// measured slower on the L2 (map redraw ~105 ms against 55-80; one unit ~89):
+// drawing here is bound by PSRAM bandwidth, which the two units share.
 #define LV_USE_OS               LV_OS_NONE
 #define LV_DEF_REFR_PERIOD      20     // ms; the loop also services the radio
 #define LV_DPI_DEF              130    // 2.8" 320x240
