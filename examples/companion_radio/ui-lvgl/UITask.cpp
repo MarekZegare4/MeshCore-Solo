@@ -373,6 +373,13 @@ static lv_obj_t* groupText(lv_obj_t* row, const char* text, const char* hint, ui
 // The title label of a settingRow() / listRow(), to recolour or rename it.
 static lv_obj_t* rowTitle(lv_obj_t* row) { return (lv_obj_t*)lv_obj_get_user_data(row); }
 
+// Rewrites the hint under a row's title in place (the label made right after
+// it) -- a rebuild would cut short the animation of the switch just tapped.
+static void rowHintSet(lv_obj_t* row, const char* hint) {
+  lv_obj_t* h = lv_obj_get_sibling(rowTitle(row), 1);
+  if (h && lv_obj_check_type(h, &lv_label_class)) lv_label_set_text(h, hint);
+}
+
 // A settings row: the label left (a muted hint under it, cut at `hint_w`),
 // room on the right for a switch / dropdown / slider.
 static lv_obj_t* settingRow(lv_obj_t* parent, const char* text, const char* hint, int hint_w = 150) {
@@ -2983,8 +2990,7 @@ void UITask::refreshThread() {
   if (n == 0 && _thread_skip > 0) {   // the page went away (history trimmed)
     _thread_skip = 0;
     n = loadThreadPage(total);
-  }
-  if (total > _thread_skip + n) {
+  }  if (total > _thread_skip + n) {
     char t[40];
     snprintf(t, sizeof(t), LV_SYMBOL_UP "  Older messages (%d)", total - _thread_skip - n);
     pageButton(_thread_list, t, 1);

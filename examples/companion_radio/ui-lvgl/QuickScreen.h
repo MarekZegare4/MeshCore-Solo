@@ -46,8 +46,18 @@ static void onQuickEditPh(lv_event_t* e)  { s_ui->quickEditInsert((int)(uintptr_
 static void onQuickEditKb(lv_event_t* e)  { s_ui->quickEditDone(lv_event_get_code(e) == LV_EVENT_READY); }
 static void onQuickList(lv_event_t* e)    { (void)e; s_ui->showQuickMsgs(); }
 static void onAdvertGo(lv_event_t* e)     { s_ui->advertSend((uintptr_t)lv_event_get_user_data(e) != 0); }
+static void bluetoothHint(char* sub, size_t n) {
+  if (!s_ui->isSerialEnabled()) snprintf(sub, n, "Off");
+  else if (s_ui->hasConnection()) snprintf(sub, n, "App connected");
+  else if (the_mesh.getBLEPin()) snprintf(sub, n, "PIN %06lu", (unsigned long)the_mesh.getBLEPin());
+  else snprintf(sub, n, "Waiting for the app");
+}
 static void onBtSwitch(lv_event_t* e) {
-  s_ui->setBluetooth(lv_obj_has_state((lv_obj_t*)lv_event_get_target(e), LV_STATE_CHECKED));
+  lv_obj_t* sw = (lv_obj_t*)lv_event_get_target(e);
+  s_ui->setBluetooth(lv_obj_has_state(sw, LV_STATE_CHECKED));
+  char sub[48];
+  bluetoothHint(sub, sizeof(sub));
+  rowHintSet(lv_obj_get_parent(sw), sub);
 }
 
 }  // namespace qview
@@ -210,25 +220,15 @@ void UITask::advertSend(bool flood) {
 
 static void bluetoothRow(lv_obj_t* body) {
   char sub[48];
-  bool on = s_ui->isSerialEnabled();
-  if (!on) snprintf(sub, sizeof(sub), "Off");
-  else if (s_ui->hasConnection()) snprintf(sub, sizeof(sub), "App connected");
-  else if (the_mesh.getBLEPin()) snprintf(sub, sizeof(sub), "PIN %06lu", (unsigned long)the_mesh.getBLEPin());
-  else snprintf(sub, sizeof(sub), "Waiting for the app");
+  qview::bluetoothHint(sub, sizeof(sub));
   lv_obj_t* sw = switchRow(body, LV_SYMBOL_BLUETOOTH "  Bluetooth", sub, nullptr);
-  if (on) lv_obj_add_state(sw, LV_STATE_CHECKED);
+  if (s_ui->isSerialEnabled()) lv_obj_add_state(sw, LV_STATE_CHECKED);
   lv_obj_add_event_cb(sw, qview::onBtSwitch, LV_EVENT_VALUE_CHANGED, NULL);
 }
 
 void UITask::setBluetooth(bool on) {
   if (on) enableSerial(); else disableSerial();
-  showToast(on ? "Bluetooth on" : "Bluetooth off - USB still works", 1500);
-  if (_screen == SCR_SETTINGS) {   // the row's subtitle
-    lv_obj_t* body = _body;
-    int32_t y = body ? lv_obj_get_scroll_y(body) : 0;
-    buildSettings();
-    if (_body) { lv_obj_update_layout(_body); lv_obj_scroll_to_y(_body, y, LV_ANIM_OFF); }
-  }
+  if (!on) showToast("Bluetooth off - USB still works", 1500);
   refreshStatusBar();
 }
 

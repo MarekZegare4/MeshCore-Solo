@@ -228,9 +228,11 @@ public:
         else if (isPlaceholder(data, len)) { lvport::fetchRelease(); finish(FAILED, "Server sends a placeholder (blocked / key?)"); return; }
         else if (!writeTile(_z, _x, _y, data, len)) { lvport::fetchRelease(); finish(FAILED, "Can't write to the SD card"); return; }
         else { _done++; _consec_fail = 0; }
-      } else if (!_retried && r != -403 && r != -401 && r != -404) {
+      } else if (!_retried && r != -403 && r != -401) {
         // One more try after a pause: a dropped keep-alive connection or a
-        // busy server usually answers the second time.
+        // busy server usually answers the second time. A 404 too: both tile
+        // servers answer every tile of the world, and OpenTopoMap sends the
+        // odd 404 for a tile it hasn't rendered yet.
         lvport::fetchRelease();
         _retried = true;
         _last_start = millis() + 1000;
@@ -247,7 +249,13 @@ public:
 
     // Skip tiles already on the card (a few stat()s per pass), then start the next GET.
     for (int i = 0; i < 16 && _state == RUNNING; i++) {
-      if (_z > _area.zmax) { finish(DONE, "Done"); return; }
+      if (_z > _area.zmax) {
+        // Tiles on the card are skipped, so the same download again fetches just the missing ones.
+        char m[48];
+        if (_failed) snprintf(m, sizeof(m), "Done, %lu missing - download again", (unsigned long)_failed);
+        finish(DONE, _failed ? m : "Done");
+        return;
+      }
       char path[96];
       tilePath(path, sizeof(path), _z, _x, _y, _layer);
       struct stat st;

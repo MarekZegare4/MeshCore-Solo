@@ -33,8 +33,19 @@ static void onWifiForget(lv_event_t* e) {
   s_wifi_forget_btn = nullptr;
   s_ui->wifiForget((int)(uintptr_t)lv_event_get_user_data(e));
 }
+static void wifiHint(char* sub, size_t n) {
+  int saved = lvport::wifiSavedCount();
+  if (!lvport::wifiAllowed()) snprintf(sub, n, "Off");
+  else if (saved == 1) snprintf(sub, n, "%s", lvport::wifiSaved(0)->ssid);
+  else if (saved > 1) snprintf(sub, n, "%d saved networks", saved);
+  else snprintf(sub, n, "Tap to pick a network");
+}
 static void onWifiAllowed(lv_event_t* e) {
-  s_ui->wifiSetAllowed(lv_obj_has_state((lv_obj_t*)lv_event_get_target(e), LV_STATE_CHECKED));
+  lv_obj_t* sw = (lv_obj_t*)lv_event_get_target(e);
+  s_ui->wifiSetAllowed(lv_obj_has_state(sw, LV_STATE_CHECKED));
+  char sub[48];
+  wifiHint(sub, sizeof(sub));
+  rowHintSet(lv_obj_get_parent(sw), sub);
 }
 static void onWifiField(lv_event_t* e) { s_ui->wifiEdit((lv_obj_t*)lv_event_get_target(e)); }
 static void onWifiKb(lv_event_t* e) {
@@ -165,14 +176,9 @@ void UITask::wifiKeyboardHide() {
 // on / off, the row opens the network settings.
 static void wifiRow(lv_obj_t* body) {
   char sub[48];
-  int n = lvport::wifiSavedCount();
-  bool on = lvport::wifiAllowed();
-  if (!on) snprintf(sub, sizeof(sub), "Off");
-  else if (n == 1) snprintf(sub, sizeof(sub), "%s", lvport::wifiSaved(0)->ssid);
-  else if (n > 1) snprintf(sub, sizeof(sub), "%d saved networks", n);
-  else snprintf(sub, sizeof(sub), "Tap to pick a network");
+  wifiHint(sub, sizeof(sub));
   lv_obj_t* sw = switchRow(body, LV_SYMBOL_WIFI "  WiFi", sub, nullptr);
-  if (on) lv_obj_add_state(sw, LV_STATE_CHECKED);
+  if (lvport::wifiAllowed()) lv_obj_add_state(sw, LV_STATE_CHECKED);
   lv_obj_add_event_cb(sw, onWifiAllowed, LV_EVENT_VALUE_CHANGED, NULL);
   lv_obj_t* row = lv_obj_get_parent(sw);
   lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
@@ -188,12 +194,6 @@ void UITask::wifiSetAllowed(bool on) {
   if (!on) {
     if (mapview::s_dl.active()) mapDownloadStop();
     if (_wifi_scanning) { _wifi_scanning = false; lvport::netEnd(); }
-  }
-  if (_screen == SCR_SETTINGS) {   // the row's subtitle
-    lv_obj_t* body = _body;
-    int32_t y = body ? lv_obj_get_scroll_y(body) : 0;
-    buildSettings();
-    if (_body) { lv_obj_update_layout(_body); lv_obj_scroll_to_y(_body, y, LV_ANIM_OFF); }
   }
 }
 
