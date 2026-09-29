@@ -579,7 +579,8 @@ private:
   bool isValidClientRepeatFreq(uint32_t f) const;
 #ifdef ENABLE_SCREENSHOT
   void handleScreenshotRequest();
-  void sendScreenshotResponse(DisplayDriver* display, const uint8_t* buffer, uint16_t bufferSize);
+  void sendScreenshotResponse(uint8_t displayType, uint8_t rotation, uint16_t width, uint16_t height,
+                              const uint8_t* buffer, uint32_t bufferSize);
 #endif
 
   // helpers, short-cuts

@@ -84,8 +84,9 @@ spare the panel.
 - **SD card**: holds the message history, maps, GPX trails and live map tiles.
   Settings › Storage shows what takes the space, how many messages each
   conversation keeps, and deletes the history.
-- **USB drive**: plugged into a computer, the device asks whether to only
-  charge or to lend the computer the SD card. While lent, the device can't use
+- **USB drive**: plugged into a computer, the device asks whether to keep the
+  SD card or lend it to the computer. Charging and the USB connection (the
+  site's USB tools, the app) work either way. While lent, the device can't use
   the card; eject it on the computer and the device restarts. With a screen
   PIN set, it doesn't ask until the screen is unlocked.
 - **WiFi**: used only for map downloads, live tiles and updates, and off the

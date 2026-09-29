@@ -428,8 +428,8 @@ void UITask::storageFormatTap(bool go) {
 }
 
 // ── The card as a USB drive ──
-// Plugged into a computer, the device asks: charge only, or lend it the SD
-// card. Lent, a panel stays up over every screen until the computer ejects
+// Plugged into a computer, the device asks whether to lend it the SD card
+// (only the card: charging and USB serial carry on either way). Lent, a panel stays up over every screen until the computer ejects
 // the drive (or the cable comes out); then the device restarts to reload what
 // it keeps from the card. lvport's usbDrive*() do the USB side.
 namespace usbview {
@@ -462,7 +462,7 @@ static void usbPanel(const char* title, const char* text, bool buttons) {
     lv_obj_set_style_radius(b, theme::RADIUS, 0);
     lv_obj_set_style_bg_color(b, lv_color_hex(i ? theme::ACCENT : theme::SURFACE_2), 0);
     lv_obj_add_event_cb(b, onUsbTap, LV_EVENT_CLICKED, i ? (void*)1 : nullptr);
-    lv_obj_center(label(b, i ? "USB drive" : "Charge only", THEME_FONT_BODY, i ? theme::BG : theme::TEXT));
+    lv_obj_center(label(b, i ? "USB drive" : "Keep card", THEME_FONT_BODY, i ? theme::BG : theme::TEXT));
   }
 }
 
@@ -491,8 +491,8 @@ void UITask::usbPoll() {
   if (host) {   // just plugged into a computer
     wake();
     usbPanel("Connected to a computer",
-             "Charge only, or use the SD card as a USB drive? As a drive, the device can't use the card "
-             "(maps, message history) until you eject it on the computer.", true);
+             "Lend the SD card to the computer as a USB drive? Until you eject it there, the device "
+             "can't use the card (maps, message history). Charging and USB work either way.", true);
   } else if (s_overlay) {   // unplugged before choosing
     lv_obj_delete(s_overlay);
     s_overlay = nullptr;

@@ -29,7 +29,7 @@ to keep it through a reboot.
 
 ### GPX export
 
-Connect USB, open [Solo Tools](https://marekzegare4.github.io/Solo-tools/) in
+Connect USB, open the [USB tools](https://solo.marekzegarek.com/#pc-tools) on the Solo site in
 Chrome or Edge and click **Connect device**, then on the device choose
 **Trail file › Export**. The GPX includes your waypoints. Without a browser,
 `uv run tools/trail_export.py` does the same. Disconnect the phone app first if

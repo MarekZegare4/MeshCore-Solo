@@ -1558,11 +1558,26 @@ static void restartScreen(const char* why) {
 }
 
 // The screen as it is, toasts and popups included, re-rendered once into a
-// buffer the flush callback fills (lvport::shotCopy) and written to the card
-// as a 24-bit BMP: /sdcard/screenshots/scr_NNNN.bmp.
-void UITask::takeScreenshot() {
+// buffer the flush callback fills (lvport::shotCopy).
+uint16_t* UITask::captureFrame(int& w, int& h) {
   lv_display_t* d = lv_display_get_default();
-  const int32_t W = lv_display_get_horizontal_resolution(d), H = lv_display_get_vertical_resolution(d);
+  w = lv_display_get_horizontal_resolution(d);
+  h = lv_display_get_vertical_resolution(d);
+#ifdef ESP32
+  uint16_t* px = (uint16_t*)heap_caps_malloc(w * h * 2, MALLOC_CAP_SPIRAM);
+#else
+  uint16_t* px = (uint16_t*)malloc(w * h * 2);
+#endif
+  if (!px) return nullptr;
+  lvport::s_shot = px;
+  lv_obj_invalidate(lv_screen_active());   // the whole display, every layer
+  lv_refr_now(d);
+  lvport::s_shot = nullptr;
+  return px;
+}
+
+// The screen, written to the card as a 24-bit BMP: /sdcard/screenshots/scr_NNNN.bmp.
+void UITask::takeScreenshot() {
   if (!lvport::mountStorage()) { showToast("No SD card"); return; }
   mkdir("/sdcard", 0777);   // the sim's MEMFS may not have it yet (the card: fails, harmless)
   mkdir("/sdcard/screenshots", 0777);
@@ -1574,17 +1589,9 @@ void UITask::takeScreenshot() {
     if (stat(path, &st) != 0) break;
   }
   if (n > 9999) { showToast("Screenshots folder full"); return; }
-#ifdef ESP32
-  uint16_t* px = (uint16_t*)heap_caps_malloc(W * H * 2, MALLOC_CAP_SPIRAM);
-#else
-  uint16_t* px = (uint16_t*)malloc(W * H * 2);
-#endif
+  int W, H;
+  uint16_t* px = captureFrame(W, H);
   if (!px) { showToast("Out of memory"); return; }
-
-  lvport::s_shot = px;
-  lv_obj_invalidate(lv_screen_active());   // the whole display, every layer
-  lv_refr_now(d);
-  lvport::s_shot = nullptr;
 
   bool ok = false;
   if (FILE* f = fopen(path, "wb")) {

@@ -33,6 +33,11 @@ public:
   void notify(UIEventType t = UIEventType::none) override;
   void shutdown(bool restart = false) override;
   MyMesh::Listener* meshListener() override;
+  // The screen as it is now: RGB565 (native, little-endian), row-major, w x h.
+  // For CMD_GET_SCREENSHOT (MyMesh, -D ENABLE_SCREENSHOT, display type 2);
+  // nullptr without the memory for it. The caller frees it with free().
+  uint16_t* captureFrame(int& w, int& h);
+#define UI_SCREENSHOT_RGB565 1
 
   // UiCoreHost
   bool isViewingChannel(uint8_t channel_idx) override;

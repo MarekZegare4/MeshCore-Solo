@@ -51,7 +51,7 @@ Heltec V3/V4 need [a keyboard or joystick wired up](./docs/solo/hardware.md#wiri
 
 [Documentation](./docs/solo/README.md) — getting started, messages, navigation, tools, settings, hardware and developer guides.
 
-**Solo Tools** — [a web app](https://marekzegare4.github.io/Solo-tools/) (Chromium, Web Serial) that takes screenshots and exports the GPS trail as GPX over USB; the same as local scripts in [tools/](./tools/README.md).
+**USB tools** — [on the Solo site](https://solo.marekzegarek.com/#pc-tools) (Chrome or Edge, Web Serial): screenshots of the device's screen and the GPS trail as GPX over USB, plus a preview of any GPX file. The same as the local scripts in [tools/](./tools/README.md).
 
 ---
 

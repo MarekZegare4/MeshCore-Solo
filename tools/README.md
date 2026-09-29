@@ -13,9 +13,9 @@ Python dependencies are managed with [uv](https://docs.astral.sh/uv/) — run th
 scripts with `uv run tools/<script>.py` from the repository root.
 
 > [!TIP]
-> The hosted [Solo Tools Web App](https://marekzegare4.github.io/Solo-tools/)
-> does both screenshots and GPX export with nothing to install, and is the
-> easiest option for most people. The scripts here are the offline equivalents.
+> The [USB tools on the Solo site](https://solo.marekzegarek.com/#pc-tools) do both screenshots and GPX
+> export with nothing to install (Chrome or Edge), and are the easiest option
+> for most people. The scripts here are the offline equivalents.
 
 > [!IMPORTANT]
 > USB serial is suspended while a BLE connection is active, so disconnect the
@@ -57,6 +57,8 @@ PLATFORMIO_BUILD_FLAGS="-D ENABLE_SCREENSHOT" pio run -e <env> -t upload
 - The device replies with `RESP_CODE_SCREENSHOT` (29) carrying the framebuffer
 - The framebuffer arrives in chunks (a 128 × 64 display is 1024 bytes, split
   across several frames), which the tool reassembles into a PNG
+- A colour screen (Wio Tracker L2) sends a freshly rendered frame as RGB565
+  (display type 2): 320 × 240 is 150 KB, about a second over USB
 
 ---
 

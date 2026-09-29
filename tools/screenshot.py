@@ -30,6 +30,7 @@ RESP_CODE_ERR = 1
 # display_type values (byte [5] in response frame)
 DISPLAY_TYPE_OLED = 0   # page-based, column-major (SH1106/SSD1306)
 DISPLAY_TYPE_EINK = 1   # row-major, MSB-first, 1=white/0=black (GxEPD2)
+DISPLAY_TYPE_RGB565 = 2 # row-major, 16-bit little-endian (colour screens, e.g. Wio Tracker L2)
 
 # No panel-specific constants needed — the firmware now sends GxEPD2's own reported
 # dimensions (which use WIDTH_VISIBLE, not the full physical WIDTH), so the header
@@ -114,6 +115,8 @@ def _u16le(buf, off):
 
 def _expected_buffer_size(width, height, display_type):
     """Bytes the firmware should send for given dims+type."""
+    if display_type == DISPLAY_TYPE_RGB565:
+        return width * height * 2
     if display_type == DISPLAY_TYPE_EINK:
         # GxEPD2 buffer is in physical panel coordinates: row-major,
         # stride = ceil(WIDTH_VISIBLE / 8) bytes, HEIGHT rows.
@@ -285,9 +288,16 @@ def eink_buffer_to_image(buffer, log_width, log_height, rotation):
     return image
 
 
+def rgb565_buffer_to_image(buffer, width, height):
+    """Colour screen: RGB565 little-endian, row-major."""
+    return Image.frombuffer("RGB", (width, height), bytes(buffer), "raw", "BGR;16", 0, 1)
+
+
 def buffer_to_image(buffer, width, height, display_type, rotation=0, scale=1):
     """Convert framebuffer to PIL Image, optionally upscaled."""
-    if display_type == DISPLAY_TYPE_EINK:
+    if display_type == DISPLAY_TYPE_RGB565:
+        image_rgb = rgb565_buffer_to_image(buffer, width, height)
+    elif display_type == DISPLAY_TYPE_EINK:
         image_rgb = eink_buffer_to_image(buffer, width, height, rotation)
     else:
         image_rgb = oled_buffer_to_image(buffer, width, height)
@@ -357,7 +367,7 @@ def main():
                 result = receive_screenshot(ser)
                 if result:
                     buffer_data, width, height, display_type, disp_rotation = result
-                    type_str = "e-ink" if display_type == DISPLAY_TYPE_EINK else "OLED"
+                    type_str = {DISPLAY_TYPE_EINK: "e-ink", DISPLAY_TYPE_RGB565: "colour"}.get(display_type, "OLED")
                     print(
                         f"Received framebuffer: {width}x{height} {type_str} rot={disp_rotation}, {len(buffer_data)} bytes"
                     )
