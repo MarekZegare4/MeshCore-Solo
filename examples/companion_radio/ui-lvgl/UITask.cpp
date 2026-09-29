@@ -1123,6 +1123,7 @@ void UITask::loop() {
         refreshNode();
       }
     }
+    fillTick();
     if (_screen == SCR_MAP) mapLoop();
     if (_screen == SCR_WIFI) pollWifiScan();
     if (_screen == SCR_STORAGE) pollStorage();
@@ -1683,7 +1684,37 @@ namespace home { static void leave(); }   // HomeScreen.h
 
 static int s_th_rows_n = 0;   // conversation bubbles built (refreshThread)
 
+// A long list fills in over several loop passes: the first screenful at
+// once, the rest as time allows. A row costs 3-6 ms on the L2 (widgets live in
+// PSRAM), so 48 nodes or a few hundred contacts built in one go held the
+// screen for a second. `row(i)` makes row i from the data as it is then.
+// One list at a time; a new screen drops it.
+static struct {
+  lv_obj_t* list = nullptr;
+  int next = 0, n = 0;
+  void (UITask::*row)(int) = nullptr;
+} s_fill;
+static const uint32_t FILL_BUDGET_US = 25000;   // rows added per loop pass: about a frame's worth
+
+void UITask::fillStart(lv_obj_t* list, int n, int first, void (UITask::*row)(int)) {
+  s_fill.list = list;
+  s_fill.n = n;
+  s_fill.row = row;
+  s_fill.next = 0;
+  while (s_fill.next < n && s_fill.next < first) (this->*row)(s_fill.next++);
+  if (s_fill.next >= n) s_fill.list = nullptr;
+}
+
+void UITask::fillTick() {
+  if (!s_fill.list) return;
+  uint32_t t0 = micros();
+  do (this->*s_fill.row)(s_fill.next++);
+  while (s_fill.next < s_fill.n && micros() - t0 < FILL_BUDGET_US);
+  if (s_fill.next >= s_fill.n) s_fill.list = nullptr;
+}
+
 lv_obj_t* UITask::newScreen(const char* title, bool with_back) {
+  s_fill.list = nullptr;   // its list goes with the screen
   _home_clock = _home_date = _home_unread = nullptr;
   _thread_list = _compose_ta = _keyboard = nullptr;
   s_th_rows_n = 0;   // the bubbles went with the screen
@@ -1882,6 +1913,7 @@ static void onOpenChannel(lv_event_t* e) {
 static uint8_t s_dm_rows[MessageHistory::DM_HIST_MAX][4];
 static const int CONTACT_ROWS_MAX = 256;   // "All" with a full contact table stays usable
 static uint8_t (*s_contact_rows)[PUB_KEY_SIZE] = psramBuf<uint8_t[PUB_KEY_SIZE]>(CONTACT_ROWS_MAX);
+static uint16_t* s_contact_raw = psramBuf<uint16_t>(CONTACT_ROWS_MAX);   // their raw table index, for the name
 
 static void onOpenDMRow(lv_event_t* e) {
   s_ui->openDM(s_dm_rows[(uintptr_t)lv_event_get_user_data(e)]);
@@ -2152,10 +2184,17 @@ void UITask::buildContacts() {
     if (c.type != ADV_TYPE_CHAT) continue;
     if (fav_only && !contactctl::favourite(c)) continue;
     memcpy(s_contact_rows[rows], c.id.pub_key, PUB_KEY_SIZE);
-    listRow(body, c.name, NULL, onOpenContactRow, (void*)(uintptr_t)rows);
+    s_contact_raw[rows] = (uint16_t)(MAX_ANON_CONTACTS + i);
     rows++;
   }
+  fillStart(body, rows, 8, &UITask::contactRow);
   if (rows == 0) label(body, fav_only ? "No favourites - tap All" : "No contacts yet", THEME_FONT_BODY, theme::TEXT_MUTED);
+}
+
+void UITask::contactRow(int i) {
+  ContactInfo c;
+  bool same = the_mesh.getContactByIdx(s_contact_raw[i], c) && memcmp(c.id.pub_key, s_contact_rows[i], PUB_KEY_SIZE) == 0;
+  listRow(s_fill.list, same ? c.name : "?", NULL, onOpenContactRow, (void*)(uintptr_t)i);   // "?": deleted meanwhile
 }
 
 // ── Nearby ────────────────────────────────────────────────────────────────────
@@ -2345,6 +2384,53 @@ uint32_t UITask::nearbySignature() const {
   return sig + rtc_clock.getCurrentTime() / 60;
 }
 
+// A Nearby row's texts: the name (a star on a favourite), what it is and how
+// long ago it was heard, and on the right its distance (or the age).
+struct NearbyText { char title[48], sub[48], right[16]; uint32_t right_col; };
+static void nearbyText(const NearbyModel::Entry& e, uint32_t now, bool imperial, NearbyText& t) {
+  const char* name = e.name[0] ? e.name : "(unknown)";
+  snprintf(t.title, sizeof(t.title), "%s%s", e.fav ? UI_SYMBOL_STAR " " : "", name);
+  char age[8];
+  geo::fmtAgeShort(age, sizeof(age), now, e.lastmod);
+  t.right[0] = 0;
+  if (e.dist_km >= 0.0f) geo::fmtDist(t.right, sizeof(t.right), e.dist_km, imperial);
+  else if (age[0]) snprintf(t.right, sizeof(t.right), "%s", age);
+  const char* kind = e.contact_idx >= 0 ? NearbyModel::typeName(e.type) : "not a contact";
+  snprintf(t.sub, sizeof(t.sub), "%s%s%s%s", kind, e.is_live ? "  -  live" : "",
+           (e.dist_km >= 0.0f && age[0]) ? "  -  " : "", (e.dist_km >= 0.0f && age[0]) ? age : "");
+  t.right_col = e.is_live ? theme::OK : theme::TEXT_MUTED;
+}
+
+void UITask::nearbyRow(int i) {
+  const NearbyModel::Entry& e = _nearby->at(i);
+  NearbyText t;
+  nearbyText(e, rtc_clock.getCurrentTime(), _prefs && _prefs->units_imperial, t);
+  lv_obj_t* row = listRow(_nearby_list, t.title, t.sub, onNearbyRow, (void*)(uintptr_t)i);
+  if (e.fav) lv_obj_set_style_text_color(rowTitle(row), lv_color_hex(theme::ACCENT), 0);
+  if (t.right[0]) lv_obj_align(label(row, t.right, THEME_FONT_SMALL, t.right_col), LV_ALIGN_RIGHT_MID, -theme::PAD, 0);
+}
+
+// Row i rewritten in place with what the model holds now.
+void UITask::nearbyRowSet(lv_obj_t* row, int i) {
+  const NearbyModel::Entry& e = _nearby->at(i);
+  NearbyText t;
+  nearbyText(e, rtc_clock.getCurrentTime(), _prefs && _prefs->units_imperial, t);
+  lv_obj_t* title = rowTitle(row);
+  setText(title, t.title);
+  lv_color_t tc = lv_color_hex(e.fav ? theme::ACCENT : theme::TEXT);
+  if (!lv_color_eq(lv_obj_get_style_text_color(title, LV_PART_MAIN), tc)) lv_obj_set_style_text_color(title, tc, 0);
+  setText(rowSub(row), t.sub);
+  lv_obj_t* r = lv_obj_get_child(row, 2);
+  if (!r && t.right[0]) {
+    r = label(row, t.right, THEME_FONT_SMALL, t.right_col);
+    lv_obj_align(r, LV_ALIGN_RIGHT_MID, -theme::PAD, 0);
+  } else if (r) {
+    setText(r, t.right);
+    lv_color_t rc = lv_color_hex(t.right_col);
+    if (!lv_color_eq(lv_obj_get_style_text_color(r, LV_PART_MAIN), rc)) lv_obj_set_style_text_color(r, rc, 0);
+  }
+}
+
 void UITask::refreshNearbyList() {
   if (!_nearby_list) return;
   _nearby->refreshModel();
@@ -2361,59 +2447,26 @@ void UITask::refreshNearbyList() {
   _nearby_sig = sig;
 
   // The same number of nodes (the usual case: ages, distances, signal
-  // change): the rows rewritten in place, not built again.
-  bool in_place = n > 0 && (int)lv_obj_get_child_count(_nearby_list) == n
-                  && lv_obj_check_type(lv_obj_get_child(_nearby_list, 0), &lv_button_class);
-  int32_t scroll = lv_obj_get_scroll_y(_nearby_list);
-  if (!in_place) lv_obj_clean(_nearby_list);
-  uint32_t now = rtc_clock.getCurrentTime();
-  bool imperial = _prefs && _prefs->units_imperial;
-  for (int i = 0; i < n; i++) {
-    const NearbyModel::Entry& e = _nearby->at(i);
-    char title[48], sub[48], right[16] = "";
-    const char* name = e.name[0] ? e.name : "(unknown)";
-    snprintf(title, sizeof(title), "%s%s", e.fav ? UI_SYMBOL_STAR " " : "", name);
-    char age[8];
-    geo::fmtAgeShort(age, sizeof(age), now, e.lastmod);
-    if (e.dist_km >= 0.0f) geo::fmtDist(right, sizeof(right), e.dist_km, imperial);
-    else if (age[0]) snprintf(right, sizeof(right), "%s", age);
-    const char* kind = e.contact_idx >= 0 ? NearbyModel::typeName(e.type) : "not a contact";
-    snprintf(sub, sizeof(sub), "%s%s%s%s", kind, e.is_live ? "  -  live" : "",
-             (e.dist_km >= 0.0f && age[0]) ? "  -  " : "", (e.dist_km >= 0.0f && age[0]) ? age : "");
-    uint32_t right_col = e.is_live ? theme::OK : theme::TEXT_MUTED;
-    if (in_place) {
-      lv_obj_t* row = lv_obj_get_child(_nearby_list, i);
-      lv_obj_t* t = rowTitle(row);
-      setText(t, title);
-      lv_color_t tc = lv_color_hex(e.fav ? theme::ACCENT : theme::TEXT);
-      if (!lv_color_eq(lv_obj_get_style_text_color(t, LV_PART_MAIN), tc)) lv_obj_set_style_text_color(t, tc, 0);
-      setText(rowSub(row), sub);
-      lv_obj_t* r = lv_obj_get_child(row, 2);
-      if (!r && right[0]) {
-        r = label(row, right, THEME_FONT_SMALL, right_col);
-        lv_obj_align(r, LV_ALIGN_RIGHT_MID, -theme::PAD, 0);
-      } else if (r) {
-        setText(r, right);
-        lv_color_t rc = lv_color_hex(right_col);
-        if (!lv_color_eq(lv_obj_get_style_text_color(r, LV_PART_MAIN), rc)) lv_obj_set_style_text_color(r, rc, 0);
-      }
-      continue;
-    }
-    lv_obj_t* row = listRow(_nearby_list, title, sub, onNearbyRow, (void*)(uintptr_t)i);
-    if (e.fav) lv_obj_set_style_text_color(rowTitle(row), lv_color_hex(theme::ACCENT), 0);
-    if (right[0]) {
-      lv_obj_t* r = label(row, right, THEME_FONT_SMALL, right_col);
-      lv_obj_align(r, LV_ALIGN_RIGHT_MID, -theme::PAD, 0);
-    }
+  // change): the rows rewritten in place, not built again. Rows still to
+  // come while the list fills in are made from the model as it is then.
+  int built = (int)lv_obj_get_child_count(_nearby_list);
+  int rows = s_fill.list == _nearby_list ? s_fill.n : built;
+  if (n > 0 && built > 0 && rows == n && lv_obj_check_type(lv_obj_get_child(_nearby_list, 0), &lv_button_class)) {
+    for (int i = 0; i < built; i++) nearbyRowSet(lv_obj_get_child(_nearby_list, i), i);
+    return;
   }
-  if (in_place) return;
+  int32_t scroll = lv_obj_get_scroll_y(_nearby_list);
+  lv_obj_clean(_nearby_list);
+  fillStart(_nearby_list, n, 6 + scroll / (theme::ROW_H + theme::GAP), &UITask::nearbyRow);   // down to where it was
   if (n == 0) {
     lv_obj_t* l = label(_nearby_list, "Nobody here yet. Tap Scan to look around.",
                         THEME_FONT_BODY, theme::TEXT_MUTED);
     lv_obj_set_style_pad_top(l, 12, 0);
   }
-  lv_obj_update_layout(_nearby_list);
-  lv_obj_scroll_to_y(_nearby_list, scroll, LV_ANIM_OFF);
+  if (scroll > 0) {
+    lv_obj_update_layout(_nearby_list);
+    lv_obj_scroll_to_y(_nearby_list, scroll, LV_ANIM_OFF);
+  }
 }
 
 // ── Node detail ───────────────────────────────────────────────────────────────
@@ -3514,10 +3567,20 @@ static void onOpenStorage(lv_event_t* e); // StorageScreen.h
 void UITask::buildSettings() {
   bool restore = _nav_back;   // back from one of its pages: where it was
   lv_obj_t* body = newScreen("Settings", true);
+  // A group at a time (fillStart): the first shows at once. Coming back to
+  // where it was scrolled needs them all first.
+  fillStart(body, SETTINGS_GROUPS, restore ? SETTINGS_GROUPS : 1, &UITask::settingsGroup);
+  if (restore) { lv_obj_update_layout(body); lv_obj_scroll_to_y(body, s_settings_y, LV_ANIM_OFF); }
+}
+
+void UITask::settingsGroup(int i) {
+  lv_obj_t* body = s_fill.list;
   char sub[48];
   lv_obj_t* g;
   char v1[24], v2[24];
-  if (_prefs) {
+  switch (i) {
+  case 0:
+    if (!_prefs) break;
     g = group(body, "DEVICE");
     listRow(g, LV_SYMBOL_EYE_OPEN "  Display", "Brightness, screen off, lock, colour",
             onOpenSchemaPage, (void*)(uintptr_t)PG_DISPLAY);
@@ -3526,62 +3589,74 @@ void UITask::buildSettings() {
     snprintf(sub, sizeof(sub), "Shutdown %s  -  GPS: %s", settingText(*_prefs, SETTING(low_batt_mv), v1, sizeof(v1)),
              settingText(*_prefs, SETTING(gps_interval), v2, sizeof(v2)));
     listRow(g, LV_SYMBOL_BATTERY_FULL "  Power", sub, onOpenSchemaPage, (void*)(uintptr_t)PG_POWER);
-    char vol[12];
-    settings::optVolume(_prefs->buzzer_volume, vol, sizeof(vol), *_prefs);
-    snprintf(sub, sizeof(sub), "%s, %s", soundctl::modeLabel(soundctl::mode(_prefs)), vol);
+    {
+      char vol[12];
+      settings::optVolume(_prefs->buzzer_volume, vol, sizeof(vol), *_prefs);
+      snprintf(sub, sizeof(sub), "%s, %s", soundctl::modeLabel(soundctl::mode(_prefs)), vol);
+    }
     listRow(g, LV_SYMBOL_VOLUME_MAX "  Sound", sub, onOpenSchemaPage, (void*)(uintptr_t)settings::PG_SOUND);
-    static const char* const SCRIPT[] = { "Latin", "Cyrillic", "Greek" };
-    uint8_t ma = _prefs->keyboard_main_alphabet % NodePrefs::KB_ALPHABET_COUNT;
-    uint8_t aa = _prefs->keyboard_alt_alphabet % NodePrefs::KB_ALPHABET_COUNT;
-    snprintf(sub, sizeof(sub), aa == ma ? "%s" : "%s + %s", SCRIPT[ma], SCRIPT[aa]);
+    {
+      static const char* const SCRIPT[] = { "Latin", "Cyrillic", "Greek" };
+      uint8_t ma = _prefs->keyboard_main_alphabet % NodePrefs::KB_ALPHABET_COUNT;
+      uint8_t aa = _prefs->keyboard_alt_alphabet % NodePrefs::KB_ALPHABET_COUNT;
+      snprintf(sub, sizeof(sub), aa == ma ? "%s" : "%s + %s", SCRIPT[ma], SCRIPT[aa]);
+    }
     listRow(g, LV_SYMBOL_KEYBOARD "  Keyboard", sub, onOpenSchemaPage, (void*)(uintptr_t)PG_KEYBOARD);
     listRow(g, LV_SYMBOL_ENVELOPE "  Messages & contacts", "Resend, expiry, quick messages",
             onOpenSchemaPage, (void*)(uintptr_t)settings::PG_MESSAGES);
-  }
+    break;
 
-  g = group(body, "CONNECTIONS");
-  if (_prefs) {
-    int pi = radioctl::currentPreset(_prefs);
-    const char* pn = "Custom"; float f, b; uint8_t sf, cr;
-    if (pi >= 0) radioctl::presetAt(_prefs, pi, pn, f, b, sf, cr);
-    snprintf(sub, sizeof(sub), "%s  -  %.3f MHz, %d dBm", pn, _prefs->freq, _prefs->tx_power_dbm);
-    listRow(g, UI_SYMBOL_RADIO "  Radio", sub, onOpenRadio, NULL);
-  }
-  bluetoothRow(g);
-  wifiRow(g);
-  if (_core->gpsAvailable()) {   // as WiFi: the switch turns it on / off, the row opens its details
-    lv_obj_t* sw = switchRow(g, LV_SYMBOL_GPS "  GPS", "Tap for satellites and signal", nullptr);
-    if (_core->gpsEnabled()) lv_obj_add_state(sw, LV_STATE_CHECKED);
-    lv_obj_add_event_cb(sw, onGpsSwitch, LV_EVENT_VALUE_CHANGED, NULL);
-    lv_obj_t* row = lv_obj_get_parent(sw);
-    lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_style_bg_color(row, lv_color_hex(theme::SURFACE_2), LV_STATE_PRESSED);
-    lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_STATE_PRESSED);
-    lv_obj_add_event_cb(row, [](lv_event_t* e) {
-      if (lv_event_get_target(e) == lv_event_get_current_target(e)) onOpenGpsFromSettings(e);   // not the switch
-    }, LV_EVENT_CLICKED, NULL);
-  }
+  case 1:
+    g = group(body, "CONNECTIONS");
+    if (_prefs) {
+      int pi = radioctl::currentPreset(_prefs);
+      const char* pn = "Custom"; float f, b; uint8_t sf, cr;
+      if (pi >= 0) radioctl::presetAt(_prefs, pi, pn, f, b, sf, cr);
+      snprintf(sub, sizeof(sub), "%s  -  %.3f MHz, %d dBm", pn, _prefs->freq, _prefs->tx_power_dbm);
+      listRow(g, UI_SYMBOL_RADIO "  Radio", sub, onOpenRadio, NULL);
+    }
+    bluetoothRow(g);
+    wifiRow(g);
+    if (_core->gpsAvailable()) {   // as WiFi: the switch turns it on / off, the row opens its details
+      lv_obj_t* sw = switchRow(g, LV_SYMBOL_GPS "  GPS", "Tap for satellites and signal", nullptr);
+      if (_core->gpsEnabled()) lv_obj_add_state(sw, LV_STATE_CHECKED);
+      lv_obj_add_event_cb(sw, onGpsSwitch, LV_EVENT_VALUE_CHANGED, NULL);
+      lv_obj_t* row = lv_obj_get_parent(sw);
+      lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+      lv_obj_set_style_bg_color(row, lv_color_hex(theme::SURFACE_2), LV_STATE_PRESSED);
+      lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_STATE_PRESSED);
+      lv_obj_add_event_cb(row, [](lv_event_t* e) {
+        if (lv_event_get_target(e) == lv_event_get_current_target(e)) onOpenGpsFromSettings(e);   // not the switch
+      }, LV_EVENT_CLICKED, NULL);
+    }
+    break;
 
-  g = group(body, "MAP & DATA");
-  if (_prefs) listRow(g, UI_SYMBOL_MAP "  Map", "Trail, live sharing, arrival alert",
-                      onOpenSchemaPage, (void*)(uintptr_t)settings::PG_NAV);
-  listRow(g, LV_SYMBOL_SD_CARD "  Storage", "SD card, message history", onOpenStorage, NULL);
+  case 2:
+    g = group(body, "MAP & DATA");
+    if (_prefs) listRow(g, UI_SYMBOL_MAP "  Map", "Trail, live sharing, arrival alert",
+                        onOpenSchemaPage, (void*)(uintptr_t)settings::PG_NAV);
+    listRow(g, LV_SYMBOL_SD_CARD "  Storage", "SD card, message history", onOpenStorage, NULL);
+    break;
 
-  g = group(body, "SYSTEM");
-  listRow(g, LV_SYMBOL_EDIT "  Name", the_mesh.getNodeName(), onNodeName, NULL);
-  if (_prefs) {
-    snprintf(sub, sizeof(sub), "%s, %s", settingText(*_prefs, SETTING(tz_offset_hours), v1, sizeof(v1)),
-             _prefs->clock_12h ? "12 h" : "24 h");
-    listRow(g, UI_SYMBOL_CLOCK "  Time", sub, onOpenSchemaPage, (void*)(uintptr_t)PG_TIME);
-    schemaRow(g, SETTING(units_imperial));
+  case 3:
+    g = group(body, "SYSTEM");
+    listRow(g, LV_SYMBOL_EDIT "  Name", the_mesh.getNodeName(), onNodeName, NULL);
+    if (_prefs) {
+      snprintf(sub, sizeof(sub), "%s, %s", settingText(*_prefs, SETTING(tz_offset_hours), v1, sizeof(v1)),
+               _prefs->clock_12h ? "12 h" : "24 h");
+      listRow(g, UI_SYMBOL_CLOCK "  Time", sub, onOpenSchemaPage, (void*)(uintptr_t)PG_TIME);
+      schemaRow(g, SETTING(units_imperial));
+    }
+    listRow(g, LV_SYMBOL_DOWNLOAD "  Firmware update", FIRMWARE_VERSION, onOpenOta, NULL);
+    listRow(g, LV_SYMBOL_LIST "  About", "Node, firmware, credits", onOpenSchemaPage, (void*)(uintptr_t)PG_ABOUT);
+    break;
+
+  case 4:
+    g = group(body, nullptr);
+    actionRow(g, LV_SYMBOL_REFRESH "  Reboot", onPowerRow, (void*)(uintptr_t)1);
+    actionRow(g, LV_SYMBOL_POWER "  Power off", onPowerRow, (void*)(uintptr_t)0, theme::FAIL);
+    break;
   }
-  listRow(g, LV_SYMBOL_DOWNLOAD "  Firmware update", FIRMWARE_VERSION, onOpenOta, NULL);
-  listRow(g, LV_SYMBOL_LIST "  About", "Node, firmware, credits", onOpenSchemaPage, (void*)(uintptr_t)PG_ABOUT);
-
-  g = group(body, nullptr);
-  actionRow(g, LV_SYMBOL_REFRESH "  Reboot", onPowerRow, (void*)(uintptr_t)1);
-  actionRow(g, LV_SYMBOL_POWER "  Power off", onPowerRow, (void*)(uintptr_t)0, theme::FAIL);
-  if (restore) { lv_obj_update_layout(body); lv_obj_scroll_to_y(body, s_settings_y, LV_ANIM_OFF); }
 }
 
 void UITask::setKeyboardAlphabets(int main_idx, int alt_sel) {

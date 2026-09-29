@@ -322,7 +322,12 @@ private:
   void homeSwipePoll();
   void buildChats();
   void buildContacts();
+  void contactRow(int i);
+  void fillStart(lv_obj_t* list, int n, int first, void (UITask::*row)(int));
+  void fillTick();
   void buildSettings();
+  static const int SETTINGS_GROUPS = 5;
+  void settingsGroup(int i);
   void buildSchemaSettings();
   void schemaRows(lv_obj_t* body, uint8_t page);
   void showMapOptions(uint8_t section);
@@ -338,6 +343,8 @@ private:
   bool wifiInUse() const;   // a map download or an update holds the WiFi
   void buildNearby();
   void refreshNearbyList();
+  void nearbyRow(int i);
+  void nearbyRowSet(lv_obj_t* row, int i);
   uint32_t nearbySignature() const;
   void showScanPopup();
   void refreshScanPopup();
