@@ -133,7 +133,13 @@ public:
       _total += countTiles(t);
     }
     _done = _skipped = _failed = _consec_fail = 0;
-    _retried = false;
+    _tries = 0;
+    _gap_ms = GAP_MS;
+    _ok_run = 0;
+    _fl_n = 0;
+    _fl_i = -1;
+    _refused = 0;
+    _last_ok_ms = millis();
     _placeholder_hash = 0; _placeholder_hits = 0;
     _msg[0] = '\0';
     if (_total == 0 || _total > (_trails ? 2 : 1) * MAX_TILES) { fail("Area too large: use the PC tool"); return false; }
@@ -211,46 +217,73 @@ public:
         if (millis() - _last_start < 60000) return;
         lvport::fetchAbandon();   // hung past every timeout: give up on this tile
         _fetching = false;
-        onFailure("Request hung (60 s)");
-        afterFailure();
+        tileFailed("Request hung (60 s)");
         return;
       }
       _fetching = false;
+      const char* reason = nullptr;
       if (r > 0) {
         size_t len = 0;
         const uint8_t* data = lvport::fetchData(len);
-        if (!looksLikeImage(data, len)) onFailure("Server didn't send a PNG tile");
-        else if (_layer == 1) {   // trails: the overlay, or an empty marker
-          if (!writeTrails(_z, _x, _y, data, len)) { lvport::fetchRelease(); finish(FAILED, "Can't write to the SD card"); return; }
-          _done++; _consec_fail = 0;
+        if (!looksLikeImage(data, len)) reason = "server didn't send a PNG tile";   // an error page: passing too
+        else {
+          if (_layer == 1) {   // trails: the overlay, or an empty marker
+            if (!writeTrails(_z, _x, _y, data, len)) { lvport::fetchRelease(); finish(FAILED, "Can't write to the SD card"); return; }
+            tileOk();
+          }
+          else if (isNoTilePicture(data, len)) { _skipped++; if (_fl_i >= 0) _failed--; _consec_fail = 0; _tries = 0; _last_ok_ms = millis(); }   // "no tile here": nothing to keep
+          else if (isPlaceholder(data, len)) { lvport::fetchRelease(); finish(FAILED, "Server sends a placeholder (blocked / key?)"); return; }
+          else if (!writeTile(_z, _x, _y, data, len)) { lvport::fetchRelease(); finish(FAILED, "Can't write to the SD card"); return; }
+          else tileOk();
+          lvport::fetchRelease();
+          advance();
+          return;
         }
-        else if (isNoTilePicture(data, len)) { _skipped++; _consec_fail = 0; }   // "no tile here": nothing to keep
-        else if (isPlaceholder(data, len)) { lvport::fetchRelease(); finish(FAILED, "Server sends a placeholder (blocked / key?)"); return; }
-        else if (!writeTile(_z, _x, _y, data, len)) { lvport::fetchRelease(); finish(FAILED, "Can't write to the SD card"); return; }
-        else { _done++; _consec_fail = 0; }
-      } else if (!_retried && r != -403 && r != -401) {
-        // One more try after a pause: a dropped keep-alive connection or a
-        // busy server usually answers the second time. A 404 too: both tile
-        // servers answer every tile of the world, and OpenTopoMap sends the
-        // odd 404 for a tile it hasn't rendered yet.
-        lvport::fetchRelease();
-        _retried = true;
-        _last_start = millis() + 1000;
-        return;
-      } else {
-        const char* why = lvport::fetchError();
-        onFailure(r == -403 || r == -401 ? "Server refused (403)" : why[0] ? why : "Download failed");
       }
+      if (!reason) reason = r == -403 || r == -401 ? "server refused (403)" : lvport::fetchError()[0] ? lvport::fetchError() : "download failed";
+      char why[48];
+      snprintf(why, sizeof(why), "%s%s", _layer ? "Trails: " : "", reason);
       lvport::fetchRelease();
-      if (_consec_fail) afterFailure();
-      else advance();
+      if (r == -403 || r == -401) {   // refused: no point asking again
+        if (++_refused >= 10) { finish(FAILED, "Server refused (403)"); return; }
+        tileFailed(why);
+        return;
+      }
+      _refused = 0;
+      // Anything else is taken as passing: both tile servers answer every
+      // tile of the world, but a busy one sends 503s (and OpenTopoMap the odd
+      // 404 for a tile it hasn't rendered yet), and a keep-alive connection
+      // drops. An HTTP error gets one more try; no answer at all (r == -1:
+      // the connection, TLS, a timeout) up to three, 2, 8 and 30 s apart. A
+      // server that says it's overloaded also gets the next requests further apart.
+      if (r == -503 || r == -429 || r == -502 || r == -504) {
+        _gap_ms = _gap_ms * 2 < 500 ? 500 : _gap_ms * 2 > GAP_MAX_MS ? GAP_MAX_MS : _gap_ms * 2;
+        _ok_run = 0;
+      }
+      if (_tries < (r == -1 ? RETRIES : 1)) {
+        static const uint8_t WAIT_S[RETRIES] = { 2, 8, 30 };
+        _last_start = millis() + WAIT_S[_tries] * 1000u;
+        _tries++;
+        snprintf(_msg, sizeof(_msg), "%s - retrying", why);
+        return;
+      }
+      tileFailed(why);
       return;
     }
 
     // Skip tiles already on the card (a few stat()s per pass), then start the next GET.
     for (int i = 0; i < 16 && _state == RUNNING; i++) {
       if (_z > _area.zmax) {
-        // Tiles on the card are skipped, so the same download again fetches just the missing ones.
+        // The tiles that failed get a second go once the server has had a
+        // break; after that, the same download again fetches what's still
+        // missing (tiles on the card are skipped).
+        if (_fl_i < 0 && _fl_n > 0) {
+          _fl_i = 0;
+          _last_start = millis() + RETRY_PASS_WAIT_MS;
+          snprintf(_msg, sizeof(_msg), "Retrying %u missing tiles", (unsigned)_fl_n);
+          nextRetry();
+          return;
+        }
         char m[48];
         if (_failed) snprintf(m, sizeof(m), "Done, %lu missing - download again", (unsigned long)_failed);
         finish(DONE, _failed ? m : "Done");
@@ -260,7 +293,7 @@ public:
       tilePath(path, sizeof(path), _z, _x, _y, _layer);
       struct stat st;
       if (!_force && stat(path, &st) == 0 && (st.st_size > 0 || _layer == 1)) { _skipped++; advance(); continue; }   // an empty trails file counts
-      if ((int32_t)(millis() - _last_start) < 120) return;   // be gentle with the server (a retry waits longer)
+      if ((int32_t)(millis() - _last_start) < (int32_t)_gap_ms) return;   // be gentle with the server (a retry waits longer)
       char url[200];
       buildUrl(url, sizeof(url), _z, _x, _y, _layer);
       int r = lvport::fetchStart(url);
@@ -281,7 +314,21 @@ private:
   bool     _trails = false;    // this job fetches the trails overlay too
   bool     _force = false;     // refetches tiles already on the card
   uint8_t  _layer = 0;         // of the current tile: 0 the base map, 1 its trails
-  bool     _retried = false;   // the current tile already failed once
+  // A tile that doesn't come is asked for again (RETRIES, spaced out), then
+  // noted in _fl for a second pass at the end of the job.
+  static const uint8_t RETRIES = 3;
+  static const uint16_t GAP_MS = 150, GAP_MAX_MS = 2000;   // between requests; wider while the server is busy
+  static const uint32_t RETRY_PASS_WAIT_MS = 20000;
+  static const int FAIL_LIST = 512;
+  struct FailedTile { int32_t x, y; int16_t z; uint8_t layer; };
+  uint8_t  _tries = 0;         // retries of the current tile so far
+  uint16_t _gap_ms = GAP_MS;
+  uint16_t _ok_run = 0;        // tiles in a row since the server was last busy
+  uint8_t  _refused = 0;       // 403s in a row
+  uint32_t _last_ok_ms = 0;    // the last tile that came
+  static const uint32_t GIVE_UP_MS = 10 * 60000;   // nothing at all for this long: stop (resumable)
+  FailedTile* _fl = nullptr;   // (PSRAM, on the first failure)
+  int      _fl_n = 0, _fl_i = -1;   // _fl_i >= 0: the second pass, the next to retry
   uint32_t _last_start = 0, _connect_started = 0;
   uint32_t _placeholder_hash = 0;
   uint8_t  _placeholder_hits = 0;
@@ -424,30 +471,49 @@ private:
     return true;
   }
 
-  // A failed tile is skipped -- unless failures come in a row: then the server
-  // (OpenTopoMap is often overloaded) or the network is down, so the same tile
-  // waits 5 s, 10 s, 20 s ... up to a minute, and the download stops only after
-  // about five minutes without a single tile.
-  void afterFailure() {
-    if (_consec_fail >= 12) { finish(FAILED, _msg[0] ? _msg : "Server not answering"); return; }
-    if (_consec_fail < 3) { advance(); return; }
-    _failed--;   // this tile gets tried again, it isn't lost yet
-    uint32_t wait_s = 5u << (_consec_fail - 3);
-    if (wait_s > 60) wait_s = 60;
-    _last_start = millis() + wait_s * 1000;
-    _retried = true;   // no extra quick retry on top of the pause
-    size_t o = strlen(_msg);
-    snprintf(_msg + o, sizeof(_msg) - o, " - retry in %lus", (unsigned long)wait_s);
+  void tileOk() {
+    _done++;
+    if (_fl_i >= 0) _failed--;   // a second-pass tile made it after all
+    _consec_fail = 0;
+    _tries = 0;
+    _last_ok_ms = millis();
+    if (_gap_ms > GAP_MS && ++_ok_run >= 20) { _ok_run = 0; _gap_ms = _gap_ms / 2 < GAP_MS ? GAP_MS : _gap_ms / 2; }
   }
 
-  void onFailure(const char* m) {
-    _failed++;
-    _consec_fail++;
+  // Given up on this tile (for now): noted for the second pass, and the job
+  // moves on. Tile after tile failing is a busy server or a lost network: the
+  // next one waits 5 s, 10 s ... up to a minute, and the job stops (to be
+  // resumed) only after GIVE_UP_MS without a single tile.
+  void tileFailed(const char* m) {
     snprintf(_msg, sizeof(_msg), "%s", m);
+    _tries = 0;
+    if (_fl_i < 0) {
+      _failed++;
+      if (!_fl) _fl = psramBuf<FailedTile>(FAIL_LIST);
+      if (_fl && _fl_n < FAIL_LIST) _fl[_fl_n++] = { _x, _y, (int16_t)_z, _layer };
+    }
+    if (millis() - _last_ok_ms > GIVE_UP_MS) { finish(FAILED, "Server not answering - resume later"); return; }
+    if (_consec_fail < 255) _consec_fail++;
+    if (_consec_fail >= 3) {
+      uint32_t wait_s = 5u << (_consec_fail - 3 < 4 ? _consec_fail - 3 : 4);
+      if (wait_s > 60) wait_s = 60;
+      _last_start = millis() + wait_s * 1000u;
+      size_t o = strlen(_msg);
+      snprintf(_msg + o, sizeof(_msg) - o, " - pause %lus", (unsigned long)wait_s);
+    }
+    advance();
+  }
+
+  // Second pass: the next failed tile, or past the last zoom when none is left.
+  void nextRetry() {
+    if (_fl_i >= _fl_n) { _z = _area.zmax + 1; return; }
+    const FailedTile& t = _fl[_fl_i++];
+    _z = t.z; _x = t.x; _y = t.y; _layer = t.layer;
   }
 
   void advance() {
-    _retried = false;
+    _tries = 0;
+    if (_fl_i >= 0) { nextRetry(); return; }
     if (_layer == 0 && _trails && _z <= TRAILS_MAX_Z) { _layer = 1; return; }   // this tile's trails next
     _layer = 0;
     if (++_y <= _y1) return;
