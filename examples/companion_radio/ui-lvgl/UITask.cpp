@@ -135,6 +135,33 @@ static void styleOpaque(lv_obj_t* o, uint32_t bg) {
   lv_obj_set_style_bg_opa(o, LV_OPA_COVER, 0);
 }
 
+// The width of `o`'s content, worked out from the styles -- or -1 where it
+// hangs on its content or a flex grow. A new box's own size is only known
+// after a layout pass, and LVGL lays out children before their parent, so
+// each box sized in % of the one above adds a whole pass over the screen.
+static int32_t innerW(lv_obj_t* o) {
+  if (!o || lv_obj_get_style_flex_grow(o, LV_PART_MAIN)) return -1;
+  int32_t w = lv_obj_get_style_width(o, LV_PART_MAIN);
+  if (LV_COORD_IS_PCT(w)) {
+    int32_t pw = innerW(lv_obj_get_parent(o));
+    if (pw < 0) return -1;
+    w = pw * LV_COORD_GET_PCT(w) / 100;
+  } else if (!LV_COORD_IS_PX(w)) {
+    return -1;
+  }
+  w -= lv_obj_get_style_pad_left(o, LV_PART_MAIN) + lv_obj_get_style_pad_right(o, LV_PART_MAIN);
+  lv_border_side_t side = lv_obj_get_style_border_side(o, LV_PART_MAIN);
+  int32_t bw = lv_obj_get_style_border_width(o, LV_PART_MAIN);
+  if (side & LV_BORDER_SIDE_LEFT) w -= bw;
+  if (side & LV_BORDER_SIDE_RIGHT) w -= bw;
+  return w;
+}
+// The parent's full width, in pixels when that's known now (see innerW()).
+static void fillWidth(lv_obj_t* o) {
+  int32_t w = innerW(lv_obj_get_parent(o));
+  lv_obj_set_width(o, w >= 0 ? w : LV_PCT(100));
+}
+
 static lv_obj_t* label(lv_obj_t* parent, const char* text, const lv_font_t* font, uint32_t color) {
   lv_obj_t* l = lv_label_create(parent);
   lv_label_set_text(l, text);
@@ -164,7 +191,7 @@ static lv_obj_t* noteLabel(lv_obj_t* parent, const char* text, const lv_font_t* 
                            uint32_t color = theme::TEXT_MUTED) {
   lv_obj_t* l = label(parent, text, font, color);
   lv_label_set_long_mode(l, LV_LABEL_LONG_WRAP);
-  lv_obj_set_width(l, LV_PCT(100));
+  fillWidth(l);
   return l;
 }
 
@@ -173,7 +200,7 @@ static lv_obj_t* noteLabel(lv_obj_t* parent, const char* text, const lv_font_t* 
 static lv_obj_t* scrollList(lv_obj_t* parent) {
   lv_obj_t* l = lv_obj_create(parent);
   styleSurface(l, theme::BG);
-  lv_obj_set_width(l, LV_PCT(100));
+  fillWidth(l);
   lv_obj_set_flex_grow(l, 1);
   lv_obj_set_flex_flow(l, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_style_pad_row(l, theme::GAP, 0);
@@ -244,7 +271,8 @@ static lv_obj_t* infoCard(lv_obj_t* parent) {
   styleSurface(c, theme::SURFACE);
   lv_obj_remove_flag(c, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_remove_flag(c, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_set_size(c, LV_PCT(100), LV_SIZE_CONTENT);
+  fillWidth(c);
+  lv_obj_set_height(c, LV_SIZE_CONTENT);
   lv_obj_set_style_radius(c, theme::RADIUS, 0);
   lv_obj_set_style_pad_hor(c, theme::PAD, 0);
   lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
@@ -277,7 +305,8 @@ static lv_obj_t* infoLine(lv_obj_t* card) {   // one row's box, the hairline abo
   lv_obj_remove_style_all(r);
   lv_obj_remove_flag(r, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_remove_flag(r, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_size(r, LV_PCT(100), LV_SIZE_CONTENT);
+  fillWidth(r);
+  lv_obj_set_height(r, LV_SIZE_CONTENT);
   lv_obj_set_style_pad_ver(r, 5, 0);
   if (lv_obj_has_flag(card, LV_OBJ_FLAG_USER_1)) lv_obj_set_style_pad_hor(r, theme::PAD, 0);   // in a group()
   if (lv_obj_get_index(r) > 0) {
@@ -1850,7 +1879,7 @@ lv_obj_t* UITask::newScreen(const char* title, bool with_back) {
 
   lv_obj_t* body = lv_obj_create(scr);
   styleSurface(body, theme::BG);
-  lv_obj_set_size(body, LV_PCT(100), lv_display_get_vertical_resolution(NULL) - top);
+  lv_obj_set_size(body, lv_display_get_horizontal_resolution(NULL), lv_display_get_vertical_resolution(NULL) - top);
   lv_obj_set_pos(body, 0, top);
   lv_obj_set_flex_flow(body, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_style_pad_all(body, theme::PAD, 0);
