@@ -69,6 +69,7 @@ static double latToTileY(double lat, int z) {
 struct Grid {
   double left = 0, top = 0;   // world px of the view's top-left
   double step_px = 0;         // 0: none
+  bool tiled = false;         // every visible cell holds a tile: grid and fill are under them
 };
 static Grid s_grid;           // the main map's
 static lv_obj_t* s_scale_bar = nullptr;
@@ -96,7 +97,7 @@ static double gridStep(int z, double lat, bool imperial, int min_px, char* lbl, 
 // user data is the Grid.
 static void drawGrid(lv_event_t* e) {
   const Grid* g = (const Grid*)lv_event_get_user_data(e);
-  if (!g || g->step_px < 8) return;
+  if (!g || g->step_px < 8 || g->tiled) return;
   lv_obj_t* o = (lv_obj_t*)lv_event_get_target(e);
   lv_area_t a;
   lv_obj_get_coords(o, &a);
@@ -116,6 +117,38 @@ static void drawGrid(lv_event_t* e) {
     d.p1.x = a.x1; d.p2.x = a.x2;
     lv_draw_line(layer, &d);
   }
+}
+
+// A map area whose visible cells all hold a tile: its fill and grid lie
+// under them (~5 ms a frame on the main map), so it drops both -- and with
+// tiledCovers still tells LVGL it hides what's below, so that isn't drawn
+// either.
+static void showTiled(lv_obj_t* area, Grid& g, bool tiled) {
+  g.tiled = tiled;
+  lv_opa_t opa = tiled ? LV_OPA_TRANSP : LV_OPA_COVER;
+  if (lv_obj_get_style_bg_opa(area, LV_PART_MAIN) != opa) lv_obj_set_style_bg_opa(area, opa, 0);
+}
+static void tiledCovers(lv_event_t* e) {   // LV_EVENT_COVER_CHECK, user data the Grid
+  if (((const Grid*)lv_event_get_user_data(e))->tiled) coversOwnArea(e);
+}
+
+// The screen under the main map: the map area and the status bar hide all of
+// it but a strip the area uncovers as it drifts in (Anim.h screenIn). Filled
+// whole it cost ~2 ms a frame; now only what shows is. User data: the area.
+static void fillAroundMap(lv_event_t* e) {
+  lv_obj_t* scr = (lv_obj_t*)lv_event_get_target(e);
+  lv_area_t s, m;
+  lv_obj_get_coords(scr, &s);
+  lv_obj_get_coords((lv_obj_t*)lv_event_get_user_data(e), &m);
+  s.y1 = belowStatusBar();
+  const lv_area_t strips[] = { { s.x1, s.y1, s.x2, m.y1 - 1 }, { s.x1, m.y2 + 1, s.x2, s.y2 },
+                               { s.x1, m.y1, m.x1 - 1, m.y2 }, { m.x2 + 1, m.y1, s.x2, m.y2 } };
+  lv_draw_rect_dsc_t d;
+  lv_draw_rect_dsc_init(&d);
+  d.bg_color = lv_obj_get_style_bg_color(scr, LV_PART_MAIN);
+  lv_layer_t* layer = lv_event_get_layer(e);
+  for (const lv_area_t& a : strips)
+    if (a.x1 <= a.x2 && a.y1 <= a.y2) lv_draw_rect(layer, &d, &a);
 }
 
 // Markers, remembered so layout can reposition them. `idx` is the Nearby row
@@ -347,6 +380,10 @@ void UITask::buildMap() {
   lv_obj_set_style_bg_color(body, lv_color_hex(0x1A1A1E), 0);   // unloaded / missing tiles
   lv_obj_set_style_bg_opa(body, LV_OPA_COVER, 0);
   lv_obj_add_event_cb(body, mapview::drawGrid, LV_EVENT_DRAW_MAIN_END, &mapview::s_grid);
+  lv_obj_add_event_cb(body, mapview::tiledCovers, LV_EVENT_COVER_CHECK, &mapview::s_grid);
+  lv_obj_t* scr = lv_obj_get_screen(body);
+  lv_obj_set_style_bg_opa(scr, LV_OPA_TRANSP, 0);
+  lv_obj_add_event_cb(scr, mapview::fillAroundMap, LV_EVENT_DRAW_MAIN, body);
   lv_obj_add_flag(body, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_add_event_cb(body, onMapPress, LV_EVENT_PRESSED, NULL);
   lv_obj_add_event_cb(body, onMapPress, LV_EVENT_PRESSING, NULL);
@@ -479,6 +516,7 @@ void UITask::layoutMap() {
   int n = 1 << _map_z;
   bool have_provider = mapview::s_available;
   int shown = 0, missing = 0, over = 0;
+  bool tiled = true;
   _map_pending = false;
 
   for (int j = 0; j < mapview::GRID_ROWS; j++) {
@@ -518,9 +556,11 @@ void UITask::layoutMap() {
         if (k > over && !stand_in) over = k;
       } else {
         lv_obj_add_flag(cell, LV_OBJ_FLAG_HIDDEN);
+        if (on_screen) tiled = false;
       }
     }
   }
+  mapview::showTiled(_map_area, mapview::s_grid, tiled);
 
   mapview::labels::layout(left, top, w, h, _map_z, have_provider && mapview::s_provider == &mapview::s_vector && mapview::s_vector.hasData(),
                           _map_nav ? navmap::BAR_H : 0);

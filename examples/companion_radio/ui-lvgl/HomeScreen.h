@@ -723,6 +723,7 @@ void UITask::homeMapLayout() {
   double lat = atan(sinh(M_PI * (1 - 2 * s_cy / (double)n))) * 180.0 / M_PI;
   s_grid = { left, top, mapview::gridStep(s_z, lat, _prefs && _prefs->units_imperial, 48, sl, sizeof(sl)) };
   lv_obj_invalidate(s_area);
+  bool tiled = true;
   for (int j = 0; j < ROWS; j++) {
     for (int i = 0; i < COLS; i++) {
       lv_obj_t* cell = s_cells[j * COLS + i];
@@ -743,7 +744,11 @@ void UITask::homeMapLayout() {
           show = mapview::cachedAncestor(s_z, wx, ty, k);
         }
       }
-      if (!show) { lv_obj_add_flag(cell, LV_OBJ_FLAG_HIDDEN); continue; }
+      if (!show) {
+        lv_obj_add_flag(cell, LV_OBJ_FLAG_HIDDEN);
+        if (px < w && py < h) tiled = false;
+        continue;
+      }
       if (lv_image_get_src(img) != &show->dsc) lv_image_set_src(img, &show->dsc);
       lv_image_set_scale(img, LV_SCALE_NONE << k);
       int m = (1 << k) - 1;
@@ -753,6 +758,7 @@ void UITask::homeMapLayout() {
       shown++;
     }
   }
+  mapview::showTiled(s_area, s_grid, tiled);
   for (int i = 0; i < s_npts; i++) {
     double x = mapview::lonToTileX(s_pts[i].lon / 1e6, s_z) * mapview::TILE_PX - left;
     double y = mapview::latToTileY(s_pts[i].lat / 1e6, s_z) * mapview::TILE_PX - top;

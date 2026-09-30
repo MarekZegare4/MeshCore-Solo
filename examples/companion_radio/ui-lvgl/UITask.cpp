@@ -11,7 +11,7 @@
   SET_LOOP_TASK_STACK_SIZE(16 * 1024);
 #endif
 #include <new>
-#include <src/core/lv_obj_event_private.h>   // lv_cover_check_info_t (freeze::imgCovers)
+#include <src/core/lv_obj_event_private.h>   // lv_cover_check_info_t (coversOwnArea)
 #include <stdarg.h>
 #include <sys/stat.h>
 
@@ -221,6 +221,24 @@ static lv_obj_t* dimOverlay(lv_obj_t* parent) {
   return o;
 }
 
+// LV_EVENT_COVER_CHECK: an opaque thing LVGL can't tell is (an image, a box
+// drawn by its children) hides all under its own area, and LVGL then starts
+// drawing from it.
+static void coversOwnArea(lv_event_t* e) {
+  lv_cover_check_info_t* info = (lv_cover_check_info_t*)lv_event_get_param(e);
+  lv_area_t a;
+  lv_obj_get_coords((lv_obj_t*)lv_event_get_current_target(e), &a);
+  const lv_area_t* r = info->area;
+  if (info->res != LV_COVER_RES_MASKED && r->x1 >= a.x1 && r->y1 >= a.y1 && r->x2 <= a.x2 && r->y2 <= a.y2)
+    info->res = LV_COVER_RES_COVER;
+}
+
+static lv_obj_t* s_status_bar = nullptr;   // on the top layer, opaque
+// Where the screen shows below the status bar (its top when the bar is hidden).
+static int32_t belowStatusBar() {
+  return s_status_bar && !lv_obj_has_flag(s_status_bar, LV_OBJ_FLAG_HIDDEN) ? lv_obj_get_y2(s_status_bar) + 1 : 0;
+}
+
 // The screen under an open popup, frozen: once the dim is up, the screen is
 // drawn once into an image, darkened as the dim layer darkens it, and shown
 // opaque on top of the screen with the dim layer cleared -- LVGL then draws
@@ -247,16 +265,6 @@ namespace freeze {
     if (s_owner != lv_event_get_target(e)) return;
     s_owner = s_strip = nullptr;
     if (s_img) lv_obj_delete(s_img);
-  }
-  // The image hides all under it: LVGL then starts drawing from it. Its own
-  // check says no, an image widget having no background.
-  static void imgCovers(lv_event_t* e) {
-    lv_cover_check_info_t* info = (lv_cover_check_info_t*)lv_event_get_param(e);
-    lv_area_t a;
-    lv_obj_get_coords((lv_obj_t*)lv_event_get_current_target(e), &a);
-    const lv_area_t* r = info->area;
-    if (info->res != LV_COVER_RES_MASKED && r->x1 >= a.x1 && r->y1 >= a.y1 && r->x2 <= a.x2 && r->y2 <= a.y2)
-      info->res = LV_COVER_RES_COVER;
   }
   static bool moving(lv_obj_t* scr) {   // a screen still sliding / fading in
     if (lv_display_get_screen_prev(NULL)) return true;
@@ -298,7 +306,7 @@ namespace freeze {
     lv_obj_remove_flag(s_img, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_pos(s_img, 0, 0);
     lv_obj_add_event_cb(s_img, imgDeleted, LV_EVENT_DELETE, buf);
-    lv_obj_add_event_cb(s_img, imgCovers, LV_EVENT_COVER_CHECK, NULL);
+    lv_obj_add_event_cb(s_img, coversOwnArea, LV_EVENT_COVER_CHECK, NULL);   // no background: its own check says no
     if (!top) lv_obj_move_foreground(overlay);   // the image under the popup, over the rest
     s_owner = overlay;
     lv_obj_set_style_bg_opa(overlay, LV_OPA_TRANSP, 0);
@@ -1815,6 +1823,7 @@ void UITask::buildStatusBar() {
   lv_obj_set_style_text_align(tl, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_add_flag(_toast, LV_OBJ_FLAG_HIDDEN);
   lv_obj_t* bar = lv_obj_create(lv_layer_top());
+  s_status_bar = bar;
   styleOpaque(bar, theme::BG);
   lv_obj_remove_flag(bar, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_remove_flag(bar, LV_OBJ_FLAG_CLICKABLE);
