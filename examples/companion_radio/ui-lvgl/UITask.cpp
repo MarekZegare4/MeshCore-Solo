@@ -1107,6 +1107,131 @@ void UITask::toggleMute() {
 
 static constexpr uint32_t LOCK_OFF_MS = 30000;   // the lock screen's own auto-off cap
 
+#if defined(UI_PERF_TEST)
+// Perf tools (-D UI_PERF_TEST, output lines start "PERF"): each settings page
+// and most screens built and drawn once, draw profiles, a popup test, then a
+// walk through the screens. -D PERF_KEEP_USB leaves the USB popup up;
+// -D PERF_WRAP_TEXT plus -Wl,--wrap= of lv_text_get_size_attributes,
+// lv_layout_apply, lv_obj_get_style_prop_internal and lv_obj_send_event adds
+// what layout costs per screen (text measured, flex runs, style reads, events).
+//
+// A full redraw of the active screen (and the top layer), timed per
+// object -- its own drawing, not its children's -- the costliest listed with
+// what they are, and totals by kind.
+static uint32_t s_dp_own[160], s_dp_t0;
+static lv_obj_t* s_dp_obj[160];
+static int s_dp_n;
+static void dpCb(lv_event_t* e) {
+  lv_event_code_t c = lv_event_get_code(e);
+  int k = (int)(intptr_t)lv_event_get_user_data(e);
+  if (c == LV_EVENT_DRAW_MAIN_BEGIN || c == LV_EVENT_DRAW_POST_BEGIN) s_dp_t0 = micros();
+  else s_dp_own[k] += micros() - s_dp_t0;
+}
+static const char* dpKind(lv_obj_t* o) {
+  const lv_obj_class_t* k = lv_obj_get_class(o);
+  return k == &lv_label_class ? "label" : k == &lv_button_class ? "button" : k == &lv_switch_class ? "switch"
+       : k == &lv_image_class ? "image" : k == &lv_slider_class ? "slider" : k == &lv_obj_class ? "obj" : "other";
+}
+static void perfDrawProfile(const char* tag) {
+  {   // the screen's entrance first: its frames timed, then done
+    uint32_t n = 0, us = 0, t0 = millis();
+    while (lv_anim_count_running() && millis() - t0 < 1000) {
+      uint32_t u = micros();
+      lv_timer_handler();
+      u = micros() - u;
+      if (u > 5000) { n++; us += u; }   // a pass that drew
+      delay(1);
+    }
+    if (n) Serial.printf("PERF draw %-8s entrance %lu frames, avg %5.1f ms\n", tag, (unsigned long)n, us / 1000.0f / n);
+  }
+  s_dp_n = 0;
+  memset(s_dp_own, 0, sizeof(s_dp_own));
+  auto hook = [](lv_obj_t* o, void*) {
+    if (s_dp_n >= 160) return LV_OBJ_TREE_WALK_END;
+    s_dp_obj[s_dp_n] = o;
+    for (lv_event_code_t c : { LV_EVENT_DRAW_MAIN_BEGIN, LV_EVENT_DRAW_MAIN_END, LV_EVENT_DRAW_POST_BEGIN, LV_EVENT_DRAW_POST_END })
+      lv_obj_add_event_cb(o, dpCb, c, (void*)(intptr_t)s_dp_n);
+    s_dp_n++;
+    return LV_OBJ_TREE_WALK_NEXT;
+  };
+  lv_obj_tree_walk(lv_screen_active(), hook, nullptr);
+  lv_obj_tree_walk(lv_layer_top(), hook, nullptr);
+  const int N = 5;
+  uint32_t fl0 = lvport::s_flush_us, t = micros();
+  for (int i = 0; i < N; i++) { lv_obj_invalidate(lv_screen_active()); lv_refr_now(NULL); }
+  t = micros() - t;
+  uint32_t fl = lvport::s_flush_us - fl0, sum = 0;
+  for (int i = 0; i < s_dp_n; i++) sum += s_dp_own[i];
+  Serial.printf("PERF draw %-8s full %5.1f ms = flush %4.1f + objects %4.1f + the rest %4.1f  (%d objects)\n", tag,
+                t / 1000.0f / N, fl / 1000.0f / N, sum / 1000.0f / N, (t - fl - sum) / 1000.0f / N, s_dp_n);
+  struct Tot { const char* k; uint32_t us; int n; } tot[8] = {};
+  for (int i = 0; i < s_dp_n; i++) {
+    const char* k = dpKind(s_dp_obj[i]);
+    for (Tot& x : tot) { if (!x.k) x.k = k; if (x.k == k) { x.us += s_dp_own[i]; x.n++; break; } }
+  }
+  for (Tot& x : tot) if (x.k) Serial.printf("PERF   by kind %-7s %3d objects %5.1f ms\n", x.k, x.n, x.us / 1000.0f / N);
+  for (int r = 0; r < 12; r++) {   // the costliest, one by one
+    int best = -1;
+    for (int i = 0; i < s_dp_n; i++) if (s_dp_own[i] && (best < 0 || s_dp_own[i] > s_dp_own[best])) best = i;
+    if (best < 0 || s_dp_own[best] < 300 * N) break;
+    lv_obj_t* o = s_dp_obj[best];
+    Serial.printf("PERF   %5.2f ms %-6s %3ldx%-3ld radius %2ld bg_opa %3d border %ld shadow %ld clip_corner %d %.30s\n",
+                  s_dp_own[best] / 1000.0f / N, dpKind(o), (long)lv_obj_get_width(o), (long)lv_obj_get_height(o),
+                  (long)lv_obj_get_style_radius(o, LV_PART_MAIN), (int)lv_obj_get_style_bg_opa(o, LV_PART_MAIN),
+                  (long)lv_obj_get_style_border_width(o, LV_PART_MAIN), (long)lv_obj_get_style_shadow_width(o, LV_PART_MAIN),
+                  (int)lv_obj_get_style_clip_corner(o, LV_PART_MAIN),
+                  lv_obj_check_type(o, &lv_label_class) ? lv_label_get_text(o) : "");
+    s_dp_own[best] = 0;
+  }
+  for (int i = 0; i < s_dp_n; i++) lv_obj_remove_event_cb(s_dp_obj[i], dpCb);
+}
+#endif
+
+#ifdef PERF_WRAP_TEXT
+#include <src/misc/lv_text_private.h>
+// (-Wl,--wrap=lv_text_get_size_attributes) How often text is measured,
+// and how often with the same text, font and width as a recent call.
+static uint32_t s_tm_n, s_tm_us, s_tm_chars, s_tm_same;
+extern "C" void __real_lv_text_get_size_attributes(lv_point_t*, const char*, const lv_font_t*, lv_text_attributes_t*);
+extern "C" void __wrap_lv_text_get_size_attributes(lv_point_t* s, const char* t, const lv_font_t* f, lv_text_attributes_t* a) {
+  struct K { const char* t; const lv_font_t* f; int32_t w; };
+  static K ring[64]; static int ri = 0;
+  for (const K& k : ring) if (k.t == t && k.f == f && k.w == a->max_width) { s_tm_same++; break; }
+  ring[ri++ & 63] = { t, f, a->max_width };
+  uint32_t u = micros();
+  __real_lv_text_get_size_attributes(s, t, f, a);
+  s_tm_us += micros() - u; s_tm_n++; s_tm_chars += strlen(t);
+}
+// ... and flex runs (-Wl,--wrap=lv_layout_apply), style reads and events.
+static uint32_t s_la_n, s_la_us, s_sp_n, s_ev_n;
+extern "C" void __real_lv_layout_apply(lv_obj_t*);
+extern "C" void __wrap_lv_layout_apply(lv_obj_t* o) {
+  static int depth = 0;
+  uint32_t u = micros(); depth++;
+  __real_lv_layout_apply(o);
+  if (--depth == 0) s_la_us += micros() - u;
+  s_la_n++;
+}
+extern "C" lv_style_value_t __real_lv_obj_get_style_prop_internal(const lv_obj_t*, lv_part_t, lv_style_prop_t);
+extern "C" lv_style_value_t __wrap_lv_obj_get_style_prop_internal(const lv_obj_t* o, lv_part_t p, lv_style_prop_t s) {
+  s_sp_n++;
+  return __real_lv_obj_get_style_prop_internal(o, p, s);
+}
+extern "C" lv_result_t __real_lv_obj_send_event(lv_obj_t*, lv_event_code_t, void*);
+extern "C" lv_result_t __wrap_lv_obj_send_event(lv_obj_t* o, lv_event_code_t c, void* p) {
+  s_ev_n++;
+  return __real_lv_obj_send_event(o, c, p);
+}
+#define TM_RESET() (s_tm_n = s_tm_us = s_tm_chars = s_tm_same = s_la_n = s_la_us = s_sp_n = s_ev_n = 0)
+#define TM_PRINT(tag) Serial.printf("PERF   text %-8s %4lu measured (%4lu same as recent), %6lu chars, %5.1f ms;" \
+    " flex runs %4lu (%5.1f ms), style reads %6lu, events %5lu\n", tag, \
+    (unsigned long)s_tm_n, (unsigned long)s_tm_same, (unsigned long)s_tm_chars, s_tm_us / 1000.0f, \
+    (unsigned long)s_la_n, s_la_us / 1000.0f, (unsigned long)s_sp_n, (unsigned long)s_ev_n)
+#else
+#define TM_RESET()
+#define TM_PRINT(tag)
+#endif
+
 void UITask::loop() {
   pollConnection();
   drainCoreEvents();
@@ -1222,17 +1347,57 @@ void UITask::loop() {
       lv_display_trigger_activity(NULL);   // no sleeping mid-test
       next = millis() + 1200;
       if (step == 0) unlockScreen();   // a PIN lock would be drawn over everything
+#ifndef PERF_KEEP_USB
       usbTap(false);   // nor the USB drive question ("Keep card")
+#endif
+      if (step == 0) lv_timer_handler();   // the popup's delete is async: gone before the sweep below
+      if (step == 0) Serial.printf("PERF reset reason %d (4 panic, 5 int wdt, 6 task wdt, 7 wdt, 3 sw)\n", (int)esp_reset_reason());
+#if defined(ESP32)
+      if (step == 0) {
+        esp_core_dump_summary_t sum;
+        if (esp_core_dump_image_check() == ESP_OK && esp_core_dump_get_summary(&sum) == ESP_OK) {
+          Serial.printf("PERF crash task %s pc %08lx cause %lu vaddr %08lx bt:", sum.exc_task, (unsigned long)sum.exc_pc,
+                        (unsigned long)sum.ex_info.exc_cause, (unsigned long)sum.ex_info.exc_vaddr);
+          for (uint32_t i = 0; i < sum.exc_bt_info.depth; i++) Serial.printf(" %08lx", (unsigned long)sum.exc_bt_info.bt[i]);
+          Serial.println();
+        }
+      }
+#endif
       if (step == 0) {   // once: every settings page and most screens, built and drawn once
         auto one = [this](const char* what, int page, void (UITask::*fn)()) {
+          TM_RESET();
           uint32_t t = micros();
           if (fn) (this->*fn)(); else showSchemaSettings(page);
           uint32_t b = micros() - t;
+          TM_PRINT("build"); TM_RESET();
+          uint32_t tl = micros();
+          lv_obj_update_layout(lv_screen_active());   // layout apart from drawing
+          tl = micros() - tl;
+          TM_PRINT("layout"); TM_RESET();
+          uint32_t fl0 = lvport::s_flush_us, td = micros();
           lv_refr_now(NULL);
+          td = micros() - td;
+          TM_PRINT("draw"); TM_RESET();
+          uint32_t fl1 = lvport::s_flush_us - fl0;
+          uint32_t total = micros() - t;
+          uint32_t tr = micros();   // the same screen drawn again: what a first frame costs over a steady one
+          lv_obj_invalidate(lv_screen_active()); lv_refr_now(NULL);
+          tr = micros() - tr;
           uint32_t n = 0;
           lv_obj_tree_walk(lv_screen_active(), [](lv_obj_t*, void* u) { ++*(uint32_t*)u; return LV_OBJ_TREE_WALK_NEXT; }, &n);
-          Serial.printf("PERF screen %-12s %2d  build %5.1f ms, with first frame %5.1f ms, %3lu objects\n", what, page,
-                        b / 1000.0f, (micros() - t) / 1000.0f, (unsigned long)n);
+          uint32_t nf = 0;
+          lv_obj_tree_walk(lv_screen_active(), [](lv_obj_t* o, void* u) {
+            if (lv_obj_get_style_layout(o, LV_PART_MAIN) == LV_LAYOUT_FLEX) ++*(uint32_t*)u;
+            return LV_OBJ_TREE_WALK_NEXT; }, &nf);
+          Serial.printf("PERF   flex containers %lu\n", (unsigned long)nf);
+          if ((!fn && (page == 7 || page == 1)) || fn == &UITask::showContacts) {
+            char tag[12]; snprintf(tag, sizeof(tag), "%s%d", fn ? "list" : "page", page);
+            fillFlush();   // the whole page, not only its first section
+            perfDrawProfile(tag);
+          }
+          Serial.printf("PERF screen %-12s %2d  build %5.1f ms, with first frame %5.1f ms, %3lu objects"
+                        " | layout %5.1f, first draw %5.1f (flush %4.1f), redraw %5.1f\n", what, page,
+                        b / 1000.0f, total / 1000.0f, (unsigned long)n, tl / 1000.0f, td / 1000.0f, fl1 / 1000.0f, tr / 1000.0f);
         };
         for (int pg = 0; pg < PG_ALL; pg++) one("page", pg, nullptr);
         one("radio", 0, &UITask::showRadio);
@@ -1247,6 +1412,36 @@ void UITask::loop() {
         one("contacts", 0, &UITask::showContacts);
         one("chats", 0, &UITask::showChats);
         showHome();
+        lv_refr_now(NULL);
+        perfDrawProfile("home");
+        {   // a popup over Home: a full frame under it dimmed live, then frozen
+          lv_obj_t* ov = nullptr;
+          lv_obj_t* p = popupOpen(lv_layer_top(), POP_FIT, ov);
+          for (int i = 0; i < 6; i++) label(p, "A popup row", THEME_FONT_BODY, theme::TEXT);
+          lv_anim_delete(ov, NULL);   // the dim at once, and no freeze yet
+          lv_anim_delete(p, NULL);
+          lv_obj_set_style_bg_opa(ov, LV_OPA_60, 0);
+          lv_obj_set_style_opa(p, LV_OPA_COVER, 0);
+          lv_obj_set_style_translate_y(p, 0, 0);
+          lv_refr_now(NULL);
+          auto full = []() {
+            uint32_t t = micros();
+            for (int i = 0; i < 5; i++) { lv_obj_invalidate(lv_screen_active()); lv_refr_now(NULL); }
+            return (micros() - t) / 5000.0f;
+          };
+          float live = full();
+          uint32_t t = micros();
+          freeze::take(ov);
+          float took = (micros() - t) / 1000.0f;
+          lv_refr_now(NULL);
+          float frozen = full();
+          perfDrawProfile("frozen");
+          Serial.printf("PERF popup over home: full frame live %.1f ms, frozen %.1f ms (freezing took %.1f ms, %s)\n",
+                        live, frozen, took, freeze::s_img ? "frozen" : "NOT frozen");
+          lv_obj_delete(ov);
+          Serial.printf("PERF popup closed: image %s\n", freeze::s_img ? "LEFT" : "gone");
+          lv_refr_now(NULL);
+        }
       }
       if (step % 10 == 0 && step > 0) {   // a static full-screen redraw of Home, for the baseline
         uint32_t fl0 = lvport::s_flush_us, t = micros();

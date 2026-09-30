@@ -307,6 +307,7 @@ void UITask::perfMap(bool reset) {
   fl0 = lvport::s_flush_us; t = micros();
   for (int i = 0; i < 10; i++) { lv_obj_invalidate(lv_screen_active()); lv_refr_now(NULL); }
   Serial.printf("PERF map full redraw %5.1f ms, flush %5.1f ms\n", (micros() - t) / 10000.0f, (lvport::s_flush_us - fl0) / 10000.0f);
+  perfDrawProfile("map");
   s_perf_tile_us = s_perf_tile_max = s_perf_tile_n = 0;
 }
 #endif
