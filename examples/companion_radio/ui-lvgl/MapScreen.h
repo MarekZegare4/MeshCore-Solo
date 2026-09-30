@@ -293,9 +293,10 @@ void UITask::perfMap(bool reset) {
   while (s_cache.busy()) { delay(5); pollTiles(); }   // a prefetch still decoding would share PSRAM with the drawing
   Serial.printf("PERF tiles %lu decoded, avg %5.1f ms, max %5.1f ms (pending %d)\n", (unsigned long)s_perf_tile_n,
                 s_perf_tile_n ? s_perf_tile_us / 1000.0f / s_perf_tile_n : 0.0f, s_perf_tile_max / 1000.0f, (int)_map_pending);
-  if (s_perf_tile_n) Serial.printf("PERF   of which read %5.1f ms (%lu B), decode %5.1f ms\n", s_raster.perf_read_us / 1000.0f / s_perf_tile_n,
-                                  (unsigned long)(s_raster.perf_bytes / s_perf_tile_n), s_raster.perf_dec_us / 1000.0f / s_perf_tile_n);
-  s_raster.perf_read_us = s_raster.perf_dec_us = s_raster.perf_bytes = 0;
+  if (s_perf_tile_n) Serial.printf("PERF   of which read %5.1f ms (%lu B), decode %5.1f ms, trails %5.1f ms\n", s_raster.perf_read_us / 1000.0f / s_perf_tile_n,
+                                  (unsigned long)(s_raster.perf_bytes / s_perf_tile_n), s_raster.perf_dec_us / 1000.0f / s_perf_tile_n,
+                                  s_raster.perf_ovl_us / 1000.0f / s_perf_tile_n);
+  s_raster.perf_read_us = s_raster.perf_dec_us = s_raster.perf_bytes = s_raster.perf_ovl_us = 0;
   uint32_t fl0 = lvport::s_flush_us, t = micros();
   for (int i = 0; i < 20; i++) {   // a drag: 4 px a frame, tiles already decoded
     _map_cx += (i < 10 ? 4.0 : -4.0) / TILE_PX;

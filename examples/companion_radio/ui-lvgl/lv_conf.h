@@ -46,7 +46,8 @@
 #define LV_TXT_BREAK_CHARS      " ,;:-_)]}"
 #define LV_USE_FONT_COMPRESSED  0      // fonts are generated uncompressed: no per-glyph decompression on every draw
 
-// PNG decoder for raster map tiles (map/TileProvider.h calls lodepng directly).
+// PNG decoder for raster map tiles: the sim's, and the fallback on the L2 behind
+// PNGdec (ui-lvgl/TilePng.cpp). map/TileProvider.h calls lodepng directly.
 #define LV_USE_LODEPNG          1
 
 // Spans: message text with @[nick] mentions picked out (UITask.cpp msgText).

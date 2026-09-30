@@ -16,6 +16,11 @@ extern "C" {
 #include "src/libs/lodepng/lodepng.h"
 }
 
+#if defined(ESP32)
+bool pngdecRgb565(const uint8_t* png, size_t len, uint16_t* out, int side);          // ui-lvgl/TilePng.cpp
+bool pngdecOverlayRgb565(const uint8_t* png, size_t len, uint16_t* out, int side);
+#endif
+
 namespace mapview {
 
 // OpenTopoMap answers every tile past its last zoom level (17) with the same
@@ -125,7 +130,7 @@ public:
   }
 
 #ifdef UI_PERF_TEST
-  uint32_t perf_read_us = 0, perf_dec_us = 0, perf_bytes = 0;
+  uint32_t perf_read_us = 0, perf_dec_us = 0, perf_bytes = 0, perf_ovl_us = 0;
 #endif
   bool renderTile(int z, int x, int y, uint16_t* out) override {
     _overlay_missed = false;
@@ -142,21 +147,32 @@ public:
     perf_read_us += t1 - t0; perf_bytes += len;
 #endif
 
-    lv_draw_buf_t* db = decodePng(png, len);
+    bool ok = false;
+#if defined(ESP32)
+    ok = pngdecRgb565(png, len, out, TILE_PX);   // lodepng below if it can't
+#endif
+    if (!ok) {
+      lv_draw_buf_t* db = decodePng(png, len);
+      if (!db) { lv_free(png); return false; }
+      for (int row = 0; row < TILE_PX; row++) {
+        const uint8_t* p = db->data + row * db->header.stride;   // R, G, B, A
+        uint16_t* o = out + row * TILE_PX;
+        for (int i = 0; i < TILE_PX; i++, p += 4)
+          o[i] = (uint16_t)(((p[0] & 0xF8) << 8) | ((p[1] & 0xFC) << 3) | (p[2] >> 3));
+      }
+      lv_draw_buf_destroy(db);
+    }
     lv_free(png);
-    if (!db) return false;
 #ifdef UI_PERF_TEST
     perf_dec_us += micros() - t1;
 #endif
-
-    for (int row = 0; row < TILE_PX; row++) {
-      const uint8_t* p = db->data + row * db->header.stride;   // R, G, B, A
-      uint16_t* o = out + row * TILE_PX;
-      for (int i = 0; i < TILE_PX; i++, p += 4)
-        o[i] = (uint16_t)(((p[0] & 0xF8) << 8) | ((p[1] & 0xFC) << 3) | (p[2] >> 3));
-    }
-    lv_draw_buf_destroy(db);
+#ifdef UI_PERF_TEST
+    uint32_t t2 = micros();
+#endif
     if (s_trails_on && z <= TRAILS_MAX_Z) drawOverlay(z, x, y, out);
+#ifdef UI_PERF_TEST
+    perf_ovl_us += micros() - t2;
+#endif
     return true;
   }
 
@@ -188,6 +204,9 @@ private:
     uint8_t* png = sz > 0 ? readRange(f, 0, (uint32_t)sz) : nullptr;   // 0 bytes: no trail here
     fclose(f);
     if (!png) return;
+#if defined(ESP32)
+    if (pngdecOverlayRgb565(png, (size_t)sz, out, TILE_PX)) { lv_free(png); return; }   // else lodepng
+#endif
     lv_draw_buf_t* db = decodePng(png, (size_t)sz);
     lv_free(png);
     if (!db) return;
