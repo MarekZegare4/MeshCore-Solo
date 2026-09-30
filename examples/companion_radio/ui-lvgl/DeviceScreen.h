@@ -391,6 +391,7 @@ void UITask::pinRemove() {
 void UITask::pinRowRefresh() {
   if (_screen != SCR_SETTINGS_NAV) return;
   buildSchemaSettings();
+  fillFlush();
   if (_body) { lv_obj_update_layout(_body); lv_obj_scroll_by(_body, 0, -lv_obj_get_scroll_bottom(_body), LV_ANIM_OFF); }
 }
 

@@ -48,8 +48,8 @@ void UITask::showRepeater() {
 
 void UITask::buildRepeater() {
   using namespace rptview;
-  using radioview::rowDropdown;
   lv_obj_t* body = newScreen("Repeater", true);
+  s_scopes_sub = nullptr;   // made with its group (repeaterRelays)
   NodePrefs* p = _prefs;
 
   lv_obj_t* g = group(body, nullptr);
@@ -57,8 +57,14 @@ void UITask::buildRepeater() {
   if (p->client_repeat) lv_obj_add_state(sw, LV_STATE_CHECKED);
   lv_obj_add_event_cb(sw, onRptSwitch, LV_EVENT_VALUE_CHANGED, (void*)(uintptr_t)RP_ON);
   groupNote(body, "Uses more battery; auto power pauses.");
+  fill(&UITask::repeaterGroup, 1, 3);   // the rest as the loop goes
+}
 
-  g = group(body, "NETWORK");
+void UITask::repeaterGroup(int i) {
+  using namespace rptview;
+  if (i == 2) { repeaterRelays(); return; }
+  NodePrefs* p = _prefs;
+  lv_obj_t* g = group(_body, "NETWORK");
   lv_obj_t* row = settingRow(g, "Relay on", p->repeater_use_profile ? "Its own frequency" : "Your chat frequency");
   static const char* NET[] = { "Current", "Custom", "" };
   radioview::rowSegmented(row, NET, p->repeater_use_profile ? 1 : 0, 150, onRptNetwork, 0);
@@ -67,8 +73,13 @@ void UITask::buildRepeater() {
     radioview::paramRows(g, p, rptctl::currentPreset(p), p->repeater_freq, p->repeater_sf, p->repeater_bw,
                          p->repeater_cr, onRptDropdown, IDS, onRptFreq, nullptr);
   }
+}
 
-  g = group(body, "WHAT IT RELAYS");
+void UITask::repeaterRelays() {
+  using namespace rptview;
+  using radioview::rowDropdown;
+  NodePrefs* p = _prefs;
+  lv_obj_t* g = group(_body, "WHAT IT RELAYS");
   switchRow(g, "Skip adverts", "Relay messages, not adverts", &p->repeat_skip_adverts);
   char v[12];
   int o = 0;
@@ -102,6 +113,7 @@ void UITask::buildRepeater() {
 void UITask::rebuildRepeater() {
   int32_t y = _body ? lv_obj_get_scroll_y(_body) : 0;
   buildRepeater();
+  fillFlush();
   if (_body) { lv_obj_update_layout(_body); lv_obj_scroll_to_y(_body, y, LV_ANIM_OFF); }
 }
 

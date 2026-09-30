@@ -1060,6 +1060,32 @@ void UITask::loop() {
       lv_display_trigger_activity(NULL);   // no sleeping mid-test
       next = millis() + 1200;
       if (step == 0) unlockScreen();   // a PIN lock would be drawn over everything
+      usbTap(false);   // nor the USB drive question ("Keep card")
+      if (step == 0) {   // once: every settings page and most screens, built and drawn once
+        auto one = [this](const char* what, int page, void (UITask::*fn)()) {
+          uint32_t t = micros();
+          if (fn) (this->*fn)(); else showSchemaSettings(page);
+          uint32_t b = micros() - t;
+          lv_refr_now(NULL);
+          uint32_t n = 0;
+          lv_obj_tree_walk(lv_screen_active(), [](lv_obj_t*, void* u) { ++*(uint32_t*)u; return LV_OBJ_TREE_WALK_NEXT; }, &n);
+          Serial.printf("PERF screen %-12s %2d  build %5.1f ms, with first frame %5.1f ms, %3lu objects\n", what, page,
+                        b / 1000.0f, (micros() - t) / 1000.0f, (unsigned long)n);
+        };
+        for (int pg = 0; pg < PG_ALL; pg++) one("page", pg, nullptr);
+        one("radio", 0, &UITask::showRadio);
+        one("diag", 0, &UITask::showDiag);
+        one("clock", 0, &UITask::showClock);
+        one("compass", 0, &UITask::showCompass);
+        one("scopes", 0, &UITask::showScopes);
+        one("repeater", 0, &UITask::showRepeater);
+        one("bot", 0, &UITask::showBot);
+        one("quick", 0, &UITask::showQuickMsgs);
+        one("admin", 0, &UITask::showAdminPick);
+        one("contacts", 0, &UITask::showContacts);
+        one("chats", 0, &UITask::showChats);
+        showHome();
+      }
       if (step % 10 == 0 && step > 0) {   // a static full-screen redraw of Home, for the baseline
         uint32_t fl0 = lvport::s_flush_us, t = micros();
         for (int i = 0; i < 10; i++) { lv_obj_invalidate(lv_screen_active()); lv_refr_now(NULL); }
@@ -1684,37 +1710,62 @@ namespace home { static void leave(); }   // HomeScreen.h
 
 static int s_th_rows_n = 0;   // conversation bubbles built (refreshThread)
 
-// A long list fills in over several loop passes: the first screenful at
-// once, the rest as time allows. A row costs 3-6 ms on the L2 (widgets live in
-// PSRAM), so 48 nodes or a few hundred contacts built in one go held the
-// screen for a second. `row(i)` makes row i from the data as it is then.
-// One list at a time; a new screen drops it.
-static struct {
-  lv_obj_t* list = nullptr;
-  int next = 0, n = 0;
-  void (UITask::*row)(int) = nullptr;
-} s_fill;
-static const uint32_t FILL_BUDGET_US = 25000;   // rows added per loop pass: about a frame's worth
+// A screen builds in pieces over several loop passes: what shows first at
+// once, the rest as time allows. A widget costs ~1 ms on the L2 (they live in
+// PSRAM), so 48 nodes, a few hundred contacts or a long settings page built
+// in one go held the screen for up to a second. The pieces queue in order:
+// fill(fn, from, to) makes fn(from) .. fn(to - 1), each from the data as it
+// is then; then(fn, arg) makes its piece at once unless others still wait,
+// keeping its place after them. A new screen drops what is left.
+struct FillJob { void (UITask::*fn)(int); int next, end; };
+static const int FILL_JOBS = 12;
+static FillJob s_fill[FILL_JOBS];
+static int s_fill_n = 0;
+static const uint32_t FILL_BUDGET_US = 25000;   // pieces made per loop pass: about a frame's worth
 
-void UITask::fillStart(lv_obj_t* list, int n, int first, void (UITask::*row)(int)) {
-  s_fill.list = list;
-  s_fill.n = n;
-  s_fill.row = row;
-  s_fill.next = 0;
-  while (s_fill.next < n && s_fill.next < first) (this->*row)(s_fill.next++);
-  if (s_fill.next >= n) s_fill.list = nullptr;
+void UITask::fill(void (UITask::*fn)(int), int from, int to) {
+  if (from >= to) return;
+  if (s_fill_n == FILL_JOBS) { while (from < to) (this->*fn)(from++); return; }   // no room: now
+  s_fill[s_fill_n++] = { fn, from, to };
+}
+
+void UITask::then(void (UITask::*fn)(int), int arg) {
+  if (s_fill_n) fill(fn, arg, arg + 1);
+  else (this->*fn)(arg);
+}
+
+// Rows 0 .. n-1 of a list: the first `first` at once, the rest queued.
+void UITask::fillStart(int n, int first, void (UITask::*row)(int)) {
+  int now = first < n ? first : n;
+  for (int i = 0; i < now; i++) (this->*row)(i);
+  fill(row, now, n);
+}
+
+void UITask::fillStep() {
+  FillJob& j = s_fill[0];
+  (this->*j.fn)(j.next++);   // may queue more, behind
+  if (j.next >= j.end) memmove(s_fill, s_fill + 1, --s_fill_n * sizeof(FillJob));
 }
 
 void UITask::fillTick() {
-  if (!s_fill.list) return;
   uint32_t t0 = micros();
-  do (this->*s_fill.row)(s_fill.next++);
-  while (s_fill.next < s_fill.n && micros() - t0 < FILL_BUDGET_US);
-  if (s_fill.next >= s_fill.n) s_fill.list = nullptr;
+  while (s_fill_n) {
+    fillStep();
+    if (micros() - t0 >= FILL_BUDGET_US) break;
+  }
+}
+
+// Everything still queued, now: before scrolling to where the screen was.
+void UITask::fillFlush() { while (s_fill_n) fillStep(); }
+
+int UITask::fillPending() const {
+  int n = 0;
+  for (int k = 0; k < s_fill_n; k++) n += s_fill[k].end - s_fill[k].next;
+  return n;
 }
 
 lv_obj_t* UITask::newScreen(const char* title, bool with_back) {
-  s_fill.list = nullptr;   // its list goes with the screen
+  s_fill_n = 0;   // what was still to be built goes with the screen
   _home_clock = _home_date = _home_unread = nullptr;
   _thread_list = _compose_ta = _keyboard = nullptr;
   s_th_rows_n = 0;   // the bubbles went with the screen
@@ -2187,14 +2238,14 @@ void UITask::buildContacts() {
     s_contact_raw[rows] = (uint16_t)(MAX_ANON_CONTACTS + i);
     rows++;
   }
-  fillStart(body, rows, 8, &UITask::contactRow);
+  fillStart(rows, 8, &UITask::contactRow);
   if (rows == 0) label(body, fav_only ? "No favourites - tap All" : "No contacts yet", THEME_FONT_BODY, theme::TEXT_MUTED);
 }
 
 void UITask::contactRow(int i) {
   ContactInfo c;
   bool same = the_mesh.getContactByIdx(s_contact_raw[i], c) && memcmp(c.id.pub_key, s_contact_rows[i], PUB_KEY_SIZE) == 0;
-  listRow(s_fill.list, same ? c.name : "?", NULL, onOpenContactRow, (void*)(uintptr_t)i);   // "?": deleted meanwhile
+  listRow(_body, same ? c.name : "?", NULL, onOpenContactRow, (void*)(uintptr_t)i);   // "?": deleted meanwhile
 }
 
 // ── Nearby ────────────────────────────────────────────────────────────────────
@@ -2450,14 +2501,14 @@ void UITask::refreshNearbyList() {
   // change): the rows rewritten in place, not built again. Rows still to
   // come while the list fills in are made from the model as it is then.
   int built = (int)lv_obj_get_child_count(_nearby_list);
-  int rows = s_fill.list == _nearby_list ? s_fill.n : built;
-  if (n > 0 && built > 0 && rows == n && lv_obj_check_type(lv_obj_get_child(_nearby_list, 0), &lv_button_class)) {
+  if (n > 0 && built > 0 && built + fillPending() == n && lv_obj_check_type(lv_obj_get_child(_nearby_list, 0), &lv_button_class)) {
     for (int i = 0; i < built; i++) nearbyRowSet(lv_obj_get_child(_nearby_list, i), i);
     return;
   }
   int32_t scroll = lv_obj_get_scroll_y(_nearby_list);
+  s_fill_n = 0;   // rows still queued: of the old list
   lv_obj_clean(_nearby_list);
-  fillStart(_nearby_list, n, 6 + scroll / (theme::ROW_H + theme::GAP), &UITask::nearbyRow);   // down to where it was
+  fillStart(n, 6 + scroll / (theme::ROW_H + theme::GAP), &UITask::nearbyRow);   // down to where it was
   if (n == 0) {
     lv_obj_t* l = label(_nearby_list, "Nobody here yet. Tap Scan to look around.",
                         THEME_FONT_BODY, theme::TEXT_MUTED);
@@ -3433,13 +3484,19 @@ void UITask::buildSchemaSettings() {
     }
   }
   schemaRows(body, _settings_page);
-  if (_settings_page == settings::PG_SOUND) buildSoundRows(body, false);   // the melodies
-  if (_settings_page == settings::PG_MESSAGES) {
+  if (_settings_page == settings::PG_SOUND) then(&UITask::schemaExtras, settings::PG_SOUND);   // after its groups
+  if (_settings_page == settings::PG_MESSAGES) then(&UITask::schemaExtras, settings::PG_MESSAGES);
+}
+
+// What a page adds to its schema groups, once they are there.
+void UITask::schemaExtras(int page) {
+  if (page == settings::PG_SOUND) buildSoundRows(_body, false);   // the melodies
+  if (page == settings::PG_MESSAGES) {
     lv_obj_t* c = s_sec_card[settings::SEC_CONTACTS];   // the action that goes with "Contact expiry"
     if (c) _prune_lbl = actionRow(c, LV_SYMBOL_TRASH "  Remove inactive contacts now", onPruneContacts, NULL, theme::FAIL);
     char sub[48];
     snprintf(sub, sizeof(sub), "%d of %d set  -  sent with one tap", msgtext::quickUsed(_prefs), msgtext::QUICK_COUNT);
-    listRow(s_sec_card[settings::SEC_MESSAGES], "Quick messages", sub, onOpenQuickMsgs, NULL);
+    if (lv_obj_t* m = s_sec_card[settings::SEC_MESSAGES]) listRow(m, "Quick messages", sub, onOpenQuickMsgs, NULL);
   }
 }
 
@@ -3474,22 +3531,34 @@ void UITask::buildAboutPage(lv_obj_t* body) {
 // A page's schema rows, one group per section (Settings pages and the tools'
 // options). Each section's card is kept in s_sec_card for rows added after.
 
+// On a screen's body the first group shows at once and the others follow
+// (fill); a popup's list gets them all now.
+static lv_obj_t* s_schema_body = nullptr;
+static bool s_schema_one = false;   // one section: its own page, no heading
+
 void UITask::schemaRows(lv_obj_t* body, uint8_t page) {
-  uint8_t sec = 0xFF;
-  lv_obj_t* card = nullptr;
   for (lv_obj_t*& c : s_sec_card) c = nullptr;
+  s_schema_body = body;
+  s_schema_one = page == settings::PG_NAV && s_nav_section >= 0;
+  uint8_t sec = 0xFF;
+  bool first = true;
   for (int i = 0; i < settings::COUNT; i++) {
     const settings::Setting& st = settings::ALL[i];
-    if (settings::sectionPage(st.section) != page) continue;
-    bool one = page == settings::PG_NAV && s_nav_section >= 0;   // one section: its own page, no heading
-    if (one && st.section != s_nav_section) continue;
-    if (st.section != sec) {
-      sec = st.section;
-      card = s_sec_card[sec] = group(body, one ? nullptr : settings::sectionTitle(sec));
-      if (sec == settings::SEC_SOUND) buildSoundRows(card, true);   // On / Off / Auto
-    }
-    schemaRow(card, i);
+    if (settings::sectionPage(st.section) != page || st.section == sec) continue;
+    if (s_schema_one && st.section != s_nav_section) continue;
+    sec = st.section;
+    if (first || body != _body) schemaSection(i);
+    else fill(&UITask::schemaSection, i, i + 1);
+    first = false;
   }
+}
+
+// The group of the section setting i starts, with its rows.
+void UITask::schemaSection(int i) {
+  uint8_t sec = settings::ALL[i].section;
+  lv_obj_t* card = s_sec_card[sec] = group(s_schema_body, s_schema_one ? nullptr : settings::sectionTitle(sec));
+  if (sec == settings::SEC_SOUND) buildSoundRows(card, true);   // On / Off / Auto
+  for (int k = i; k < settings::COUNT && settings::ALL[k].section == sec; k++) schemaRow(card, k);
 }
 
 // One schema setting as a row of `card`: a switch, a choice, or (brightness,
@@ -3550,6 +3619,7 @@ void UITask::setSchemaValue(int idx, int v) {
     lv_obj_t* body = _body;
     int32_t y = body ? lv_obj_get_scroll_y(body) : 0;
     buildSchemaSettings();
+    fillFlush();
     if (_body) { lv_obj_update_layout(_body); lv_obj_scroll_to_y(_body, y, LV_ANIM_OFF); }
   }
 }
@@ -3569,12 +3639,12 @@ void UITask::buildSettings() {
   lv_obj_t* body = newScreen("Settings", true);
   // A group at a time (fillStart): the first shows at once. Coming back to
   // where it was scrolled needs them all first.
-  fillStart(body, SETTINGS_GROUPS, restore ? SETTINGS_GROUPS : 1, &UITask::settingsGroup);
-  if (restore) { lv_obj_update_layout(body); lv_obj_scroll_to_y(body, s_settings_y, LV_ANIM_OFF); }
+  fillStart(SETTINGS_GROUPS, 1, &UITask::settingsGroup);
+  if (restore) { fillFlush(); lv_obj_update_layout(body); lv_obj_scroll_to_y(body, s_settings_y, LV_ANIM_OFF); }
 }
 
 void UITask::settingsGroup(int i) {
-  lv_obj_t* body = s_fill.list;
+  lv_obj_t* body = _body;
   char sub[48];
   lv_obj_t* g;
   char v1[24], v2[24];

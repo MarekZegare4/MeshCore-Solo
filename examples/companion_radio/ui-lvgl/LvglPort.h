@@ -444,11 +444,17 @@ static const char* resetReason() {
 // the address with the build's firmware.elf, or read the whole dump over USB).
 static bool crashSummary(char* out, size_t n) {
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
-  if (esp_core_dump_image_check() != ESP_OK) return false;
-  esp_core_dump_summary_t sum;
-  if (esp_core_dump_get_summary(&sum) != ESP_OK) return false;
-  snprintf(out, n, "%.10s %08lx", sum.exc_task, (unsigned long)sum.exc_pc);
-  return true;
+  // Read once: checking the dump in flash takes ~45 ms, and it stays the same
+  // until the next restart (Diagnostics asks every second).
+  static int8_t s_have = -1;
+  static char s_sum[24];
+  if (s_have < 0) {
+    esp_core_dump_summary_t sum;
+    s_have = esp_core_dump_image_check() == ESP_OK && esp_core_dump_get_summary(&sum) == ESP_OK;
+    if (s_have) snprintf(s_sum, sizeof(s_sum), "%.10s %08lx", sum.exc_task, (unsigned long)sum.exc_pc);
+  }
+  if (s_have) snprintf(out, n, "%s", s_sum);
+  return s_have;
 #else
   (void)out; (void)n;
   return false;

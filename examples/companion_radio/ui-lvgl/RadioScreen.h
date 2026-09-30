@@ -96,8 +96,14 @@ void UITask::buildRadio() {
   paramRows(g, p, radioctl::currentPreset(p), p->freq, p->sf, p->bw, p->cr, onRadioDropdown, IDS, onRadioFreq,
             "Higher = longer range");
   groupNote(body, "Everyone you talk to needs the same settings.");
+  fill(&UITask::radioGroup, 1, 3);   // the rest as the loop goes
+}
 
-  g = group(body, "TRANSMIT");
+void UITask::radioGroup(int i) {
+  using namespace radioview;
+  NodePrefs* p = _prefs;
+  if (i == 2) { buildRadioExtras(_body); return; }   // my presets, scopes (RadioExtras.h)
+  lv_obj_t* g = group(_body, "TRANSMIT");
   int o = 0;
   for (int v = TX_MIN; v <= TX_MAX; v++) o += snprintf(s_opts + o, OPTS_LEN - o, v > TX_MIN ? "\n%d dBm" : "%d dBm", v);
   int tx = p->tx_power_dbm < TX_MIN ? TX_MIN : p->tx_power_dbm > TX_MAX ? TX_MAX : p->tx_power_dbm;
@@ -107,8 +113,6 @@ void UITask::buildRadio() {
   if (p->tx_apc) lv_obj_add_state(sw, LV_STATE_CHECKED);
   if (p->client_repeat) lv_obj_add_state(sw, LV_STATE_DISABLED);
   lv_obj_add_event_cb(sw, onRadioSwitch, LV_EVENT_VALUE_CHANGED, (void*)(uintptr_t)R_APC);
-
-  buildRadioExtras(body);   // my presets, scopes (RadioExtras.h)
 }
 
 void UITask::radioSet(int which, int v) {
@@ -134,6 +138,7 @@ void UITask::radioSet(int which, int v) {
 void UITask::rebuildRadio() {
   int32_t y = _body ? lv_obj_get_scroll_y(_body) : 0;
   buildRadio();
+  fillFlush();
   if (_body) { lv_obj_update_layout(_body); lv_obj_scroll_to_y(_body, y, LV_ANIM_OFF); }
 }
 

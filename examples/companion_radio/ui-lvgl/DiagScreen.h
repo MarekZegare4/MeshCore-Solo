@@ -87,6 +87,7 @@ static void showValue(const char* core, const char* v, char* out, size_t n) {
 
 static void setLive(int i, const diag::Row& r) {
   LiveVal& lv = s_vals[i];
+  if (!lv.in && !lv.val) return;   // its section isn't built yet (fill)
   if (lv.in) {
     const char* slash = strchr(r.value, '/');
     char a[12];
@@ -260,25 +261,11 @@ void UITask::buildDiag() {
   s_rows = 0;
 
   if (s_tab == TAB_LIVE) {
-    // Section by section, in ui-core's order within each.
+    // Section by section, the first at once, the others as the loop goes (fill).
     diag::Row rows[diag::MAX_ROWS + EXTRA];
     s_rows = allRows(rows, _core->gpsEnabled());
-    for (uint8_t sec = 0; sec < SEC_COUNT; sec++) {
-      lv_obj_t* card = nullptr;
-      for (int i = 0; i < s_rows; i++) {
-        const Name* nm = nameOf(rows[i].label);
-        if ((nm ? nm->sec : SEC_DEVICE) != sec) continue;
-        if (!card) {
-          sectionTitle(s_list, SEC_TITLE[sec]);
-          card = infoCard(s_list);
-          if (sec == SEC_PACKETS) { lv_obj_t *a, *b; pairLine(card, "", &a, &b, true); }
-        }
-        s_vals[i] = { nullptr, nullptr, nullptr };
-        if (nm && nm->pair) pairLine(card, nm->text, &s_vals[i].in, &s_vals[i].out, false);
-        else s_vals[i].val = infoRow(card, nm ? nm->text : rows[i].label, "");
-        setLive(i, rows[i]);
-      }
-    }
+    for (int i = 0; i < s_rows; i++) s_vals[i] = { nullptr, nullptr, nullptr };
+    fillStart(SEC_COUNT, 1, &UITask::diagSection);
     return;
   }
 
@@ -351,6 +338,27 @@ void UITask::buildDiag() {
 }
 
 // From loop(), once a second: the Live values in place.
+// One Live section, in ui-core's order within it.
+void UITask::diagSection(int sec) {
+  using namespace diagview;
+  diag::Row rows[diag::MAX_ROWS + EXTRA];
+  int n = allRows(rows, _core->gpsEnabled());
+  if (n != s_rows) return;   // changed meanwhile: refreshDiag() builds it again
+  lv_obj_t* card = nullptr;
+  for (int i = 0; i < n; i++) {
+    const Name* nm = nameOf(rows[i].label);
+    if ((nm ? nm->sec : SEC_DEVICE) != sec) continue;
+    if (!card) {
+      sectionTitle(s_list, SEC_TITLE[sec]);
+      card = infoCard(s_list);
+      if (sec == SEC_PACKETS) { lv_obj_t *a, *b; pairLine(card, "", &a, &b, true); }
+    }
+    if (nm && nm->pair) pairLine(card, nm->text, &s_vals[i].in, &s_vals[i].out, false);
+    else s_vals[i].val = infoRow(card, nm ? nm->text : rows[i].label, "");
+    setLive(i, rows[i]);
+  }
+}
+
 void UITask::refreshDiag() {
   using namespace diagview;
   if (_screen != SCR_DIAG || s_tab != TAB_LIVE || _nav_overlay) return;

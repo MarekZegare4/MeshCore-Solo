@@ -68,6 +68,7 @@ static void onAdminPickRow(lv_event_t* e)  { s_ui->adminPick((int)(uintptr_t)lv_
 namespace adminview {
 static const int PICK_MAX = 128;
 static uint8_t (*s_pick)[PUB_KEY_SIZE] = psramBuf<uint8_t[PUB_KEY_SIZE]>(PICK_MAX);
+static uint16_t* s_pick_raw = psramBuf<uint16_t>(PICK_MAX);   // their raw table index, for the row
 }
 
 // Home > Admin: every repeater and room server, favourites first (ui-new's
@@ -80,25 +81,34 @@ void UITask::showAdminPick() {
 void UITask::buildAdminPick() {
   lv_obj_t* body = newScreen("Admin", true);
   int rows = 0;
-  for (int pass = 0; pass < 2; pass++) {
+  for (int pass = 0; pass < 2; pass++) {   // favourites first
     for (int i = 0; i < the_mesh.getNumContacts() && rows < adminview::PICK_MAX; i++) {
       ContactInfo c;
       if (!the_mesh.getContactByIdx(MAX_ANON_CONTACTS + i, c)) continue;
       if (c.type != ADV_TYPE_REPEATER && c.type != ADV_TYPE_ROOM) continue;
-      bool fav = contactctl::favourite(c);
-      if (fav != (pass == 0)) continue;
-      if (!rows) sectionTitle(body, "LOG IN TO");
-      char name[48];
-      snprintf(name, sizeof(name), "%s%s", fav ? UI_SYMBOL_STAR "  " : "", c.name);
+      if (contactctl::favourite(c) != (pass == 0)) continue;
       memcpy(adminview::s_pick[rows], c.id.pub_key, PUB_KEY_SIZE);
-      listRow(body, name, c.type == ADV_TYPE_ROOM ? "Room server" : "Repeater", onAdminPickRow, (void*)(uintptr_t)rows);
+      adminview::s_pick_raw[rows] = (uint16_t)(MAX_ANON_CONTACTS + i);
       rows++;
     }
   }
+  if (rows) sectionTitle(body, "LOG IN TO");
+  fillStart(rows, 8, &UITask::adminPickRow);   // the rest as the loop goes (fill)
   if (!rows) {
     noteLabel(body, "No repeaters or room servers yet. They show up here once their advert is heard.",
               THEME_FONT_BODY, theme::TEXT_MUTED);
   }
+}
+
+void UITask::adminPickRow(int i) {
+  ContactInfo c;
+  if (!the_mesh.getContactByIdx(adminview::s_pick_raw[i], c) || memcmp(c.id.pub_key, adminview::s_pick[i], PUB_KEY_SIZE) != 0) {
+    listRow(_body, "?", NULL, onAdminPickRow, (void*)(uintptr_t)i);   // deleted meanwhile
+    return;
+  }
+  char name[48];
+  snprintf(name, sizeof(name), "%s%s", contactctl::favourite(c) ? UI_SYMBOL_STAR "  " : "", c.name);
+  listRow(_body, name, c.type == ADV_TYPE_ROOM ? "Room server" : "Repeater", onAdminPickRow, (void*)(uintptr_t)i);
 }
 
 void UITask::adminPick(int row) {
