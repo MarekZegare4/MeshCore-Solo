@@ -1965,7 +1965,8 @@ void UITask::refreshStatusBar() {
 }
 
 void UITask::setGps(bool on) {
-  if (!_core->setGpsEnabled(on)) { showToast("No GPS on this device"); return; }
+  if (!_core->setGpsEnabled(on, false)) { showToast("No GPS on this device"); return; }
+  prefsSave();   // written on leaving the screen, as the other switches
   refreshStatusBar();
 }
 

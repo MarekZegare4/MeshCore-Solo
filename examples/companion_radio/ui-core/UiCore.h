@@ -133,11 +133,13 @@ public:
     return i >= 0 && strcmp(_sensors->getSettingValue(i), "1") == 0;
   }
   // False when the board has no GPS.
-  bool setGpsEnabled(bool on) {
+  // save = false: the caller has the prefs written later (the L2 on leaving
+  // the screen -- a flash write mid-tap stalls the switch's animation).
+  bool setGpsEnabled(bool on, bool save = true) {
     if (gpsSettingIndex() < 0) return false;
     _sensors->setSettingValue("gps", on ? "1" : "0");
     if (_prefs) _prefs->gps_enabled = on ? 1 : 0;
-    the_mesh.savePrefs();
+    if (save) the_mesh.savePrefs();
     return true;
   }
 
