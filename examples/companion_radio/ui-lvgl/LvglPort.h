@@ -878,8 +878,13 @@ static void setLiveTiles(bool on) { nvs::putBool("mc_wifi", "live", on); }
 // Map tools > Hiking trails: the Waymarked Trails overlay over the map.
 static bool trailsOn() { return nvs::getBool("mc_ui", "trails", false); }
 static void setTrailsOn(bool on) { nvs::putBool("mc_ui", "trails", on); }
-// Map tools > Vector map (test).
+// Map tools > Vector map (test). Unfinished: on only in a -D MAP_VECTOR build,
+// off (and its switch gone) otherwise, whatever was saved.
+#ifdef MAP_VECTOR
 static bool vectorOn() { return nvs::getBool("mc_ui", "vector", false); }
+#else
+static bool vectorOn() { return false; }
+#endif
 static void setVectorOn(bool on) { nvs::putBool("mc_ui", "vector", on); }
 
 // Screen-lock PIN (Settings > Display > Screen PIN): digits, "" = none.

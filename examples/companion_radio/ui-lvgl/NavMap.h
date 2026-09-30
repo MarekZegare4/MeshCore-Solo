@@ -1028,6 +1028,7 @@ void UITask::navToolsPopup() {
   lv_obj_t* tsw = switchRow(g, "Hiking trails", "Marked routes in their colours", nullptr);
   if (lvport::trailsOn()) lv_obj_add_state(tsw, LV_STATE_CHECKED);
   lv_obj_add_event_cb(tsw, onTrails, LV_EVENT_VALUE_CHANGED, NULL);
+#ifdef MAP_VECTOR   // unfinished (LvglPort.h vectorOn)
   lv_obj_t* vsw = switchRow(g, "Vector map (test)", "Drawn on the device: trails, contours", nullptr);
   if (lvport::vectorOn()) lv_obj_add_state(vsw, LV_STATE_CHECKED);
   lv_obj_add_event_cb(vsw, onVectorMap, LV_EVENT_VALUE_CHANGED, NULL);
@@ -1035,6 +1036,7 @@ void UITask::navToolsPopup() {
   int nv = mapview::s_vpacks.count();
   snprintf(vr, sizeof(vr), nv ? "%d on the card" : "None - packs go in /vmap", nv);
   listRow(g, "Vector regions", vr, onNavTool, (void*)(uintptr_t)navmap::TL_REGIONS);
+#endif
 
   refreshNavTools();
 }
