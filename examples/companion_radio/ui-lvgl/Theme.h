@@ -66,16 +66,21 @@ namespace theme {
   };
   static const int ACCENT_COUNT = sizeof(ACCENTS) / sizeof(ACCENTS[0]);
   static int s_accent = 0;
+  // `fg` at `pct` % over `bg`, worked out once: an opaque fill in the colour
+  // a translucent one would blend to, without blending it every frame.
+  static uint32_t mix(uint32_t fg, uint32_t bg, uint32_t pct) {
+    uint32_t out = 0;
+    for (int sh = 0; sh <= 16; sh += 8) {
+      uint32_t c = (fg >> sh) & 0xFF, b = (bg >> sh) & 0xFF;
+      out |= ((c * pct + b * (100 - pct)) / 100) << sh;
+    }
+    return out;
+  }
   static void setAccent(int idx) {
     if (idx < 0 || idx >= ACCENT_COUNT) idx = 0;
     s_accent = idx;
     ACCENT = ACCENTS[idx].col;
-    uint32_t dim = 0;
-    for (int sh = 0; sh <= 16; sh += 8) {
-      uint32_t c = (ACCENT >> sh) & 0xFF, b = (BG >> sh) & 0xFF;
-      dim |= ((c * 42 + b * 58) / 100) << sh;
-    }
-    ACCENT_DIM = dim;
+    ACCENT_DIM = mix(ACCENT, BG, 42);
   }
 
   // Over LVGL's default theme, for every widget: a checked button is

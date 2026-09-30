@@ -181,9 +181,7 @@ static void wifiRow(lv_obj_t* body) {
   if (lvport::wifiAllowed()) lv_obj_add_state(sw, LV_STATE_CHECKED);
   lv_obj_add_event_cb(sw, onWifiAllowed, LV_EVENT_VALUE_CHANGED, NULL);
   lv_obj_t* row = lv_obj_get_parent(sw);
-  lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_set_style_bg_color(row, lv_color_hex(theme::SURFACE_2), LV_STATE_PRESSED);
-  lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_STATE_PRESSED);
+  rowPressable(row);
   lv_obj_add_event_cb(row, [](lv_event_t* e) {
     if (lv_event_get_target(e) == lv_event_get_current_target(e)) s_ui->showWifi();   // not the switch
   }, LV_EVENT_CLICKED, NULL);

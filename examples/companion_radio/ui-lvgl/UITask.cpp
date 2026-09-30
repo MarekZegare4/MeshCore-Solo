@@ -119,12 +119,20 @@ extern "C" EMSCRIPTEN_KEEPALIVE int sim_buzzer_get_volume() { return s_ui ? (int
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
+// A plain box in `bg`. One in the page colour is left unpainted: the screen
+// under it (or the popup panel) already is that colour, and filling it again
+// costs a full-area blend per frame. The screen and the status bar, which
+// something may scroll or slide under, are made opaque with styleOpaque().
 static void styleSurface(lv_obj_t* o, uint32_t bg) {
   lv_obj_set_style_bg_color(o, lv_color_hex(bg), 0);
-  lv_obj_set_style_bg_opa(o, LV_OPA_COVER, 0);
+  lv_obj_set_style_bg_opa(o, bg == theme::BG ? LV_OPA_TRANSP : LV_OPA_COVER, 0);
   lv_obj_set_style_border_width(o, 0, 0);
   lv_obj_set_style_radius(o, 0, 0);
   lv_obj_set_style_pad_all(o, 0, 0);
+}
+static void styleOpaque(lv_obj_t* o, uint32_t bg) {
+  styleSurface(o, bg);
+  lv_obj_set_style_bg_opa(o, LV_OPA_COVER, 0);
 }
 
 static lv_obj_t* label(lv_obj_t* parent, const char* text, const lv_font_t* font, uint32_t color) {
@@ -341,9 +349,24 @@ static lv_obj_t* group(lv_obj_t* parent, const char* title) {
   if (title) sectionTitle(parent, title);
   lv_obj_t* c = infoCard(parent);
   lv_obj_set_style_pad_hor(c, 0, 0);   // rows pad themselves: a pressed row lights edge to edge
-  lv_obj_set_style_clip_corner(c, true, 0);
   lv_obj_add_flag(c, LV_OBJ_FLAG_USER_1);
   return c;
+}
+
+// A row that lights up under the finger. In a group() the card clips its
+// corners while a row is held, so the first / last row's light is rounded
+// with it -- only then: clipping a card's corners costs a few ms every frame.
+static void groupPressClip(lv_event_t* e) {
+  lv_obj_t* card = lv_obj_get_parent((lv_obj_t*)lv_event_get_current_target(e));
+  if (isGroup(card)) lv_obj_set_style_clip_corner(card, lv_event_get_code(e) == LV_EVENT_PRESSED, 0);
+}
+static void rowPressable(lv_obj_t* row) {
+  lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_style_bg_color(row, lv_color_hex(theme::SURFACE_2), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_STATE_PRESSED);
+  lv_obj_add_event_cb(row, groupPressClip, LV_EVENT_PRESSED, NULL);
+  lv_obj_add_event_cb(row, groupPressClip, LV_EVENT_RELEASED, NULL);
+  lv_obj_add_event_cb(row, groupPressClip, LV_EVENT_PRESS_LOST, NULL);
 }
 
 static lv_obj_t* groupNote(lv_obj_t* parent, const char* text) {
@@ -362,11 +385,7 @@ static lv_obj_t* groupLine(lv_obj_t* card, bool tappable) {
   lv_obj_set_flex_flow(r, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(r, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_column(r, 8, 0);
-  if (tappable) {
-    lv_obj_add_flag(r, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_style_bg_color(r, lv_color_hex(theme::SURFACE_2), LV_STATE_PRESSED);
-    lv_obj_set_style_bg_opa(r, LV_OPA_COVER, LV_STATE_PRESSED);
-  }
+  if (tappable) rowPressable(r);
   return r;
 }
 
@@ -421,6 +440,20 @@ static lv_obj_t* settingRow(lv_obj_t* parent, const char* text, const char* hint
     lv_obj_align(h, LV_ALIGN_BOTTOM_LEFT, theme::PAD, -5);
   }
   return row;
+}
+
+// A slider on the right of a settingRow(). Its track is the theme's 20 %
+// accent tint worked out over the card, opaque: blended, it cost ~3 ms a frame.
+static lv_obj_t* rowSlider(lv_obj_t* row, int32_t min, int32_t max, int32_t v) {
+  lv_obj_t* sl = lv_slider_create(row);
+  lv_slider_set_range(sl, min, max);
+  lv_slider_set_value(sl, v, LV_ANIM_OFF);
+  lv_obj_set_size(sl, 150, 8);
+  lv_obj_set_style_margin_right(sl, 8, 0);
+  lv_obj_set_ext_click_area(sl, 14);
+  lv_obj_set_style_bg_color(sl, lv_color_hex(theme::mix(theme::ACCENT, theme::SURFACE, 20)), LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(sl, LV_OPA_COVER, LV_PART_MAIN);
+  return sl;
 }
 
 // Does something at once (Reboot, Delete ...): its text in `col`, no chevron.
@@ -1458,7 +1491,7 @@ void UITask::buildStatusBar() {
   lv_obj_set_style_text_align(tl, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_add_flag(_toast, LV_OBJ_FLAG_HIDDEN);
   lv_obj_t* bar = lv_obj_create(lv_layer_top());
-  styleSurface(bar, theme::BG);
+  styleOpaque(bar, theme::BG);
   lv_obj_remove_flag(bar, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_remove_flag(bar, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_set_size(bar, LV_PCT(100), theme::STATUS_H);
@@ -1788,7 +1821,7 @@ lv_obj_t* UITask::newScreen(const char* title, bool with_back) {
   for (lv_obj_t*& t : _map_tiles) t = nullptr;
   lv_obj_t* prev = _scr;
   lv_obj_t* scr = lv_obj_create(NULL);
-  styleSurface(scr, theme::BG);
+  styleOpaque(scr, theme::BG);
   lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
 
   int top = theme::STATUS_H;
@@ -1839,7 +1872,7 @@ lv_obj_t* UITask::newScreen(const char* title, bool with_back) {
   } else {
     lv_screen_load(scr);
     if (prev) lv_obj_delete_async(prev);   // this usually runs from one of its own widgets
-    if (prev && !same && !_asleep) anim::screenIn(scr, body, backward);
+    if (prev && !same && !_asleep) anim::screenIn(body, backward);
   }
   _fade_next = false;
   return body;
@@ -3568,26 +3601,14 @@ void UITask::schemaRow(lv_obj_t* card, int i) {
   const settings::Setting& st = settings::ALL[i];
   uint8_t v = settings::get(*_prefs, st);
   if (st.offset == offsetof(NodePrefs, buzzer_volume)) {   // a five-step slider, heard on release
-    lv_obj_t* row = settingRow(card, st.label, NULL);
-    lv_obj_t* sl = lv_slider_create(row);
-    lv_slider_set_range(sl, 0, 4);
-    lv_slider_set_value(sl, v, LV_ANIM_OFF);
-    lv_obj_set_size(sl, 150, 8);
-    lv_obj_set_style_margin_right(sl, 8, 0);
-    lv_obj_set_ext_click_area(sl, 14);
+    lv_obj_t* sl = rowSlider(settingRow(card, st.label, NULL), 0, 4, v);
     lv_obj_add_event_cb(sl, onVolumeSlider, LV_EVENT_RELEASED, NULL);
     return;
   }
   if (st.offset == offsetof(NodePrefs, display_brightness)) {   // a slider here instead of five steps
-    lv_obj_t* row = settingRow(card, st.label, NULL);
-    lv_obj_t* sl = lv_slider_create(row);
-    lv_slider_set_range(sl, 5, 100);
     uint8_t pct = _prefs->display_brightness_pct ? _prefs->display_brightness_pct
                                                  : (uint8_t)(_prefs->display_brightness * 25 > 5 ? _prefs->display_brightness * 25 : 5);
-    lv_slider_set_value(sl, pct, LV_ANIM_OFF);
-    lv_obj_set_size(sl, 150, 8);
-    lv_obj_set_style_margin_right(sl, 8, 0);
-    lv_obj_set_ext_click_area(sl, 14);
+    lv_obj_t* sl = rowSlider(settingRow(card, st.label, NULL), 5, 100, pct);
     lv_obj_add_event_cb(sl, onBrightnessSlider, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_add_event_cb(sl, onBrightnessSlider, LV_EVENT_RELEASED, NULL);
     return;
@@ -3692,9 +3713,7 @@ void UITask::settingsGroup(int i) {
       if (_core->gpsEnabled()) lv_obj_add_state(sw, LV_STATE_CHECKED);
       lv_obj_add_event_cb(sw, onGpsSwitch, LV_EVENT_VALUE_CHANGED, NULL);
       lv_obj_t* row = lv_obj_get_parent(sw);
-      lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
-      lv_obj_set_style_bg_color(row, lv_color_hex(theme::SURFACE_2), LV_STATE_PRESSED);
-      lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_STATE_PRESSED);
+      rowPressable(row);
       lv_obj_add_event_cb(row, [](lv_event_t* e) {
         if (lv_event_get_target(e) == lv_event_get_current_target(e)) onOpenGpsFromSettings(e);   // not the switch
       }, LV_EVENT_CLICKED, NULL);

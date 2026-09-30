@@ -124,9 +124,7 @@ void UITask::buildBot() {
     lv_obj_set_width(v, botcfg::isHour(r.kind) ? 60 : 150);   // fixed: LONG_DOT needs a width
     lv_obj_set_style_text_align(v, LV_TEXT_ALIGN_RIGHT, 0);
     label(row, LV_SYMBOL_RIGHT, THEME_FONT_SMALL, theme::TEXT_MUTED);
-    lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_style_bg_color(row, lv_color_hex(theme::SURFACE_2), LV_STATE_PRESSED);
-    lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_STATE_PRESSED);
+    rowPressable(row);
     lv_obj_add_event_cb(row, onBotRow, LV_EVENT_CLICKED, (void*)(uintptr_t)i);
   }
 }

@@ -259,7 +259,7 @@ static lv_obj_t* mapButton(lv_obj_t* parent, const char* text, lv_event_cb_t cb)
   lv_obj_set_style_radius(b, theme::RADIUS, 0);
   lv_obj_set_style_shadow_width(b, 0, 0);
   lv_obj_set_style_bg_color(b, lv_color_hex(theme::BG), 0);
-  lv_obj_set_style_bg_opa(b, LV_OPA_80, 0);
+  lv_obj_set_style_bg_opa(b, LV_OPA_COVER, 0);   // opaque: blended over the tiles, each cost ~1.6 ms a frame
   lv_obj_set_style_bg_color(b, lv_color_hex(theme::SURFACE_2), LV_STATE_PRESSED);
   lv_obj_set_style_border_color(b, lv_color_hex(theme::SURFACE_2), 0);
   lv_obj_set_style_border_width(b, 1, 0);
@@ -271,7 +271,7 @@ static lv_obj_t* mapButton(lv_obj_t* parent, const char* text, lv_event_cb_t cb)
 static lv_obj_t* mapPill(lv_obj_t* parent, const char* text) {
   lv_obj_t* l = label(parent, text, THEME_FONT_SMALL, theme::TEXT);
   lv_obj_set_style_bg_color(l, lv_color_hex(theme::BG), 0);
-  lv_obj_set_style_bg_opa(l, LV_OPA_70, 0);
+  lv_obj_set_style_bg_opa(l, LV_OPA_COVER, 0);
   lv_obj_set_style_pad_hor(l, 5, 0);
   lv_obj_set_style_pad_ver(l, 1, 0);
   lv_obj_set_style_radius(l, 4, 0);
@@ -344,6 +344,7 @@ void UITask::buildMap() {
   lv_obj_set_style_pad_all(body, 0, 0);
   lv_obj_remove_flag(body, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_bg_color(body, lv_color_hex(0x1A1A1E), 0);   // unloaded / missing tiles
+  lv_obj_set_style_bg_opa(body, LV_OPA_COVER, 0);
   lv_obj_add_event_cb(body, mapview::drawGrid, LV_EVENT_DRAW_MAIN_END, &mapview::s_grid);
   lv_obj_add_flag(body, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_add_event_cb(body, onMapPress, LV_EVENT_PRESSED, NULL);
@@ -426,7 +427,7 @@ void UITask::buildMap() {
   lv_obj_remove_flag(sc, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_size(sc, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
   lv_obj_set_style_bg_color(sc, lv_color_hex(theme::BG), 0);
-  lv_obj_set_style_bg_opa(sc, LV_OPA_70, 0);
+  lv_obj_set_style_bg_opa(sc, LV_OPA_COVER, 0);
   lv_obj_set_style_radius(sc, 4, 0);
   lv_obj_set_style_pad_hor(sc, 5, 0);
   lv_obj_set_style_pad_ver(sc, 3, 0);

@@ -167,7 +167,7 @@ void UITask::buildNavControls(lv_obj_t* body) {
   lv_obj_set_style_radius(_nav_bar, 0, 0);
   lv_obj_set_style_shadow_width(_nav_bar, 0, 0);
   lv_obj_set_style_bg_color(_nav_bar, lv_color_hex(theme::BG), 0);
-  lv_obj_set_style_bg_opa(_nav_bar, LV_OPA_90, 0);
+  lv_obj_set_style_bg_opa(_nav_bar, LV_OPA_COVER, 0);   // opaque, as the map buttons
   lv_obj_set_style_bg_color(_nav_bar, lv_color_hex(theme::SURFACE_2), LV_STATE_PRESSED);
   lv_obj_set_style_border_side(_nav_bar, LV_BORDER_SIDE_TOP, 0);
   lv_obj_set_style_border_color(_nav_bar, lv_color_hex(theme::SURFACE_2), 0);

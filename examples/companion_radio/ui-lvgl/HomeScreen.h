@@ -600,7 +600,7 @@ void UITask::buildHomeMap(lv_obj_t* box) {
   s_fitted = false;
   s_hint = label(s_area, "", THEME_FONT_SMALL, theme::TEXT);
   lv_obj_set_style_bg_color(s_hint, lv_color_hex(theme::BG), 0);
-  lv_obj_set_style_bg_opa(s_hint, LV_OPA_80, 0);
+  lv_obj_set_style_bg_opa(s_hint, LV_OPA_COVER, 0);   // opaque over the tiles, as the map's pills
   lv_obj_set_style_radius(s_hint, theme::RADIUS_SM, 0);
   lv_obj_set_style_pad_hor(s_hint, 8, 0);
   lv_obj_set_style_pad_ver(s_hint, 4, 0);
@@ -609,7 +609,7 @@ void UITask::buildHomeMap(lv_obj_t* box) {
   lv_obj_add_flag(s_hint, LV_OBJ_FLAG_HIDDEN);
   s_caption = label(s_area, "", THEME_FONT_SMALL, theme::TEXT);   // who's on it
   lv_obj_set_style_bg_color(s_caption, lv_color_hex(theme::BG), 0);
-  lv_obj_set_style_bg_opa(s_caption, LV_OPA_80, 0);
+  lv_obj_set_style_bg_opa(s_caption, LV_OPA_COVER, 0);
   lv_obj_set_style_radius(s_caption, theme::RADIUS_SM, 0);
   lv_obj_set_style_pad_hor(s_caption, 6, 0);
   lv_obj_set_style_pad_ver(s_caption, 2, 0);

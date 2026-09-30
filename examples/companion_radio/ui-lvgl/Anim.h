@@ -47,19 +47,13 @@ namespace anim {
     if (panel) rise(panel);
   }
 
-  // A new screen emerges: a cover in the background colour fades away over
-  // it while its content drifts a few pixels into place (up going deeper,
-  // down coming back). A plain fill blended on top -- far cheaper than
-  // fading the screen itself (a full-screen layer) or sliding two screens.
+  // A fading cover's end: it goes.
   static void coverDone(lv_anim_t* a) { lv_obj_delete((lv_obj_t*)a->var); }
-  static void screenIn(lv_obj_t* scr, lv_obj_t* body, bool back) {
-    lv_obj_t* cover = lv_obj_create(scr);
-    lv_obj_remove_style_all(cover);
-    lv_obj_remove_flag(cover, LV_OBJ_FLAG_CLICKABLE);   // taps go through to the screen
-    lv_obj_add_flag(cover, LV_OBJ_FLAG_IGNORE_LAYOUT);
-    lv_obj_set_size(cover, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_style_bg_color(cover, lv_obj_get_style_bg_color(scr, LV_PART_MAIN), 0);
-    run(cover, setBgOpa, LV_OPA_COVER, LV_OPA_TRANSP, SCREEN_MS, coverDone);
+
+  // A new screen emerges: its content drifts a few pixels into place (up
+  // going deeper, down coming back). No fade: a cover fading over the screen
+  // blended a full-screen fill into every frame of it (~7 ms each on the L2).
+  static void screenIn(lv_obj_t* body, bool back) {
     if (body) run(body, setTy, back ? -6 : 6, 0, SCREEN_MS);
   }
 
