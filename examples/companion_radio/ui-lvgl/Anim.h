@@ -40,9 +40,9 @@ namespace anim {
   }
 
   // A popup: the dimmed backdrop fades up to `dim`, its first child (the
-  // panel) rises.
-  static void popup(lv_obj_t* overlay, lv_opa_t dim = LV_OPA_60) {
-    run(overlay, setBgOpa, LV_OPA_TRANSP, dim, POP_MS);
+  // panel) rises; `done` runs once it's up.
+  static void popup(lv_obj_t* overlay, lv_opa_t dim = LV_OPA_60, lv_anim_completed_cb_t done = nullptr) {
+    run(overlay, setBgOpa, LV_OPA_TRANSP, dim, POP_MS, done);
     lv_obj_t* panel = lv_obj_get_child(overlay, 0);
     if (panel) rise(panel);
   }

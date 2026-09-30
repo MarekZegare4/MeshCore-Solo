@@ -53,6 +53,9 @@
 // Spans: message text with @[nick] mentions picked out (UITask.cpp msgText).
 #define LV_USE_SPAN             1
 
+// Snapshots: the screen under an open popup, frozen dimmed (UITask.cpp popupFreeze).
+#define LV_USE_SNAPSHOT         1
+
 #define LV_USE_THEME_DEFAULT    1
 #define LV_THEME_DEFAULT_DARK   1
 

@@ -11,6 +11,7 @@
   SET_LOOP_TASK_STACK_SIZE(16 * 1024);
 #endif
 #include <new>
+#include <src/core/lv_obj_event_private.h>   // lv_cover_check_info_t (freeze::imgCovers)
 #include <stdarg.h>
 #include <sys/stat.h>
 
@@ -220,6 +221,100 @@ static lv_obj_t* dimOverlay(lv_obj_t* parent) {
   return o;
 }
 
+// The screen under an open popup, frozen: once the dim is up, the screen is
+// drawn once into an image, darkened as the dim layer darkens it, and shown
+// opaque on top of the screen with the dim layer cleared -- LVGL then draws
+// nothing below it. Live, the screen plus a full-screen blend under the popup
+// cost ~28 ms a frame. One popup at a time; the image goes with its popup, and
+// the popup dims live again if its screen goes first.
+namespace freeze {
+  static lv_obj_t* s_img = nullptr;      // the frozen screen, on that screen
+  static lv_obj_t* s_owner = nullptr;    // the popup's dim layer
+  static lv_obj_t* s_strip = nullptr;    // the status bar's dim (a popup on the top layer)
+  static lv_timer_t* s_retry = nullptr;  // waiting for the screen to stop moving
+
+  static void imgDeleted(lv_event_t* e) {
+    lv_draw_buf_destroy((lv_draw_buf_t*)lv_event_get_user_data(e));
+    s_img = nullptr;
+    if (s_owner) {   // the screen went, the popup stays
+      if (s_strip) lv_obj_delete(s_strip);
+      lv_obj_set_style_bg_opa(s_owner, LV_OPA_60, 0);
+      s_owner = s_strip = nullptr;
+    }
+  }
+  static void ownerDeleted(lv_event_t* e) {
+    if (s_retry && lv_timer_get_user_data(s_retry) == lv_event_get_target(e)) { lv_timer_delete(s_retry); s_retry = nullptr; }
+    if (s_owner != lv_event_get_target(e)) return;
+    s_owner = s_strip = nullptr;
+    if (s_img) lv_obj_delete(s_img);
+  }
+  // The image hides all under it: LVGL then starts drawing from it. Its own
+  // check says no, an image widget having no background.
+  static void imgCovers(lv_event_t* e) {
+    lv_cover_check_info_t* info = (lv_cover_check_info_t*)lv_event_get_param(e);
+    lv_area_t a;
+    lv_obj_get_coords((lv_obj_t*)lv_event_get_current_target(e), &a);
+    const lv_area_t* r = info->area;
+    if (info->res != LV_COVER_RES_MASKED && r->x1 >= a.x1 && r->y1 >= a.y1 && r->x2 <= a.x2 && r->y2 <= a.y2)
+      info->res = LV_COVER_RES_COVER;
+  }
+  static bool moving(lv_obj_t* scr) {   // a screen still sliding / fading in
+    if (lv_display_get_screen_prev(NULL)) return true;
+    for (uint32_t i = 0; i < lv_obj_get_child_count(scr); i++)
+      if (lv_anim_get(lv_obj_get_child(scr, i), NULL)) return true;
+    return false;
+  }
+  static void take(lv_obj_t* overlay);
+  static void retry(lv_timer_t* t) {
+    s_retry = nullptr;
+    take((lv_obj_t*)lv_timer_get_user_data(t));
+  }
+  static void take(lv_obj_t* overlay) {
+    if (s_img) return;   // a popup over a popup: dimmed live
+    lv_obj_t* scr = lv_obj_get_screen(overlay);
+    bool top = scr == lv_layer_top();
+    if (top) scr = lv_screen_active();
+    if (moving(scr)) {
+      s_retry = lv_timer_create(retry, 60, overlay);
+      lv_timer_set_repeat_count(s_retry, 1);
+      return;
+    }
+    if (!top) lv_obj_add_flag(overlay, LV_OBJ_FLAG_HIDDEN);
+    lv_draw_buf_t* buf = lv_snapshot_take(scr, LV_COLOR_FORMAT_RGB565);
+    if (!top) lv_obj_remove_flag(overlay, LV_OBJ_FLAG_HIDDEN);
+    if (!buf) return;   // no memory: dimmed live
+    const uint32_t keep = 256 - LV_OPA_60;   // what's left under 60 % black
+    for (uint32_t y = 0; y < buf->header.h; y++) {
+      uint16_t* p = (uint16_t*)(buf->data + y * buf->header.stride);
+      for (uint32_t x = 0; x < buf->header.w; x++) {
+        uint32_t c = p[x];
+        p[x] = (uint16_t)(((((c >> 11) * keep) >> 8) << 11) | (((((c >> 5) & 0x3F) * keep) >> 8) << 5) |
+                          (((c & 0x1F) * keep) >> 8));
+      }
+    }
+    s_img = lv_image_create(scr);
+    lv_image_set_src(s_img, buf);
+    lv_obj_add_flag(s_img, LV_OBJ_FLAG_IGNORE_LAYOUT);
+    lv_obj_remove_flag(s_img, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_pos(s_img, 0, 0);
+    lv_obj_add_event_cb(s_img, imgDeleted, LV_EVENT_DELETE, buf);
+    lv_obj_add_event_cb(s_img, imgCovers, LV_EVENT_COVER_CHECK, NULL);
+    if (!top) lv_obj_move_foreground(overlay);   // the image under the popup, over the rest
+    s_owner = overlay;
+    lv_obj_set_style_bg_opa(overlay, LV_OPA_TRANSP, 0);
+    if (top) {   // the status bar, on the top layer too, stays dimmed
+      s_strip = lv_obj_create(overlay);
+      lv_obj_remove_style_all(s_strip);
+      lv_obj_remove_flag(s_strip, LV_OBJ_FLAG_CLICKABLE);
+      lv_obj_add_flag(s_strip, LV_OBJ_FLAG_IGNORE_LAYOUT);
+      lv_obj_set_size(s_strip, LV_PCT(100), theme::STATUS_H);
+      lv_obj_set_style_bg_color(s_strip, lv_color_hex(0x000000), 0);
+      lv_obj_set_style_bg_opa(s_strip, LV_OPA_60, 0);
+    }
+  }
+  static void onDimUp(lv_anim_t* a) { take((lv_obj_t*)a->var); }
+}
+
 // A popup: the dimmed layer (into `overlay`, to close it by) and its panel --
 // the page colour, the accent hairline, a flex column -- rising into view.
 // POP_FIT: as tall as its content, centred below the status bar, scrolling
@@ -256,7 +351,12 @@ static lv_obj_t* popupOpen(lv_obj_t* parent, PopFit fit, lv_obj_t*& overlay, int
   lv_obj_set_style_pad_all(panel, theme::PAD, 0);
   lv_obj_set_style_pad_row(panel, 4, 0);
   lv_obj_set_flex_flow(panel, LV_FLEX_FLOW_COLUMN);
-  anim::popup(overlay, fit == POP_BOTTOM ? LV_OPA_TRANSP : LV_OPA_60);
+  if (fit == POP_BOTTOM) {
+    anim::popup(overlay, LV_OPA_TRANSP);   // over a live screen
+  } else {
+    lv_obj_add_event_cb(overlay, freeze::ownerDeleted, LV_EVENT_DELETE, NULL);
+    anim::popup(overlay, LV_OPA_60, freeze::onDimUp);
+  }
   return panel;
 }
 
