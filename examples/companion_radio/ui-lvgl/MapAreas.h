@@ -28,6 +28,7 @@ static lv_obj_t* s_info = nullptr;
 static lv_obj_t* s_zoom = nullptr;
 static lv_obj_t* s_trails_btn = nullptr;
 static int       s_show = -1;            // area outlined while its sheet is open
+static bool      s_drawn = false;        // the layer's last draw put something on the map
 static bool      s_preview = false;      // the map is framing it; the view before:
 static double    s_prev_cx, s_prev_cy;
 static int       s_prev_z;
@@ -91,7 +92,8 @@ static void onRenameKb(lv_event_t* e) { s_ui->mapAreaRenameDone(lv_event_get_cod
 
 // LV_EVENT_DRAW_MAIN of the layer: outlines, the frame and the dim outside it.
 static void drawLayer(lv_event_t* e) {
-  if (!s_sel && s_show < 0) return;
+  s_drawn = s_sel || s_show >= 0;
+  if (!s_drawn) return;
   lv_obj_t* o = (lv_obj_t*)lv_event_get_target(e);
   lv_layer_t* layer = lv_event_get_layer(e);
   lv_area_t a;
@@ -291,7 +293,7 @@ void UITask::areaHandleDrag(int corner, int dx, int dy) {
 void UITask::areaLayout() {
   using namespace areas;
   if (!s_layer || !_map_area) return;
-  lv_obj_invalidate(s_layer);
+  if (s_sel || s_show >= 0 || s_drawn) lv_obj_invalidate(s_layer);   // not a full-map redraw each refresh for nothing
   if (!s_sel) return;
   double scale = (double)(1 << _map_z) * mapview::TILE_PX;
   double xs[2] = { s_fx0 * scale - mapview::s_left, s_fx1 * scale - mapview::s_left };

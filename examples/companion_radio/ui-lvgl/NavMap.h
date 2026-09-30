@@ -280,7 +280,16 @@ static void layoutNavTrail(double scale) {
   using namespace navmap;
   s_pts_n = 0;
   if (!s_trail) return;
-  lv_obj_invalidate(s_trail);
+  {   // redrawn when the view or the trail changed, not on every map refresh
+    static double v_left = NAN, v_top, v_scale;
+    static int v_n;
+    static uint32_t v_gen, v_seq;
+    if (v_left != mapview::s_left || v_top != mapview::s_top || v_scale != scale || v_n != s_sync_n || v_gen != s_sync_gen || v_seq != s_sync_seq) {
+      v_left = mapview::s_left; v_top = mapview::s_top; v_scale = scale;
+      v_n = s_sync_n; v_gen = s_sync_gen; v_seq = s_sync_seq;
+      lv_obj_invalidate(s_trail);
+    }
+  }
   int n = s_sync_n;
   if (!s_pts || n < 2) return;
   lv_area_t a;
@@ -393,12 +402,12 @@ void UITask::refreshNavBar() {
   bool pos = navCurrentTarget(tlat, tlon, name, sizeof(name), person, set);
   if (!set) {
     setText(_nav_title, "No target");
-    lv_obj_set_style_text_color(_nav_title, lv_color_hex(theme::TEXT_MUTED), 0);
+    setTextColor(_nav_title, theme::TEXT_MUTED);
     setText(_nav_info, "Tap here to pick a target, or hold the map on a spot");
     lv_obj_add_flag(_nav_clear, LV_OBJ_FLAG_HIDDEN);
     return;
   }
-  lv_obj_set_style_text_color(_nav_title, lv_color_hex(theme::ACCENT), 0);
+  setTextColor(_nav_title, theme::ACCENT);
   lv_obj_remove_flag(_nav_clear, LV_OBJ_FLAG_HIDDEN);
   setTextFmt(_nav_title, "%s %s", navmap::s_tb.active() ? LV_SYMBOL_LOOP : person ? UI_SYMBOL_USERS : UI_SYMBOL_FLAG,
                         name);
@@ -1039,19 +1048,19 @@ void UITask::refreshNavTools() {
   navmap::fmtDuration(dur, sizeof(dur), ts.elapsedSeconds());
   const char* state = !ts.isActive() ? (ts.empty() ? "Not recording" : "Stopped")
                     : ts.isPaused() ? "Paused (standing still)" : "Recording";
-  if (ts.empty()) lv_label_set_text(_nav_trail_lbl, state);
-  else lv_label_set_text_fmt(_nav_trail_lbl, "%s  -  %s, %s, %d points", state, dist, dur, ts.count());
-  lv_label_set_text(_nav_trail_btn, ts.isActive() ? LV_SYMBOL_STOP " Stop" : LV_SYMBOL_PLAY " Record");
-  lv_label_set_text(_nav_tb_btn, navmap::s_tb.active() ? LV_SYMBOL_STOP " Stop back" : LV_SYMBOL_LOOP " Track back");
+  if (ts.empty()) setText(_nav_trail_lbl, state);
+  else setTextFmt(_nav_trail_lbl, "%s  -  %s, %s, %d points", state, dist, dur, ts.count());
+  setText(_nav_trail_btn, ts.isActive() ? LV_SYMBOL_STOP " Stop" : LV_SYMBOL_PLAY " Record");
+  setText(_nav_tb_btn, navmap::s_tb.active() ? LV_SYMBOL_STOP " Stop back" : LV_SYMBOL_LOOP " Track back");
 
   if (_prefs->loc_share_enabled) {
     char left[12];
     navmap::fmtDuration(left, sizeof(left), _core->live_share.remainingSecs());
-    lv_label_set_text_fmt(_nav_share_lbl, "Sharing your position  -  %s left", left);
+    setTextFmt(_nav_share_lbl, "Sharing your position  -  %s left", left);
   } else {
-    lv_label_set_text(_nav_share_lbl, "Off. Sends your position while you move, then stops by itself.");
+    setText(_nav_share_lbl, "Off. Sends your position while you move, then stops by itself.");
   }
-  lv_label_set_text(_nav_share_btn, _prefs->loc_share_enabled ? LV_SYMBOL_STOP " Stop sharing" : LV_SYMBOL_PLAY " Share live");
+  setText(_nav_share_btn, _prefs->loc_share_enabled ? LV_SYMBOL_STOP " Stop sharing" : LV_SYMBOL_PLAY " Share live");
 }
 
 void UITask::navSetShareTarget(int sel) {

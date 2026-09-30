@@ -72,6 +72,14 @@ struct Grid {
   bool tiled = false;         // every visible cell holds a tile: grid and fill are under them
 };
 static Grid s_grid;           // the main map's
+
+// The view moved (or the step changed): the grid with it, and the area
+// redrawn -- not when a refresh finds it where it was.
+static void setGrid(lv_obj_t* area, Grid& g, double left, double top, double step_px) {
+  if (g.left == left && g.top == top && g.step_px == step_px) return;
+  g.left = left; g.top = top; g.step_px = step_px;
+  lv_obj_invalidate(area);
+}
 static lv_obj_t* s_scale_bar = nullptr;
 static lv_obj_t* s_scale_lbl = nullptr;
 
@@ -280,10 +288,7 @@ static void onMapMarker(lv_event_t* e) {
 
 // The centre-on-me button in the accent colour while the map follows you.
 static void followShown(lv_obj_t* btn, bool on) {
-  if (!btn) return;
-  lv_obj_t* l = lv_obj_get_child(btn, 0);
-  lv_color_t c = lv_color_hex(on ? theme::ACCENT : theme::TEXT);
-  if (!lv_color_eq(lv_obj_get_style_text_color(l, LV_PART_MAIN), c)) lv_obj_set_style_text_color(l, c, 0);
+  if (btn) setTextColor(lv_obj_get_child(btn, 0), on ? theme::ACCENT : theme::TEXT);
 }
 
 static lv_obj_t* mapButton(lv_obj_t* parent, const char* text, lv_event_cb_t cb) {
@@ -505,12 +510,11 @@ void UITask::layoutMap() {
   {   // the grid under the tiles, the scale bar
     char sl[16];
     double lat = atan(sinh(M_PI * (1 - 2 * _map_cy / (double)(1 << _map_z)))) * 180.0 / M_PI;
-    mapview::s_grid = { left, top, mapview::gridStep(_map_z, lat, _prefs && _prefs->units_imperial, 56, sl, sizeof(sl)) };
+    mapview::setGrid(_map_area, mapview::s_grid, left, top, mapview::gridStep(_map_z, lat, _prefs && _prefs->units_imperial, 56, sl, sizeof(sl)));
     if (mapview::s_scale_lbl) {
       setText(mapview::s_scale_lbl, sl);
       lv_obj_set_width(mapview::s_scale_bar, (int)lround(mapview::s_grid.step_px));
     }
-    lv_obj_invalidate(_map_area);
   }
   int tx0 = (int)floor(left / mapview::TILE_PX), ty0 = (int)floor(top / mapview::TILE_PX);
   int n = 1 << _map_z;

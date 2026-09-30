@@ -721,8 +721,7 @@ void UITask::homeMapLayout() {
   int shown = 0;
   char sl[16];
   double lat = atan(sinh(M_PI * (1 - 2 * s_cy / (double)n))) * 180.0 / M_PI;
-  s_grid = { left, top, mapview::gridStep(s_z, lat, _prefs && _prefs->units_imperial, 48, sl, sizeof(sl)) };
-  lv_obj_invalidate(s_area);
+  mapview::setGrid(s_area, s_grid, left, top, mapview::gridStep(s_z, lat, _prefs && _prefs->units_imperial, 48, sl, sizeof(sl)));
   bool tiled = true;
   for (int j = 0; j < ROWS; j++) {
     for (int i = 0; i < COLS; i++) {

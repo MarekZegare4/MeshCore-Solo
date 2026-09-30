@@ -118,8 +118,12 @@ static void clear() {
 // Places the labels for a view (world px of its top-left at zoom z, size;
 // `bottom` px taken by a bar along the bottom).
 static void layout(double left, double top, int w, int h, int z, bool on, int bottom) {
+  int had = s_n;
   clear();
-  if (!on || z < 10 || !s_layer || !s_placed || !s_cand) { if (s_layer) lv_obj_invalidate(s_layer); return; }
+  if (!on || z < 10 || !s_layer || !s_placed || !s_cand) {   // none: those shown go (none shown, nothing to redraw)
+    if (s_layer && had) lv_obj_invalidate(s_layer);
+    return;
+  }
   int dz = z >= 14 ? 14 : z >= 12 ? 12 : 10, k = z - dz;
   double span = (double)(TILE_PX << k);   // a data tile, in px at zoom z
   int x0 = (int)floor(left / span), x1 = (int)floor((left + w) / span);

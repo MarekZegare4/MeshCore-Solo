@@ -12,6 +12,7 @@
 #endif
 #include <new>
 #include <src/core/lv_obj_event_private.h>   // lv_cover_check_info_t (coversOwnArea)
+#include <src/widgets/label/lv_label_private.h>   // lv_label_t (labelShows)
 #include <stdarg.h>
 #include <sys/stat.h>
 
@@ -170,13 +171,31 @@ static lv_obj_t* label(lv_obj_t* parent, const char* text, const lv_font_t* font
   lv_obj_set_style_text_color(l, lv_color_hex(color), 0);
   return l;
 }
+// Whether label `l` holds `text`. A LV_LABEL_LONG_DOT one that's cut short
+// has the "..." written into its own copy of the text, the bytes they cover
+// kept aside (lv_label_set_dots): it's read back past them.
+static bool labelShows(lv_obj_t* l, const char* text) {
+  const lv_label_t* lb = (const lv_label_t*)l;
+  const char* cur = lb->text;
+  if (!cur) return false;
+  uint32_t d = lb->dot_begin;
+  if (d == 0xFFFFFFFF || lb->static_txt) return strcmp(cur, text) == 0;   // no dots (lv_label.c LV_LABEL_DOT_BEGIN_INV)
+  if (strncmp(cur, text, d) != 0) return false;
+  size_t k = strnlen(lb->dot, sizeof(lb->dot));   // the bytes under the dots
+  if (strncmp(lb->dot, text + d, k) != 0) return false;
+  return k < sizeof(lb->dot) ? text[d + k] == '\0' : strcmp(cur + d + k, text + d + k) == 0;
+}
 // A label's text, set only when it differs: LVGL redraws a label on every
 // set_text, the same text or not, and the refreshes that run every second
 // mostly write back what's already there.
 static void setText(lv_obj_t* l, const char* text) {
-  const char* cur = lv_label_get_text(l);
-  if (cur && strcmp(cur, text) == 0) return;
+  if (labelShows(l, text)) return;
   lv_label_set_text(l, text);
+}
+// The same for a text colour: LVGL restyles, and redraws, on every set.
+static void setTextColor(lv_obj_t* l, uint32_t color) {
+  lv_color_t c = lv_color_hex(color);
+  if (!lv_color_eq(lv_obj_get_style_text_color(l, LV_PART_MAIN), c)) lv_obj_set_style_text_color(l, c, 0);
 }
 static void setTextFmt(lv_obj_t* l, const char* fmt, ...) __attribute__((format(printf, 2, 3)));
 static void setTextFmt(lv_obj_t* l, const char* fmt, ...) {
@@ -841,6 +860,16 @@ static lv_obj_t* textField(lv_obj_t* parent, const char* placeholder = NULL) {
   lv_obj_set_style_border_color(ta, lv_color_hex(theme::ACCENT), LV_PART_CURSOR | LV_STATE_FOCUSED);
   lv_obj_set_style_border_width(ta, 2, LV_PART_CURSOR | LV_STATE_FOCUSED);
   return ta;
+}
+// A field's cursor shown (FOCUSED, blinking) or not. LVGL starts and stops
+// the blink only as the cursor moves, so it's nudged here: left running on a
+// field without focus, it redraws the field every 400 ms for nothing.
+// (lv_keyboard_set_textarea() focuses the field it's given.)
+static void fieldFocus(lv_obj_t* ta, bool on) {
+  if (!ta) return;
+  if (on) lv_obj_add_state(ta, LV_STATE_FOCUSED);
+  else lv_obj_remove_state(ta, LV_STATE_FOCUSED);
+  lv_textarea_set_cursor_pos(ta, lv_textarea_get_cursor_pos(ta));
 }
 
 // The primary action of a screen or popup: full amber, dark text (Theme.h);
@@ -1857,6 +1886,17 @@ void UITask::buildStatusBar() {
   refreshStatusBar();
 }
 
+// lv_obj_align_to(o, base, LV_ALIGN_OUT_LEFT_MID, dx, 0), `base` a sibling,
+// for what's refreshed every second: LVGL restyles the box on every call, so
+// it redraws moved or not -- here it's only moved.
+static void placeLeftOf(lv_obj_t* o, lv_obj_t* base, int32_t dx) {
+  lv_obj_update_layout(o);
+  int32_t x = lv_obj_get_x(base) - lv_obj_get_width(o) + dx;
+  int32_t y = lv_obj_get_y(base) + (lv_obj_get_height(base) - lv_obj_get_height(o)) / 2;
+  if (lv_obj_get_style_align(o, LV_PART_MAIN) != LV_ALIGN_TOP_LEFT || lv_obj_get_x(o) != x || lv_obj_get_y(o) != y)
+    lv_obj_align_to(o, base, LV_ALIGN_OUT_LEFT_MID, dx, 0);
+}
+
 void UITask::refreshStatusBar() {
   if (!_status_time) return;
   struct tm ti;
@@ -1884,7 +1924,7 @@ void UITask::refreshStatusBar() {
   lv_obj_t* left_of = _status_batt;   // the icons pack up to this
   if (_board->isExternalPowered()) {
     lv_obj_remove_flag(_status_chg, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_align_to(_status_chg, _status_batt, LV_ALIGN_OUT_LEFT_MID, -2, 0);
+    placeLeftOf(_status_chg, _status_batt, -2);
     left_of = _status_chg;
   } else lv_obj_add_flag(_status_chg, LV_OBJ_FLAG_HIDDEN);
 
@@ -1921,7 +1961,7 @@ void UITask::refreshStatusBar() {
     for (int i = n - 1; i >= 0; i--)   // the icon font gives each the same size and cell
       label(_status_icons, icons[i].sym, THEME_FONT_ICONS, icons[i].col);
   }
-  lv_obj_align_to(_status_icons, left_of, LV_ALIGN_OUT_LEFT_MID, -5, 0);
+  placeLeftOf(_status_icons, left_of, -5);
 }
 
 void UITask::setGps(bool on) {
@@ -3131,10 +3171,10 @@ void UITask::setKeyboardVisible(bool show) {
   if (show == !lv_obj_has_flag(_keyboard, LV_OBJ_FLAG_HIDDEN)) return;
   if (show) {
     lv_obj_remove_flag(_keyboard, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_add_state(_compose_ta, LV_STATE_FOCUSED);
+    fieldFocus(_compose_ta, true);
   } else {
     lv_obj_add_flag(_keyboard, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_remove_state(_compose_ta, LV_STATE_FOCUSED);
+    fieldFocus(_compose_ta, false);
   }
   if (_header && _body) {
     int top = theme::STATUS_H + (show ? 0 : lv_obj_get_height(_header));
@@ -3221,6 +3261,7 @@ void UITask::buildThread() {
     _keyboard = kb::create(body, _prefs);   // phone-style, scripts from prefs, hold for accents (Keyboard.h)
     lv_obj_set_size(_keyboard, LV_PCT(100), 124);
     lv_keyboard_set_textarea(_keyboard, _compose_ta);
+    fieldFocus(_compose_ta, false);   // until the keyboard is up
     lv_obj_add_event_cb(_keyboard, onKeyboard, LV_EVENT_READY, _keyboard);
     lv_obj_add_event_cb(_keyboard, onKeyboard, LV_EVENT_CANCEL, _keyboard);
     lv_obj_add_flag(_keyboard, LV_OBJ_FLAG_HIDDEN);

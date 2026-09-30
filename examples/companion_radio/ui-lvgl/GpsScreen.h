@@ -325,13 +325,13 @@ void UITask::refreshGps() {
   bool fix = false;
   if (!g) {
     setText(s_status, "Not available");
-    lv_obj_set_style_text_color(s_status, lv_color_hex(theme::TEXT_MUTED), 0);
+    setTextColor(s_status, theme::TEXT_MUTED);
   } else if (off) {
     setText(s_status, "GPS is off");
-    lv_obj_set_style_text_color(s_status, lv_color_hex(theme::TEXT_MUTED), 0);
+    setTextColor(s_status, theme::TEXT_MUTED);
   } else if (!data) {
     setText(s_status, "No data");
-    lv_obj_set_style_text_color(s_status, lv_color_hex(theme::FAIL), 0);
+    setTextColor(s_status, theme::FAIL);
 #if defined(SEEED_WIO_TRACKER_L2)
     snprintf(used, sizeof(used), "Nothing from the receiver (%lu B)", (unsigned long)gps.rxChars());
 #else
@@ -343,10 +343,10 @@ void UITask::refreshGps() {
     fix = g->hasFix();
     if (fix) {
       setText(s_status, g->fix_mode == 2 ? "2D fix" : "3D fix");
-      lv_obj_set_style_text_color(s_status, lv_color_hex(theme::OK), 0);
+      setTextColor(s_status, theme::OK);
     } else {
       setText(s_status, "Searching");
-      lv_obj_set_style_text_color(s_status, lv_color_hex(theme::ACCENT), 0);
+      setTextColor(s_status, theme::ACCENT);
     }
     snprintf(used, sizeof(used), "%d of %d used", fix ? (used_n ? used_n : g->sats_used) : 0, s_n);
     snprintf(inview, sizeof(inview), "%d heard", tracked);

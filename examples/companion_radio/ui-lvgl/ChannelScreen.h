@@ -262,10 +262,10 @@ void UITask::channelEditHex(bool hex) {
 void UITask::channelEditField(lv_obj_t* ta) {
   using namespace chanview;
   if (!s_kb) return;
-  lv_obj_remove_state(s_name, LV_STATE_FOCUSED);
-  lv_obj_remove_state(s_secret, LV_STATE_FOCUSED);
-  lv_obj_add_state(ta, LV_STATE_FOCUSED);   // draws the cursor
+  fieldFocus(s_name, false);
+  fieldFocus(s_secret, false);
   lv_keyboard_set_textarea(s_kb, ta);
+  fieldFocus(ta, true);
   if (lv_obj_has_flag(s_kb, LV_OBJ_FLAG_HIDDEN)) {
     lv_obj_remove_flag(s_kb, LV_OBJ_FLAG_HIDDEN);
     if (_body) lv_obj_set_height(_body, lv_obj_get_height(_body) - lv_obj_get_height(s_kb));
@@ -278,8 +278,8 @@ void UITask::channelEditKbHide() {
   using namespace chanview;
   if (!s_kb || lv_obj_has_flag(s_kb, LV_OBJ_FLAG_HIDDEN)) return;
   lv_obj_add_flag(s_kb, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_remove_state(s_name, LV_STATE_FOCUSED);
-  lv_obj_remove_state(s_secret, LV_STATE_FOCUSED);
+  fieldFocus(s_name, false);
+  fieldFocus(s_secret, false);
   if (_body) lv_obj_set_height(_body, lv_obj_get_height(_body) + lv_obj_get_height(s_kb));
 }
 

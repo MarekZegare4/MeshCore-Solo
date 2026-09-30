@@ -99,7 +99,7 @@ static void setLive(int i, const diag::Row& r) {
   char v[40];
   showValue(r.label, r.value, v, sizeof(v));
   setText(lv.val, v);
-  if (!strcmp(r.label, "Errors")) lv_obj_set_style_text_color(lv.val, lv_color_hex(strcmp(r.value, "OK") ? theme::FAIL : theme::OK), 0);
+  if (!strcmp(r.label, "Errors")) setTextColor(lv.val, strcmp(r.value, "OK") ? theme::FAIL : theme::OK);
 }
 
 // A packets row: the name, then received and sent in fixed columns.

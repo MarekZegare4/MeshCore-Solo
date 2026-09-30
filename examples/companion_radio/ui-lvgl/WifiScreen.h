@@ -152,10 +152,10 @@ static void wifiRebuild(UITask* ui, lv_obj_t*& body) {
 
 void UITask::wifiEdit(lv_obj_t* ta) {
   if (!_wifi_kb) return;
-  lv_obj_remove_state(_wifi_ssid, LV_STATE_FOCUSED);
-  lv_obj_remove_state(_wifi_pass, LV_STATE_FOCUSED);
-  lv_obj_add_state(ta, LV_STATE_FOCUSED);   // draws the cursor
+  fieldFocus(_wifi_ssid, false);
+  fieldFocus(_wifi_pass, false);
   lv_keyboard_set_textarea(_wifi_kb, ta);
+  fieldFocus(ta, true);
   if (lv_obj_has_flag(_wifi_kb, LV_OBJ_FLAG_HIDDEN)) {
     lv_obj_remove_flag(_wifi_kb, LV_OBJ_FLAG_HIDDEN);
     if (_body) lv_obj_set_height(_body, lv_obj_get_height(_body) - lv_obj_get_height(_wifi_kb));
@@ -167,8 +167,8 @@ void UITask::wifiEdit(lv_obj_t* ta) {
 void UITask::wifiKeyboardHide() {
   if (!_wifi_kb || lv_obj_has_flag(_wifi_kb, LV_OBJ_FLAG_HIDDEN)) return;
   lv_obj_add_flag(_wifi_kb, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_remove_state(_wifi_ssid, LV_STATE_FOCUSED);
-  lv_obj_remove_state(_wifi_pass, LV_STATE_FOCUSED);
+  fieldFocus(_wifi_ssid, false);
+  fieldFocus(_wifi_pass, false);
   if (_body) lv_obj_set_height(_body, lv_obj_get_height(_body) + lv_obj_get_height(_wifi_kb));
 }
 
