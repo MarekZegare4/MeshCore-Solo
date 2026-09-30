@@ -244,19 +244,21 @@ static int32_t belowStatusBar() {
 // opaque on top of the screen with the dim layer cleared -- LVGL then draws
 // nothing below it. Live, the screen plus a full-screen blend under the popup
 // cost ~28 ms a frame. One popup at a time; the image goes with its popup, and
-// the popup dims live again if its screen goes first.
+// the popup dims live again if its screen goes first. Any dim level: the
+// layer's own when it's frozen.
 namespace freeze {
   static lv_obj_t* s_img = nullptr;      // the frozen screen, on that screen
   static lv_obj_t* s_owner = nullptr;    // the popup's dim layer
   static lv_obj_t* s_strip = nullptr;    // the status bar's dim (a popup on the top layer)
   static lv_timer_t* s_retry = nullptr;  // waiting for the screen to stop moving
+  static lv_opa_t s_dim = LV_OPA_60;     // the dim layer's, frozen into the image
 
   static void imgDeleted(lv_event_t* e) {
     lv_draw_buf_destroy((lv_draw_buf_t*)lv_event_get_user_data(e));
     s_img = nullptr;
     if (s_owner) {   // the screen went, the popup stays
       if (s_strip) lv_obj_delete(s_strip);
-      lv_obj_set_style_bg_opa(s_owner, LV_OPA_60, 0);
+      lv_obj_set_style_bg_opa(s_owner, s_dim, 0);
       s_owner = s_strip = nullptr;
     }
   }
@@ -287,11 +289,12 @@ namespace freeze {
       lv_timer_set_repeat_count(s_retry, 1);
       return;
     }
+    s_dim = lv_obj_get_style_bg_opa(overlay, LV_PART_MAIN);
     if (!top) lv_obj_add_flag(overlay, LV_OBJ_FLAG_HIDDEN);
     lv_draw_buf_t* buf = lv_snapshot_take(scr, LV_COLOR_FORMAT_RGB565);
     if (!top) lv_obj_remove_flag(overlay, LV_OBJ_FLAG_HIDDEN);
     if (!buf) return;   // no memory: dimmed live
-    const uint32_t keep = 256 - LV_OPA_60;   // what's left under 60 % black
+    const uint32_t keep = 256 - s_dim;   // what's left under the black
     for (uint32_t y = 0; y < buf->header.h; y++) {
       uint16_t* p = (uint16_t*)(buf->data + y * buf->header.stride);
       for (uint32_t x = 0; x < buf->header.w; x++) {
@@ -317,10 +320,15 @@ namespace freeze {
       lv_obj_add_flag(s_strip, LV_OBJ_FLAG_IGNORE_LAYOUT);
       lv_obj_set_size(s_strip, LV_PCT(100), theme::STATUS_H);
       lv_obj_set_style_bg_color(s_strip, lv_color_hex(0x000000), 0);
-      lv_obj_set_style_bg_opa(s_strip, LV_OPA_60, 0);
+      lv_obj_set_style_bg_opa(s_strip, s_dim, 0);
     }
   }
   static void onDimUp(lv_anim_t* a) { take((lv_obj_t*)a->var); }
+  // A dim layer that's up at once, without the fade: frozen now.
+  static void now(lv_obj_t* overlay) {
+    lv_obj_add_event_cb(overlay, ownerDeleted, LV_EVENT_DELETE, NULL);
+    take(overlay);
+  }
 }
 
 // A popup: the dimmed layer (into `overlay`, to close it by) and its panel --

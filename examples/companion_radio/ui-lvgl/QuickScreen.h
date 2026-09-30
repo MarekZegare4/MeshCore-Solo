@@ -165,6 +165,7 @@ void UITask::quickEdit(int slot) {
   lv_keyboard_set_textarea(_nav_kb, _nav_ta);
   lv_obj_add_event_cb(_nav_kb, onQuickEditKb, LV_EVENT_READY, NULL);
   lv_obj_add_event_cb(_nav_kb, onQuickEditKb, LV_EVENT_CANCEL, NULL);
+  freeze::now(_nav_overlay);   // typing redraws keys, not the list under the dim
 }
 
 void UITask::quickEditInsert(int ph) {
