@@ -616,7 +616,7 @@ void UITask::buildHomeMap(lv_obj_t* box) {
   lv_obj_align(s_caption, LV_ALIGN_BOTTOM_LEFT, 6, -6);
   mapview::s_available = lvport::mountStorage() && mapview::s_provider->available();
   mapview::s_trails_on = lvport::trailsOn();
-  lv_obj_update_layout(s_area);
+  layoutNow(s_area);
   homeMapFit();
   homeMapLayout();
 }

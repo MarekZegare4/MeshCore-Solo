@@ -270,7 +270,7 @@ void UITask::channelEditField(lv_obj_t* ta) {
     lv_obj_remove_flag(s_kb, LV_OBJ_FLAG_HIDDEN);
     if (_body) lv_obj_set_height(_body, lv_obj_get_height(_body) - lv_obj_get_height(s_kb));
   }
-  lv_obj_update_layout(screen());
+  layoutNow(screen());
   lv_obj_scroll_to_view(ta, LV_ANIM_OFF);
 }
 

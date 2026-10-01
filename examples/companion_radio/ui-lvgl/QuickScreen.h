@@ -185,7 +185,7 @@ void UITask::quickEditDone(bool ok) {
     lv_obj_t* body = _body;
     int32_t y = body ? lv_obj_get_scroll_y(body) : 0;
     buildQuickMsgs();
-    if (_body) { lv_obj_update_layout(_body); lv_obj_scroll_to_y(_body, y, LV_ANIM_OFF); }
+    if (_body) { layoutNow(_body); lv_obj_scroll_to_y(_body, y, LV_ANIM_OFF); }
   }
 }
 

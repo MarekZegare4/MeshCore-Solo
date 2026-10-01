@@ -114,7 +114,7 @@ void UITask::rebuildRepeater() {
   int32_t y = _body ? lv_obj_get_scroll_y(_body) : 0;
   buildRepeater();
   fillFlush();
-  if (_body) { lv_obj_update_layout(_body); lv_obj_scroll_to_y(_body, y, LV_ANIM_OFF); }
+  if (_body) { layoutNow(_body); lv_obj_scroll_to_y(_body, y, LV_ANIM_OFF); }
 }
 
 void UITask::repeaterSet(int which, int v) {

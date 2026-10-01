@@ -147,7 +147,7 @@ void UITask::buildWifi() {
 static void wifiRebuild(UITask* ui, lv_obj_t*& body) {
   int32_t y = body ? lv_obj_get_scroll_y(body) : 0;
   ui->showWifi();
-  if (body) { lv_obj_update_layout(body); lv_obj_scroll_to_y(body, y, LV_ANIM_OFF); }
+  if (body) { layoutNow(body); lv_obj_scroll_to_y(body, y, LV_ANIM_OFF); }
 }
 
 void UITask::wifiEdit(lv_obj_t* ta) {
@@ -160,7 +160,7 @@ void UITask::wifiEdit(lv_obj_t* ta) {
     lv_obj_remove_flag(_wifi_kb, LV_OBJ_FLAG_HIDDEN);
     if (_body) lv_obj_set_height(_body, lv_obj_get_height(_body) - lv_obj_get_height(_wifi_kb));
   }
-  lv_obj_update_layout(screen());
+  layoutNow(screen());
   lv_obj_scroll_to_view(ta, LV_ANIM_OFF);
 }
 
@@ -241,7 +241,7 @@ void UITask::wifiTestShow(const char* msg, const char* ssid, const char* pass) {
     lv_textarea_set_text(_wifi_ssid, ssid);
     lv_textarea_set_text(_wifi_pass, pass);
   }
-  lv_obj_update_layout(_body);
+  layoutNow(_body);
   lv_obj_scroll_to_view(_wifi_status, LV_ANIM_ON);
 }
 

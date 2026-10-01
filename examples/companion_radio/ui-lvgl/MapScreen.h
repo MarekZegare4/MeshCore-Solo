@@ -493,7 +493,7 @@ void UITask::buildMap() {
   lv_obj_add_flag(_map_hint, LV_OBJ_FLAG_HIDDEN);
   if (_map_nav) buildNavControls(body);
 
-  lv_obj_update_layout(body);
+  layoutNow(body);
   mapview::s_mark_count = 0;   // the previous markers went with the previous screen
   rebuildMapMarkers();
   layoutMap();
@@ -691,7 +691,7 @@ void UITask::rebuildMapMarkers() {
   else rebuildNodeMarkers();
   for (int k = mapview::s_mark_count; k < mapview::s_mark_prev; k++) lv_obj_delete(mapview::s_marks[k].obj);
   mapview::s_mark_prev = 0;
-  lv_obj_update_layout(_map_marks);   // so layoutMap() knows where each dot sits in its marker
+  layoutNow(_map_marks);   // so layoutMap() knows where each dot sits in its marker
 }
 
 void UITask::rebuildNodeMarkers() {

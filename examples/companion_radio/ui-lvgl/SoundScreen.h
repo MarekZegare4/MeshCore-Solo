@@ -107,7 +107,7 @@ static void rebuildStrip() {
     cellText(i);
     styleCell(i, i == s_sel);
   }
-  lv_obj_update_layout(s_strip);
+  layoutNow(s_strip);
   if (s_sel < s_mel.len) lv_obj_scroll_to_view(s_cells[s_sel], LV_ANIM_OFF);
 }
 

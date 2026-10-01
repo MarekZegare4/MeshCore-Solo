@@ -196,7 +196,7 @@ static lv_obj_t* catRow(lv_obj_t* g, int c) {
 // Segment widths: each category's share of the card, the rest of `used` grey.
 static void showSegments(uint64_t total, uint64_t used) {
   if (!s_sd_bar || !total) return;
-  lv_obj_update_layout(s_sd_bar);
+  layoutNow(s_sd_bar);
   int w = lv_obj_get_width(s_sd_bar), x = 0;
   uint64_t counted = 0;
   for (int c = 0; c <= C_COUNT; c++) {

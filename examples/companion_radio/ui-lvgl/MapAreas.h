@@ -418,7 +418,7 @@ void UITask::mapAreaPopup(int idx) {
   s_del_lbl = actButton(r, LV_SYMBOL_TRASH, "Delete", A_DELETE);
 
   // Framed in the map above the sheet: the view is kept to go back to.
-  lv_obj_update_layout(panel);
+  layoutNow(panel);
   int w = _map_area ? lv_obj_get_width(_map_area) : 320, h = _map_area ? lv_obj_get_height(_map_area) : 218;
   int sheet = lv_obj_get_height(panel) + 8;   // its inset
   int above = h - sheet;

@@ -138,12 +138,18 @@ static void styleOpaque(lv_obj_t* o, uint32_t bg) {
   lv_obj_set_style_bg_opa(o, LV_OPA_COVER, 0);
 }
 
+static bool growsWide(lv_obj_t* o) {   // a flex grow along a row: the width is the layout's
+  lv_obj_t* p = lv_obj_get_parent(o);
+  if (!p || !lv_obj_get_style_flex_grow(o, LV_PART_MAIN) || lv_obj_get_style_layout(p, LV_PART_MAIN) != LV_LAYOUT_FLEX) return false;
+  lv_flex_flow_t f = lv_obj_get_style_flex_flow(p, LV_PART_MAIN);
+  return !(f & LV_FLEX_COLUMN);
+}
 // The width of `o`'s content, worked out from the styles -- or -1 where it
-// hangs on its content or a flex grow. A new box's own size is only known
+// hangs on its content or a row's flex grow. A new box's own size is only known
 // after a layout pass, and LVGL lays out children before their parent, so
 // each box sized in % of the one above adds a whole pass over the screen.
 static int32_t innerW(lv_obj_t* o) {
-  if (!o || lv_obj_get_style_flex_grow(o, LV_PART_MAIN)) return -1;
+  if (!o || growsWide(o)) return -1;
   int32_t w = lv_obj_get_style_width(o, LV_PART_MAIN);
   if (LV_COORD_IS_PCT(w)) {
     int32_t pw = innerW(lv_obj_get_parent(o));
@@ -159,10 +165,27 @@ static int32_t innerW(lv_obj_t* o) {
   if (side & LV_BORDER_SIDE_RIGHT) w -= bw;
   return w;
 }
+extern "C" bool lv_obj_refr_size(lv_obj_t* obj);   // lv_obj_pos.c, in no header
+// A wrapping label's size settled now, `w` wide. LVGL's first layout of a
+// label works out its height at the width it had before -- 0 for a new one,
+// a line per letter -- and only then measures it again at the new width.
+static void labelFit(lv_obj_t* l, int32_t w) {
+  l->coords.x2 = l->coords.x1 + w - 1;
+  lv_obj_refr_size(l);
+}
+// A flex row whose one growing child gets its width before the first layout
+// (rowsFit(), further down).
+static bool s_fit_pending;
+static lv_obj_t* s_fit_screen;   // newScreen()'s, maybe still fading in: not lv_screen_active() yet
+static void fitLater(lv_obj_t* row) {
+  lv_obj_add_flag(row, LV_OBJ_FLAG_USER_2);
+  s_fit_pending = true;
+}
 // The parent's full width, in pixels when that's known now (see innerW()).
 static void fillWidth(lv_obj_t* o) {
   int32_t w = innerW(lv_obj_get_parent(o));
   lv_obj_set_width(o, w >= 0 ? w : LV_PCT(100));
+  if (w > 0 && lv_obj_check_type(o, &lv_label_class)) labelFit(o, w);
 }
 
 static lv_obj_t* label(lv_obj_t* parent, const char* text, const lv_font_t* font, uint32_t color) {
@@ -361,6 +384,7 @@ namespace freeze {
 enum PopFit : uint8_t { POP_FIT, POP_FULL, POP_TOP, POP_BOTTOM };
 static lv_obj_t* popupOpen(lv_obj_t* parent, PopFit fit, lv_obj_t*& overlay, int32_t inset = 8) {
   overlay = dimOverlay(parent);
+  s_fit_pending = true;   // rowsFit()
   lv_obj_t* panel = lv_obj_create(overlay);
   int32_t w = lv_display_get_horizontal_resolution(NULL), h = lv_display_get_vertical_resolution(NULL);
   lv_obj_set_width(panel, w - 2 * inset);
@@ -468,6 +492,7 @@ static lv_obj_t* infoRow(lv_obj_t* card, const char* key, const char* value, uin
   lv_obj_set_width(v, LV_SIZE_CONTENT);
   lv_obj_set_style_max_width(v, LV_PCT(66), 0);
   lv_obj_set_style_text_align(v, LV_TEXT_ALIGN_RIGHT, 0);
+  fitLater(r);
   return v;
 }
 
@@ -569,7 +594,100 @@ static lv_obj_t* groupText(lv_obj_t* row, const char* text, const char* hint, ui
     noteLabel(t, hint);
   }
   lv_obj_set_user_data(row, l);   // rowTitle()
+  fitLater(row);
   return l;
+}
+
+// A group row's text column grows into what the controls on its right leave,
+// and LVGL lays out children before their parent: its labels were first
+// measured 1 px wide (a line per letter), then at the real width, and each
+// height that changed took another pass up the screen -- four in all. Before
+// a frame's layout, rowsFit() gives each new column the width the flex will:
+// its row's minus the controls', worked out from their styles and text. The
+// grow stays, so a control this can't size only costs the old passes.
+static constexpr lv_obj_flag_t NOT_LAID_OUT =
+    (lv_obj_flag_t)(LV_OBJ_FLAG_HIDDEN | LV_OBJ_FLAG_FLOATING | LV_OBJ_FLAG_IGNORE_LAYOUT);
+
+// `o`'s outer width as the layout will make it; -1 when that's unclear.
+static int32_t layoutW(lv_obj_t* o) {
+  int32_t w = lv_obj_get_style_width(o, LV_PART_MAIN);
+  if (LV_COORD_IS_PX(w)) {
+    // as it is
+  } else if (w != LV_SIZE_CONTENT) {
+    return -1;
+  } else if (lv_obj_check_type(o, &lv_label_class)) {
+    lv_obj_refr_size(o);   // the label's own measure, cached for the layout
+    w = lv_obj_get_width(o);
+  } else if (lv_obj_get_style_layout(o, LV_PART_MAIN) == LV_LAYOUT_FLEX &&
+             lv_obj_get_style_flex_flow(o, LV_PART_MAIN) == LV_FLEX_FLOW_ROW) {
+    int32_t gap = lv_obj_get_style_pad_column(o, LV_PART_MAIN), n = 0;
+    w = lv_obj_get_style_pad_left(o, LV_PART_MAIN) + lv_obj_get_style_pad_right(o, LV_PART_MAIN);
+    for (uint32_t i = 0; i < lv_obj_get_child_count(o); i++) {
+      lv_obj_t* c = lv_obj_get_child(o, i);
+      if (lv_obj_has_flag_any(c, NOT_LAID_OUT)) continue;
+      int32_t cw = layoutW(c);
+      if (cw < 0) return -1;
+      w += cw + (n++ ? gap : 0);
+    }
+    w = LV_CLAMP(lv_obj_get_style_min_width(o, LV_PART_MAIN), w, lv_obj_get_style_max_width(o, LV_PART_MAIN));
+  } else {
+    return -1;
+  }
+  return w + lv_obj_get_style_margin_left(o, LV_PART_MAIN) + lv_obj_get_style_margin_right(o, LV_PART_MAIN);
+}
+
+static void rowFit(lv_obj_t* row) {
+  lv_obj_refr_size(row);   // its own width now: a child's % size is of it
+  int32_t w = innerW(row), gap = lv_obj_get_style_pad_column(row, LV_PART_MAIN);
+  if (w < 0) return;
+  lv_obj_t* grow = nullptr;
+  for (uint32_t i = 0; i < lv_obj_get_child_count(row); i++) {
+    lv_obj_t* c = lv_obj_get_child(row, i);
+    if (lv_obj_has_flag_any(c, NOT_LAID_OUT)) continue;
+    if (lv_obj_get_style_flex_grow(c, LV_PART_MAIN)) {
+      if (grow) return;   // one grows, or the share isn't worth working out
+      grow = c;
+      continue;
+    }
+    int32_t cw = layoutW(c);
+    if (cw < 0) return;
+    w -= cw + gap;
+  }
+  if (!grow || w < 1) return;
+  lv_obj_set_width(grow, w);
+  if (lv_obj_check_type(grow, &lv_label_class)) { labelFit(grow, w); return; }
+  lv_obj_refr_size(grow);
+  for (uint32_t i = 0; i < lv_obj_get_child_count(grow); i++) {   // its labels, 100 % of it
+    lv_obj_t* l = lv_obj_get_child(grow, i);
+    if (lv_obj_check_type(l, &lv_label_class)) labelFit(l, w);
+  }
+}
+
+// ... and every label given a width in pixels, which labelFit() then measures
+// at it (the screen titles, a list row's cut-off name ...).
+static void rowsFit(lv_obj_t* root) {
+  lv_obj_tree_walk(root, [](lv_obj_t* o, void*) {
+    if (lv_obj_has_flag(o, LV_OBJ_FLAG_USER_2)) {
+      lv_obj_remove_flag(o, LV_OBJ_FLAG_USER_2);
+      rowFit(o);
+    } else if (lv_obj_check_type(o, &lv_label_class)) {
+      int32_t w = lv_obj_get_style_width(o, LV_PART_MAIN);
+      if (LV_COORD_IS_PX(w) && w > 0 && lv_obj_get_width(o) != w) labelFit(o, w);
+    }
+    return LV_OBJ_TREE_WALK_NEXT;
+  }, nullptr);
+}
+static void rowsFitPending() {
+  if (!s_fit_pending) return;
+  s_fit_pending = false;
+  if (s_fit_screen && s_fit_screen != lv_screen_active()) rowsFit(s_fit_screen);
+  rowsFit(lv_screen_active());
+  rowsFit(lv_layer_top());
+}
+// lv_obj_update_layout() for a screen just built: its rows fitted first.
+static void layoutNow(lv_obj_t* o) {
+  rowsFitPending();
+  lv_obj_update_layout(o);
 }
 
 // The title label of a settingRow() / listRow(), to recolour or rename it.
@@ -719,7 +837,7 @@ static void pickerOpen(lv_obj_t* c) {
     if (cur) { label(r, LV_SYMBOL_OK, THEME_FONT_BODY, theme::ACCENT); sel_row = r; }
     lv_obj_add_event_cb(r, onPickOption, LV_EVENT_CLICKED, (void*)(uintptr_t)i);
   }
-  if (sel_row) { lv_obj_update_layout(panel); lv_obj_scroll_to_view_recursive(sel_row, LV_ANIM_OFF); }
+  if (sel_row) { layoutNow(panel); lv_obj_scroll_to_view_recursive(sel_row, LV_ANIM_OFF); }
 }
 
 // A choice: in a group row the value is bare text (accent) and a chevron;
@@ -1128,6 +1246,7 @@ void UITask::begin(DisplayDriver* display_drv, SensorManager* sensors, NodePrefs
   }
   theme::setAccent(lvport::loadAccent());
   theme::install(lv_display_get_default());
+  lv_display_add_event_cb(lv_display_get_default(), [](lv_event_t*) { rowsFitPending(); }, LV_EVENT_REFR_START, NULL);
 
   buildStatusBar();
   applyDisplayPrefs();   // a slider percentage overrides the level main.cpp set
@@ -1417,7 +1536,7 @@ void UITask::loop() {
           uint32_t b = micros() - t;
           TM_PRINT("build"); TM_RESET();
           uint32_t tl = micros();
-          lv_obj_update_layout(lv_screen_active());   // layout apart from drawing
+          layoutNow(lv_screen_active());   // layout apart from drawing
           tl = micros() - tl;
           TM_PRINT("layout"); TM_RESET();
           uint32_t fl0 = lvport::s_flush_us, td = micros();
@@ -1777,7 +1896,7 @@ static void bannerShow(const char* icon, const char* title, const char* text) {
   lv_anim_delete(s_banner, NULL);
   lv_obj_remove_flag(s_banner, LV_OBJ_FLAG_HIDDEN);
   if (!shown) {   // a new one while it's up just changes the text
-    lv_obj_update_layout(s_banner);
+    layoutNow(s_banner);
     anim::run(s_banner, anim::setTy, -(lv_obj_get_height(s_banner) + theme::STATUS_H), 0, anim::SCREEN_MS);
   } else {
     lv_obj_set_style_translate_y(s_banner, 0, 0);
@@ -1891,7 +2010,7 @@ void UITask::buildStatusBar() {
 // for what's refreshed every second: LVGL restyles the box on every call, so
 // it redraws moved or not -- here it's only moved.
 static void placeLeftOf(lv_obj_t* o, lv_obj_t* base, int32_t dx) {
-  lv_obj_update_layout(o);
+  layoutNow(o);
   int32_t x = lv_obj_get_x(base) - lv_obj_get_width(o) + dx;
   int32_t y = lv_obj_get_y(base) + (lv_obj_get_height(base) - lv_obj_get_height(o)) / 2;
   if (lv_obj_get_style_align(o, LV_PART_MAIN) != LV_ALIGN_TOP_LEFT || lv_obj_get_x(o) != x || lv_obj_get_y(o) != y)
@@ -2104,7 +2223,7 @@ void UITask::showToast(const char* text, uint32_t ms) {
   int32_t y = theme::STATUS_H + 4;
   if (s_banner && !lv_obj_has_flag(s_banner, LV_OBJ_FLAG_HIDDEN)) y = lv_obj_get_y(s_banner) + lv_obj_get_height(s_banner) + 4;
   lv_obj_align(_toast, LV_ALIGN_TOP_MID, 0, y);
-  lv_obj_update_layout(_toast);
+  layoutNow(_toast);
   if (!shown) anim::run(_toast, anim::setTy, -(y + lv_obj_get_height(_toast)), 0, anim::POP_MS);   // a replaced text just changes
   else lv_obj_set_style_translate_y(_toast, 0, 0);
   if (!_toast_timer) _toast_timer = lv_timer_create(toastTimerCb, ms, _toast);
@@ -2204,6 +2323,8 @@ lv_obj_t* UITask::newScreen(const char* title, bool with_back) {
   for (lv_obj_t*& t : _map_tiles) t = nullptr;
   lv_obj_t* prev = _scr;
   lv_obj_t* scr = lv_obj_create(NULL);
+  s_fit_screen = scr;   // rowsFit()
+  s_fit_pending = true;
   styleOpaque(scr, theme::BG);
   lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -2299,13 +2420,13 @@ void UITask::back() {
     case SCR_QUICK:    // back to Messages & contacts' bottom, where the row is
       if (_nav_overlay) { navClosePopup(); break; }
       showSchemaSettings(settings::PG_MESSAGES);
-      if (_body) { lv_obj_update_layout(_body); lv_obj_scroll_by(_body, 0, -lv_obj_get_scroll_bottom(_body), LV_ANIM_OFF); }
+      if (_body) { layoutNow(_body); lv_obj_scroll_by(_body, 0, -lv_obj_get_scroll_bottom(_body), LV_ANIM_OFF); }
       break;
     case SCR_MELODY:   // back to the Sound page's bottom, where the melodies are
       melodySave();
       stopMelody();
       showSchemaSettings(settings::PG_SOUND);
-      if (_body) { lv_obj_update_layout(_body); lv_obj_scroll_by(_body, 0, -lv_obj_get_scroll_bottom(_body), LV_ANIM_OFF); }
+      if (_body) { layoutNow(_body); lv_obj_scroll_by(_body, 0, -lv_obj_get_scroll_bottom(_body), LV_ANIM_OFF); }
       break;
     case SCR_CLOCK:    showHome(); break;
     case SCR_RADIO:
@@ -2321,7 +2442,7 @@ void UITask::back() {
     case SCR_SCOPES:   // back to the Radio screen's bottom, where Scopes is
       if (_nav_overlay) { navClosePopup(); break; }
       showRadio();
-      if (_body) { lv_obj_update_layout(_body); lv_obj_scroll_by(_body, 0, -lv_obj_get_scroll_bottom(_body), LV_ANIM_OFF); }
+      if (_body) { layoutNow(_body); lv_obj_scroll_by(_body, 0, -lv_obj_get_scroll_bottom(_body), LV_ANIM_OFF); }
       break;
     case SCR_CHATS:    if (_nav_overlay) navClosePopup(); else showHome(); break;
     case SCR_NEARBY:
@@ -2518,7 +2639,7 @@ void UITask::buildChats() {
     stylePrimary(nb);
     if (unreadTotal() > 0) {
       lv_obj_t* rb = headerButton(_header, LV_SYMBOL_OK " Read all", onMarkAllRead, 0, NULL);
-      lv_obj_update_layout(_header);
+      layoutNow(_header);
       lv_obj_align_to(rb, nb, LV_ALIGN_OUT_LEFT_MID, -6, 0);
     }
   }
@@ -2627,7 +2748,7 @@ void UITask::chatFold(int which) {
   lvport::saveChatFold(s_chat_fold);
   int y = _body ? lv_obj_get_scroll_y(_body) : 0;
   buildChats();
-  if (_body) { lv_obj_update_layout(_body); lv_obj_scroll_to_y(_body, y, LV_ANIM_OFF); }
+  if (_body) { layoutNow(_body); lv_obj_scroll_to_y(_body, y, LV_ANIM_OFF); }
 }
 
 // ── Contact picker (start a DM) ───────────────────────────────────────────────
@@ -2931,7 +3052,7 @@ void UITask::refreshNearbyList() {
     lv_obj_set_style_pad_top(l, 12, 0);
   }
   if (scroll > 0) {
-    lv_obj_update_layout(_nearby_list);
+    layoutNow(_nearby_list);
     lv_obj_scroll_to_y(_nearby_list, scroll, LV_ANIM_OFF);
   }
 }
@@ -3186,7 +3307,7 @@ void UITask::setKeyboardVisible(bool show) {
     lv_obj_set_height(_body, lv_display_get_vertical_resolution(NULL) - top);
   }
   if (_thread_list) {   // keep the newest message in view
-    lv_obj_update_layout(_thread_list);
+    layoutNow(_thread_list);
     lv_obj_scroll_to_y(_thread_list, LV_COORD_MAX, LV_ANIM_OFF);
   }
 }
@@ -3273,7 +3394,7 @@ void UITask::buildThread() {
   if (_compose_ta && _share_text[0]) {   // shareToMessage(): the text waits in the field
     lv_textarea_set_text(_compose_ta, _share_text);
     _share_text[0] = '\0';
-    lv_obj_update_layout(screen());
+    layoutNow(screen());
     setKeyboardVisible(true);
   }
 }
@@ -3694,7 +3815,7 @@ void UITask::refreshThread() {
     if (s_older_lbl) { char t[40]; olderText(t, sizeof(t)); setText(s_older_lbl, t); }
     s_th_rows_n = s_msg_meta_n = s_msg_loc_n = n;
     if (n > kept) {   // new messages: down to them
-      lv_obj_update_layout(_thread_list);
+      layoutNow(_thread_list);
       lv_obj_scroll_to_y(_thread_list, LV_COORD_MAX, LV_ANIM_OFF);
     }
     return;
@@ -3714,7 +3835,7 @@ void UITask::refreshThread() {
   s_th_rows_newest = _thread_skip == 0;   // a page back is built whole each time
   if (_thread_skip > 0) pageButton(_thread_list, LV_SYMBOL_DOWN "  Newer messages", -1);
   if (n == 0) label(_thread_list, "No messages yet", THEME_FONT_BODY, theme::TEXT_MUTED);
-  lv_obj_update_layout(_thread_list);
+  layoutNow(_thread_list);
   lv_obj_scroll_to_y(_thread_list, _thread_scroll_top ? 0 : LV_COORD_MAX, LV_ANIM_OFF);
   _thread_scroll_top = false;
 }
@@ -4025,7 +4146,7 @@ void UITask::setSchemaValue(int idx, int v) {
     int32_t y = body ? lv_obj_get_scroll_y(body) : 0;
     buildSchemaSettings();
     fillFlush();
-    if (_body) { lv_obj_update_layout(_body); lv_obj_scroll_to_y(_body, y, LV_ANIM_OFF); }
+    if (_body) { layoutNow(_body); lv_obj_scroll_to_y(_body, y, LV_ANIM_OFF); }
   }
 }
 
@@ -4045,7 +4166,7 @@ void UITask::buildSettings() {
   // A group at a time (fillStart): the first shows at once. Coming back to
   // where it was scrolled needs them all first.
   fillStart(SETTINGS_GROUPS, 1, &UITask::settingsGroup);
-  if (restore) { fillFlush(); lv_obj_update_layout(body); lv_obj_scroll_to_y(body, s_settings_y, LV_ANIM_OFF); }
+  if (restore) { fillFlush(); layoutNow(body); lv_obj_scroll_to_y(body, s_settings_y, LV_ANIM_OFF); }
 }
 
 void UITask::settingsGroup(int i) {
