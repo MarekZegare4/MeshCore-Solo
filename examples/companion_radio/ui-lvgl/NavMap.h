@@ -198,9 +198,9 @@ void UITask::buildNavControls(lv_obj_t* body) {
   lv_obj_add_flag(_nav_avg_pill, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_add_event_cb(_nav_avg_pill, onNavAvgCancel, LV_EVENT_CLICKED, NULL);
   lv_obj_add_flag(_nav_avg_pill, LV_OBJ_FLAG_HIDDEN);
-  _nav_rec = mapPill(body, "");   // trail recording / live share running
-  lv_obj_set_style_text_color(_nav_rec, lv_color_hex(theme::FAIL), 0);
-  lv_obj_align(_nav_rec, LV_ALIGN_TOP_MID, 0, 40);
+  _nav_rec = mapPill(mapview::s_going, "");   // trail recording / live share running, over the download
+  lv_label_set_recolor(_nav_rec, true);
+  lv_obj_move_to_index(_nav_rec, 0);
   lv_obj_add_flag(_nav_rec, LV_OBJ_FLAG_HIDDEN);
   _next_nav_bar_ms = 0;
   navmap::s_eta.reset();
@@ -380,18 +380,21 @@ void UITask::refreshNavBar() {
   if (!_nav_bar) return;
   refreshNavTools();
   {
-    char t[48] = "";
+    // Plain text, the marks coloured (recolor): red for recording, accent
+    // for paused and live -- all-red text was hard to read over the map.
+    char t[96] = "";
     int o = 0;
     TrailStore& ts = _core->trail.store();
     if (ts.isActive()) {
       char d[12];
       geo::fmtDist(d, sizeof(d), ts.totalDistanceMeters() / 1000.0f, _prefs && _prefs->units_imperial);
-      o += snprintf(t + o, sizeof(t) - o, "%s %s", ts.isPaused() ? "PAUSED" : "REC", d);
+      o += snprintf(t + o, sizeof(t) - o, ts.isPaused() ? "#%06lX " LV_SYMBOL_PAUSE "# PAUSED %s" : "#%06lX " LV_SYMBOL_STOP "# REC %s",
+                    (unsigned long)(ts.isPaused() ? theme::ACCENT : theme::FAIL), d);
     }
     if (_prefs && _prefs->loc_share_enabled) {
       char left[12];
       navmap::fmtDuration(left, sizeof(left), _core->live_share.remainingSecs());
-      o += snprintf(t + o, sizeof(t) - o, "%sLIVE %s", o ? "  " : "", left);
+      o += snprintf(t + o, sizeof(t) - o, "%s#%06lX " LV_SYMBOL_GPS "# LIVE %s", o ? "   " : "", (unsigned long)theme::ACCENT, left);
     }
     setText(_nav_rec, t);
     if (o) lv_obj_remove_flag(_nav_rec, LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(_nav_rec, LV_OBJ_FLAG_HIDDEN);

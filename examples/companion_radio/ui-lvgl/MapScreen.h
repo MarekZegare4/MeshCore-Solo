@@ -82,6 +82,7 @@ static void setGrid(lv_obj_t* area, Grid& g, double left, double top, double ste
 }
 static lv_obj_t* s_scale_bar = nullptr;
 static lv_obj_t* s_scale_lbl = nullptr;
+static lv_obj_t* s_going = nullptr;   // what's going on (recording, download): a column, top centre
 
 // The step for zoom `z` at latitude `lat`: at least `min_px` apart. Label out.
 static double gridStep(int z, double lat, bool imperial, int min_px, char* lbl, size_t n) {
@@ -308,9 +309,9 @@ static lv_obj_t* mapPill(lv_obj_t* parent, const char* text) {
   lv_obj_t* l = label(parent, text, THEME_FONT_SMALL, theme::TEXT);
   lv_obj_set_style_bg_color(l, lv_color_hex(theme::BG), 0);
   lv_obj_set_style_bg_opa(l, LV_OPA_COVER, 0);
-  lv_obj_set_style_pad_hor(l, 5, 0);
-  lv_obj_set_style_pad_ver(l, 1, 0);
-  lv_obj_set_style_radius(l, 4, 0);
+  lv_obj_set_style_pad_hor(l, 7, 0);   // 22 px tall, round ends: every pill over the map alike
+  lv_obj_set_style_pad_ver(l, 3, 0);
+  lv_obj_set_style_radius(l, 11, 0);
   return l;
 }
 
@@ -442,51 +443,57 @@ void UITask::buildMap() {
   int bottom = _map_nav ? navmap::BAR_H : 0;   // the nav bar takes the bottom edge
   _map_center_btn = mapButton(body, LV_SYMBOL_GPS, onMapCenter);
   lv_obj_align(_map_center_btn, LV_ALIGN_BOTTOM_RIGHT, -6, -6 - bottom);
-  _map_dl_pill = mapPill(body, "");   // tap: the download popup
+  // Top centre: what's going on, one pill under another -- the trail /
+  // live share (NavMap.h), the download. Empty most of the time.
+  mapview::s_going = lv_obj_create(body);
+  lv_obj_remove_style_all(mapview::s_going);
+  lv_obj_remove_flag(mapview::s_going, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_remove_flag(mapview::s_going, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_size(mapview::s_going, 212, LV_SIZE_CONTENT);   // between the button columns
+  lv_obj_set_flex_flow(mapview::s_going, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(mapview::s_going, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_row(mapview::s_going, 4, 0);
+  lv_obj_align(mapview::s_going, LV_ALIGN_TOP_MID, 0, 15);
+  _map_dl_pill = mapPill(mapview::s_going, "");   // tap: the download popup
   lv_obj_set_style_text_color(_map_dl_pill, lv_color_hex(theme::ACCENT), 0);
-  lv_obj_set_style_pad_ver(_map_dl_pill, 3, 0);
-  lv_obj_align(_map_dl_pill, LV_ALIGN_TOP_RIGHT, -52, 14);   // beside +, clear of the zoom pill on the left
   lv_obj_add_flag(_map_dl_pill, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_set_ext_click_area(_map_dl_pill, 6);
   lv_obj_add_event_cb(_map_dl_pill, onMapDownload, LV_EVENT_CLICKED, NULL);
   lv_obj_add_flag(_map_dl_pill, LV_OBJ_FLAG_HIDDEN);
-  _map_zoom_lbl = mapPill(body, "");
-  lv_obj_align(_map_zoom_lbl, LV_ALIGN_TOP_LEFT, 52, 16);
-  // Map data credit (the licences require it on the map): a small "©" that
-  // shows the full line when tapped; it is also in Settings > About.
-  lv_obj_t* attr = mapPill(body, "\xC2\xA9");
-  lv_obj_set_style_pad_hor(attr, 7, 0);
-  lv_obj_set_style_pad_ver(attr, 3, 0);
-  lv_obj_add_flag(attr, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_set_ext_click_area(attr, 8);
-  lv_obj_add_event_cb(attr, onMapCredits, LV_EVENT_CLICKED, NULL);
-  lv_obj_align(attr, LV_ALIGN_BOTTOM_LEFT, 6, -6 - bottom);
-  // Scale: a bar one grid step long, the distance beside it.
-  lv_obj_t* sc = lv_obj_create(body);
+  // Bottom left, one pill about the map itself: the map data credit (the
+  // licences require it on the map; a tap shows the full line, also in
+  // Settings > About), a bar one grid step long with its distance, the zoom.
+  lv_obj_t* sc = lv_obj_create(body);   // a pill (mapPill's look) holding a row
   lv_obj_remove_style_all(sc);
-  lv_obj_remove_flag(sc, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_remove_flag(sc, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_size(sc, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
   lv_obj_set_style_bg_color(sc, lv_color_hex(theme::BG), 0);
   lv_obj_set_style_bg_opa(sc, LV_OPA_COVER, 0);
-  lv_obj_set_style_radius(sc, 4, 0);
-  lv_obj_set_style_pad_hor(sc, 5, 0);
+  lv_obj_set_style_pad_hor(sc, 8, 0);
   lv_obj_set_style_pad_ver(sc, 3, 0);
+  lv_obj_set_style_radius(sc, 11, 0);
+  lv_obj_set_size(sc, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
   lv_obj_set_flex_flow(sc, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(sc, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_column(sc, 5, 0);
+  lv_obj_set_style_pad_column(sc, 6, 0);
+  lv_obj_add_flag(sc, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_ext_click_area(sc, 8);
+  lv_obj_add_event_cb(sc, onMapCredits, LV_EVENT_CLICKED, NULL);
+  label(sc, "\xC2\xA9", THEME_FONT_SMALL, theme::TEXT_MUTED);
   mapview::s_scale_bar = lv_obj_create(sc);
   lv_obj_remove_style_all(mapview::s_scale_bar);
+  lv_obj_remove_flag(mapview::s_scale_bar, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_set_size(mapview::s_scale_bar, 60, 6);
   lv_obj_set_style_border_color(mapview::s_scale_bar, lv_color_hex(theme::TEXT), 0);
   lv_obj_set_style_border_width(mapview::s_scale_bar, 2, 0);
   lv_obj_set_style_border_side(mapview::s_scale_bar, (lv_border_side_t)(LV_BORDER_SIDE_BOTTOM | LV_BORDER_SIDE_LEFT | LV_BORDER_SIDE_RIGHT), 0);
   mapview::s_scale_lbl = label(sc, "", THEME_FONT_SMALL, theme::TEXT);
-  lv_obj_align(sc, LV_ALIGN_BOTTOM_LEFT, 36, -6 - bottom);
+  _map_zoom_lbl = label(sc, "", THEME_FONT_SMALL, theme::TEXT_MUTED);
+  lv_obj_align(sc, LV_ALIGN_BOTTOM_LEFT, 6, -6 - bottom);
   _map_hint = mapPill(body, "");
   lv_label_set_long_mode(_map_hint, LV_LABEL_LONG_WRAP);
   lv_obj_set_width(_map_hint, 200);
   lv_obj_set_style_text_align(_map_hint, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_style_radius(_map_hint, 8, 0);   // may wrap
   lv_obj_align(_map_hint, LV_ALIGN_TOP_MID, 0, 50);   // clear of own position, mid-map
   lv_obj_add_flag(_map_hint, LV_OBJ_FLAG_HIDDEN);
   if (_map_nav) buildNavControls(body);
@@ -739,6 +746,8 @@ void UITask::addMapMark(uint8_t kind, int idx, int32_t lat_e6, int32_t lon_e6, u
   lv_obj_remove_flag(dot, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_t* name = mapPill(m, text);
   lv_obj_remove_flag(name, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_style_pad_ver(name, 1, 0);   // a marker's name stays small
+  lv_obj_set_style_radius(name, 4, 0);
 
   mapview::Mark& mk = mapview::s_marks[mapview::s_mark_count++];
   mk.lat_e6 = lat_e6; mk.lon_e6 = lon_e6; mk.idx = idx; mk.kind = kind; mk.col = col; mk.text_hash = h; mk.obj = m; mk.dot = dot;
