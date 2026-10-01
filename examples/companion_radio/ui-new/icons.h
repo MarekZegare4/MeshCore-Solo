@@ -1,13 +1,14 @@
 #pragma once
 
 #include <stdint.h>
+#include <math.h>
 #include <helpers/ui/DisplayDriver.h>
 
 // ── Scalable mini-icons ──────────────────────────────────────────────────────
 // Small procedural glyphs (delivery markers, etc.) authored on a 1× pixel grid
 // and scaled to the current font, so they stay legible on large-font layouts
-// (e.g. landscape e-ink renders text at 2×). Distinct from the XBM page icons
-// further down, which are fixed-size full bitmaps drawn via drawXbm().
+// (e.g. landscape e-ink renders text at 2×). Distinct from the big page icons
+// further down, which are fixed-size 32 px glyphs drawn via bigIconDraw().
 //
 // To add a mini-icon:
 //   1. Draw it as ASCII-art rows, one string per row (width ≤ 8): any char
@@ -500,7 +501,7 @@ MINI_ICON(ICON_SCROLL_DOWN, 5, // ▼
 // text never runs under the scrollbar. Mirrors the column math below (5*scale
 // triangle + 1px gap).
 inline int scrollIndicatorColWidth(DisplayDriver& d) {
-  return 5 * miniIconScale(d) + 1;            // triangle (5*scale) + 1px gap
+  return 3 * miniIconScale(d) + 2;            // thumb (3*scale) + 2px gap
 }
 inline int scrollIndicatorReserve(DisplayDriver& d, int total, int visible) {
   return (total > visible) ? scrollIndicatorColWidth(d) : 0;
@@ -534,37 +535,23 @@ inline void drawScrollIndicatorPx(DisplayDriver& d, int right_x, int top_y, int 
   if (scroll_px < 0) scroll_px = 0;
   if (scroll_px > span) scroll_px = span;
 
-  const int s    = miniIconScale(d);
-  const int col  = 5 * s;                  // triangle / column width
-  const int th   = 3 * s;                  // triangle height
-  const int x    = right_x - col;          // indicator column origin
+  // A dotted 1 px track down the middle of a 3*scale column and a soft-cornered
+  // thumb sized to the share of the list on screen. The column is narrower
+  // than the old arrow-capped one, so rows keep 2 px more for text.
+  const int s     = miniIconScale(d);
+  const int bar_w = 3 * s;
+  const int x     = right_x - bar_w;
+  const int mid   = x + bar_w / 2;
 
-  // Caps are static end-markers, always drawn flush at the very top / bottom of
-  // the track; the thumb travels in the fixed band between them. (They mark the
-  // track ends, not "more above/below", so they never vanish at the extremes.)
-  const int cap = th + 2;                  // triangle height + 2px gap
-  const int band_t = top_y + cap;
-  const int band_b = top_y + track_h - cap;
-  int band = band_b - band_t;
-  if (band < s) band = s;
+  int thumb_h = (int)((long)track_h * view_px / total_px);
+  if (thumb_h < 4 * s) thumb_h = 4 * s;
+  if (thumb_h > track_h) thumb_h = track_h;
+  const int thumb_y = top_y + (int)((long)(track_h - thumb_h) * scroll_px / span);
 
-  const int bar_w = 3 * s;                  // odd width → centres exactly in the 5*s column
-  const int bar_x = x + (col - bar_w) / 2;
-
-  int thumb_h = (int)((long)band * view_px / total_px);
-  if (thumb_h < th) thumb_h = th;
-  if (thumb_h > band)  thumb_h = band;
-  const int thumb_y = band_t + (int)((long)(band - thumb_h) * scroll_px / span);
-
-  // No halo: every caller already keeps its selection bar clear of this column
-  // (reserve/_reserve), so the markers never need to fight a LIGHT background
-  // for contrast — and a halo on the bottom arrow had no symmetric clip like
-  // the top one, so it bled 1px into the container's bottom border.
   d.setColor(DisplayDriver::LIGHT);
-  d.fillRect(bar_x, thumb_y, bar_w, thumb_h);
-
-  miniIconDrawTop(d, x, top_y, ICON_SCROLL_UP);
-  miniIconDrawTop(d, x, top_y + track_h - th, ICON_SCROLL_DOWN);
+  for (int y = top_y; y < top_y + track_h; y += 2)
+    if (y < thumb_y - 1 || y > thumb_y + thumb_h) d.fillRect(mid, y, 1, 1);
+  d.fillSoftRect(x, thumb_y, bar_w, thumb_h);
 }
 
 // Convenience overload anchored to the screen's right edge — the common case
@@ -613,6 +600,52 @@ inline int drawList(DisplayDriver& d, int total, int sel, int& scroll, RenderRow
   return visible;
 }
 
+// Signal strength as four rising bars, from a LoRa SNR in quarter-dB (the
+// unit packets carry). Bars that aren't lit leave a 1 px stub so the scale
+// stays readable. Bottom-aligned to a text row at y; right edge at x_right.
+// Returns the width used. Draws in the current ink.
+inline int signalBarsFromSnr(int snr_x4) {
+  int snr = snr_x4 / 4;
+  return snr >= 5 ? 4 : snr >= 0 ? 3 : snr >= -7 ? 2 : snr >= -13 ? 1 : 0;
+}
+inline int signalBarsWidth(DisplayDriver& d) { int s = miniIconScale(d); return 4 * 2 * s + 3 * s; }
+inline int drawSignalBars(DisplayDriver& d, int x_right, int y, int snr_x4) {
+  const int s = miniIconScale(d);
+  const int bw = 2 * s, gap = s, w = signalBarsWidth(d);
+  const int base = y + d.getLineHeight() - 2;   // sits on the text baseline
+  const int lit = signalBarsFromSnr(snr_x4);
+  int x = x_right - w;
+  for (int i = 0; i < 4; i++) {
+    int h = (i + 1) * 2 * s;
+    if (i < lit) d.fillRect(x, base - h + 1, bw, h);
+    else         d.fillRect(x, base, bw, s);
+    x += bw + gap;
+  }
+  return w;
+}
+
+// Three dots rising in turn, each a beat after the last: the "working on it"
+// mark shared by the boot splash and every screen waiting on the radio or GPS.
+// Centred on cx with their resting bottom at y_bottom. Returns the redraw
+// delay the animation needs; e-ink draws them still and asks for none sooner.
+inline int drawLoadingDots(DisplayDriver& d, int cx, int y_bottom) {
+  const int s = miniIconScale(d);
+  const int dot = 3 * s, pitch = 9 * s, lift_max = 3 * s;
+  const bool anim = !d.isEink();
+  const unsigned long t = millis();
+  d.setColor(DisplayDriver::LIGHT);
+  for (int i = 0; i < 3; i++) {
+    int lift = 0;
+    if (anim) {
+      long ph = (long)((t + 940UL - 140UL * i) % 940UL);
+      if (ph < 260)      lift = (int)(lift_max * ph / 260);
+      else if (ph < 520) lift = (int)(lift_max * (520 - ph) / 260);
+    }
+    d.fillRect(cx + (i - 1) * pitch - dot / 2, y_bottom - dot - lift, dot, dot);
+  }
+  return anim ? 40 : 1000;
+}
+
 // Canonical selection bar for a drawList() row: spans the row width minus the
 // scroll-indicator `reserve`, one pixel short of the row height, anchored one
 // pixel above `y` (the row's text baseline-top). Call as the first line of a
@@ -623,11 +656,10 @@ inline void drawRowSelection(DisplayDriver& d, int y, bool sel, int reserve) {
   d.drawSelectionRow(0, y - 1, d.width() - reserve, d.lineStep() - 1, sel);
 }
 
-// ── Big ASCII-art icons (skeleton, not yet used) ─────────────────────────────
+// ── Big ASCII-art icons ─────────────────────────────
 // Same authoring idea as the mini-icons but for full page glyphs up to 32 px
-// wide: one uint32_t per row. The existing XBM bitmaps below (logo/bluetooth/…)
-// stay hand-encoded; reach for this when adding a *new* big icon so it's
-// readable in source. Drawn at 1× (page icons aren't font-scaled).
+// wide: one uint32_t per row, readable in source. Drawn at 1× (page icons
+// aren't font-scaled).
 //
 // To add one:
 //   BIG_ICON(MY_ICON, 16,
@@ -651,126 +683,264 @@ struct BigIcon { uint8_t w, h; const uint32_t* rows; };
       (uint8_t)(sizeof(name##_rows) / sizeof(uint32_t)), name##_rows }
 
 // Draw a packed big icon at 1× with the current ink colour, top-left at (x, y).
-inline void bigIconDraw(DisplayDriver& d, int x, int y, const BigIcon& ic) {
-  for (int r = 0; r < ic.h; r++)
-    for (int c = 0; c < ic.w; c++)
-      if (ic.rows[r] & (1u << c)) d.fillRect(x + c, y + r, 1, 1);
+// `dim` draws only every other pixel (50% checker): the icon's "off" state.
+inline void bigIconDraw(DisplayDriver& d, int x, int y, const BigIcon& ic, bool dim = false) {
+  for (int r = 0; r < ic.h; r++) {
+    if (dim) {
+      for (int c = (r + x + y) & 1; c < ic.w; c += 2)
+        if (ic.rows[r] & (1u << c)) d.fillRect(x + c, y + r, 1, 1);
+      continue;
+    }
+    for (int c = 0; c < ic.w; ) {          // runs of set bits as one rect
+      if (!(ic.rows[r] & (1u << c))) { c++; continue; }
+      int e = c;
+      while (e + 1 < ic.w && (ic.rows[r] & (1u << (e + 1)))) e++;
+      d.fillRect(x + c, y + r, e - c + 1, 1);
+      c = e + 1;
+    }
+  }
 }
 
-// 'meshcore', 128x13px
-static const uint8_t meshcore_logo [] = {
-    0x3c, 0x01, 0xe3, 0xff, 0xc7, 0xff, 0x8f, 0x03, 0x87, 0xfe, 0x1f, 0xfe, 0x1f, 0xfe, 0x1f, 0xfe, 
-    0x3c, 0x03, 0xe3, 0xff, 0xc7, 0xff, 0x8e, 0x03, 0x8f, 0xfe, 0x3f, 0xfe, 0x1f, 0xff, 0x1f, 0xfe, 
-    0x3e, 0x03, 0xc3, 0xff, 0x8f, 0xff, 0x0e, 0x07, 0x8f, 0xfe, 0x7f, 0xfe, 0x1f, 0xff, 0x1f, 0xfc, 
-    0x3e, 0x07, 0xc7, 0x80, 0x0e, 0x00, 0x0e, 0x07, 0x9e, 0x00, 0x78, 0x0e, 0x3c, 0x0f, 0x1c, 0x00, 
-    0x3e, 0x0f, 0xc7, 0x80, 0x1e, 0x00, 0x0e, 0x07, 0x1e, 0x00, 0x70, 0x0e, 0x38, 0x0f, 0x3c, 0x00, 
-    0x7f, 0x0f, 0xc7, 0xfe, 0x1f, 0xfc, 0x1f, 0xff, 0x1c, 0x00, 0x70, 0x0e, 0x38, 0x0e, 0x3f, 0xf8, 
-    0x7f, 0x1f, 0xc7, 0xfe, 0x0f, 0xff, 0x1f, 0xff, 0x1c, 0x00, 0xf0, 0x0e, 0x38, 0x0e, 0x3f, 0xf8, 
-    0x7f, 0x3f, 0xc7, 0xfe, 0x0f, 0xff, 0x1f, 0xff, 0x1c, 0x00, 0xf0, 0x1e, 0x3f, 0xfe, 0x3f, 0xf0, 
-    0x77, 0x3b, 0x87, 0x00, 0x00, 0x07, 0x1c, 0x0f, 0x3c, 0x00, 0xe0, 0x1c, 0x7f, 0xfc, 0x38, 0x00, 
-    0x77, 0xfb, 0x8f, 0x00, 0x00, 0x07, 0x1c, 0x0f, 0x3c, 0x00, 0xe0, 0x1c, 0x7f, 0xf8, 0x38, 0x00, 
-    0x73, 0xf3, 0x8f, 0xff, 0x0f, 0xff, 0x1c, 0x0e, 0x3f, 0xf8, 0xff, 0xfc, 0x70, 0x78, 0x7f, 0xf8, 
-    0xe3, 0xe3, 0x8f, 0xff, 0x1f, 0xfe, 0x3c, 0x0e, 0x3f, 0xf8, 0xff, 0xfc, 0x70, 0x3c, 0x7f, 0xf8, 
-    0xe3, 0xe3, 0x8f, 0xff, 0x1f, 0xfc, 0x3c, 0x0e, 0x1f, 0xf8, 0xff, 0xf8, 0x70, 0x3c, 0x7f, 0xf8, 
-};
+// Home page icons, 32x32, one family: 3 px strokes, rounded ends. Drawn
+// through drawHoverIcon() below. Rasterised from vector shapes, so keep any
+// redraw to the same stroke width rather than touching single pixels.
+// Bluetooth rune
+BIG_ICON(BIG_BLUETOOTH, 32,
+  packRow32("................................"),
+  packRow32("................................"),
+  packRow32("..............##................"),
+  packRow32(".............####..............."),
+  packRow32(".............#####.............."),
+  packRow32(".............######............."),
+  packRow32(".............#######............"),
+  packRow32(".............#########.........."),
+  packRow32(".............####.#####........."),
+  packRow32("........##...####..####........."),
+  packRow32(".......####..####..####........."),
+  packRow32("........####.####.#####........."),
+  packRow32(".........############..........."),
+  packRow32("..........##########............"),
+  packRow32("...........########............."),
+  packRow32("............######.............."),
+  packRow32("............######.............."),
+  packRow32("...........########............."),
+  packRow32("..........##########............"),
+  packRow32(".........############..........."),
+  packRow32("........####.####.#####........."),
+  packRow32(".......####..####..####........."),
+  packRow32("........##...####..####........."),
+  packRow32(".............####.#####........."),
+  packRow32(".............#########.........."),
+  packRow32(".............#######............"),
+  packRow32(".............######............."),
+  packRow32(".............#####.............."),
+  packRow32(".............####..............."),
+  packRow32("..............##................"),
+  packRow32("................................"),
+  packRow32("................................"));
+// advert: a dot between two pairs of arcs
+BIG_ICON(BIG_ADVERT, 32,
+  packRow32("................................"),
+  packRow32("................................"),
+  packRow32("................................"),
+  packRow32("................................"),
+  packRow32("................................"),
+  packRow32("................................"),
+  packRow32("....#......................#...."),
+  packRow32("...####..................####..."),
+  packRow32("...###....................###..."),
+  packRow32("..###......................###.."),
+  packRow32("..###...##............##...###.."),
+  packRow32(".###...####..........####...###."),
+  packRow32(".###...###.....##.....###...###."),
+  packRow32(".###..###....######....###..###."),
+  packRow32(".##...###....######....###...##."),
+  packRow32(".##...###...########...###...##."),
+  packRow32(".##...###...########...###...##."),
+  packRow32(".##...###....######....###...##."),
+  packRow32(".###..###....######....###..###."),
+  packRow32(".###...###.....##.....###...###."),
+  packRow32(".###...####..........####...###."),
+  packRow32("..###...##............##...###.."),
+  packRow32("..###......................###.."),
+  packRow32("...###....................###..."),
+  packRow32("...####..................####..."),
+  packRow32("....#......................#...."),
+  packRow32("................................"),
+  packRow32("................................"),
+  packRow32("................................"),
+  packRow32("................................"),
+  packRow32("................................"),
+  packRow32("................................"));
+// power (Hibernate)
+BIG_ICON(BIG_POWER, 32,
+  packRow32("................................"),
+  packRow32("................................"),
+  packRow32("...............##..............."),
+  packRow32("..............####.............."),
+  packRow32("..............####.............."),
+  packRow32("..............####.............."),
+  packRow32("..............####.............."),
+  packRow32("..............####.............."),
+  packRow32(".......##.....####.....##......."),
+  packRow32("......####....####....####......"),
+  packRow32(".....####.....####.....####....."),
+  packRow32("....####......####......####...."),
+  packRow32("....###.......####.......###...."),
+  packRow32("....###.......####.......###...."),
+  packRow32("...###........####........###..."),
+  packRow32("...###.........##.........###..."),
+  packRow32("...###....................###..."),
+  packRow32("...###....................###..."),
+  packRow32("...###....................###..."),
+  packRow32("...###....................###..."),
+  packRow32("...###....................###..."),
+  packRow32("....###..................###...."),
+  packRow32("....###..................###...."),
+  packRow32("....####................####...."),
+  packRow32(".....####..............####....."),
+  packRow32("......####............####......"),
+  packRow32(".......#####........#####......."),
+  packRow32("........################........"),
+  packRow32(".........##############........."),
+  packRow32("...........##########..........."),
+  packRow32("................................"),
+  packRow32("................................"));
+// gear
+BIG_ICON(BIG_SETTINGS, 32,
+  packRow32("................................"),
+  packRow32(".............######............."),
+  packRow32(".............######............."),
+  packRow32(".............######............."),
+  packRow32(".......##....######....##......."),
+  packRow32("......####...######...####......"),
+  packRow32(".....######################....."),
+  packRow32("....########################...."),
+  packRow32("....########################...."),
+  packRow32(".....######################....."),
+  packRow32("......####################......"),
+  packRow32("......#######......#######......"),
+  packRow32("......######........######......"),
+  packRow32(".##########..........##########."),
+  packRow32(".##########..........##########."),
+  packRow32(".##########..........##########."),
+  packRow32(".##########..........##########."),
+  packRow32(".##########..........##########."),
+  packRow32(".##########..........##########."),
+  packRow32("......######........######......"),
+  packRow32("......#######......#######......"),
+  packRow32("......####################......"),
+  packRow32(".....######################....."),
+  packRow32("....########################...."),
+  packRow32("....########################...."),
+  packRow32(".....######################....."),
+  packRow32("......####...######...####......"),
+  packRow32(".......##....######....##......."),
+  packRow32(".............######............."),
+  packRow32(".............######............."),
+  packRow32(".............######............."),
+  packRow32("................................"));
+// wrench
+BIG_ICON(BIG_TOOLS, 32,
+  packRow32("................................"),
+  packRow32("................................"),
+  packRow32(".....................##........."),
+  packRow32("..................#######......."),
+  packRow32(".................#######........"),
+  packRow32("................#######........."),
+  packRow32("...............#######.........."),
+  packRow32("...............######.......#..."),
+  packRow32("...............#####.......##..."),
+  packRow32("..............#######.....####.."),
+  packRow32("..............########...#####.."),
+  packRow32("...............########.#####..."),
+  packRow32("...............##############..."),
+  packRow32("...............##############..."),
+  packRow32("..............##############...."),
+  packRow32(".............##############....."),
+  packRow32("............##############......"),
+  packRow32("...........#######...##........."),
+  packRow32("..........#######..............."),
+  packRow32(".........#######................"),
+  packRow32("........#######................."),
+  packRow32(".......#######.................."),
+  packRow32("......#######..................."),
+  packRow32(".....#######...................."),
+  packRow32("....#######....................."),
+  packRow32("....######......................"),
+  packRow32("....#####......................."),
+  packRow32(".....###........................"),
+  packRow32("................................"),
+  packRow32("................................"),
+  packRow32("................................"),
+  packRow32("................................"));
+// chat bubble with the loading-dot trio in it
+BIG_ICON(BIG_MESSAGES, 32,
+  packRow32("................................"),
+  packRow32("................................"),
+  packRow32("................................"),
+  packRow32("................................"),
+  packRow32("................................"),
+  packRow32("......####################......"),
+  packRow32("....########################...."),
+  packRow32("....########################...."),
+  packRow32("...####..................####..."),
+  packRow32("...###....................###..."),
+  packRow32("...###....................###..."),
+  packRow32("...###....................###..."),
+  packRow32("...###..####..####..####..###..."),
+  packRow32("...###..####..####..####..###..."),
+  packRow32("...###..####..####..####..###..."),
+  packRow32("...###....................###..."),
+  packRow32("...###....................###..."),
+  packRow32("...###....................###..."),
+  packRow32("...####..................####..."),
+  packRow32("....########################...."),
+  packRow32("....########################...."),
+  packRow32("......####################......"),
+  packRow32("........#####..................."),
+  packRow32("........####...................."),
+  packRow32("........###....................."),
+  packRow32("........##......................"),
+  packRow32("........#......................."),
+  packRow32("................................"),
+  packRow32("................................"),
+  packRow32("................................"),
+  packRow32("................................"),
+  packRow32("................................"));
 
-static const uint8_t bluetooth_on[] = {
-  0x00, 0x00, 0x00, 0x00, 
-  0x00, 0x00, 0x00, 0x00, 
-  0x00, 0x00, 0x00, 0x00, 
-  0x00, 0x30, 0x00, 0x00, 
-  0x00, 0x3C, 0x00, 0x00, 
-  0x00, 0x3E, 0x00, 0x00, 
-  0x00, 0x3F, 0x80, 0x00, 
-  0x00, 0x3F, 0xC0, 0x00, 
-  0x00, 0x3B, 0xE0, 0x00, 
-  0x30, 0x38, 0xF8, 0x00, 
-  0x3C, 0x38, 0x7C, 0x00, 
-  0x3E, 0x38, 0x7C, 0x00, 
-  0x1F, 0xB8, 0xF8, 0x70, 
-  0x07, 0xF9, 0xF0, 0x78, 
-  0x03, 0xFF, 0xC0, 0x78, 
-  0x00, 0xFF, 0x80, 0x3C, 
-  0x00, 0x7F, 0x07, 0x1C, 
-  0x00, 0x7E, 0x07, 0x1C, 
-  0x03, 0xFF, 0x82, 0x1C, 
-  0x03, 0xFF, 0xC0, 0x78, 
-  0x07, 0xFB, 0xE0, 0x78, 
-  0x0F, 0xB8, 0xF8, 0x70, 
-  0x3E, 0x38, 0x7C, 0x00, 
-  0x3C, 0x38, 0x7C, 0x00, 
-  0x38, 0x38, 0xF8, 0x00, 
-  0x00, 0x39, 0xF0, 0x00, 
-  0x00, 0x3F, 0xC0, 0x00, 
-  0x00, 0x3F, 0x80, 0x00, 
-  0x00, 0x3E, 0x00, 0x00, 
-  0x00, 0x3C, 0x00, 0x00, 
-  0x00, 0x38, 0x00, 0x00, 
-  0x00, 0x00, 0x00, 0x00, 
-};
-
-static const uint8_t bluetooth_off[] = {
-  0x00, 0x00, 0x00, 0x00, 
-  0x00, 0x00, 0x00, 0x00, 
-  0x00, 0x03, 0x80, 0x00, 
-  0x00, 0x03, 0xC0, 0x00, 
-  0x00, 0x03, 0xE0, 0x00, 
-  0x38, 0x03, 0xF8, 0x00, 
-  0x3C, 0x03, 0xFC, 0x00, 
-  0x3E, 0x03, 0xBF, 0x00, 
-  0x0F, 0x83, 0x8F, 0x80, 
-  0x07, 0xC3, 0x87, 0xC0, 
-  0x03, 0xF0, 0x03, 0xC0, 
-  0x00, 0xF8, 0x0F, 0x80, 
-  0x00, 0x7C, 0x0F, 0x00, 
-  0x00, 0x1F, 0x0E, 0x00, 
-  0x00, 0x0F, 0x80, 0x00, 
-  0x00, 0x07, 0xE0, 0x00, 
-  0x00, 0x07, 0xF0, 0x00, 
-  0x00, 0x0F, 0xF8, 0x00, 
-  0x00, 0x3F, 0xBE, 0x00, 
-  0x00, 0x7F, 0x9F, 0x00, 
-  0x00, 0xFB, 0x8F, 0xC0, 
-  0x03, 0xE3, 0x83, 0xE0, 
-  0x03, 0xC3, 0x87, 0xF0, 
-  0x03, 0x83, 0x8F, 0xFC, 
-  0x00, 0x03, 0xBF, 0x3C, 
-  0x00, 0x03, 0xFC, 0x1C, 
-  0x00, 0x03, 0xF8, 0x00, 
-  0x00, 0x03, 0xE0, 0x00, 
-  0x00, 0x03, 0xC0, 0x00, 
-  0x00, 0x03, 0x80, 0x00, 
-  0x00, 0x00, 0x00, 0x00, 
-  0x00, 0x00, 0x00, 0x00, 
-};
-
-static const uint8_t power_icon[] = {
-    0x00, 0x01, 0x80, 0x00, 0x00, 0x03, 0xC0, 0x00, 0x00, 0x03, 0xC0, 0x00,
-    0x00, 0x33, 0xCC, 0x00, 0x00, 0xF3, 0xCF, 0x00, 0x01, 0xF3, 0xCF, 0x80,
-    0x03, 0xF3, 0xCF, 0xC0, 0x07, 0xF3, 0xCF, 0xE0, 0x0F, 0xE3, 0xC7, 0xF0,
-    0x1F, 0xC3, 0xC3, 0xF8, 0x1F, 0x83, 0xC1, 0xF8, 0x3F, 0x03, 0xC0, 0xFC,
-    0x3E, 0x03, 0xC0, 0x7C, 0x3E, 0x03, 0xC0, 0x7C, 0x7E, 0x01, 0x80, 0x7E,
-    0x7C, 0x00, 0x00, 0x3E, 0x7C, 0x00, 0x00, 0x3E, 0x7C, 0x00, 0x00, 0x3E,
-    0x7C, 0x00, 0x00, 0x3E, 0x7C, 0x00, 0x00, 0x3E, 0x3E, 0x00, 0x00, 0x7C,
-    0x3E, 0x00, 0x00, 0x7C, 0x3F, 0x00, 0x00, 0xFC, 0x1F, 0x80, 0x01, 0xF8,
-    0x1F, 0xC0, 0x03, 0xF8, 0x0F, 0xE0, 0x07, 0xF0, 0x0F, 0xF8, 0x1F, 0xF0,
-    0x07, 0xFF, 0xFF, 0xE0, 0x03, 0xFF, 0xFF, 0xC0, 0x00, 0xFF, 0xFF, 0x00,
-    0x00, 0x3F, 0xFC, 0x00, 0x00, 0x0F, 0xF0, 0x00,
-};
-
-static const uint8_t advert_icon[] = {
-0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0C, 0x00, 0x00, 0x30,
-0x1C, 0x00, 0x00, 0x38, 0x18, 0x00, 0x00, 0x18, 0x30, 0x00, 0x00, 0x0C,
-0x30, 0x60, 0x06, 0x0C, 0x60, 0xE0, 0x07, 0x06, 0x61, 0xC0, 0x03, 0x86,
-0xE1, 0x81, 0x81, 0x87, 0xC3, 0x07, 0xE0, 0xC3, 0xC3, 0x0F, 0xF0, 0xC3,
-0xC3, 0x0F, 0xF0, 0xC3, 0xC3, 0x0F, 0xF0, 0xC3, 0xC3, 0x0F, 0xF0, 0xC3,
-0xC3, 0x07, 0xE0, 0xC3, 0xC1, 0x83, 0xC1, 0x83, 0x61, 0x80, 0x01, 0x86,
-0x60, 0xC0, 0x03, 0x06, 0x70, 0xE0, 0x07, 0x0E, 0x30, 0x40, 0x02, 0x0C,
-0x38, 0x00, 0x00, 0x1C, 0x18, 0x00, 0x00, 0x18, 0x0C, 0x00, 0x00, 0x30,
-0x04, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-};
+// A Home page icon hovering over its spot: it bobs up to 2 px on a slow
+// cosine while a dithered blob below it, its shadow, shrinks as it rises and
+// spreads as it sinks. Centred on cx in the 32 px box at y: the glyphs leave
+// a row or two blank at the top, so the icon rests 1 px high and the shadow
+// fits in the rows the old static icon left above its title. Put the title at
+// y + h + HOVER_GAP. E-ink gets the resting frame. Returns ms until the next
+// frame is due.
+constexpr int HOVER_GAP = 3;
+// Where the bob is now: 0 = resting, 1 = top. Anything riding on the icon (a
+// badge) lifts by hoverLift() so it moves with it.
+inline float hoverPhase(DisplayDriver& d) {
+  if (d.isEink()) return 0;
+  const unsigned long period = 2400;
+  return (1.0f - cosf(6.2831853f * (float)(millis() % period) / period)) * 0.5f;
+}
+inline int hoverLift(DisplayDriver& d) { return 1 + (int)(2 * hoverPhase(d) + 0.5f); }
+inline int drawHoverIcon(DisplayDriver& d, int cx, int y, const BigIcon& ic, bool dim = false) {
+  const bool anim = !d.isEink();
+  const float up = hoverPhase(d);
+  d.setColor(DisplayDriver::LIGHT);
+  bigIconDraw(d, cx - ic.w / 2, y - 1 - (int)(2 * up + 0.5f), ic, dim);
+  // Shadow: three rows, a checker oval with a solid core that fades as it rises.
+  const int w = (int)(28 - 10 * up + 0.5f), core = (int)(w * 0.5f * (1 - up) + 0.5f);
+  const int sy = y + ic.h - 1;
+  for (int r = 0; r < 3; r++) {
+    const int rw = r == 1 ? w : w - 8, x0 = cx - rw / 2;
+    for (int x = x0; x < x0 + rw; x++)
+      if (((x + sy + r) & 1) == 0 || (r == 1 && 2 * (x - cx) + 1 < core && 2 * (cx - x) - 1 < core))
+        d.fillRect(x, sy + r, 1, 1);
+  }
+  return anim ? 60 : 1000;
+}
 
 // Favourite marker for a list row, on every screen that lists something
 // starrable. Reuses the Favourites page's own icon so the two read as one idea.

@@ -164,7 +164,7 @@ struct PopupMenu {
         // Stops short of the scroll-indicator gutter, like every other list's
         // selection bar (e.g. drawList's row width - reserve) — otherwise the
         // bar paints over the indicator's column instead of framing it.
-        display.fillRect(bx + 1, py - 1, bw - 2 - arrow_w, item_h);
+        display.fillSoftRect(bx + 2, py - 1, bw - 4 - arrow_w, item_h);
         display.setColor(DisplayDriver::DARK);
       } else {
         display.setColor(DisplayDriver::LIGHT);

@@ -61,6 +61,7 @@ class AdminScreen : public UIScreen {
 
   void openLoginKb() {
     kb().begin("", 15);       // admin password: same max length as room/repeater login
+    kb().prompt = "Password";
     kb().clearPlaceholders(); // {loc}/{time} are for messages, not a password
     _login_kb = true;
   }
@@ -69,6 +70,7 @@ class AdminScreen : public UIScreen {
   // {} picker to CLI command-name completion (Custom-command row only).
   void openValueKb(const char* initial, bool cli_autocomplete) {
     kb().begin(initial, 160);
+    kb().prompt = "Command";
     kb().clearPlaceholders();   // a CLI command/value is literal, not a message
     if (cli_autocomplete) kb().setPlaceholderRefresh(refreshCmdPlaceholders, nullptr, "Commands:");
     _kb_active = true;
@@ -162,6 +164,13 @@ public:
     }
   }
 
+  // A waiting line centred under the header, with the loading dots below it.
+  int waiting(DisplayDriver& display, const char* what) {
+    int mid = (display.listStart() + display.height()) / 2;
+    display.drawTextCentered(display.width() / 2, mid - display.lineStep(), what);
+    return drawLoadingDots(display, display.width() / 2, mid + display.lineStep());
+  }
+
   int render(DisplayDriver& display) override {
     display.setTextSize(1);
     display.setColor(DisplayDriver::LIGHT);
@@ -170,9 +179,8 @@ public:
     AdminSession::State st = S().state();
     if (st == AdminSession::LOGGING_IN || st == AdminSession::IDLE || st == AdminSession::NEED_PASSWORD) {
       display.drawCenteredHeader("ADMIN LOGIN");
-      display.setCursor(2, display.listStart());
-      if (st == AdminSession::LOGGING_IN) display.print("Logging in...");
-      return 500;
+      if (st != AdminSession::LOGGING_IN) return 500;
+      return waiting(display, "Logging in");
     }
     if (_showing_reply) return _reply_view.render(display, S().target().name, S().reply(), false, false);
     if (_kb_active) return kb().render(display);
@@ -180,9 +188,7 @@ public:
       char title[24];
       snprintf(title, sizeof(title), "%.23s", S().target().name);
       display.drawCenteredHeader(title);
-      display.setCursor(2, display.listStart());
-      display.print(S().fetching() ? "Fetching..." : "Waiting for reply...");
-      return 500;
+      return waiting(display, S().fetching() ? "Fetching" : "Waiting for reply");
     }
 
     tabbar::draw(display, admin::TAB_LABELS, admin::TAB_COUNT, _tab);

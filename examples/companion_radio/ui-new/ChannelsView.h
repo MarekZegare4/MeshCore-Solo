@@ -51,8 +51,9 @@ class ChannelsView {
 
   KeyboardWidget& kb() { return _task->keyboard(); }
 
-  void openKb(const char* initial, int max) {
+  void openKb(const char* initial, int max, const char* prompt) {
     kb().begin(initial, max);
+    kb().prompt = prompt;
     kb().clearPlaceholders();     // literal field — {loc}/{time} make no sense here
     _kb_active = true;
   }
@@ -195,7 +196,7 @@ public:
       if (c == KEY_UP)   { _sel = (_sel > 0) ? _sel - 1 : 1; return true; }
       if (c == KEY_DOWN) { _sel = (_sel < 1) ? _sel + 1 : 0; return true; }
       if (c == KEY_ENTER) {
-        if (_sel == 0) { _kb_field = 2; openKb(_topic, sizeof(_topic) - 1); }
+        if (_sel == 0) { _kb_field = 2; openKb(_topic, sizeof(_topic) - 1, "Hashtag"); }
         else            commit();
       }
       return true;
@@ -210,8 +211,8 @@ public:
       return true;
     }
     if (c == KEY_ENTER) {
-      if      (_sel == 0) { _kb_field = 0; openKb(_name, sizeof(_name) - 1); }
-      else if (_sel == 1) { _kb_field = 1; openKb(_secret_text, _hex_mode ? 32 : (int)sizeof(_secret_text) - 1); }
+      if      (_sel == 0) { _kb_field = 0; openKb(_name, sizeof(_name) - 1, "Name"); }
+      else if (_sel == 1) { _kb_field = 1; openKb(_secret_text, _hex_mode ? 32 : (int)sizeof(_secret_text) - 1, "Secret"); }
       else                 commit();
       return true;
     }

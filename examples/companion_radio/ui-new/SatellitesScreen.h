@@ -192,9 +192,9 @@ public:
     g->expire();
     if (!g->sentences || millis() - g->last_ms > 5000) {
       bool on = _task->getGPSState();
-      display.drawTextCentered(cx, top + lh, on ? "Waiting for GPS..." : "GPS is off");
-      if (!on) display.drawTextCentered(cx, top + 2 * lh + 2, "Home > GPS page");
-      return 1000;
+      display.drawTextCentered(cx, top + lh, on ? "Waiting for GPS" : "GPS is off");
+      if (!on) { display.drawTextCentered(cx, top + 2 * lh + 2, "Home > GPS page"); return 1000; }
+      return drawLoadingDots(display, cx, top + 3 * lh + 4);
     }
     if (_signal) renderSignal(display, *g, top);
     else renderSky(display, *g, top);

@@ -110,7 +110,7 @@ public:
         }
         if (sel) {
           display.setColor(DisplayDriver::LIGHT);
-          display.fillRect(cx, notes_y, cell_w - 1, cell_h);
+          display.fillSoftRect(cx, notes_y, cell_w - 1, cell_h);
           display.setColor(DisplayDriver::DARK);
         } else {
           display.setColor(DisplayDriver::LIGHT);

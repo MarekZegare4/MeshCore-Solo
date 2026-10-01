@@ -188,7 +188,8 @@ public:
   void drawSelectionRow(int x, int y, int w, int h, bool sel) {
     setColor(LIGHT);
     if (sel) {
-      fillRect(x, y, w, h);
+      if (w > 2 && h > 2) fillSoftRect(x, y, w, h);   // soft corners, like every box
+      else fillRect(x, y, w, h);
       setColor(DARK);
     }
   }

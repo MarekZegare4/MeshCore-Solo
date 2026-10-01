@@ -154,6 +154,46 @@ class MessagesScreen : public UIScreen {
   // reflow as messages arrive.
   struct HistScroll { bool need; int reserve; long total_px, scroll_px; int view_px; };
 
+  // Compact DM bubble text: -1 when it fits on one line beside the marker and
+  // age (tail_w), else the byte offset its second line starts at -- the last
+  // space that keeps line 1 within line_w, or a hard cut if there is none.
+  static int dmSplit(DisplayDriver& d, const char* body, int line_w, int tail_w) {
+    if ((int)d.getTextWidth(body) + tail_w <= line_w) return -1;
+    const uint8_t* p = (const uint8_t*)body;
+    int w = 0, last_sp = -1;
+    while (*p) {
+      const uint8_t* cp_start = p;
+      uint32_t cp = DisplayDriver::decodeCodepoint(p);
+      int off = (int)(cp_start - (const uint8_t*)body);
+      if (cp == ' ' && w <= line_w) last_sp = off;
+      w += d.getCodepointWidth(cp);
+      if (w > line_w) return last_sp > 0 ? last_sp + 1 : (off > 0 ? off : (int)(p - (const uint8_t*)body));
+    }
+    return -1;
+  }
+
+  // Scrollbar metrics for boxes of varying height (h(idx, reserve) px each,
+  // `gap` px apart): the same fit test as the portrait path below.
+  template <class GetH>
+  HistScroll computeHistScrollH(DisplayDriver& display, int count, int scroll, int hist_start_y, int cby,
+                                int gap, GetH h) {
+    HistScroll r{};
+    r.view_px = cby - (hist_start_y + 1);
+    if (r.view_px < 1) r.view_px = 1;
+    const int col = scrollIndicatorColWidth(display);
+    int cur = hist_start_y, fit = 0;
+    for (int i = 0; i < count; i++) { int bh = h(i, 0); if (cur + bh > cby) break; fit++; cur += bh + gap; }
+    r.need    = fit < count;
+    r.reserve = r.need ? col : 0;
+    if (r.need)
+      for (int i = 0; i < count; i++) {
+        long ext = h(i, r.reserve) + gap;
+        r.total_px += ext;
+        if (i < scroll) r.scroll_px += ext;
+      }
+    return r;
+  }
+
   // `getBody(idx)` returns the body text for list item idx (the part that wraps),
   // or nullptr to fall back to a fixed 2-line box. Must return exactly what the
   // real per-item render pass wraps (sender split off, reply prefix stripped) --
@@ -169,7 +209,7 @@ class MessagesScreen : public UIScreen {
     if (r.view_px < 1) r.view_px = 1;
     const int col = scrollIndicatorColWidth(display);
 
-    if (!portrait) {                          // uniform 2-line boxes → exact pixel math
+    if (!portrait) {                          // uniform boxes → exact pixel math
       const int box = fixed_bh + 1;
       r.total_px  = (long)count * box;
       r.scroll_px = (long)scroll * box;
@@ -278,11 +318,22 @@ class MessagesScreen : public UIScreen {
     _phase = MSG_PICK;
   }
 
+  // The keyboard's field label while writing: who it goes to.
+  char _kb_prompt[16];
+  void setComposePrompt() {
+    const char* to = _sel_contact.name;
+    ChannelDetails ch;
+    if (_sending_to_channel && the_mesh.getChannel(_sel_channel_idx, ch)) to = ch.name;
+    snprintf(_kb_prompt, sizeof(_kb_prompt), "%.12s", to);
+    _kb->prompt = _kb_prompt;
+  }
+
   // Recipient chosen while sharing — open the keyboard with the prepared text.
   void beginShareCompose(bool channel) {
     _sending_to_channel = channel;
     _reply_mode = false;
     _kb->begin(_share_text);
+    setComposePrompt();
     _phase = KEYBOARD;
   }
 
@@ -641,6 +692,7 @@ class MessagesScreen : public UIScreen {
     }
     _login_mode = true;
     _kb->begin("", 15); // room/repeater password: max 15 chars
+    _kb->prompt = "Password";
     _kb->clearPlaceholders();   // {loc}/{time} are for messages, not a password
     _phase = KEYBOARD;
   }
@@ -1317,24 +1369,55 @@ public:
       // Portrait e-ink (height > width): variable-height boxes that show the full
       // wrapped message text. All other displays/orientations: compact 2-line boxes.
       bool portrait_expand = (display.height() > display.width());
+      // A DM bubble on a compact screen carries no sender line: one line of
+      // text with the delivery / hop marker and the age at its end, growing to
+      // two lines (marker and age ending the second) when the text is longer.
+      // Rooms keep the author line above the text.
+      const bool compact_dm = !is_room && !portrait_expand;
       const int MAX_VIS_BOXES = 8;
       int box_ys[MAX_VIS_BOXES], box_hs[MAX_VIS_BOXES], n_vis = 0;
+
+      // The marker + age strip at a compact bubble's end, and its width.
+      struct Tail { int ack_w, age_w, mk_gap, hops, w; char age[6]; };
+      auto tailOf = [&](const DmHistEntry& e) {
+        Tail t;
+        geo::fmtAgeShort(t.age, sizeof(t.age), now_ts, e.timestamp ? e.timestamp : now_ts);
+        t.age_w = t.age[0] ? display.getTextWidth(t.age) + 3 : 0;
+        t.hops = !e.outgoing ? (e.path_len & 63) : 0;
+        t.ack_w = e.outgoing ? (3 + ackGlyphWidth(display, _history.dmEffectiveStatus(e), e.attempt + 1))
+                : (t.hops > 0 ? (3 + miniIconNumberWidth(display, t.hops)) : 0);
+        t.mk_gap = (t.ack_w > 0 && t.age_w > 0) ? 4 : 0;
+        t.w = t.ack_w + t.mk_gap + t.age_w + (t.age_w ? 0 : 3);
+        return t;
+      };
+      auto bodyAt = [&](int idx, char* sb, size_t sbn) -> const char* {
+        int rp = _history.dmHistEntryForContact(_sel_contact.id.pub_key, idx);
+        if (rp < 0) return nullptr;
+        return skipReplyPrefix(dmDisplayParts(_history.dmAtPos(rp), is_room, filtered_name, sb, sbn));
+      };
+      // Height of compact bubble idx at a given scrollbar reserve.
+      auto compactH = [&](int idx, int rsv) {
+        int rp = _history.dmHistEntryForContact(_sel_contact.id.pub_key, idx);
+        if (rp < 0) return lh + 1;
+        char sb[33];
+        const char* body = bodyAt(idx, sb, sizeof(sb));
+        int line_w = bubbleMaxW(display, display.width() - rsv) - 6;
+        return dmSplit(display, body ? body : "", line_w, tailOf(_history.dmAtPos(rp)).w) < 0 ? lh + 1 : 2 * lh + 1;
+      };
+
       // Fixed-track scrollbar metrics + a stable gutter reserve (decided by a
       // whole-list fit test, not last frame's visible count) so message boxes
       // don't reflow their width as messages arrive.
-      HistScroll hs = computeHistScroll(display, portrait_expand, dm_count, _dm_hist_scroll,
+      HistScroll hs = compact_dm
+          ? computeHistScrollH(display, dm_count, _dm_hist_scroll, hist_start_y, cby, 1, compactH)
+          : computeHistScroll(display, portrait_expand, dm_count, _dm_hist_scroll,
           hist_start_y, cby, lh,
           [&](int idx) -> const char* {
-            int rp = _history.dmHistEntryForContact(_sel_contact.id.pub_key, idx);
-            if (rp < 0) return nullptr;
             // Must match the per-item body extraction below (dmDisplayParts +
             // skipReplyPrefix) exactly, or this sizing pass and the real render
-            // pass disagree on wrapped line count for room posts -- previously
-            // this returned the raw "Sender: text" unsplit, wrapping the sender
-            // name in with the body and mis-sizing the box.
+            // pass disagree on wrapped line count for room posts.
             char tmp_sender[33];
-            return skipReplyPrefix(dmDisplayParts(_history.dmAtPos(rp), is_room, filtered_name,
-                                                    tmp_sender, sizeof(tmp_sender)));
+            return bodyAt(idx, tmp_sender, sizeof(tmp_sender));
           });
       int reserve = hs.reserve;
       {
@@ -1347,7 +1430,7 @@ public:
         const int box_gap = portrait_expand ? 2 : 1;
         int cur_y = cby - box_gap;   // reserve the same gap against compose as between boxes
         for (int ii = 0; ii < MAX_VIS_BOXES && (_dm_hist_scroll + ii) < dm_count; ii++) {
-          int bh = fixed_bh;
+          int bh = compact_dm ? compactH(_dm_hist_scroll + ii, reserve) : fixed_bh;
           if (portrait_expand) {
             int rp = _history.dmHistEntryForContact(_sel_contact.id.pub_key, _dm_hist_scroll + ii);
             if (rp >= 0) {
@@ -1377,7 +1460,54 @@ public:
         const DmHistEntry& e = _history.dmAtPos(ring_pos);
         char sender_buf[33];
         const char* body = skipReplyPrefix(dmDisplayParts(e, is_room, filtered_name, sender_buf, sizeof(sender_buf)));
-        const char* sender = sender_buf;
+        // A DM has two people: the header names the contact and the side a
+        // bubble sits on says who wrote it, so bubbles carry only the delivery
+        // or hop marker and the age. Rooms keep each post's author.
+        const char* sender = is_room ? sender_buf : "";
+
+        if (compact_dm) {
+          Tail t = tailOf(e);
+          int full_avail = display.width() - reserve;
+          int max_w = bubbleMaxW(display, full_avail);
+          int line_w = max_w - 6;
+          int split = dmSplit(display, body, line_w, t.w);
+          char l1[MSG_TEXT_BUF];
+          const char* l2 = nullptr;
+          int body_w;
+          if (split < 0) {
+            int raw = display.getTextWidth(body);
+            body_w = (raw > line_w - t.w ? line_w - t.w : raw) + 6 + t.w;
+          } else {
+            int n = split;
+            while (n > 0 && body[n - 1] == ' ') n--;
+            if (n > (int)sizeof(l1) - 1) n = sizeof(l1) - 1;
+            memcpy(l1, body, n); l1[n] = '\0';
+            l2 = body + split;
+            int w1 = display.getTextWidth(l1), w2 = display.getTextWidth(l2);
+            if (w2 > line_w - t.w) w2 = line_w - t.w;
+            body_w = (w1 > w2 + t.w ? w1 : w2 + t.w) + 6;
+          }
+          BubbleBox box = computeBubbleBox(full_avail, max_w, e.outgoing, 0, body_w);
+          drawHistRowFrame(display, box.x, box.w, y, bh, lh, sel);
+          // Marker and age end the last line of text.
+          const int ty = y + 1 + (l2 ? lh : 0);
+          const int mark_x = box.x + box.w - t.w + 3;
+          if (e.outgoing)      drawAckGlyph(display, mark_x, ty, _history.dmEffectiveStatus(e), e.attempt + 1);
+          else if (t.hops > 0) miniIconDrawNumber(display, mark_x, ty, t.hops);
+          if (t.age[0]) { display.setCursor(box.x + box.w - t.age_w, ty); display.print(t.age); }
+          // Only the last line marquees (one shared marquee slot), and not
+          // while the context menu is over it.
+          bool body_marquee = sel && !_ctx_menu.active;
+          int r_body;
+          if (!l2) {
+            r_body = display.drawTextEllipsized(box.x + 3, y + 1, box.w - 6 - t.w, body, body_marquee);
+          } else {
+            display.drawTextEllipsized(box.x + 3, y + 1, box.w - 6, l1, false);
+            r_body = display.drawTextEllipsized(box.x + 3, y + lh + 1, box.w - 6 - t.w, l2, body_marquee);
+          }
+          if (body_marquee && r_body > 0) mq_delay = r_body;
+          continue;
+        }
 
         // e.timestamp==0 shouldn't happen (storeDMMsg() falls back to receipt
         // time at write time), but if it ever does, show the receipt time
@@ -1399,7 +1529,7 @@ public:
                   : (in_hop_count > 0 ? (3 + miniIconNumberWidth(display, in_hop_count)) : 0);
         // A little air between a marker and the age, so "12" + "1s" doesn't read as "121s".
         int mk_gap = (ack_w > 0 && age_w > 0) ? 2 : 0;
-        int header_w = 3 + display.getTextWidth(sender) + ack_w + mk_gap + age_w + 3;
+        int header_w = 3 + (sender[0] ? display.getTextWidth(sender) : -3) + ack_w + mk_gap + age_w + 3;
         int body_w, nl = 0;
         if (portrait_expand) {
           display.translateUTF8ToBlocks(s_wrap_trans, body, sizeof(s_wrap_trans));
@@ -1422,14 +1552,15 @@ public:
         // actually got -- not after its full width, which would run it into the age.
         int name_avail = box.w - 6 - age_w - ack_w - mk_gap;
         if (name_avail < display.getCharWidth()) name_avail = display.getCharWidth();
-        int name_w = display.getTextWidth(sender);
+        int name_w = sender[0] ? display.getTextWidth(sender) : 0;
         if (name_w > name_avail) name_w = name_avail;
-        display.drawTextEllipsized(box.x + 3, y + 1, name_avail, sender);
+        if (sender[0]) display.drawTextEllipsized(box.x + 3, y + 1, name_avail, sender);
+        const int mark_x = box.x + 3 + (name_w ? name_w + 3 : 0);
         if (e.outgoing) {                       // delivery marker after "Me"
-          int gx = box.x + 3 + name_w + 3;
+          int gx = mark_x;
           drawAckGlyph(display, gx, y + 1, _history.dmEffectiveStatus(e), e.attempt + 1);
         } else if (in_hop_count > 0) {          // hop count after the sender name
-          int gx = box.x + 3 + name_w + 3;
+          int gx = mark_x;
           miniIconDrawNumber(display, gx, y + 1, in_hop_count);
         }
         if (age[0]) { display.setCursor(box.x + box.w - age_w, y + 1); display.print(age); }
@@ -1627,7 +1758,7 @@ public:
                   : (in_hop_count > 0 ? (3 + miniIconNumberWidth(display, in_hop_count)) : 0);
         // A little air between a marker and the age, so "12" + "1s" doesn't read as "121s".
         int mk_gap = (ack_w > 0 && age_w > 0) ? 2 : 0;
-        int header_w = 3 + display.getTextWidth(sender) + ack_w + mk_gap + age_w + 3;
+        int header_w = 3 + (sender[0] ? display.getTextWidth(sender) : -3) + ack_w + mk_gap + age_w + 3;
         int body_w, nl = 0;
         if (portrait_expand) {
           display.translateUTF8ToBlocks(s_wrap_trans, body, sizeof(s_wrap_trans));
@@ -1825,6 +1956,7 @@ public:
               if (sel == 0) {
                 _login_mode = true;
                 _kb->begin("", 15); // room/repeater password: max 15 chars
+                _kb->prompt = "Password";
                 _kb->clearPlaceholders();   // {loc}/{time} are for messages, not a password
                 _phase = KEYBOARD;
               } else if (sel == _ctx_pin_idx) {
@@ -1910,6 +2042,7 @@ public:
                 // _login_mode handler), whether or not login itself succeeds.
                 _login_mode = true;
                 _kb->begin("", 15); // room/repeater password: max 15 chars
+                _kb->prompt = "Password";
                 _kb->clearPlaceholders();
                 _phase = KEYBOARD;
                 return true;
@@ -2377,6 +2510,7 @@ public:
       if (c == KEY_ENTER) {
         if (_msg_sel == 0) {
           _kb->begin(_reply_mode ? _reply_prefix : "");
+          setComposePrompt();
           kbAddSensorPlaceholders(*_kb, &sensors);
           _phase = KEYBOARD;
           return true;

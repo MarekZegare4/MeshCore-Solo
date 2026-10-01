@@ -205,6 +205,7 @@ public:
     if (char* txt = botcfg::text(_prefs, k, cap)) {
       _kb_row = _sel;
       _kb->begin(txt, cap - 1);
+      _kb->prompt = botcfg::isTrigger(k) ? "Trigger" : "Reply";
       if (botcfg::isTrigger(k)) {
         _kb->clearPlaceholders();  // trigger is literal — placeholders never match
       } else {

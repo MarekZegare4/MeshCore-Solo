@@ -497,8 +497,10 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
     display.setCursor(2, hdr + step);     display.print(buf);
     snprintf(buf, sizeof(buf), "SNR:  %.1f dB", e.snr_x4 / 4.0f);
     display.setCursor(2, hdr + step * 2); display.print(buf);
+    drawSignalBars(display, display.width() - 2, hdr + step * 2, e.snr_x4);          // how we hear them
     snprintf(buf, sizeof(buf), "Rem:  %.1f dB", e.remote_snr_x4 / 4.0f);
     display.setCursor(2, hdr + step * 3); display.print(buf);
+    drawSignalBars(display, display.width() - 2, hdr + step * 3, e.remote_snr_x4);   // how they hear us
     display.setCursor(2, hdr + step * 4);
     display.print(e.is_known ? "Status: known" : "Status: new");
   }
@@ -631,10 +633,15 @@ public:
       char empty[24];
       if (_source == SRC_SCAN) {
         const char* msg;
-        if (_scanning)   msg = "No replies yet";   // fits 128 px; the header already says SCANNING
+        if (_scanning) {   // the header already says SCANNING: just show it's listening
+          display.drawTextCentered(display.width() / 2, display.height() / 2 - display.lineStep() / 2, "No replies yet");
+          int r = drawLoadingDots(display, display.width() / 2, display.height() / 2 + display.lineStep() + 2);
+          if (mq_delay <= 0 || r < mq_delay) mq_delay = r;
+          msg = nullptr;
+        }
         else if (flt)  { snprintf(empty, sizeof(empty), "No %s nodes", flt); msg = empty; }
         else             msg = "No nodes found";
-        display.drawTextCentered(display.width() / 2, display.height() / 2, msg);
+        if (msg) display.drawTextCentered(display.width() / 2, display.height() / 2, msg);
       } else {
         const char* hint;
         if (_pick_admin_target && !flt) { snprintf(empty, sizeof(empty), "Nothing to admin"); hint = "Repeaters & rooms"; }
@@ -675,8 +682,9 @@ public:
 
         display.setColor(sel ? DisplayDriver::DARK : DisplayDriver::LIGHT);
         char right[10];
-        if (_source == SRC_SCAN) {
-          snprintf(right, sizeof(right), "%d", (int)e.rssi);
+        if (_source == SRC_SCAN) {   // live scan: how well we hear it, as bars
+          drawSignalBars(display, display.width() - reserve - 2, y, e.snr_x4);
+          right[0] = '\0';
         } else if (_sort == SORT_TIME) {
           geo::fmtAgeShort(right, sizeof(right), rtc_clock.getCurrentTime(), e.lastmod);
           if (!right[0]) snprintf(right, sizeof(right), "?");   // unknown / RTC not synced
@@ -684,7 +692,7 @@ public:
           if (e.dist_km >= 0.0f) geo::fmtDist(right, sizeof(right), e.dist_km, useImperial());
           else                   strncpy(right, "?GPS", sizeof(right));
         }
-        display.drawTextRightAlign(display.width() - reserve - 2, y, right);
+        if (right[0]) display.drawTextRightAlign(display.width() - reserve - 2, y, right);
       });
     }
 

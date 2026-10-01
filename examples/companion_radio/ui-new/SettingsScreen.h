@@ -790,7 +790,7 @@ public:
       if (res == KeyboardWidget::DONE) {
         // Entered twice: a typo here would lock the owner out.
         if (strlen(_kb->buf) < 4) {
-          _kb->pin_prompt = "Min 4";
+          _kb->prompt = "Min 4";
         } else if (!_lock_pass_first[0]) {
           strncpy(_lock_pass_first, _kb->buf, sizeof(_lock_pass_first) - 1);
           _lock_pass_first[sizeof(_lock_pass_first) - 1] = '\0';
@@ -853,6 +853,7 @@ public:
           } else if (sel == 1 && _scope_action_idx >= 1) {  // Rename
             _scope_rename_idx = _scope_action_idx;
             _kb->begin(sl.name((uint8_t)_scope_action_idx), 23);
+            _kb->prompt = "Scope";
             _kb->clearPlaceholders();
           } else if (sel == 2 && _scope_action_idx >= 1) {  // Delete -- confirm first
             _scope_action_menu.beginConfirm("Delete scope?", "Delete");
@@ -869,6 +870,7 @@ public:
         if (_scope_mgmt_sel == sl.totalCount()) {   // "+ Add scope"
           _scope_rename_idx = -1;
           _kb->begin("", 23);
+          _kb->prompt = "Scope";
           _kb->clearPlaceholders();
         } else {
           _scope_action_idx = _scope_mgmt_sel;
@@ -910,6 +912,7 @@ public:
         switch (_picker.onSelected(_picker.menu.selectedIndex(), p, radioTarget(p))) {
           case RadioPresetPicker::START_SAVE:
             _kb->begin("", (int)sizeof(p->user_radio_presets[0].name) - 1);
+            _kb->prompt = "Preset name";
             _kb->clearPlaceholders();   // {loc}/{time} are for messages, not preset names
             break;
           case RadioPresetPicker::APPLIED:
@@ -1038,6 +1041,7 @@ public:
     if (_selected == DEVICE_NAME && p && enter) {
       _edit_name = true;
       _kb->begin(the_mesh.getNodeName(), (int)sizeof(p->node_name) - 1);
+      _kb->prompt = "Node name";
       _kb->clearPlaceholders();   // a device name is literal, not a message
       return true;
     }
@@ -1140,6 +1144,7 @@ public:
       // can't overflow it on save.
       _kb->begin(p ? p->custom_msgs[slot] : "",
                 p ? (int)sizeof(p->custom_msgs[slot]) - 1 : KB_MAX_LEN);
+      _kb->prompt = "Quick msg";
       kbAddSensorPlaceholders(*_kb, &sensors);
       return true;
     }

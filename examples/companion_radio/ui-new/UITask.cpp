@@ -52,20 +52,9 @@
   #define UI_RECENT_LIST_SIZE 4
 #endif
 
-// The sim's D-pad + dedicated OK/Enter key behaves like a joystick board
-// (a short Enter press opens Settings/Tools/Messages -- see the
-// KEY_ENTER && _page==... handlers below; holding it separately reaches
-// KEY_CONTEXT_MENU via handleLongPress(), same as a real joystick board's
-// long-press) -- without SIM_PLATFORM here, this would fall to the
-// touchscreen-board wording below, which describes a different, and for
-// this input method simply wrong, interaction.
-#if UI_HAS_JOYSTICK || defined(SIM_PLATFORM)
-  #define PRESS_LABEL "press Enter"
-#else
-  #define PRESS_LABEL "long press"
-#endif
 
 #include "icons.h"
+#include "../ui-core/Lettering.h"   // boot splash wordmark + lettering (shared with the L2)
 #include "GfxUtils.h"   // gfx::drawLine — connects trail points on the Home map preview
 
 // Blinking status indicators: on for the first half of a 4 s cycle, but e-ink
@@ -74,68 +63,77 @@ static inline bool blinkOn() {
   return Features::BLINK_INDICATORS ? ((millis() % 4000) < 2000) : true;
 }
 
+// Boot splash, as on the L2 (ui-lvgl/Splash.h, same lettering from
+// ui-core/Lettering.h): the MeshCore wordmark rising into place, "solo" in its
+// lettering once it has landed, the Solo version, upstream version + build date, and three dots
+// rising in turn while the device starts. E-ink gets the still final frame.
 class SplashScreen : public UIScreen {
   UITask* _task;
-  unsigned long dismiss_after;
-  char _version_info[12];
-  char _solo_ver[12];
+  unsigned long _start, dismiss_after;
+  char _solo_ver[24];
+  char _line2[32];
+
+  // A word in the wordmark's lettering, 1:1, top-left at (x, y).
+  static void drawLettering(DisplayDriver& d, const char* text, int x, int y, int gap) {
+    for (const char* p = text; *p; p++) {
+      char c = (char)tolower((unsigned char)*p);
+      int cw = lettering::charW(c);
+      if (cw < 0) continue;
+      for (int r = 0; r < lettering::LOGO_H; r++)
+        for (int col = 0; col < cw; ) {   // runs of inked pixels as one rect
+          if (!lettering::inked(c, col, r)) { col++; continue; }
+          int e = col;
+          while (e + 1 < cw && lettering::inked(c, e + 1, r)) e++;
+          d.fillRect(x + col, y + r, e - col + 1, 1);
+          col = e + 1;
+        }
+      x += cw + gap;
+    }
+  }
 
 public:
   SplashScreen(UITask* task) : _task(task) {
-    // MeshCore upstream version shown large (e.g. "1.15")
-    strncpy(_version_info, MESHCORE_VERSION, sizeof(_version_info) - 1);
-    _version_info[sizeof(_version_info) - 1] = '\0';
-
-    // Solo firmware version: strip the commit-hash suffix build.sh always
-    // appends as the LAST dash-segment (v1.15-solo.1-abcdef -> v1.15-solo.1).
-    // Must be the last dash, not the first: a tag like v1.21-rc1 has a dash
-    // of its own before the commit hash gets appended.
-    const char *ver = FIRMWARE_VERSION;
-    const char *dash = strrchr(ver, '-');
-    int plen = dash ? (int)(dash - ver) : (int)strlen(ver);
-    if (plen >= (int)sizeof(_solo_ver)) plen = sizeof(_solo_ver) - 1;
-    memcpy(_solo_ver, ver, plen);
-    _solo_ver[plen] = '\0';
-
-    dismiss_after = millis() + BOOT_SCREEN_MILLIS;
+    lettering::soloVersion(_solo_ver, sizeof(_solo_ver));
+    char date[16];
+    lettering::buildDate(date, sizeof(date));
+#ifdef MESHCORE_VERSION
+    snprintf(_line2, sizeof(_line2), "%s  %s", MESHCORE_VERSION, date);
+#else
+    snprintf(_line2, sizeof(_line2), "%s", date);
+#endif
+    _start = millis();
+    dismiss_after = _start + BOOT_SCREEN_MILLIS;
   }
 
   int render(DisplayDriver& display) override {
+    const bool anim = !display.isEink();
+    const unsigned long t = anim ? millis() - _start : 100000UL;   // e-ink: the settled frame
     display.setTextSize(1);
+    display.setColor(DisplayDriver::LIGHT);
     const int lh = display.getLineHeight();
-    const int step = display.lineStep();
+    const int cx = display.width() / 2;
 
-    // meshcore logo
-    display.setColor(DisplayDriver::LIGHT);
-    int logoWidth = 128;
-    int logo_y = 3;
-    display.drawXbm((display.width() - logoWidth) / 2, logo_y, meshcore_logo, logoWidth, 13);
+    // Block from the wordmark down to the second text line, centred above the dots.
+    const int dots_h = 8;
+    const int block_h = lettering::LOGO_H * 2 + 5 + lh * 2 + 2;
+    int top = (display.height() - dots_h - block_h) / 2;
+    if (top < 0) top = 0;
 
-    // version info at sz2
-    int ver_y = logo_y + 13 + 2;
-    display.setTextSize(2);
-    int lh2 = display.getLineHeight();
-    display.drawTextCentered(display.width()/2, ver_y, _version_info);
+    // Wordmark: rises 6 px into place over the first 400 ms (ease-out).
+    int rise = 0;
+    if (t < 400) { int k = 400 - (int)t; rise = (6 * k * k) / (400 * 400); }
+    display.drawXbm((display.width() - lettering::LOGO_W) / 2, top + rise, lettering::LOGO, lettering::LOGO_W, lettering::LOGO_H);
 
-    // build date at sz1, below sz2 version
-    int date_y = ver_y + lh2 + 2;
-    display.setTextSize(1);
-    display.drawTextCentered(display.width()/2, date_y, FIRMWARE_BUILD_DATE);
+    int y = top + lettering::LOGO_H + 3;
+    const int solo_w = lettering::textW("solo", 2);
+    if (t >= 400) drawLettering(display, "solo", cx - solo_w / 2, y, 2);   // once the wordmark has landed
+    y += lettering::LOGO_H + 2;
+    display.drawTextCentered(cx, y, _solo_ver[0] ? _solo_ver : "dev");
+    y += lh + 2;
+    display.drawTextCentered(cx, y, _line2);
 
-#ifdef FIRMWARE_SOLO_BUILD
-    int solo_y = date_y + step;
-    display.fillRect(0, solo_y - 1, display.width(), lh + 2);
-    display.setColor(DisplayDriver::DARK);
-    char solo_label[24];
-    if (_solo_ver[0])
-      snprintf(solo_label, sizeof(solo_label), "Solo %s", _solo_ver);
-    else
-      snprintf(solo_label, sizeof(solo_label), "Solo");
-    display.drawTextCentered(display.width()/2, solo_y, solo_label);
-    display.setColor(DisplayDriver::LIGHT);
-#endif
-
-    return 1000;
+    drawLoadingDots(display, cx, display.height() - 2);   // as the L2's
+    return anim ? 40 : 1000;
   }
 
   void poll() override {
@@ -722,6 +720,7 @@ public:
   int render(DisplayDriver& display) override {
     char tmp[80];
     int mq_delay = 0;   // >0 while a selected row's name is marquee-scrolling
+    int anim_ms = 0;    // >0 while a hovering page icon is on screen
     display.setTextSize(1);
     const int lh      = display.getLineHeight();  // line height at sz1
     const int step    = display.lineStep();        // lh + 2
@@ -752,8 +751,19 @@ public:
       display.setColor(DisplayDriver::LIGHT);
 
       if (_page != LOCK) {
+        // The time, once the clock is set (the node name before that): the
+        // name is what others see, the time is what you glance at here.
         char filtered_name[sizeof(_node_prefs->node_name)];
-        display.translateUTF8ToBlocks(filtered_name, _node_prefs->node_name, sizeof(filtered_name));
+        uint32_t now_ts = _rtc->getCurrentTime();
+        if (now_ts >= 1000000000UL) {
+          struct tm lt;
+          localTm(now_ts, _node_prefs->tz_offset_hours, lt);
+          int hh = lt.tm_hour;
+          if (_node_prefs->clock_12h) { hh %= 12; if (hh == 0) hh = 12; }
+          snprintf(filtered_name, sizeof(filtered_name), "%d:%02d", hh, lt.tm_min);
+        } else {
+          display.translateUTF8ToBlocks(filtered_name, _node_prefs->node_name, sizeof(filtered_name));
+        }
 
         // Only show the live-power readout when APC is actually controlling power —
         // not merely when the pref is set. While repeating APC is suppressed and
@@ -791,9 +801,15 @@ public:
       int x = display.width() / 2 - pitch * (n - 1) / 2;
       for (int i = 0; i < n; i++) {
         const MiniIcon* ic = pageIcon(order[i]);
+        if (i == curr_vis) {                            // the current page: icon knocked out of a soft pill
+          int pw = icon_w + 4;
+          if (pw > pitch - 1) pw = pitch - 1;
+          display.setColor(DisplayDriver::LIGHT);
+          display.fillSoftRect(x - pw / 2, dots_y - pg_half - 1, pw, pg_half * 2 + 3);
+          display.setColor(DisplayDriver::DARK);
+        }
         if (ic) miniIconDrawCentered(display, x, dots_y, *ic);
-        if (i == curr_vis)                              // underline the current page
-          display.fillRect(x - icon_w / 2, dots_y + pg_half + 1, icon_w, s);
+        display.setColor(DisplayDriver::LIGHT);
         x += pitch;
       }
     }
@@ -822,7 +838,8 @@ public:
         static const char* wd[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
         static const char* mo[] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
         snprintf(buf, sizeof(buf),"%s %d %s %d", wd[ti->tm_wday], ti->tm_mday, mo[ti->tm_mon], 1900 + ti->tm_year);
-        display.drawTextCentered(display.width() / 2, date_y, buf);
+        display.setCursor(0, date_y);
+        display.print(buf);
 
         // Alarm armed: a small bell in the top-left corner. The status bar (and
         // its bell) is hidden on this page, so signal the armed alarm here. Just
@@ -876,6 +893,7 @@ public:
         struct tm* ti = &lt;
         char buf[12];
         bool h12 = _node_prefs && _node_prefs->clock_12h;
+        // Left-aligned on purpose: the rest of the top row is left for status icons.
         int date_y = drawClockTime(display, 0, ti, h12, /*show_sec*/false);
         display.setTextSize(1);
         static const char* wd[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
@@ -961,9 +979,8 @@ public:
     } else if (_page == HomePage::BLUETOOTH) {
       display.setColor(DisplayDriver::LIGHT);
       display.setTextSize(1);
-      display.drawXbm((display.width() - 32) / 2, content_y,
-          _task->isSerialEnabled() ? bluetooth_on : bluetooth_off, 32, 32);
-      const int text_y = content_y + 32 + 3;
+      anim_ms = drawHoverIcon(display, display.width() / 2, content_y, BIG_BLUETOOTH, !_task->isSerialEnabled());
+      const int text_y = content_y + BIG_BLUETOOTH.h + HOVER_GAP;
       // The pairing PIN is BLE-specific: show it while BLE is on but not yet
       // bonded. (Gating on a plain isConnected() broke this on dual builds,
       // where it's hardcoded true.)
@@ -972,18 +989,18 @@ public:
         char pin_buf[16];
         snprintf(pin_buf, sizeof(pin_buf), "PIN: %d", the_mesh.getBLEPin());
         display.drawTextCentered(display.width() / 2, text_y, pin_buf);
-      } else if (waiting_for_pair) {
+      } else if (waiting_for_pair) {   // the pairing PIN takes the title's place
         char pin_buf[16];
         snprintf(pin_buf, sizeof(pin_buf), "PIN: %d", the_mesh.getBLEPin());
         display.drawTextCentered(display.width() / 2, text_y, pin_buf);
-        display.drawTextCentered(display.width() / 2, text_y + step, "toggle: " PRESS_LABEL);
       } else {
-        display.drawTextCentered(display.width() / 2, text_y, "toggle: " PRESS_LABEL);
+        // Each icon page carries just its title; Enter acting on it is the same everywhere.
+        display.drawTextCentered(display.width() / 2, text_y, "Bluetooth");
       }
     } else if (_page == HomePage::ADVERT) {
       display.setColor(DisplayDriver::LIGHT);
-      display.drawXbm((display.width() - 32) / 2, content_y, advert_icon, 32, 32);
-      display.drawTextCentered(display.width() / 2, content_y + 32 + 3, "advert: " PRESS_LABEL);
+      anim_ms = drawHoverIcon(display, display.width() / 2, content_y, BIG_ADVERT);
+      display.drawTextCentered(display.width() / 2, content_y + BIG_ADVERT.h + HOVER_GAP, "Advert");
 #if ENV_INCLUDE_GPS == 1
     } else if (_page == HomePage::GPS) {
       LocationProvider* nmea = sensors.getLocationProvider();
@@ -1095,8 +1112,8 @@ public:
     } else if (_page == HomePage::SETTINGS) {
       display.setColor(DisplayDriver::LIGHT);
       display.setTextSize(1);
-      display.drawTextCentered(display.width() / 2, content_y, "Settings");
-      display.drawTextCentered(display.width() / 2, content_y + step * 2, PRESS_LABEL " to open");
+      anim_ms = drawHoverIcon(display, display.width() / 2, content_y, BIG_SETTINGS);
+      display.drawTextCentered(display.width() / 2, content_y + BIG_SETTINGS.h + HOVER_GAP, "Settings");
     } else if (_page == HomePage::MAP) {
       display.setColor(DisplayDriver::LIGHT);
       display.setTextSize(1);
@@ -1137,19 +1154,24 @@ public:
     } else if (_page == HomePage::TOOLS) {
       display.setColor(DisplayDriver::LIGHT);
       display.setTextSize(1);
-      display.drawTextCentered(display.width() / 2, content_y, "Tools");
-      display.drawTextCentered(display.width() / 2, content_y + step * 2, PRESS_LABEL " to open");
+      anim_ms = drawHoverIcon(display, display.width() / 2, content_y, BIG_TOOLS);
+      display.drawTextCentered(display.width() / 2, content_y + BIG_TOOLS.h + HOVER_GAP, "Tools");
     } else if (_page == HomePage::QUICK_MSG) {
       display.setColor(DisplayDriver::LIGHT);
       display.setTextSize(1);
-      display.drawTextCentered(display.width() / 2, content_y, "Messages");
+      const int ix = (display.width() - BIG_MESSAGES.w) / 2;
+      anim_ms = drawHoverIcon(display, display.width() / 2, content_y, BIG_MESSAGES);
+      // Unread count as the usual pill on the bubble's top-right corner.
       int total_unread = _task->getDMUnreadTotal() + _task->getChannelUnreadCount() + _task->getRoomUnreadCount();
       if (total_unread > 0) {
-        char badge[20];
-        snprintf(badge, sizeof(badge), _task->getAnyUnreadOverflow() ? "%d+ unread" : "%d unread", total_unread);
-        display.drawTextCentered(display.width() / 2, content_y + step, badge);
+        int bw = display.unreadBadgeWidth(total_unread, _task->getAnyUnreadOverflow());
+        int bx = ix + BIG_MESSAGES.w + bw / 2;
+        display.setColor(DisplayDriver::DARK);   // a dark ring so it reads over the bubble's border
+        const int by = content_y - hoverLift(display);   // rides on the hovering bubble
+        display.fillRect(bx - bw - 1, by + 1, bw + 2, lh + 2);
+        display.drawUnreadBadge(bx, by + 2, total_unread, false, _task->getAnyUnreadOverflow());
       }
-      display.drawTextCentered(display.width() / 2, content_y + step * 2, PRESS_LABEL " to open");
+      display.drawTextCentered(display.width() / 2, content_y + BIG_MESSAGES.h + HOVER_GAP, "Messages");
     } else if (_page == HomePage::FAVOURITES) {
       // Grid of pinned contacts. Layout transposes to current orientation:
       // landscape → 3×2, portrait → 2×3. Selected tile inverts via drawSelectionRow.
@@ -1247,20 +1269,11 @@ public:
       if (_shutdown_init) {
         display.drawTextCentered(display.width() / 2, content_y + step, "hibernating...");
       } else {
-        display.drawXbm((display.width() - 32) / 2, content_y, power_icon, 32, 32);
-        const int text_y = content_y + 32 + 3;
+        anim_ms = drawHoverIcon(display, display.width() / 2, content_y, BIG_POWER);
+        const int text_y = content_y + BIG_POWER.h + HOVER_GAP;
         const int lh1 = display.getLineHeight();
-        if (text_y + lh1 <= display.height()) {
-          char hib_hint[32];
-          snprintf(hib_hint, sizeof(hib_hint), "hibernate:%s", PRESS_LABEL);
-          if (display.getTextWidth(hib_hint) < display.width()) {
-            display.drawTextCentered(display.width() / 2, text_y, hib_hint);
-          } else {
-            display.drawTextCentered(display.width() / 2, text_y, "hibernate:");
-            if (text_y + step + lh1 <= display.height())
-              display.drawTextCentered(display.width() / 2, text_y + step, PRESS_LABEL);
-          }
-        }
+        if (text_y + lh1 <= display.height())
+          display.drawTextCentered(display.width() / 2, text_y, "Hibernate");
       }
     }
     bool auto_adv = _node_prefs && _node_prefs->advert_auto_interval_sec > 0;
@@ -1281,6 +1294,7 @@ public:
       return (mq_delay > 0 && mq_delay < ret) ? mq_delay : ret;
     }
     int ret = need_blink ? 1000 : 5000;
+    if (anim_ms > 0 && anim_ms < ret) ret = anim_ms;
     return (mq_delay > 0 && mq_delay < ret) ? mq_delay : ret;
   }
 

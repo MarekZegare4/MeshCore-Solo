@@ -131,7 +131,7 @@ class ClockToolsScreen : public UIScreen {
       int cx = valx + k * cw;
       if (k == char_idx) {
         d.setColor(DisplayDriver::DARK);
-        d.fillRect(cx, y - 1, cw, d.getLineHeight() + 1);
+        d.fillSoftRect(cx, y - 1, cw, d.getLineHeight() + 1);
         d.setColor(DisplayDriver::LIGHT);
       } else {
         d.setColor(DisplayDriver::DARK);

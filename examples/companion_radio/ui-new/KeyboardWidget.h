@@ -271,7 +271,10 @@ struct KeyboardWidget {
   // The number pad (beginPin) instead of the user's ABC / T9 layout; its ABC
   // key drops back to that layout for a password with letters.
   bool pin_mode = false;
-  const char* pin_prompt = nullptr;   // e.g. "New PIN", shown in the preview; kept past the ABC switch
+  // What is being typed ("New PIN", "Password", a channel name...), shown at
+  // the right of the preview; set it after begin(), which clears it. Kept past
+  // the PIN pad's ABC switch.
+  const char* prompt = nullptr;
   static const int PIN_MAX_LEN = 16;
   int  row, col;
   int  page;        // see totalPages()/scriptAt()/pageIsSymbols() below
@@ -416,7 +419,7 @@ struct KeyboardWidget {
     caps_lock = false;
     pin_kb_mask_enabled = false;
     pin_mode = false;
-    pin_prompt = nullptr;
+    prompt = nullptr;
     t9_cell = -1;
     t9_cycle = 0;
     _ph_menu.active = false;
@@ -430,10 +433,10 @@ struct KeyboardWidget {
   }
 
   // Open keyboard in PIN mode
-  void beginPin(const char* initial = "", int max = PIN_MAX_LEN, bool mask = false, const char* prompt = nullptr) {
+  void beginPin(const char* initial = "", int max = PIN_MAX_LEN, bool mask = false, const char* label = nullptr) {
     begin(initial, max);
     pin_mode = true;
-    pin_prompt = prompt;
+    prompt = label;
     pin_kb_mask_enabled = mask; // Mask input of number field
   }
 
@@ -518,6 +521,29 @@ struct KeyboardWidget {
     else if (key == KEY_DOWN)  { cursor_pos = len; }
   }
 
+  // PIN preview: what it's for, centred, and the digits below it spaced out
+  // (filled soft squares when masked), with an underline on the next slot.
+  void renderPinPreview(DisplayDriver& display, int sep_y) {
+    const int lh = display.getLineHeight(), cw = display.getCharWidth();
+    const int pitch = cw + 3;
+    const int y = sep_y - lh;              // digits on the last preview line
+    int title_y = y - lh - 1;
+    if (title_y < 0) title_y = 0;
+    if (prompt && title_y + lh <= y) display.drawTextCentered(display.width() / 2, title_y, prompt);
+    const int slots = len + (len < max_len ? 1 : 0);
+    int x = display.width() / 2 - (slots * pitch - 3) / 2;
+    for (int i = 0; i < slots; i++, x += pitch) {
+      if (i == len) { display.fillRect(x, y + lh - 2, cw, 1); continue; }   // next digit goes here
+      if (pin_kb_mask_enabled) {
+        display.fillSoftRect(x, y + 1, cw, lh - 3);
+      } else {
+        char d[2] = { buf[i], 0 };
+        display.setCursor(x, y);
+        display.print(d);
+      }
+    }
+  }
+
   int render(DisplayDriver& display) {
     _visible = true;
     // A stale mid-cycle T9 press (no further input since) finalizes on its own —
@@ -576,6 +602,9 @@ struct KeyboardWidget {
     // ...and the byte offset that line starts at.
     int ps = 0;
     for (int n = first_line * cpl; n > 0 && ps < len; n--) ps += kbUtf8CharBytesAt(buf, ps, len);
+    if (isPin()) {
+      renderPinPreview(display, sep_y);
+    } else
     for (int pl = 0; pl < prev_lines; pl++) {
       int pe = ps;   // byte offset cpl codepoints further along (or end of text)
       for (int k = 0; k < cpl && pe < len; k++) pe += kbUtf8CharBytesAt(buf, pe, len);
@@ -622,9 +651,27 @@ struct KeyboardWidget {
       display.print(linebuf_t);
       ps = pe;
     }
-    if (pin_prompt) {   // what the PIN is for, bottom-right of the preview (alerts don't show over the keyboard)
-      display.setCursor(display.width() - display.getTextWidth(pin_prompt), (prev_lines - 1) * lh);
-      display.print(pin_prompt);
+    if (!isPin()) {
+      // Bottom-right of the preview: what the field is, or near the limit how
+      // much room is left. Only when it clears the text on that line.
+      char left[12];
+      const char* tag = prompt;
+      if (max_len > 0 && len * 4 >= max_len * 3) { snprintf(left, sizeof(left), "%d left", max_len - len); tag = left; }
+      if (tag) {
+        int tw = display.getTextWidth(tag);
+        // Codepoints on the last preview line, plus the cursor if it's there.
+        int total_chars = 0;
+        for (int p = 0; p < len; ) { p += kbUtf8CharBytesAt(buf, p, len); total_chars++; }
+        const int last_line = first_line + prev_lines - 1;
+        int last_chars = total_chars - last_line * cpl;
+        if (last_chars < 0) last_chars = 0;
+        if (last_chars > cpl) last_chars = cpl;
+        if (cursor_line == last_line) last_chars++;
+        if (last_chars * cw + tw + cw <= display.width()) {
+          display.setCursor(display.width() - tw, (prev_lines - 1) * lh);
+          display.print(tag);
+        }
+      }
     }
     display.fillRect(0, sep_y, display.width(), display.sepH());
 
@@ -808,7 +855,7 @@ struct KeyboardWidget {
         int x = bx + i * seg_w;
         if (i == accent_sel) {
           display.setColor(DisplayDriver::LIGHT);
-          display.fillRect(x + 1, by + 1, seg_w - 1, bh - 2);
+          display.fillSoftRect(x + 1, by + 1, seg_w - 1, bh - 2);
           display.setColor(DisplayDriver::DARK);
         } else {
           display.setColor(DisplayDriver::LIGHT);
