@@ -932,9 +932,7 @@ public:
       const int hy = display.height() - lk_lh - p * 2;
       const int hw = display.getTextWidth(hint);
       const int hx = (display.width() - hw) / 2;
-      display.setColor(DisplayDriver::LIGHT);
-      display.fillRect(hx - p, hy - p, hw + p*2, lk_lh + p*2);
-      display.setColor(DisplayDriver::DARK);
+      display.drawPanel(hx - p, hy - p, hw + p*2, lk_lh + p*2);
       display.setCursor(hx, hy);
       display.print(hint);
     } else if (_page == HomePage::RADIO) {
@@ -1015,7 +1013,10 @@ public:
         display.drawTextRightAlign(display.width()-1, y, buf);
         y += step;
         display.drawTextLeftAlign(0, y, "pos");
-        snprintf(buf, sizeof(buf),"%.4f %.4f",
+        // The driver reports 999 deg until a first fix: show a dash, not the
+        // placeholder. After a fix the last known position stays.
+        if (labs(nmea->getLatitude()) > 90000000L) strcpy(buf, "-");
+        else snprintf(buf, sizeof(buf),"%.4f %.4f",
           nmea->getLatitude()/1000000., nmea->getLongitude()/1000000.);
         display.drawTextRightAlign(display.width()-1, y, buf);
         y += step;
@@ -1854,9 +1855,16 @@ void UITask::onMessageArrived(const UiEvent& ev) {
   }
   if (ev.kind == UIEventType::channelMessage) _last_notif_ch_idx = ev.idx;
 
-  char alert_buf[80];
-  snprintf(alert_buf, sizeof(alert_buf), "Msg: %.20s", ev.text);
-  showAlert(alert_buf, 3000);
+  // No toast when the message lands in the thread that is open on screen:
+  // it already shows up there, and the box would only cover it.
+  bool in_view = curr == messages_screen && _display && _display->isOn() && !_locked &&
+                 ((ev.kind == UIEventType::contactMessage && ev.flag && isViewingDM(ev.key)) ||
+                  (ev.kind == UIEventType::channelMessage && ev.idx >= 0 && isViewingChannel((uint8_t)ev.idx)));
+  if (!in_view) {
+    char alert_buf[80];
+    snprintf(alert_buf, sizeof(alert_buf), "Msg: %.20s", ev.text);
+    showAlert(alert_buf, 3000);
+  }
 
   if (_display != NULL && !_locked) {
     bool wake_disabled = _node_prefs && (_node_prefs->msg_wake_screen_off || inQuietHours(*_node_prefs, rtc_clock.getCurrentTime()));
@@ -1909,10 +1917,7 @@ void UITask::renderAlertOverlay() {
   if (nl < 1) nl = 1;
   int box_h = nl * lh + pad * 2;
   int box_y = (_display->height() - box_h) / 2;
-  _display->setColor(DisplayDriver::DARK);
-  _display->fillRect(box_x, box_y, box_w, box_h);
-  _display->setColor(DisplayDriver::LIGHT);
-  _display->drawRect(box_x, box_y, box_w, box_h);
+  _display->drawPanel(box_x, box_y, box_w, box_h);
   for (int i = 0; i < nl; i++)
     _display->drawTextCentered(_display->width() / 2, box_y + pad + i * lh, s_wrap_lines[i]);
 }

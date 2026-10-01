@@ -801,10 +801,7 @@ struct KeyboardWidget {
       int bx = (display.width() - bw) / 2;
       int by = compact_ui ? (chars_y + 2 * lh + 2) : (chars_y + row * cell_h - 1);
       int bh = compact_ui ? (lh + 2) : (cell_h + 1);
-      display.setColor(DisplayDriver::DARK);
-      display.fillRect(bx, by, bw, bh);
-      display.setColor(DisplayDriver::LIGHT);
-      display.drawRect(bx, by, bw, bh);
+      display.drawPanel(bx, by, bw, bh);
       for (int i = 0; i < n; i++) {
         char one[5]; kbUtf8CharAt(group, i, one);
         char shown[5]; kbApplyCapsUtf8(one, caps, shown, sizeof(shown));
@@ -971,22 +968,27 @@ struct KeyboardWidget {
         }
         return NONE;
       }
+      // The blank cells either side of 0 are never a stop: moving up/down
+      // onto one lands on 0, moving sideways steps over it.
+      auto blank = [&]() { return row < rows && KB_PIN_DIGITS[row][col] == ' '; };
       if (c == KEY_UP)   {                      // Navigation
         row = (row > 0) ? row - 1 : rows;
+        if (blank()) col = 1;
         return NONE;
       }
       if (c == KEY_DOWN) {
         row = (row < rows) ? row + 1 : 0;
+        if (blank()) col = 1;
         return NONE;
       }
       if (c == KEY_LEFT) {
         int max_col = (row == rows) ? KB_PIN_SPECIAL - 1 : cols - 1;
-        col = (col > 0) ? col - 1 : max_col;
+        do { col = (col > 0) ? col - 1 : max_col; } while (blank());
         return NONE;
       }
       if (c == KEY_RIGHT) {
         int max_col = (row == rows) ? KB_PIN_SPECIAL - 1 : cols - 1;
-        col = (col < max_col) ? col + 1 : 0;
+        do { col = (col < max_col) ? col + 1 : 0; } while (blank());
         return NONE;
       }
       if (c == KEY_ENTER) {

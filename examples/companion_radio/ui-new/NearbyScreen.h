@@ -631,14 +631,15 @@ public:
       char empty[24];
       if (_source == SRC_SCAN) {
         const char* msg;
-        if (_scanning)   msg = "Waiting for replies...";
+        if (_scanning)   msg = "No replies yet";   // fits 128 px; the header already says SCANNING
         else if (flt)  { snprintf(empty, sizeof(empty), "No %s nodes", flt); msg = empty; }
         else             msg = "No nodes found";
         display.drawTextCentered(display.width() / 2, display.height() / 2, msg);
       } else {
         const char* hint;
-        if (flt) { snprintf(empty, sizeof(empty), "No %s contacts", flt); hint = "[<>] change filter"; }
-        else     { snprintf(empty, sizeof(empty), "No contacts found");   hint = "[Enter]=Discover";   }
+        if (_pick_admin_target && !flt) { snprintf(empty, sizeof(empty), "Nothing to admin"); hint = "Repeaters & rooms"; }
+        else if (flt) { snprintf(empty, sizeof(empty), "No %s contacts", flt); hint = "[<>] change filter"; }
+        else          { snprintf(empty, sizeof(empty), "No contacts found");   hint = "[Enter]=Discover";   }
         display.drawTextCentered(display.width() / 2, display.height() / 2 - display.lineStep() / 2, empty);
         display.drawTextCentered(display.width() / 2, display.height() / 2 + display.lineStep() / 2, hint);
       }

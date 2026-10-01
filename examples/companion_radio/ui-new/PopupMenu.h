@@ -149,10 +149,7 @@ struct PopupMenu {
     if (bx < margin) bx = margin;
     if (by < margin) by = margin;
 
-    display.setColor(DisplayDriver::DARK);
-    display.fillRect(bx, by, bw, bh);
-    display.setColor(DisplayDriver::LIGHT);
-    display.drawRect(bx, by, bw, bh);
+    display.drawPanel(bx, by, bw, bh);
     if (_title) display.drawTextEllipsized(bx + pad, by + 1, bw - pad * 2, _title);
     display.fillRect(bx, by + lh + 2, bw, sh);   // separator just under the title; gap follows
 

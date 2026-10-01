@@ -459,10 +459,10 @@ class MessagesScreen : public UIScreen {
   static void drawHistRowFrame(DisplayDriver& d, int box_x, int box_w, int y, int bh, int lh, bool sel) {
     d.setColor(DisplayDriver::LIGHT);
     if (sel) {
-      d.fillRect(box_x, y, box_w, bh);
+      d.fillSoftRect(box_x, y, box_w, bh);
       d.setColor(DisplayDriver::DARK);
     } else {
-      d.drawRect(box_x, y, box_w, bh);
+      d.drawSoftRect(box_x, y, box_w, bh);
     }
   }
 
@@ -519,8 +519,8 @@ class MessagesScreen : public UIScreen {
     int bw = ctw + 4;
     int bx = d.width() - bw;
     d.setColor(DisplayDriver::LIGHT);
-    if (sel) { d.fillRect(bx, cby, bw, lh); d.setColor(DisplayDriver::DARK); }
-    else       d.drawRect(bx, cby, bw, lh);
+    if (sel) { d.fillSoftRect(bx, cby, bw, lh); d.setColor(DisplayDriver::DARK); }
+    else       d.drawSoftRect(bx, cby, bw, lh);
     d.setCursor(bx + 2, cby);
     d.print(ctxt);
     d.setColor(DisplayDriver::LIGHT);

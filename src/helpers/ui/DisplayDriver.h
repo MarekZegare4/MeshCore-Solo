@@ -193,6 +193,33 @@ public:
     }
   }
 
+  // Soft-cornered boxes: the same corner-pixel knockout as drawUnreadBadge(),
+  // shared by bubbles, popups, alerts and hints so every box reads alike.
+  // Outline only, corners left out; line thickness follows sepH().
+  void drawSoftRect(int x, int y, int w, int h) {
+    int t = sepH();
+    fillRect(x + 1, y, w - 2, t);
+    fillRect(x + 1, y + h - t, w - 2, t);
+    fillRect(x, y + 1, t, h - 2);
+    fillRect(x + w - t, y + 1, t, h - 2);
+  }
+  // Filled in the current colour; the four corner pixels aren't painted, so
+  // they keep whatever is under them.
+  void fillSoftRect(int x, int y, int w, int h) {
+    fillRect(x + 1, y, w - 2, h);
+    fillRect(x, y + 1, 1, h - 2);
+    fillRect(x + w - 1, y + 1, 1, h - 2);
+  }
+  // A box floating over the screen (alert, popup, hint): clears a 1 px moat
+  // around it so lines of the view below stop short of the border instead of
+  // running into it, fills it dark and draws the soft border. Leaves ink LIGHT.
+  void drawPanel(int x, int y, int w, int h) {
+    setColor(DARK);
+    fillRect(x - 1, y - 1, w + 2, h + 2);
+    setColor(LIGHT);
+    drawSoftRect(x, y, w, h);
+  }
+
   // Format a small unread count into buf: "1".."99", then "99+". count >= 1.
   // No stdio — DisplayDriver.h only pulls stdint/string.
   // overflow: the count itself is honest (how many still-held entries are

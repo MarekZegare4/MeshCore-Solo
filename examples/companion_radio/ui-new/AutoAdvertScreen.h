@@ -22,31 +22,22 @@ public:
 
   void onShow() override { _dirty = false; }
 
+  // One value row, drawn like every other settings list (LEFT/RIGHT or Enter
+  // cycles, Back saves) instead of a screen of its own with typed hints.
   int render(DisplayDriver& display) override {
     display.setTextSize(1);
     display.setColor(DisplayDriver::LIGHT);
-    int label_y = display.listStart();
-    int bar_y   = label_y + display.lineStep();
-    int bar_h   = display.lineStep();
-    int tip_y   = bar_y + bar_h + 4;
-
     display.drawCenteredHeader("AUTO-ADVERT");
-
-    display.setCursor(2, label_y);
-    display.print("Interval:");
-
-    int idx = currentIdx();
-    display.setColor(DisplayDriver::LIGHT);
-    display.fillRect(0, bar_y, display.width(), bar_h);
-    display.setColor(DisplayDriver::DARK);
-    display.drawTextCentered(display.width() / 2, bar_y + 1, OPT_LABELS[idx]);
-    display.setColor(DisplayDriver::LIGHT);
-
-    display.setCursor(2, tip_y);
-    display.print("<  > to change");
-    display.setCursor(2, tip_y + display.lineStep());
-    display.print("[Esc] to save");
-    return 500;
+    const int valx = display.width() / 2 + 6;
+    int sel = 0, scroll = 0;
+    drawList(display, 1, sel, scroll, [&](int, int y, bool is_sel, int reserve) {
+      drawRowSelection(display, y, is_sel, reserve);
+      display.setCursor(4, y);
+      display.print("Interval");
+      display.setCursor(valx, y);
+      display.print(OPT_LABELS[currentIdx()]);
+    });
+    return 5000;
   }
 
   bool handleInput(char c) override {
