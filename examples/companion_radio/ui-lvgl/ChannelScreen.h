@@ -41,8 +41,10 @@ static void onChanDropdown(lv_event_t* e) {
                    choiceSelected((lv_obj_t*)lv_event_get_target(e)));
 }
 static void onChanRowHold(lv_event_t* e) {
+  intptr_t i = vlist::arg(e);
+  if (i < 0) return;
   lv_indev_wait_release(lv_indev_active());   // the hold isn't also a tap that opens the channel
-  s_ui->channelMenu((int)(uintptr_t)lv_event_get_user_data(e));
+  s_ui->channelMenu((int)i);
 }
 static void onChanThreadMenu(lv_event_t* e) { (void)e; s_ui->channelMenu(-1); }
 static void onChanAdd(lv_event_t* e)      { (void)e; s_ui->showChannelEdit(-1); }

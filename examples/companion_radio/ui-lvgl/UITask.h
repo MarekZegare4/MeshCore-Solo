@@ -314,14 +314,16 @@ private:
   bool homeMapFit();
 #ifdef UI_PERF_TEST
   void perfMap(bool reset = false);
+  void perfNearbyAgain() { _nearby_sig = 0; refreshNearbyList(); }
 #endif
   void homeMapLayout();
   void homeMapLoop();
   void refreshHome();
   void homeSwipePoll();
   void buildChats();
+  void refreshChats();
+  void fillChats();
   void buildContacts();
-  void contactRow(int i);
   void fill(void (UITask::*fn)(int), int from, int to);
   void then(void (UITask::*fn)(int), int arg);
   void fillStart(int n, int first, void (UITask::*row)(int));
@@ -341,7 +343,6 @@ private:
   void buildKeyboardPage(lv_obj_t* body);
   void buildAboutPage(lv_obj_t* body);
   void buildAdminPick();
-  void adminPickRow(int i);
   void buildOta();
   void refreshOta();
   void otaTick();
@@ -350,8 +351,6 @@ private:
   bool wifiInUse() const;   // a map download or an update holds the WiFi
   void buildNearby();
   void refreshNearbyList();
-  void nearbyRow(int i);
-  void nearbyRowSet(lv_obj_t* row, int i);
   uint32_t nearbySignature() const;
   void showScanPopup();
   void refreshScanPopup();

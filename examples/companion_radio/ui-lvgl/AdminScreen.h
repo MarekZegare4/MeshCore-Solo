@@ -63,7 +63,7 @@ static void onAdminPwKb(lv_event_t* e) { s_ui->adminLogin(lv_event_get_code(e) =
 static void onAdminTextKb(lv_event_t* e) { s_ui->adminTextDone(lv_event_get_code(e) == LV_EVENT_READY); }
 static void onAdminCancelWait(lv_event_t* e) { (void)e; s_ui->adminCancelWait(); }
 static void onOpenAdminPick(lv_event_t* e) { (void)e; s_ui->showAdminPick(); }
-static void onAdminPickRow(lv_event_t* e)  { s_ui->adminPick((int)(uintptr_t)lv_event_get_user_data(e)); }
+static void onAdminPickRow(lv_event_t* e)  { s_ui->adminPick((int)vlist::arg(e)); }
 
 namespace adminview {
 static const int PICK_MAX = 128;
@@ -80,6 +80,8 @@ void UITask::showAdminPick() {
 
 void UITask::buildAdminPick() {
   lv_obj_t* body = newScreen("Admin", true);
+  vlist::attach(body);
+  vlist::begin(body);
   int rows = 0;
   for (int pass = 0; pass < 2; pass++) {   // favourites first
     for (int i = 0; i < the_mesh.getNumContacts() && rows < adminview::PICK_MAX; i++) {
@@ -92,23 +94,27 @@ void UITask::buildAdminPick() {
       rows++;
     }
   }
-  if (rows) sectionTitle(body, "LOG IN TO");
-  fillStart(rows, 8, &UITask::adminPickRow);   // the rest as the loop goes (fill)
+  if (rows) vlist::own(body, sectionTitle(body, "LOG IN TO"));
+  static const vlist::Kind ROW = {
+    theme::ROW_H,
+    [](lv_obj_t* list) { return vRow(list, onAdminPickRow, NULL); },
+    [](lv_obj_t* row, intptr_t i) {
+      ContactInfo c;
+      if (!the_mesh.getContactByIdx(adminview::s_pick_raw[i], c) || memcmp(c.id.pub_key, adminview::s_pick[i], PUB_KEY_SIZE) != 0) {
+        rowSet(row, "?", NULL);   // deleted meanwhile
+        return;
+      }
+      char name[48];
+      snprintf(name, sizeof(name), "%s%s", contactctl::favourite(c) ? UI_SYMBOL_STAR "  " : "", c.name);
+      rowSet(row, name, c.type == ADV_TYPE_ROOM ? "Room server" : "Repeater");
+    },
+  };
+  for (int i = 0; i < rows; i++) vlist::add(body, &ROW, i);
   if (!rows) {
-    noteLabel(body, "No repeaters or room servers yet. They show up here once their advert is heard.",
-              THEME_FONT_BODY, theme::TEXT_MUTED);
+    vlist::own(body, noteLabel(body, "No repeaters or room servers yet. They show up here once their advert is heard.",
+                               THEME_FONT_BODY, theme::TEXT_MUTED));
   }
-}
-
-void UITask::adminPickRow(int i) {
-  ContactInfo c;
-  if (!the_mesh.getContactByIdx(adminview::s_pick_raw[i], c) || memcmp(c.id.pub_key, adminview::s_pick[i], PUB_KEY_SIZE) != 0) {
-    listRow(_body, "?", NULL, onAdminPickRow, (void*)(uintptr_t)i);   // deleted meanwhile
-    return;
-  }
-  char name[48];
-  snprintf(name, sizeof(name), "%s%s", contactctl::favourite(c) ? UI_SYMBOL_STAR "  " : "", c.name);
-  listRow(_body, name, c.type == ADV_TYPE_ROOM ? "Room server" : "Repeater", onAdminPickRow, (void*)(uintptr_t)i);
+  vlist::end(body);
 }
 
 void UITask::adminPick(int row) {

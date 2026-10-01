@@ -238,5 +238,5 @@ void UITask::setBluetooth(bool on) {
 void UITask::markAllRead() {
   _core->markAllRead();
   showToast("All marked read", 1200);
-  if (_screen == SCR_CHATS) buildChats();
+  if (_screen == SCR_CHATS) refreshChats();
 }

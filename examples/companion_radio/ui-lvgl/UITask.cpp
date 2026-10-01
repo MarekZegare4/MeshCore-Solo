@@ -66,6 +66,8 @@ template <class T> static T* psramBuf(size_t n) {
   return (T*)calloc(n, sizeof(T));
 }
 
+static bool s_chats_stale = false;   // Messages: a refresh waits for a held row to be let go
+
 #include "../ui-core/UiCore.h"   // shared UI Core (header-only, this TU)
 #include "../ui-core/NearbyModel.h"
 #include "../ui-core/EtaTracker.h"
@@ -1165,6 +1167,18 @@ static void badge(lv_obj_t* parent, int n, bool overflow) {
   lv_obj_center(l);
 }
 
+// A vlist row's badge (its third child): made the first time there's a
+// count, then its count set, hidden at none.
+static void rowBadge(lv_obj_t* row, int n, bool overflow) {
+  lv_obj_t* b = lv_obj_get_child(row, 2);
+  if (!b) { badge(row, n, overflow); return; }
+  lv_obj_set_flag(b, LV_OBJ_FLAG_HIDDEN, n <= 0);
+  if (n <= 0) return;
+  char t[8];
+  snprintf(t, sizeof(t), "%d%s", n, overflow ? "+" : "");
+  setText(lv_obj_get_child(b, 0), t);
+}
+
 // The same on a Home tile: in its top-right corner, clear of the icon.
 static void tileBadge(lv_obj_t* tile, int n) {
   if (n <= 0) return;
@@ -1336,7 +1350,10 @@ static constexpr uint32_t LOCK_OFF_MS = 30000;   // the lock screen's own auto-o
 #if defined(UI_PERF_TEST)
 // Perf tools (-D UI_PERF_TEST, output lines start "PERF"): each settings page
 // and most screens built and drawn once, draw profiles, a popup test, then a
-// walk through the screens. -D PERF_KEEP_USB leaves the USB popup up;
+// walk through the screens. -D PERF_LISTS times the long lists (opened until
+// all is in, scrolled, refreshed); -D PERF_LIST_MUL fills New message's
+// with the few contacts there are, repeated up to 256.
+// -D PERF_KEEP_USB leaves the USB popup up;
 // -D PERF_WRAP_TEXT plus -Wl,--wrap= of lv_text_get_size_attributes,
 // lv_layout_apply, lv_obj_get_style_prop_internal and lv_obj_send_event adds
 // what layout costs per screen (text measured, flex runs, style reads, events).
@@ -1779,6 +1796,71 @@ void UITask::loop() {
         one("contacts", 0, &UITask::showContacts);
         one("chats", 0, &UITask::showChats);
         one("nearby", 0, &UITask::showNearby);
+#ifdef PERF_LISTS
+        {   // -D PERF_LISTS: the long lists -- opened until all is built, scrolled, refreshed
+          auto list = [this](const char* tag, void (UITask::*fn)(), void (UITask::*again)()) {
+            showHome(); lv_refr_now(NULL);
+            size_t h0 = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+            uint32_t t = micros();
+            (this->*fn)();
+            uint32_t b = micros() - t;
+            PerfFrames f;
+            uint32_t t0 = millis();
+            while (millis() - t0 < 3000 && (fillPending() || lv_anim_count_running() || millis() - t0 < 100)) {
+              uint32_t u = micros();
+              lv_timer_handler();
+              fillTick();
+              u = micros() - u;
+              if (u > 3000) { f.n++; f.sum += u; if (u > f.max) f.max = u; }
+              delay(1);
+            }
+            uint32_t ready = micros() - t;
+            uint32_t n = 0;
+            lv_obj_tree_walk(lv_screen_active(), [](lv_obj_t*, void* u) { ++*(uint32_t*)u; return LV_OBJ_TREE_WALK_NEXT; }, &n);
+            long kb = ((long)h0 - (long)heap_caps_get_free_size(MALLOC_CAP_SPIRAM)) / 1024;
+            struct S { lv_obj_t* o; int h; } s = { nullptr, 10 };   // the list: the most to scroll
+            lv_obj_tree_walk(lv_screen_active(), [](lv_obj_t* o, void* u) {
+              S* s = (S*)u;
+              int v = lv_obj_get_scroll_bottom(o) + lv_obj_get_scroll_y(o);
+              if (lv_obj_has_flag(o, LV_OBJ_FLAG_SCROLLABLE) && v > s->h) { s->h = v; s->o = o; }
+              return LV_OBJ_TREE_WALK_NEXT;
+            }, &s);
+            PerfFrames sc;
+            if (s.o) {
+              for (int i = 0; i < 60 && lv_obj_get_scroll_bottom(s.o) > 0; i++) {   // a steady fling, 18 px a frame
+                lv_obj_scroll_by(s.o, 0, -18, LV_ANIM_OFF);
+                uint32_t u = micros();
+                lv_refr_now(NULL);
+                u = micros() - u;
+                sc.n++; sc.sum += u; if (u > sc.max) sc.max = u;
+              }
+              lv_obj_scroll_to_y(s.o, 0, LV_ANIM_OFF);
+            }
+            uint32_t tr = 0;
+            if (again) {   // what a new message / a changed node costs
+              lv_refr_now(NULL);
+              tr = micros();
+              (this->*again)();
+              lv_refr_now(NULL);
+              tr = micros() - tr;
+            }
+            Serial.printf("PERF list %-9s open %5.1f ms, all built %6.1f ms (%2lu frames avg %4.1f max %5.1f) | %4lu objects, %4ld KB"
+                          " | scroll %2lu frames avg %4.1f max %5.1f (list %d px) | refresh %5.1f ms\n",
+                          tag, b / 1000.0f, ready / 1000.0f, (unsigned long)f.n, f.n ? f.sum / 1000.0f / f.n : 0.0f, f.max / 1000.0f,
+                          (unsigned long)n, kb, (unsigned long)sc.n, sc.n ? sc.sum / 1000.0f / sc.n : 0.0f, sc.max / 1000.0f,
+                          s.h, tr / 1000.0f);
+          };
+          bool all = _prefs->dm_show_all;
+          list("fav", &UITask::showContacts, nullptr);
+          _prefs->dm_show_all = true;   // not saved
+          list("contacts", &UITask::showContacts, nullptr);
+          _prefs->dm_show_all = all;
+          list("chats", &UITask::showChats, &UITask::buildChats);
+          list("chats-new", &UITask::showChats, &UITask::refreshChats);   // a new message, in place
+          list("nearby", &UITask::showNearby, &UITask::perfNearbyAgain);
+          list("admin", &UITask::showAdminPick, nullptr);
+        }
+#endif
 #ifdef PERF_CONTROLS
         {   // -D PERF_CONTROLS: every control on the settings screens used once (perfControls)
           auto ctls = [this](const char* tag, int page, void (UITask::*fn)()) {
@@ -1874,6 +1956,7 @@ void UITask::loop() {
       refreshStatusBar();
       refreshLock();
       if (_screen == SCR_HOME) refreshHome();
+      if (s_chats_stale && !_nav_overlay) refreshChats();   // a row was held when it came
       refreshDiag();
       refreshCompass();
       refreshGps();
@@ -2166,7 +2249,7 @@ void UITask::onMessageArrived(const UiEvent& ev) {
       (ev.kind == UIEventType::channelMessage ? _thread_is_channel && ev.idx == _thread_channel
                                               : !_thread_is_channel && memcmp(_thread_key, ev.key, 4) == 0);
   if (!open_here) bannerShow(icon, ev.text, text);   // not over the very conversation it's in
-  if (_screen == SCR_CHATS && !_nav_overlay) buildChats();   // new unread counts (not under an open popup)
+  if (_screen == SCR_CHATS && !_nav_overlay) refreshChats();   // new unread counts (not under an open popup)
 }
 
 bool UITask::isViewingChannel(uint8_t channel_idx) {
@@ -2714,10 +2797,193 @@ static void onPowerRow(lv_event_t* e);
 
 // Home itself (pages, clock, minimap, apps) is HomeScreen.h.
 
+// ── Virtual list ──────────────────────────────────────────────────────────────
+// A long list (contacts, nodes, conversations) as only the rows it shows: a
+// row scrolled out of sight takes the next item coming in. The items are
+// kinds with a fixed height -- a row made once (make), its texts set for an
+// item (bind) -- or fixed objects of their own (a section title, a note).
+// The scroll extent comes from the items' heights, so the scrollbar, a throw
+// and coming back to where it was work as with every row built. Built in the
+// same time whatever the count; 256 contacts: 522 objects, 950 ms filling
+// in and 28 ms a scrolled frame before, 19 objects and 13 ms now.
+namespace vlist {
+struct Kind {
+  int16_t h;
+  lv_obj_t* (*make)(lv_obj_t* list);      // a row, its event callbacks on (they ask arg())
+  void (*bind)(lv_obj_t* row, intptr_t arg);
+};
+struct Item { const Kind* k; intptr_t arg; int32_t top; int16_t h; };   // k null: arg is its own object
+struct Slot { lv_obj_t* o; const Kind* k; int item; int prev; };
+static const int SLOTS = 32;   // a screenful of the shortest kind, a few kinds
+struct List {
+  lv_obj_t* obj;
+  Item* items;
+  int n, cap;
+  int32_t total;
+  bool placed;   // the items' tops are known (not while a new set comes in)
+  Slot slots[SLOTS];
+  int nslots;
+};
+static List* s_lists[8];   // a screen's and a popup's, two screens while one slides in
+
+static List* of(lv_obj_t* obj) {
+  for (List* l : s_lists) if (l && l->obj == obj) return l;
+  return nullptr;
+}
+
+static void place(lv_obj_t* o, int32_t y) {
+  if (lv_obj_get_style_y(o, LV_PART_MAIN) != y) lv_obj_set_y(o, y);
+  if (lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN)) lv_obj_remove_flag(o, LV_OBJ_FLAG_HIDDEN);
+}
+
+// The rows for what's in view: kept where they show the same item, the rest
+// handed over (bound) to the items coming in, made only when none is free.
+// all: every one bound again (the items changed).
+static void update(List* l, bool all) {
+  if (!l->placed) return;
+  int32_t sy = lv_obj_get_scroll_y(l->obj), vh = lv_obj_get_content_height(l->obj);
+  if (vh <= 0) vh = LV_VER_RES;   // not laid out yet: a screenful
+  int first = 0, hi = l->n;
+  while (first < hi) {   // the first item reaching into view
+    int m = (first + hi) / 2;
+    if (l->items[m].top + l->items[m].h <= sy) first = m + 1; else hi = m;
+  }
+  int last = first;
+  while (last < l->n && l->items[last].top < sy + vh) last++;
+  for (int s = 0; s < l->nslots; s++) {
+    Slot& sl = l->slots[s];
+    if (sl.item < 0) continue;
+    if (all || sl.item < first || sl.item >= last) { sl.prev = sl.item; sl.item = -1; }
+  }
+  for (int i = first; i < last; i++) {
+    Item& it = l->items[i];
+    if (!it.k) continue;
+    int got = -1;
+    for (int s = 0; s < l->nslots && got < 0; s++) if (l->slots[s].item == i) got = s;
+    if (got >= 0) continue;   // shown already
+    for (int s = 0; s < l->nslots; s++) {   // a free one of its kind; the one that showed it, if any
+      Slot& sl = l->slots[s];
+      if (sl.item >= 0 || sl.k != it.k) continue;
+      if (got < 0 || sl.prev == i) got = s;
+      if (sl.prev == i) break;
+    }
+    if (got < 0) {
+      if (l->nslots == SLOTS) continue;
+      got = l->nslots++;
+      l->slots[got] = { it.k->make(l->obj), it.k, -1, -1 };
+    }
+    Slot& sl = l->slots[got];
+    sl.item = i;
+    it.k->bind(sl.o, it.arg);
+    place(sl.o, it.top);
+  }
+  for (int s = 0; s < l->nslots; s++) {
+    Slot& sl = l->slots[s];
+    if (sl.item < 0 && !lv_obj_has_flag(sl.o, LV_OBJ_FLAG_HIDDEN)) lv_obj_add_flag(sl.o, LV_OBJ_FLAG_HIDDEN);
+  }
+}
+
+static void onEvent(lv_event_t* e) {
+  lv_obj_t* obj = (lv_obj_t*)lv_event_get_current_target(e);
+  List* l = of(obj);
+  if (!l) return;
+  switch (lv_event_get_code(e)) {
+    case LV_EVENT_SCROLL: case LV_EVENT_SIZE_CHANGED: update(l, false); break;
+    case LV_EVENT_GET_SELF_SIZE: {
+      lv_point_t* p = (lv_point_t*)lv_event_get_param(e);
+      if (p->y < l->total) p->y = l->total;
+      break;
+    }
+    case LV_EVENT_DELETE:
+      for (List*& x : s_lists) if (x == l) x = nullptr;
+      lv_free(l->items);
+      lv_free(l);
+      break;
+    default: break;
+  }
+}
+
+// `obj` (a scrolling column: a screen body, a scrollList) becomes a virtual
+// list; its children so far are taken away.
+static void attach(lv_obj_t* obj) {
+  List* l = nullptr;
+  for (List*& x : s_lists) if (!x) { x = l = (List*)lv_malloc_zeroed(sizeof(List)); break; }
+  if (!l) return;   // can't be: then a plain empty column
+  l->obj = obj;
+  lv_obj_clean(obj);
+  lv_obj_set_layout(obj, LV_LAYOUT_NONE);
+  for (lv_event_code_t c : { LV_EVENT_SCROLL, LV_EVENT_SIZE_CHANGED, LV_EVENT_GET_SELF_SIZE, LV_EVENT_DELETE })
+    lv_obj_add_event_cb(obj, onEvent, c, NULL);
+}
+
+// A new set of items: add() / own() them, then end(). The rows made stay
+// (rebound); objects of their own given to own() before are deleted.
+static void begin(lv_obj_t* obj) {
+  List* l = of(obj);
+  if (!l) return;
+  for (int i = 0; i < l->n; i++) if (!l->items[i].k) lv_obj_delete((lv_obj_t*)l->items[i].arg);
+  l->n = 0;
+  l->placed = false;
+}
+static void push(List* l, const Kind* k, intptr_t arg, int16_t h) {
+  if (l->n == l->cap) {
+    l->cap = l->cap ? l->cap * 2 : 64;
+    l->items = (Item*)lv_realloc(l->items, l->cap * sizeof(Item));
+  }
+  l->items[l->n++] = { k, arg, 0, h };
+}
+static void add(lv_obj_t* obj, const Kind* k, intptr_t arg) { if (List* l = of(obj)) push(l, k, arg, k->h); }
+// An object of its own (made on the list, its height known after a layout).
+static void own(lv_obj_t* obj, lv_obj_t* o) { if (List* l = of(obj)) push(l, nullptr, (intptr_t)o, 0); }
+
+static void end(lv_obj_t* obj) {
+  List* l = of(obj);
+  if (!l) return;
+  bool mine = false;
+  for (int i = 0; i < l->n && !mine; i++) mine = !l->items[i].k;
+  if (mine) lv_obj_update_layout(obj);   // their heights
+  int32_t gap = lv_obj_get_style_pad_row(obj, LV_PART_MAIN), y = 0;
+  for (int i = 0; i < l->n; i++) {
+    Item& it = l->items[i];
+    if (!it.k) {
+      lv_obj_t* o = (lv_obj_t*)it.arg;
+      it.h = (int16_t)lv_obj_get_height(o);
+      place(o, y);
+    }
+    it.top = y;
+    y += it.h + gap;
+  }
+  l->total = l->n ? y - gap : 0;
+  l->placed = true;
+  lv_obj_refresh_self_size(obj);
+  update(l, true);
+  lv_obj_readjust_scroll(obj, LV_ANIM_OFF);   // fewer items: not scrolled past the end
+}
+
+// The item a row's event is for (its arg).
+static intptr_t arg(lv_event_t* e) {
+  lv_obj_t* o = (lv_obj_t*)lv_event_get_current_target(e);
+  List* l = of(lv_obj_get_parent(o));
+  if (l)
+    for (int s = 0; s < l->nslots; s++)
+      if (l->slots[s].o == o && l->slots[s].item >= 0) return l->items[l->slots[s].item].arg;
+  return -1;
+}
+
+// A row held down: what it shows stays until it's let go.
+static bool pressed(lv_obj_t* obj) {
+  List* l = of(obj);
+  for (int s = 0; l && s < l->nslots; s++)
+    if (lv_obj_has_state(l->slots[s].o, LV_STATE_PRESSED)) return true;
+  return false;
+}
+}  // namespace vlist
+
 // ── Conversation list ─────────────────────────────────────────────────────────
 
 static void onOpenChannel(lv_event_t* e) {
-  s_ui->openChannel((uint8_t)(uintptr_t)lv_event_get_user_data(e));
+  intptr_t i = vlist::arg(e);
+  if (i >= 0) s_ui->openChannel((uint8_t)i);
 }
 
 // DM rows carry a 4-byte prefix; kept in a static table the rows point into.
@@ -2726,11 +2992,15 @@ static const int CONTACT_ROWS_MAX = 256;   // "All" with a full contact table st
 static uint8_t (*s_contact_rows)[PUB_KEY_SIZE] = psramBuf<uint8_t[PUB_KEY_SIZE]>(CONTACT_ROWS_MAX);
 static uint16_t* s_contact_raw = psramBuf<uint16_t>(CONTACT_ROWS_MAX);   // their raw table index, for the name
 
+static uint16_t s_dm_pos[MessageHistory::DM_HIST_MAX];   // its newest message in the DM ring
+static bool s_dm_known[MessageHistory::DM_HIST_MAX];      // a contact (has options on hold)
 static void onOpenDMRow(lv_event_t* e) {
-  s_ui->openDM(s_dm_rows[(uintptr_t)lv_event_get_user_data(e)]);
+  intptr_t r = vlist::arg(e);
+  if (r >= 0) s_ui->openDM(s_dm_rows[r]);
 }
 static void onOpenContactRow(lv_event_t* e) {
-  s_ui->openDM(s_contact_rows[(uintptr_t)lv_event_get_user_data(e)]);
+  intptr_t i = vlist::arg(e);
+  if (i >= 0) s_ui->openDM(s_contact_rows[i]);
 }
 static void onNewChat(lv_event_t* e) { (void)e; s_ui->showContacts(); }
 static void onChanRowHold(lv_event_t* e);      // ChannelScreen.h
@@ -2738,6 +3008,8 @@ static void onChanAdd(lv_event_t* e);
 static void onChanThreadMenu(lv_event_t* e);
 static const int ROOM_ROWS_MAX = 32;
 static uint8_t (*s_room_rows)[PUB_KEY_SIZE] = psramBuf<uint8_t[PUB_KEY_SIZE]>(ROOM_ROWS_MAX);
+static uint16_t s_room_raw[ROOM_ROWS_MAX];   // their raw table index, for the row
+static bool s_chats_read_all = false;        // Messages built with "Read all" in its header
 static void onDMRowHold(lv_event_t* e);        // ConversationScreen.h
 static void onRoomRow(lv_event_t* e);
 static void onRoomRowHold(lv_event_t* e);
@@ -2777,6 +3049,36 @@ static lv_obj_t* listRow(lv_obj_t* parent, const char* title, const char* sub,
     lv_obj_align(s, LV_ALIGN_BOTTOM_LEFT, theme::PAD, -5);
   }
   return row;
+}
+
+// A listRow() for a vlist: the subtitle always there (shown or not), the
+// right side free for a value or a badge; texts set by rowSet().
+static lv_obj_t* vRow(lv_obj_t* list, lv_event_cb_t cb, lv_event_cb_t hold) {
+  lv_obj_t* row = listRow(list, "", "", cb, NULL);
+  if (hold) lv_obj_add_event_cb(row, hold, LV_EVENT_LONG_PRESSED, NULL);
+  return row;
+}
+static void rowSet(lv_obj_t* row, const char* title, const char* sub, uint32_t title_col = theme::TEXT) {
+  lv_obj_t* t = rowTitle(row);
+  lv_obj_t* s = lv_obj_get_child(row, 1);
+  setText(t, title);
+  setTextColor(t, title_col);
+  int32_t y = sub ? 5 : 13;   // as listRow() puts it
+  if (lv_obj_get_style_y(t, LV_PART_MAIN) != y) lv_obj_set_y(t, y);
+  if (sub) setText(s, sub);
+  if (!sub != lv_obj_has_flag(s, LV_OBJ_FLAG_HIDDEN)) lv_obj_set_flag(s, LV_OBJ_FLAG_HIDDEN, !sub);
+}
+
+// The same with a value on the right (a distance, a signal), set by rowValue().
+static lv_obj_t* vRowValue(lv_obj_t* list, lv_event_cb_t cb) {
+  lv_obj_t* row = vRow(list, cb, NULL);
+  lv_obj_align(label(row, "", THEME_FONT_SMALL, theme::TEXT_MUTED), LV_ALIGN_RIGHT_MID, -theme::PAD, 0);
+  return row;
+}
+static void rowValue(lv_obj_t* row, const char* text, uint32_t col) {
+  lv_obj_t* r = lv_obj_get_child(row, 2);
+  setText(r, text);
+  setTextColor(r, col);
 }
 
 static lv_obj_t* sectionTitle(lv_obj_t* parent, const char* text) {
@@ -2857,19 +3159,64 @@ static lv_obj_t* headerButton(lv_obj_t* hdr, const char* text, lv_event_cb_t cb,
 
 void UITask::buildChats() {
   lv_obj_t* body = newScreen("Messages", true);
+  s_chats_read_all = unreadTotal() > 0;
   if (_header) {   // a new message first, whatever the lists below hold
     lv_obj_t* nb = headerButton(_header, LV_SYMBOL_EDIT " New", onNewChat, 4, NULL);
     stylePrimary(nb);
-    if (unreadTotal() > 0) {
+    if (s_chats_read_all) {
       lv_obj_t* rb = headerButton(_header, LV_SYMBOL_OK " Read all", onMarkAllRead, 0, NULL);
       layoutNow(_header);
       lv_obj_align_to(rb, nb, LV_ALIGN_OUT_LEFT_MID, -6, 0);
     }
   }
+  vlist::attach(body);
+  fillChats();
+}
+
+// Messages again where it is (a new message, a section folded, back from
+// the lock): the rows in view rewritten, the rest as they scroll in. Built
+// anew only when "Read all" comes or goes.
+void UITask::refreshChats() {
+  if (_screen != SCR_CHATS) { s_chats_stale = false; return; }
+  if (!_body || !vlist::of(_body) || (unreadTotal() > 0) != s_chats_read_all) {
+    int y = _body ? lv_obj_get_scroll_y(_body) : 0;
+    buildChats();
+    layoutNow(_body);
+    lv_obj_scroll_to_y(_body, y, LV_ANIM_OFF);
+    return;
+  }
+  s_chats_stale = vlist::pressed(_body);   // held: once it's let go
+  if (!s_chats_stale) fillChats();
+}
+
+void UITask::fillChats() {
+  lv_obj_t* body = _body;
+  vlist::begin(body);
+  auto own = [body]() { vlist::own(body, lv_obj_get_child(body, -1)); };
 
   // Channels: favourites first (unless turned off), hold a row for its options
+  static const vlist::Kind CHANNEL = {
+    theme::ROW_H,
+    [](lv_obj_t* list) { return vRow(list, onOpenChannel, onChanRowHold); },
+    [](lv_obj_t* row, intptr_t i) {
+      UITask* ui = s_ui;
+      ChannelDetails ch;
+      if (!the_mesh.getChannel((int)i, ch)) ch.name[0] = '\0';
+      char title[48], sub[64] = "";
+      snprintf(title, sizeof(title), "%s%s%s", chanctl::favourite(ui->_prefs, (int)i) ? UI_SYMBOL_STAR " " : "", ch.name,
+               chanctl::notif(ui->_prefs, (int)i) == chanctl::NOTIF_MUTED ? "  " UI_SYMBOL_MUTE : "");
+      if (ui->_core->history.histCountForChannel((int)i) > 0) {
+        const ChHistEntry& e = ui->_core->history.chAtPos(ui->_core->history.histEntryForChannel((int)i, 0));
+        snprintf(sub, sizeof(sub), "%s", e.text);
+        plainMentions(sub);
+      }
+      rowSet(row, title, sub[0] ? sub : NULL);
+      rowBadge(row, ui->_core->history.chUnread((int)i), ui->_core->history.chUnreadOverflow((int)i));
+    },
+  };
   bool ch_fav_only = _prefs && _prefs->ch_fav_only;
   chatSection(body, "CHANNELS", FOLD_CHANNELS, _core->history.getTotalChannelUnread(), CF_CHANNELS, ch_fav_only);
+  own();
   bool fav_first = !(_prefs && _prefs->fav_sort_off);
   int ch_rows = 0;
   for (int pass = fav_first ? 0 : 1; pass < 2 && !chatFolded(FOLD_CHANNELS); pass++) {
@@ -2880,37 +3227,49 @@ void UITask::buildChats() {
       if (ch_fav_only && !fav) continue;
       if (fav_first && fav != (pass == 0)) continue;
       ch_rows++;
-      char title[48], sub[64] = "";
-      snprintf(title, sizeof(title), "%s%s%s", fav ? UI_SYMBOL_STAR " " : "", ch.name,
-               chanctl::notif(_prefs, i) == chanctl::NOTIF_MUTED ? "  " UI_SYMBOL_MUTE : "");
-      int n = _core->history.histCountForChannel(i);
-      if (n > 0) {
-        const ChHistEntry& e = _core->history.chAtPos(_core->history.histEntryForChannel(i, 0));
-        snprintf(sub, sizeof(sub), "%s", e.text);
-        plainMentions(sub);
-      }
-      lv_obj_t* row = listRow(body, title, sub[0] ? sub : NULL, onOpenChannel, (void*)(uintptr_t)i);
-      lv_obj_add_event_cb(row, onChanRowHold, LV_EVENT_LONG_PRESSED, (void*)(uintptr_t)i);
-      badge(row, _core->history.chUnread(i), _core->history.chUnreadOverflow(i));
+      vlist::add(body, &CHANNEL, i);
     }
   }
-  if (ch_rows == 0 && ch_fav_only && !chatFolded(FOLD_CHANNELS)) label(body, "No favourite channels", THEME_FONT_SMALL, theme::TEXT_MUTED);
-  lv_obj_t* add_ch = lv_button_create(body);
-  if (chatFolded(FOLD_CHANNELS)) lv_obj_add_flag(add_ch, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_set_size(add_ch, LV_PCT(100), 32);
-  lv_obj_set_style_bg_color(add_ch, lv_color_hex(theme::BG), 0);
-  lv_obj_set_style_border_color(add_ch, lv_color_hex(theme::SURFACE_2), 0);
-  lv_obj_set_style_border_width(add_ch, 1, 0);
-  lv_obj_set_style_radius(add_ch, theme::RADIUS, 0);
-  lv_obj_set_style_shadow_width(add_ch, 0, 0);
-  lv_obj_add_event_cb(add_ch, onChanAdd, LV_EVENT_CLICKED, NULL);
-  lv_obj_center(label(add_ch, LV_SYMBOL_PLUS "  Add channel", THEME_FONT_SMALL, theme::TEXT_MUTED));
+  if (!chatFolded(FOLD_CHANNELS)) {
+    if (ch_rows == 0 && ch_fav_only) { label(body, "No favourite channels", THEME_FONT_SMALL, theme::TEXT_MUTED); own(); }
+    lv_obj_t* add_ch = lv_button_create(body);
+    lv_obj_set_size(add_ch, LV_PCT(100), 32);
+    lv_obj_set_style_bg_color(add_ch, lv_color_hex(theme::BG), 0);
+    lv_obj_set_style_border_color(add_ch, lv_color_hex(theme::SURFACE_2), 0);
+    lv_obj_set_style_border_width(add_ch, 1, 0);
+    lv_obj_set_style_radius(add_ch, theme::RADIUS, 0);
+    lv_obj_set_style_shadow_width(add_ch, 0, 0);
+    lv_obj_add_event_cb(add_ch, onChanAdd, LV_EVENT_CLICKED, NULL);
+    lv_obj_center(label(add_ch, LV_SYMBOL_PLUS "  Add channel", THEME_FONT_SMALL, theme::TEXT_MUTED));
+    vlist::own(body, add_ch);
+  }
 
   // Recent direct conversations (DM ring, newest first, one row per contact)
+  static const vlist::Kind DM = {
+    theme::ROW_H,
+    [](lv_obj_t* list) { return vRow(list, onOpenDMRow, onDMRowHold); },
+    [](lv_obj_t* row, intptr_t r) {
+      UITask* ui = s_ui;
+      const DmHistEntry& e = ui->_core->history.dmAtPos(s_dm_pos[r]);
+      ContactInfo c;
+      bool known = s_dm_known[r] && MessageHistory::contactByPrefix(s_dm_rows[r], c);
+      char name[48];
+      contactName(s_dm_rows[r], name, sizeof(name));
+      if (known && contactctl::favourite(c)) { char t[48]; snprintf(t, sizeof(t), UI_SYMBOL_STAR " %s", name); strcpy(name, t); }
+      if (known && contactctl::notif(ui->_prefs, c.id.pub_key) == contactctl::NOTIF_MUTED) strncat(name, "  " UI_SYMBOL_MUTE, sizeof(name) - strlen(name) - 1);
+      char sub[64];
+      snprintf(sub, sizeof(sub), "%s%s", e.outgoing ? "Me: " : "", e.text);
+      plainMentions(sub);
+      rowSet(row, name, sub);
+      rowBadge(row, ui->_core->dmUnread(s_dm_rows[r]), ui->_core->dmUnreadOverflow(s_dm_rows[r]));
+    },
+  };
   chatSection(body, "DIRECT", FOLD_DIRECT, _core->dmUnreadTotal(), -1, false);
+  own();
   int rows = 0;
   for (int j = 0; j < _core->history.dmHistCount() && rows < MessageHistory::DM_HIST_MAX && !chatFolded(FOLD_DIRECT); j++) {
-    const DmHistEntry& e = _core->history.dmAtPos(_core->history.dmHistPosNewest(j));
+    int pos = _core->history.dmHistPosNewest(j);
+    const DmHistEntry& e = _core->history.dmAtPos(pos);
     bool seen = false;
     for (int r = 0; r < rows; r++) if (memcmp(s_dm_rows[r], e.prefix, 4) == 0) { seen = true; break; }
     if (seen) continue;
@@ -2918,49 +3277,58 @@ void UITask::buildChats() {
     bool known = MessageHistory::contactByPrefix(e.prefix, c);
     if (known && c.type == ADV_TYPE_ROOM) continue;   // rooms have their own section
     memcpy(s_dm_rows[rows], e.prefix, 4);
-    char name[48];
-    contactName(e.prefix, name, sizeof(name));
-    if (known && contactctl::favourite(c)) { char t[48]; snprintf(t, sizeof(t), UI_SYMBOL_STAR " %s", name); strcpy(name, t); }
-    if (known && contactctl::notif(_prefs, c.id.pub_key) == contactctl::NOTIF_MUTED) strncat(name, "  " UI_SYMBOL_MUTE, sizeof(name) - strlen(name) - 1);
-    char sub[64];
-    snprintf(sub, sizeof(sub), "%s%s", e.outgoing ? "Me: " : "", e.text);
-    plainMentions(sub);
-    lv_obj_t* row = listRow(body, name, sub, onOpenDMRow, (void*)(uintptr_t)rows);
-    if (known) lv_obj_add_event_cb(row, onDMRowHold, LV_EVENT_LONG_PRESSED, (void*)(uintptr_t)rows);
-    badge(row, _core->dmUnread(e.prefix), _core->dmUnreadOverflow(e.prefix));
+    s_dm_pos[rows] = (uint16_t)pos;
+    s_dm_known[rows] = known;
+    vlist::add(body, &DM, rows);
     rows++;
   }
-  if (rows == 0 && !chatFolded(FOLD_DIRECT)) label(body, "No conversations yet - New, top right", THEME_FONT_SMALL, theme::TEXT_MUTED);
+  if (rows == 0 && !chatFolded(FOLD_DIRECT)) { label(body, "No conversations yet - New, top right", THEME_FONT_SMALL, theme::TEXT_MUTED); own(); }
 
   // Room servers: tap logs in (saved password or ask) and opens; hold: options
+  static const vlist::Kind ROOM = {
+    theme::ROW_H,
+    [](lv_obj_t* list) { return vRow(list, onRoomRow, onRoomRowHold); },
+    [](lv_obj_t* row, intptr_t r) {
+      UITask* ui = s_ui;
+      ContactInfo c;
+      if (!the_mesh.getContactByIdx(s_room_raw[r], c) || memcmp(c.id.pub_key, s_room_rows[r], PUB_KEY_SIZE) != 0) {
+        rowSet(row, "?", NULL);   // deleted meanwhile
+        return;
+      }
+      char title[48], sub[64];
+      snprintf(title, sizeof(title), "%s%s", contactctl::favourite(c) ? UI_SYMBOL_STAR " " : "", c.name);
+      if (ui->_core->history.dmHistCountForContact(c.id.pub_key) > 0) {
+        const DmHistEntry& e = ui->_core->history.dmAtPos(ui->_core->history.dmHistEntryForContact(c.id.pub_key, 0));
+        snprintf(sub, sizeof(sub), "%s%s", e.outgoing ? "Me: " : "", e.text);
+        plainMentions(sub);
+      } else {
+        snprintf(sub, sizeof(sub), "%s", ui->_core->rooms.isLoggedIn(c.id.pub_key) ? "Logged in" : "Tap to log in");
+      }
+      rowSet(row, title, sub);
+    },
+  };
   bool room_fav_only = _prefs && _prefs->room_fav_only;
   chatSection(body, "ROOMS", FOLD_ROOMS, _core->roomUnread(), CF_ROOMS, room_fav_only);
+  own();
   int nrooms = 0, total = the_mesh.getNumContacts();
-  const int MAX_ROOMS = ROOM_ROWS_MAX;
   for (int pass = fav_first ? 0 : 1; pass < 2 && !chatFolded(FOLD_ROOMS); pass++) {
-    for (int i = 0; i < total && nrooms < MAX_ROOMS; i++) {
+    for (int i = 0; i < total && nrooms < ROOM_ROWS_MAX; i++) {
       ContactInfo c;
       if (!the_mesh.getContactByIdx(MAX_ANON_CONTACTS + i, c) || c.type != ADV_TYPE_ROOM) continue;
       bool fav = contactctl::favourite(c);
       if (room_fav_only && !fav) continue;
       if (fav_first && fav != (pass == 0)) continue;
       memcpy(s_room_rows[nrooms], c.id.pub_key, PUB_KEY_SIZE);
-      char title[48], sub[64];
-      snprintf(title, sizeof(title), "%s%s", fav ? UI_SYMBOL_STAR " " : "", c.name);
-      if (_core->history.dmHistCountForContact(c.id.pub_key) > 0) {
-        const DmHistEntry& e = _core->history.dmAtPos(_core->history.dmHistEntryForContact(c.id.pub_key, 0));
-        snprintf(sub, sizeof(sub), "%s%s", e.outgoing ? "Me: " : "", e.text);
-        plainMentions(sub);
-      } else {
-        snprintf(sub, sizeof(sub), "%s", _core->rooms.isLoggedIn(c.id.pub_key) ? "Logged in" : "Tap to log in");
-      }
-      lv_obj_t* row = listRow(body, title, sub, onRoomRow, (void*)(uintptr_t)nrooms);
-      lv_obj_add_event_cb(row, onRoomRowHold, LV_EVENT_LONG_PRESSED, (void*)(uintptr_t)nrooms);
+      s_room_raw[nrooms] = (uint16_t)(MAX_ANON_CONTACTS + i);
+      vlist::add(body, &ROOM, nrooms);
       nrooms++;
     }
   }
-  if (nrooms == 0 && !chatFolded(FOLD_ROOMS))
+  if (nrooms == 0 && !chatFolded(FOLD_ROOMS)) {
     label(body, room_fav_only ? "No favourite rooms" : "No room servers known", THEME_FONT_SMALL, theme::TEXT_MUTED);
+    own();
+  }
+  vlist::end(body);
 }
 
 // A section title tapped: folded / unfolded (kept in NVS), the list redrawn
@@ -2969,9 +3337,7 @@ void UITask::chatFold(int which) {
   chatFolded(which);   // loaded
   s_chat_fold ^= 1 << which;
   lvport::saveChatFold(s_chat_fold);
-  int y = _body ? lv_obj_get_scroll_y(_body) : 0;
-  buildChats();
-  if (_body) { layoutNow(_body); lv_obj_scroll_to_y(_body, y, LV_ANIM_OFF); }
+  refreshChats();
 }
 
 // ── Contact picker (start a DM) ───────────────────────────────────────────────
@@ -2984,7 +3350,10 @@ void UITask::showContacts() {
 void UITask::buildContacts() {
   lv_obj_t* body = newScreen("New message", true);
   bool fav_only = _prefs && !_prefs->dm_show_all;   // ui-new's default: favourites only
+  vlist::attach(body);
+  vlist::begin(body);
   sectionWithFilter(body, "CONTACTS", fav_only, CF_CONTACTS);
+  vlist::own(body, lv_obj_get_child(body, -1));
   int total = the_mesh.getNumContacts();
   int rows = 0;
   // +MAX_ANON_CONTACTS: getContactByIdx() takes the raw table index (see
@@ -2998,14 +3367,24 @@ void UITask::buildContacts() {
     s_contact_raw[rows] = (uint16_t)(MAX_ANON_CONTACTS + i);
     rows++;
   }
-  fillStart(rows, 8, &UITask::contactRow);
-  if (rows == 0) label(body, fav_only ? "No favourites - tap All" : "No contacts yet", THEME_FONT_BODY, theme::TEXT_MUTED);
-}
-
-void UITask::contactRow(int i) {
-  ContactInfo c;
-  bool same = the_mesh.getContactByIdx(s_contact_raw[i], c) && memcmp(c.id.pub_key, s_contact_rows[i], PUB_KEY_SIZE) == 0;
-  listRow(_body, same ? c.name : "?", NULL, onOpenContactRow, (void*)(uintptr_t)i);   // "?": deleted meanwhile
+#ifdef PERF_LIST_MUL
+  for (int k = 0, real = rows; real && rows < CONTACT_ROWS_MAX; k++, rows++) {   // a long list from the few there are
+    memcpy(s_contact_rows[rows], s_contact_rows[k % real], PUB_KEY_SIZE);
+    s_contact_raw[rows] = s_contact_raw[k % real];
+  }
+#endif
+  static const vlist::Kind ROW = {
+    theme::ROW_H,
+    [](lv_obj_t* list) { return vRow(list, onOpenContactRow, NULL); },
+    [](lv_obj_t* row, intptr_t i) {
+      ContactInfo c;
+      bool same = the_mesh.getContactByIdx(s_contact_raw[i], c) && memcmp(c.id.pub_key, s_contact_rows[i], PUB_KEY_SIZE) == 0;
+      rowSet(row, same ? c.name : "?", NULL);   // "?": deleted meanwhile
+    },
+  };
+  for (int i = 0; i < rows; i++) vlist::add(body, &ROW, i);
+  if (rows == 0) vlist::own(body, label(body, fav_only ? "No favourites - tap All" : "No contacts yet", THEME_FONT_BODY, theme::TEXT_MUTED));
+  vlist::end(body);
 }
 
 // ── Nearby ────────────────────────────────────────────────────────────────────
@@ -3023,8 +3402,8 @@ static void onNearbyChip(lv_event_t* e) { s_ui->setNearbyFilter((uint8_t)(uintpt
 static void onNearbySort(lv_event_t* e) { (void)e; s_ui->toggleNearbySort(); }
 static void onNearbyScan(lv_event_t* e) { (void)e; s_ui->startNearbyScan(); }
 static void onAdvertRow(lv_event_t* e);   // QuickScreen.h
-static void onNearbyRow(lv_event_t* e)  { s_ui->openNode((int)(uintptr_t)lv_event_get_user_data(e)); }
-static void onScanRow(lv_event_t* e)    { s_ui->openScanNode((int)(uintptr_t)lv_event_get_user_data(e)); }
+static void onNearbyRow(lv_event_t* e)  { s_ui->openNode((int)vlist::arg(e)); }
+static void onScanRow(lv_event_t* e)    { s_ui->openScanNode((int)vlist::arg(e)); }
 static void onScanClose(lv_event_t* e)  { (void)e; s_ui->closeScanPopup(); }
 static void onNodeAction(lv_event_t* e) { s_ui->nodeAction((uint8_t)(uintptr_t)lv_event_get_user_data(e)); }
 
@@ -3083,6 +3462,7 @@ void UITask::buildNearby() {
   _nearby_status = label(body, "", THEME_FONT_SMALL, theme::TEXT_MUTED);
 
   _nearby_list = scrollList(body);
+  vlist::attach(_nearby_list);
 
   _nearby_sig = 0;
   refreshNearbyList();
@@ -3124,6 +3504,7 @@ void UITask::showScanPopup() {
 
   _scan_status = label(panel, "", THEME_FONT_SMALL, theme::TEXT_MUTED);
   _scan_list = scrollList(panel);
+  vlist::attach(_scan_list);
 
   _scan_sig = 0;
   refreshScanPopup();
@@ -3148,28 +3529,35 @@ void UITask::refreshScanPopup() {
     sig = sig * 31 + e.rssi * 7 + e.snr_x4 + e.is_known;
     for (int k = 0; k < 4; k++) sig = sig * 31 + e.pub_key[k];
   }
-  if (sig == _scan_sig) return;
+  if (sig == _scan_sig || vlist::pressed(_scan_list)) return;   // held: once it's let go
   _scan_sig = sig;
 
-  lv_obj_clean(_scan_list);
-  for (int i = 0; i < n; i++) {
-    const NearbyModel::Entry& e = _scan->at(i);
-    char title[40], sub[48], right[12];
-    if (e.name[0]) snprintf(title, sizeof(title), "%s", e.name);
-    else snprintf(title, sizeof(title), "%s %02X%02X%02X%02X", NearbyModel::typeName(e.type),
-                  e.pub_key[0], e.pub_key[1], e.pub_key[2], e.pub_key[3]);
-    snprintf(sub, sizeof(sub), "%s  -  SNR %.1f / %.1f%s", NearbyModel::typeName(e.type),
-             e.snr_x4 / 4.0f, e.remote_snr_x4 / 4.0f, e.is_known ? "" : "  -  new");
-    snprintf(right, sizeof(right), "%d dBm", e.rssi);
-    lv_obj_t* row = listRow(_scan_list, title, sub, onScanRow, (void*)(uintptr_t)i);
-    lv_obj_align(label(row, right, THEME_FONT_SMALL, theme::TEXT_MUTED), LV_ALIGN_RIGHT_MID, -theme::PAD, 0);
-  }
+  static const vlist::Kind ROW = {
+    theme::ROW_H,
+    [](lv_obj_t* list) { return vRowValue(list, onScanRow); },
+    [](lv_obj_t* row, intptr_t i) {
+      const NearbyModel::Entry& e = s_ui->_scan->at((int)i);
+      char title[40], sub[48], right[12];
+      if (e.name[0]) snprintf(title, sizeof(title), "%s", e.name);
+      else snprintf(title, sizeof(title), "%s %02X%02X%02X%02X", NearbyModel::typeName(e.type),
+                    e.pub_key[0], e.pub_key[1], e.pub_key[2], e.pub_key[3]);
+      snprintf(sub, sizeof(sub), "%s  -  SNR %.1f / %.1f%s", NearbyModel::typeName(e.type),
+               e.snr_x4 / 4.0f, e.remote_snr_x4 / 4.0f, e.is_known ? "" : "  -  new");
+      snprintf(right, sizeof(right), "%d dBm", e.rssi);
+      rowSet(row, title, sub);
+      rowValue(row, right, theme::TEXT_MUTED);
+    },
+  };
+  vlist::begin(_scan_list);
+  for (int i = 0; i < n; i++) vlist::add(_scan_list, &ROW, i);
   if (n == 0) {
     lv_obj_t* l = noteLabel(_scan_list, _scanning ? "Repeaters and rooms in range will answer."
                             : "Nobody answered. Try again later or move.",
                             THEME_FONT_BODY, theme::TEXT_MUTED);
     lv_obj_set_style_pad_top(l, 8, 0);
+    vlist::own(_scan_list, l);
   }
+  vlist::end(_scan_list);
 }
 
 void UITask::openScanNode(int row) {
@@ -3212,36 +3600,6 @@ static void nearbyText(const NearbyModel::Entry& e, uint32_t now, bool imperial,
   t.right_col = e.is_live ? theme::OK : theme::TEXT_MUTED;
 }
 
-void UITask::nearbyRow(int i) {
-  const NearbyModel::Entry& e = _nearby->at(i);
-  NearbyText t;
-  nearbyText(e, rtc_clock.getCurrentTime(), _prefs && _prefs->units_imperial, t);
-  lv_obj_t* row = listRow(_nearby_list, t.title, t.sub, onNearbyRow, (void*)(uintptr_t)i);
-  if (e.fav) lv_obj_set_style_text_color(rowTitle(row), lv_color_hex(theme::ACCENT), 0);
-  if (t.right[0]) lv_obj_align(label(row, t.right, THEME_FONT_SMALL, t.right_col), LV_ALIGN_RIGHT_MID, -theme::PAD, 0);
-}
-
-// Row i rewritten in place with what the model holds now.
-void UITask::nearbyRowSet(lv_obj_t* row, int i) {
-  const NearbyModel::Entry& e = _nearby->at(i);
-  NearbyText t;
-  nearbyText(e, rtc_clock.getCurrentTime(), _prefs && _prefs->units_imperial, t);
-  lv_obj_t* title = rowTitle(row);
-  setText(title, t.title);
-  lv_color_t tc = lv_color_hex(e.fav ? theme::ACCENT : theme::TEXT);
-  if (!lv_color_eq(lv_obj_get_style_text_color(title, LV_PART_MAIN), tc)) lv_obj_set_style_text_color(title, tc, 0);
-  setText(rowSub(row), t.sub);
-  lv_obj_t* r = lv_obj_get_child(row, 2);
-  if (!r && t.right[0]) {
-    r = label(row, t.right, THEME_FONT_SMALL, t.right_col);
-    lv_obj_align(r, LV_ALIGN_RIGHT_MID, -theme::PAD, 0);
-  } else if (r) {
-    setText(r, t.right);
-    lv_color_t rc = lv_color_hex(t.right_col);
-    if (!lv_color_eq(lv_obj_get_style_text_color(r, LV_PART_MAIN), rc)) lv_obj_set_style_text_color(r, rc, 0);
-  }
-}
-
 void UITask::refreshNearbyList() {
   if (!_nearby_list) return;
   _nearby->refreshModel();
@@ -3254,30 +3612,31 @@ void UITask::refreshNearbyList() {
   bool gps = _nearby->ownPosition(lat, lon);
   setTextFmt(_nearby_status, "%d node%s%s", n, n == 1 ? "" : "s",
                         gps ? "" : "  -  no GPS fix, distances unknown");
-  if (sig == _nearby_sig) return;
+  if (sig == _nearby_sig || vlist::pressed(_nearby_list)) return;   // held: once it's let go
   _nearby_sig = sig;
 
-  // The same number of nodes (the usual case: ages, distances, signal
-  // change): the rows rewritten in place, not built again. Rows still to
-  // come while the list fills in are made from the model as it is then.
-  int built = (int)lv_obj_get_child_count(_nearby_list);
-  if (n > 0 && built > 0 && built + fillPending() == n && lv_obj_check_type(lv_obj_get_child(_nearby_list, 0), &lv_button_class)) {
-    for (int i = 0; i < built; i++) nearbyRowSet(lv_obj_get_child(_nearby_list, i), i);
-    return;
-  }
-  int32_t scroll = lv_obj_get_scroll_y(_nearby_list);
-  s_fill_n = 0;   // rows still queued: of the old list
-  lv_obj_clean(_nearby_list);
-  fillStart(n, 6 + scroll / (theme::ROW_H + theme::GAP), &UITask::nearbyRow);   // down to where it was
+  // The rows in view rewritten from the model (ages, distances, a new
+  // order); the list stays where it was scrolled.
+  static const vlist::Kind ROW = {
+    theme::ROW_H,
+    [](lv_obj_t* list) { return vRowValue(list, onNearbyRow); },
+    [](lv_obj_t* row, intptr_t i) {
+      const NearbyModel::Entry& e = s_ui->_nearby->at((int)i);
+      NearbyText t;
+      nearbyText(e, rtc_clock.getCurrentTime(), s_ui->_prefs && s_ui->_prefs->units_imperial, t);
+      rowSet(row, t.title, t.sub, e.fav ? theme::ACCENT : theme::TEXT);
+      rowValue(row, t.right, t.right_col);
+    },
+  };
+  vlist::begin(_nearby_list);
+  for (int i = 0; i < n; i++) vlist::add(_nearby_list, &ROW, i);
   if (n == 0) {
     lv_obj_t* l = label(_nearby_list, "Nobody here yet. Tap Scan to look around.",
                         THEME_FONT_BODY, theme::TEXT_MUTED);
     lv_obj_set_style_pad_top(l, 12, 0);
+    vlist::own(_nearby_list, l);
   }
-  if (scroll > 0) {
-    layoutNow(_nearby_list);
-    lv_obj_scroll_to_y(_nearby_list, scroll, LV_ANIM_OFF);
-  }
+  vlist::end(_nearby_list);
 }
 
 // ── Node detail ───────────────────────────────────────────────────────────────
@@ -4541,7 +4900,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_open(const char* name) {
     { "clock", &UITask::showClock }, { "radio", &UITask::showRadio }, { "scopes", &UITask::showScopes },
     { "repeater", &UITask::showRepeater }, { "bot", &UITask::showBot }, { "storage", &UITask::showStorage },
     { "diag", &UITask::showDiag }, { "compass", &UITask::showCompass }, { "admin", &UITask::showAdminPick },
-    { "quick", &UITask::showQuickMsgs },
+    { "quick", &UITask::showQuickMsgs }, { "contacts", &UITask::showContacts },
   };
   for (auto& s : SCREENS) if (!strcmp(s.n, name)) { (s_ui->*s.fn)(); return; }
   if (!strncmp(name, "page", 4)) { s_ui->showSchemaSettings(atoi(name + 4)); return; }

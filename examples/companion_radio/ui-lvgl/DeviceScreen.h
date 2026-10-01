@@ -240,7 +240,7 @@ void UITask::unlockScreen() {
   s_lock = s_lock_clock = s_lock_date = s_lock_unread = s_lock_slider = s_pin_dots = s_pin_msg = nullptr;
   _pin_entry[0] = '\0';
   if (_screen == SCR_HOME) refreshHome();
-  else if (_screen == SCR_CHATS) buildChats();   // counts moved on while locked
+  else if (_screen == SCR_CHATS) refreshChats();   // counts moved on while locked
 }
 
 bool UITask::locked() const { return devview::s_lock != nullptr; }

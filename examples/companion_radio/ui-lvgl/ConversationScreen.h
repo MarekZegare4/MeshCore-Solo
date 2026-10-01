@@ -39,13 +39,20 @@ static void onMsgAction(lv_event_t* e) { s_ui->messageAction((uint8_t)(uintptr_t
 static void onRoomLoginKb(lv_event_t* e) { s_ui->roomLoginDone(lv_event_get_code(e) == LV_EVENT_READY); }
 
 static void onDMRowHold(lv_event_t* e) {
+  intptr_t r = vlist::arg(e);
+  if (r < 0 || !s_dm_known[r]) return;   // no options for who isn't a contact
   lv_indev_wait_release(lv_indev_active());   // the hold isn't also a tap that opens it
-  s_ui->conversationMenu(s_dm_rows[(uintptr_t)lv_event_get_user_data(e)]);
+  s_ui->conversationMenu(s_dm_rows[r]);
 }
-static void onRoomRow(lv_event_t* e) { s_ui->openRoom(s_room_rows[(uintptr_t)lv_event_get_user_data(e)]); }
+static void onRoomRow(lv_event_t* e) {
+  intptr_t r = vlist::arg(e);
+  if (r >= 0) s_ui->openRoom(s_room_rows[r]);
+}
 static void onRoomRowHold(lv_event_t* e) {
+  intptr_t r = vlist::arg(e);
+  if (r < 0) return;
   lv_indev_wait_release(lv_indev_active());
-  s_ui->conversationMenu(s_room_rows[(uintptr_t)lv_event_get_user_data(e)]);
+  s_ui->conversationMenu(s_room_rows[r]);
 }
 static void onConvThreadMenu(lv_event_t* e) { (void)e; s_ui->conversationMenu(nullptr); }
 static void onMsgHold(lv_event_t* e) {
@@ -120,7 +127,7 @@ void UITask::roomPoll() {
   if (o == RoomSessions::LOGGED_IN) {
     showToast("Logged in", 1200);
     if (mine && picking) openDM(s_login_key);
-    else if (_screen == SCR_CHATS && !_nav_overlay) buildChats();
+    else if (_screen == SCR_CHATS && !_nav_overlay) refreshChats();
   } else if (o == RoomSessions::LOGIN_FAILED) {
     showToast("Login failed - wrong password?", 3000);
     if (mine && picking) roomLoginPopup(s_login_key);
@@ -383,5 +390,5 @@ void UITask::toggleChatFilter(uint8_t which) {
     case CF_CONTACTS: _prefs->dm_show_all ^= 1; break;
   }
   prefsSave();
-  if (_screen == SCR_CONTACTS) buildContacts(); else buildChats();
+  if (_screen == SCR_CONTACTS) buildContacts(); else refreshChats();
 }
