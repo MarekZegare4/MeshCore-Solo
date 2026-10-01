@@ -142,19 +142,57 @@ void SH1106Display::setBrightness(uint8_t level)
   display.setContrast(_contrast);
 }
 
+#ifdef UI_PERF_L1
+uint32_t g_disp_flushes = 0;
+#endif
+
+void SH1106Paged::sendBlock(uint8_t page, uint8_t col, uint8_t len) {
+  uint8_t c = col + _page_start_offset;
+  uint8_t cmd[] = { 0x00, (uint8_t)(SH110X_SETPAGEADDR + page), (uint8_t)(0x10 + (c >> 4)), (uint8_t)(c & 0xF) };
+  uint8_t dc_byte = 0x40;
+  const uint8_t* ptr = buffer + (uint16_t)page * WIDTH + col;
+  uint16_t maxbuff = i2c_dev->maxBufferSize() - 1;
+  i2c_dev->setSpeed(i2c_preclk);
+  i2c_dev->write(cmd, 4);
+  while (len) {
+    uint8_t n = len < maxbuff ? len : (uint8_t)maxbuff;
+    i2c_dev->write(ptr, n, true, &dc_byte, 1);
+    ptr += n; len -= n;
+  }
+  i2c_dev->setSpeed(i2c_postclk);
+}
+
 void SH1106Display::endFrame()
 {
-  // Skip the I²C flush when the frame is byte-identical to the last one pushed.
-  // The most-shown screens (clock, home) are static between updates, so this
-  // cuts redundant display() traffic and a little power. FNV-1a over the 1 KB
-  // GFX buffer (~1k xor+mul, cheap); _force_redraw guarantees the first frame
-  // and the frame after wake/clear.
   const uint8_t* buf = display.getBuffer();
-  uint16_t n = (uint16_t)((width() * height()) / 8);
-  uint32_t h = 2166136261u;
-  for (uint16_t i = 0; i < n; i++) { h ^= buf[i]; h *= 16777619u; }
-  if (!_force_redraw && h == _last_frame_hash) return;
-  _force_redraw = false;
-  _last_frame_hash = h;
-  display.display();
+  const uint8_t per_page = 128 / BLOCK_W;
+  bool any = false;
+  bool dirty[BLOCKS];
+  for (uint8_t i = 0; i < BLOCKS; i++) {
+    const uint8_t* q = buf + (uint16_t)i * BLOCK_W;   // blocks run along each page in buffer order
+    uint32_t h = 2166136261u;
+    for (uint8_t j = 0; j < BLOCK_W; j++) { h ^= q[j]; h *= 16777619u; }
+    dirty[i] = _force_redraw || h != _block_hash[i];
+    _block_hash[i] = h;
+    any |= dirty[i];
+  }
+  if (!any) return;
+#ifdef UI_PERF_L1
+  g_disp_flushes++;
+#endif
+  if (_force_redraw || !display.canSendBlocks()) {
+    _force_redraw = false;
+    display.display();
+    return;
+  }
+  for (uint8_t page = 0; page < 64 / 8; page++) {
+    // runs of neighbouring dirty blocks go out as one transfer
+    for (uint8_t b = 0; b < per_page; ) {
+      if (!dirty[page * per_page + b]) { b++; continue; }
+      uint8_t e = b;
+      while (e + 1 < per_page && dirty[page * per_page + e + 1]) e++;
+      display.sendBlock(page, b * BLOCK_W, (e - b + 1) * BLOCK_W);
+      b = e + 1;
+    }
+  }
 }
