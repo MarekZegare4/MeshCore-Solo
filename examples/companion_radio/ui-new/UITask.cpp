@@ -331,6 +331,38 @@ class HomeScreen : public UIScreen {
   uint8_t _prev_page;   // home page restored when the device unlocks
   bool _shutdown_init;
 
+  // Sideways slide between pages (OLED; drivers that can't read their frame
+  // back just cut over). _slide_dir is +1 (new page from the right), -1, or 0.
+  static const unsigned long SLIDE_MS = 220;
+  int8_t        _slide_dir = 0;
+  uint8_t       _slide_from = 0;
+  unsigned long _slide_t0 = 0;
+
+  // First row under the header and the page-icon row (see render()).
+  static int contentTop(DisplayDriver& d) {
+    const int pg_half = (5 * miniIconScale(d) + 1) / 2;
+    return d.getLineHeight() + 2 * pg_half + 4;
+  }
+  // 0..1 eased progress of the running slide, or -1 when none.
+  float slideProgress() {
+    if (!_slide_dir) return -1;
+    unsigned long el = millis() - _slide_t0;
+    if (el >= SLIDE_MS) { _slide_dir = 0; return -1; }
+    float t = 1.0f - (float)el / SLIDE_MS;
+    return 1.0f - t * t * t;           // ease-out: quick start, soft landing
+  }
+  void turnPage(int dir) {
+    const uint8_t from = _page;
+    _page = navPage(_page, dir);
+    if (_page == from) return;
+    DisplayDriver* d = _task->getDisplay();
+    // Pages with the header slide below it; the full-screen clock slides whole.
+    const bool whole = from == CLOCK || _page == CLOCK;
+    if (d && d->slideBegin(whole ? 0 : contentTop(*d))) {
+      _slide_dir = (int8_t)dir; _slide_from = from; _slide_t0 = millis();
+    }
+  }
+
   int pageBit(int page) const {
     if (page == CLOCK)      return NodePrefs::HPB_CLOCK;
     if (page == FAVOURITES) return NodePrefs::HPB_FAVOURITES;
@@ -720,7 +752,7 @@ public:
   int render(DisplayDriver& display) override {
     char tmp[80];
     int mq_delay = 0;   // >0 while a selected row's name is marquee-scrolling
-    int anim_ms = 0;    // >0 while a hovering page icon is on screen
+    int anim_ms = 0;    // >0 while something animates: a hovering page icon, a page turn
     display.setTextSize(1);
     const int lh      = display.getLineHeight();  // line height at sz1
     const int step    = display.lineStep();        // lh + 2
@@ -729,7 +761,8 @@ public:
     // below (identical to the old lh+4 / +6 dots layout at 1x).
     const int pg_half   = (5 * miniIconScale(display) + 1) / 2;
     const int dots_y    = lh + pg_half + 1;       // icon-row centre, below the header
-    const int content_y = dots_y + pg_half + 3;   // first content row, below the icons
+    const int content_y = dots_y + pg_half + 3;   // first content row, below the icons (= contentTop())
+    const float slide   = slideProgress();        // -1, or how far a page turn has got
 
     // Title bar displaying node name (except on lock screen), status icons and battery.
     // Hidden on fullscreen pages (CLOCK).
@@ -799,19 +832,27 @@ public:
         if (fit < pitch) pitch = fit;
       }
       int x = display.width() / 2 - pitch * (n - 1) / 2;
+      // The current page: its icon knocked out of a soft pill. During a page
+      // turn the pill glides over from the page being left.
+      int pw = icon_w + 4;
+      if (pw > pitch - 1) pw = pitch - 1;
+      int pill_x = x + pitch * curr_vis;
+      if (slide >= 0) {
+        for (int i = 0; i < n; i++)
+          if (order[i] == _slide_from) { pill_x = x + pitch * i + (int)((pill_x - x - pitch * i) * slide + 0.5f); break; }
+      }
+      display.setColor(DisplayDriver::LIGHT);
+      display.fillSoftRect(pill_x - pw / 2, dots_y - pg_half - 1, pw, pg_half * 2 + 3);
       for (int i = 0; i < n; i++) {
         const MiniIcon* ic = pageIcon(order[i]);
-        if (i == curr_vis) {                            // the current page: icon knocked out of a soft pill
-          int pw = icon_w + 4;
-          if (pw > pitch - 1) pw = pitch - 1;
-          display.setColor(DisplayDriver::LIGHT);
-          display.fillSoftRect(x - pw / 2, dots_y - pg_half - 1, pw, pg_half * 2 + 3);
-          display.setColor(DisplayDriver::DARK);
-        }
+        const int d2 = 2 * (x - pill_x < 0 ? pill_x - x : x - pill_x);
+        if (d2 <= pw - icon_w)       display.setColor(DisplayDriver::DARK);   // inside the pill
+        else if (d2 < pw + icon_w) { x += pitch; continue; }                   // half under the gliding pill
+        else                         display.setColor(DisplayDriver::LIGHT);
         if (ic) miniIconDrawCentered(display, x, dots_y, *ic);
-        display.setColor(DisplayDriver::LIGHT);
         x += pitch;
       }
+      display.setColor(DisplayDriver::LIGHT);
     }
 
     if (_page == HomePage::CLOCK) {
@@ -1276,6 +1317,10 @@ public:
           display.drawTextCentered(display.width() / 2, text_y, "Hibernate");
       }
     }
+    if (slide >= 0) {   // page turn: the page left behind slides out, this one in
+      display.slideCompose(_slide_dir * (int)(display.width() * slide + 0.5f));
+      anim_ms = 15;
+    }
     bool auto_adv = _node_prefs && _node_prefs->advert_auto_interval_sec > 0;
     // Any blinking status-bar indicator needs a 1 s refresh to animate evenly —
     // but the status bar (and its icons) is hidden on the CLOCK page, so don't
@@ -1291,6 +1336,7 @@ public:
     if (_page == HomePage::CLOCK) {
       bool show_sec = !_node_prefs || !_node_prefs->clock_hide_seconds;
       int ret = need_blink ? 1000 : (show_sec ? 1000 : 60000);
+      if (anim_ms > 0 && anim_ms < ret) ret = anim_ms;
       return (mq_delay > 0 && mq_delay < ret) ? mq_delay : ret;
     }
     int ret = need_blink ? 1000 : 5000;
@@ -1367,11 +1413,11 @@ public:
     }
 
     if (c == KEY_LEFT || c == KEY_PREV) {
-      _page = navPage(_page, -1);
+      turnPage(-1);
       return true;
     }
     if (c == KEY_NEXT || c == KEY_RIGHT) {
-      _page = navPage(_page, +1);
+      turnPage(+1);
       return true;
     }
     if (c == KEY_ENTER && _page == HomePage::BLUETOOTH) {

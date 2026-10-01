@@ -533,6 +533,14 @@ public:
   virtual void setBrightness(uint8_t level) { }  // level 0-4 (min to max), no-op default
   virtual void setDisplayRotation(uint8_t rot) { }  // 0-3, no-op for fixed-orientation displays
   virtual void setFullRefreshInterval(uint8_t n) { }  // e-ink: do full refresh every n partial refreshes (0=never)
+  // Sideways slide between two frames, for screens that page left/right.
+  // slideBegin() keeps rows y0.. of the frame on screen now; call it before the
+  // next frame is drawn. slideCompose(dx), at the end of drawing that frame,
+  // moves the kept rows dx px left (right when dx < 0) and fills the gap with
+  // the new frame's rows sliding in behind them. A driver that can't read its
+  // frame back returns false and the screen just cuts over.
+  virtual bool slideBegin(int y0) { return false; }
+  virtual void slideCompose(int dx) { }
   virtual void endFrame() = 0;
 
   // Called from board setup to run safe background work during a blocking

@@ -356,6 +356,28 @@ public:
   // codepoint and call getTextWidth() on it.
   uint16_t getCodepointWidth(uint32_t cp) override;
 
+  // The canvas is the frame (128x64 native, CSS-scaled), so the slide reads
+  // it back: the kept rows now, the new ones at compose time.
+  bool slideBegin(int y0) override {
+    EM_ASM({
+      if (!Module.__simCtx) return;
+      Module.__simSlideY = $0;
+      Module.__simSlide = Module.__simCtx.getImageData(0, $0, 128, 64 - $0);
+    }, y0);
+    return true;
+  }
+  void slideCompose(int dx) override {
+    EM_ASM({
+      var c = Module.__simCtx;
+      var old = Module.__simSlide;
+      if (!c || !old) return;
+      var y = Module.__simSlideY;
+      var fresh = c.getImageData(0, y, 128, 64 - y);
+      c.putImageData(old, -$0, y);
+      c.putImageData(fresh, $0 >= 0 ? 128 - $0 : -128 - $0, y);
+    }, dx);
+  }
+
   // Every draw call above already lands directly on the visible canvas
   // (see the class comment) -- nothing left to flush.
   void endFrame() override { }

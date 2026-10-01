@@ -44,6 +44,9 @@ class SH1106Display : public DisplayDriver
   static const uint8_t BLOCKS = (128 / BLOCK_W) * (64 / 8);
   uint32_t _block_hash[BLOCKS] = {};
   bool     _force_redraw = true;
+  // slideBegin()'s copy of the frame on screen (only rows >= _slide_y0 are used).
+  uint8_t  _slide_old[128 * 64 / 8];
+  int      _slide_y0 = 0;
 
   bool i2c_probe(TwoWire &wire, uint8_t addr);
   // Thin wrapper over the shared misc-fixed renderer (MiscFixedRenderer.h), kept
@@ -61,6 +64,8 @@ public:
   void turnOff() override;
   void clear() override;
   void startFrame(Color bkg = DARK) override;
+  bool slideBegin(int y0) override;
+  void slideCompose(int dx) override;
   void setTextSize(int sz) override;
   void setColor(Color c) override;
   void setCursor(int x, int y) override;

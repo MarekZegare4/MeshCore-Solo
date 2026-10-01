@@ -1,4 +1,5 @@
 #include "SH1106Display.h"
+#include <string.h>
 #include <Adafruit_GrayOLED.h>
 #include "Adafruit_SH110X.h"
 #include "MiscFixedRenderer.h"
@@ -62,6 +63,36 @@ void SH1106Display::startFrame(Color bkg)
   display.setTextSize(1);
   _text_sz = 1;
   display.cp437(true); // Use full 256 char 'Code Page 437' font
+}
+
+// The GFX buffer still holds the last frame sent until the next startFrame().
+bool SH1106Display::slideBegin(int y0)
+{
+  _slide_y0 = y0 < 0 ? 0 : (y0 > height() ? height() : y0);
+  memcpy(_slide_old, display.getBuffer(), sizeof(_slide_old));
+  return true;
+}
+
+// Buffer layout: one byte per column per 8-row page, bit n = row page*8+n.
+void SH1106Display::slideCompose(int dx)
+{
+  uint8_t* buf = display.getBuffer();
+  const int W = width();
+  int off = dx < 0 ? -dx : dx;
+  if (off > W) off = W;
+  uint8_t fresh[128];
+  for (int p = _slide_y0 / 8; p < height() / 8; p++) {
+    const uint8_t keep = (p == _slide_y0 / 8) ? (uint8_t)~(0xFF << (_slide_y0 & 7)) : 0;
+    uint8_t* cur = buf + p * W;
+    const uint8_t* old = _slide_old + p * W;
+    memcpy(fresh, cur, W);
+    for (int x = 0; x < W; x++) {
+      uint8_t v;
+      if (dx >= 0) v = x < W - off ? old[x + off] : fresh[x - (W - off)];
+      else         v = x >= off    ? old[x - off] : fresh[x + (W - off)];
+      cur[x] = (cur[x] & keep) | (v & ~keep);
+    }
+  }
 }
 
 void SH1106Display::setTextSize(int sz)
