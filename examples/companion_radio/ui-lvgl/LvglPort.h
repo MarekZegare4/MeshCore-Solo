@@ -574,12 +574,17 @@ static size_t   s_fcap = 0;
 static volatile size_t s_flen = 0;
 static volatile bool s_fabandoned = false;
 static TaskHandle_t s_ftask = nullptr;
+static uint32_t s_fstart_ms = 0;
+static const uint32_t FETCH_MAX_MS = 30000;   // a body still trickling in after this is cut off
 
 // Stream sink for HTTPClient::writeToStream() (which also undoes chunking).
 class FetchSink : public Stream {
 public:
   size_t write(uint8_t c) override { return write(&c, 1); }
   size_t write(const uint8_t* d, size_t n) override {
+    // A stalled server can keep a body trickling in for minutes, each read
+    // inside HTTPClient's timeout; cut off, the tile is retried later.
+    if (millis() - s_fstart_ms > FETCH_MAX_MS) return 0;
     if (s_flen + n > s_fcap) {
       size_t cap = s_fcap ? s_fcap : 32 * 1024;
       while (cap < s_flen + n) cap *= 2;
@@ -622,6 +627,7 @@ static void fetchTask(void*) {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     s_fstate = F_BUSY;
     s_flen = 0;
+    s_fstart_ms = millis();
     bool https = strncmp(s_furl, "https:", 6) == 0;
     int code = -1;
     s_ferr[0] = '\0';
@@ -629,7 +635,10 @@ static void fetchTask(void*) {
       code = http.GET();
       if (code == 200) {
         FetchSink sink;
-        if (http.writeToStream(&sink) < 0) { code = -1; snprintf(s_ferr, sizeof(s_ferr), "read failed / out of memory"); }
+        if (http.writeToStream(&sink) < 0) {
+          code = -1;
+          snprintf(s_ferr, sizeof(s_ferr), "%s", millis() - s_fstart_ms > FETCH_MAX_MS ? "too slow (30 s)" : "read failed / out of memory");
+        }
       } else if (code < 0) {
         char tls_err[40] = "";
         if (https && tls.lastError(tls_err, sizeof(tls_err)) != 0 && tls_err[0])

@@ -102,7 +102,6 @@ public:
   void mapDownloadStop();
   void mapDownloadResume();
   void mapDownloadDiscard();
-  void mapDownloadZmax(int delta);
   void setLiveTiles(bool on);
   void setTrails(bool on);
   void setVectorMap(bool on);
@@ -567,11 +566,10 @@ private:
   lv_obj_t* _dl_info = nullptr;
   lv_obj_t* _dl_bar = nullptr;          // progress while downloading
   lv_obj_t* _dl_err = nullptr;          // failures, one line
-  lv_obj_t* _dl_zoom_lbl = nullptr;
+  lv_obj_t* _dl_sub = nullptr;
   lv_obj_t* _dl_start_lbl = nullptr;
   lv_obj_t* _dl_job_row = nullptr;      // "Unfinished ... Resume" in the popup
   lv_obj_t* _dl_job_lbl = nullptr;
-  int       _dl_zmax = 0;
   uint8_t   _dl_last_state = 0;
 
   // Navigation map (SCR_MAP with _map_nav)
