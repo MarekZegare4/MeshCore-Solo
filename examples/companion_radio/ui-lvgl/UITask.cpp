@@ -13,6 +13,7 @@
 #include <new>
 #include <src/core/lv_obj_event_private.h>   // lv_cover_check_info_t (coversOwnArea)
 #include <src/widgets/label/lv_label_private.h>   // lv_label_t (labelShows)
+#include <src/misc/lv_area_private.h>   // lv_area_intersect (clockview::wheelDraw)
 #include <stdarg.h>
 #include <sys/stat.h>
 

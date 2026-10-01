@@ -24,15 +24,6 @@ static lv_obj_t* s_ring = nullptr;          // "Timer done" card on the top laye
 static lv_obj_t* s_ring_lbl = nullptr;
 static lv_obj_t* s_alarm_sw = nullptr;     // follows a time change (setting it arms the alarm)
 
-static char s_opts24[24 * 3], s_opts60[60 * 3];   // "00\n01\n..." for the rollers
-static void buildOptions() {
-  if (s_opts24[0]) return;
-  int o = 0;
-  for (int i = 0; i < 24; i++) o += snprintf(s_opts24 + o, sizeof(s_opts24) - o, i ? "\n%02d" : "%02d", i);
-  o = 0;
-  for (int i = 0; i < 60; i++) o += snprintf(s_opts60 + o, sizeof(s_opts60) - o, i ? "\n%02d" : "%02d", i);
-}
-
 static uint32_t swElapsed() { return s_sw_accum + (s_sw_running ? millis() - s_sw_start : 0); }
 
 // Countdown: rounds up, so "00:01" shows until it actually fires.
@@ -47,21 +38,154 @@ static void fmtStopwatch(char* b, int n, uint32_t ms) {
   else snprintf(b, n, "%02lu:%02lu.%lu", (unsigned long)(t / 60), (unsigned long)(t % 60), (unsigned long)(ms / 100 % 10));
 }
 
-static lv_obj_t* roller(lv_obj_t* parent, const char* opts, int sel, lv_event_cb_t cb, uintptr_t which) {
-  lv_obj_t* r = lv_roller_create(parent);
-  lv_roller_set_options(r, opts, LV_ROLLER_MODE_INFINITE);
-  lv_roller_set_selected(r, sel, LV_ANIM_OFF);
-  lv_obj_set_size(r, 60, 84);   // three rows; leaves room for the button below
-  lv_obj_set_style_text_font(r, THEME_FONT_TITLE, 0);
-  lv_obj_set_style_text_font(r, THEME_FONT_LARGE, LV_PART_SELECTED);
-  lv_obj_set_style_text_line_space(r, 4, 0);
-  lv_obj_set_style_text_color(r, lv_color_hex(theme::TEXT_MUTED), 0);
-  lv_obj_set_style_bg_color(r, lv_color_hex(theme::SURFACE), 0);
-  lv_obj_set_style_border_width(r, 0, 0);
-  lv_obj_set_style_bg_color(r, lv_color_hex(theme::SURFACE_2), LV_PART_SELECTED);
-  lv_obj_set_style_text_color(r, lv_color_hex(theme::ACCENT), LV_PART_SELECTED);
-  lv_obj_add_event_cb(r, cb, LV_EVENT_VALUE_CHANGED, (void*)which);
-  return r;
+// A number wheel, 0..n-1 in a loop with the middle row selected: an infinite
+// lv_roller's look and touch, drawn by hand. lv_roller measures its whole
+// option text (repeated three times) on every style change, layout pass and
+// frame: some 40 of the ~100 ms this screen took to open went on that.
+struct Wheel {
+  uint8_t n;
+  int32_t pos;     // the selected row, in 1/256 rows: dragging moves it between rows
+  int32_t vel;     // the finger's recent speed, px per input read (smoothed)
+  int32_t drag;    // px the finger has moved since it went down
+};
+static const int32_t WHEEL_LINE = 4;   // between rows
+static char s_nums[60][3];             // "00".."59"
+
+static int32_t wheelPitch() { return lv_font_get_line_height(THEME_FONT_TITLE) + WHEEL_LINE; }
+static Wheel* wheelOf(lv_obj_t* o) { return (Wheel*)lv_obj_get_user_data(o); }
+static int wheelValue(lv_obj_t* o) {
+  const Wheel* w = wheelOf(o);
+  int32_t r = (w->pos + 128) >> 8;
+  return (int)(((r % w->n) + w->n) % w->n);
+}
+
+static void wheelAnim(void* o, int32_t v) {
+  wheelOf((lv_obj_t*)o)->pos = v;
+  lv_obj_invalidate((lv_obj_t*)o);
+}
+static void wheelAnimDone(lv_anim_t* a) {   // back to the first loop, so pos never grows
+  Wheel* w = wheelOf((lv_obj_t*)a->var);
+  w->pos = (int32_t)wheelValue((lv_obj_t*)a->var) << 8;
+}
+// Rolls to row `to` (whole rows from where it is now) and says so.
+static void wheelGo(lv_obj_t* o, int32_t to) {
+  Wheel* w = wheelOf(o);
+  int32_t from = w->pos, end = to * 256;
+  lv_anim_delete(o, wheelAnim);
+  lv_anim_t a;
+  lv_anim_init(&a);
+  lv_anim_set_var(&a, o);
+  lv_anim_set_exec_cb(&a, wheelAnim);
+  lv_anim_set_values(&a, from, end);
+  int32_t rows = LV_ABS(end - from) >> 8;
+  lv_anim_set_duration(&a, LV_MIN(200 + rows * 20, 600));
+  lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
+  lv_anim_set_completed_cb(&a, wheelAnimDone);
+  w->pos = end;   // the value is the target already: read by the event below
+  lv_obj_send_event(o, LV_EVENT_VALUE_CHANGED, NULL);
+  w->pos = from;
+  lv_anim_start(&a);
+}
+
+static void wheelDraw(lv_event_t* e) {
+  lv_obj_t* o = lv_event_get_current_target_obj(e);
+  const Wheel* w = wheelOf(o);
+  lv_layer_t* layer = lv_event_get_layer(e);
+  lv_area_t a;
+  lv_obj_get_coords(o, &a);
+  int32_t pitch = wheelPitch(), mid = (a.y1 + a.y2 + 1) / 2;
+  int32_t h_main = lv_font_get_line_height(THEME_FONT_TITLE), h_sel = lv_font_get_line_height(THEME_FONT_LARGE);
+  int32_t band_h = (h_main + h_sel) / 2 + WHEEL_LINE;
+  lv_area_t band = { a.x1, mid - band_h / 2, a.x2, mid - band_h / 2 + band_h - 1 };
+
+  lv_draw_rect_dsc_t rd;
+  lv_draw_rect_dsc_init(&rd);
+  rd.bg_color = lv_color_hex(theme::SURFACE_2);
+  lv_draw_rect(layer, &rd, &band);
+
+  // Above the band, the band, below it: the band's rows in the larger font.
+  const lv_area_t clips[3] = { { a.x1, a.y1, a.x2, band.y1 - 1 }, band, { a.x1, band.y2 + 1, a.x2, a.y2 } };
+  const lv_area_t clip_ori = layer->_clip_area;
+  int32_t base = w->pos >> 8, frac = w->pos & 255;
+  int32_t span = lv_area_get_height(&a) / 2 / pitch + 2;
+  for (int c = 0; c < 3; c++) {
+    if (!lv_area_intersect(&layer->_clip_area, &clip_ori, &clips[c])) continue;
+    bool sel = c == 1;
+    lv_draw_label_dsc_t td;
+    lv_draw_label_dsc_init(&td);
+    td.font = sel ? THEME_FONT_LARGE : THEME_FONT_TITLE;
+    td.color = lv_color_hex(sel ? theme::ACCENT : theme::TEXT_MUTED);
+    td.align = LV_TEXT_ALIGN_CENTER;
+    int32_t fh = sel ? h_sel : h_main;
+    for (int32_t k = -span; k <= span; k++) {
+      int32_t y = mid + ((k << 8) - frac) * pitch / 256;   // the row's middle
+      if (y + fh < layer->_clip_area.y1 || y - fh > layer->_clip_area.y2) continue;
+      td.text = s_nums[(((base + k) % w->n) + w->n) % w->n];
+      lv_area_t ta = { a.x1, y - fh / 2, a.x2, y - fh / 2 + fh - 1 };
+      lv_draw_label(layer, &td, &ta);
+    }
+  }
+  layer->_clip_area = clip_ori;
+}
+
+static void wheelEvent(lv_event_t* e) {
+  lv_obj_t* o = lv_event_get_current_target_obj(e);
+  Wheel* w = wheelOf(o);
+  lv_indev_t* indev = lv_indev_active();
+  switch (lv_event_get_code(e)) {
+    case LV_EVENT_PRESSED:
+      lv_anim_delete(o, wheelAnim);
+      w->vel = w->drag = 0;
+      break;
+    case LV_EVENT_PRESSING: {
+      lv_point_t v = { 0, 0 };
+      if (indev) lv_indev_get_vect(indev, &v);
+      w->vel = (w->vel + v.y) / 2;
+      w->drag += LV_ABS(v.y);
+      if (v.y) {
+        w->pos -= v.y * 256 / wheelPitch();
+        lv_obj_invalidate(o);
+      }
+      break;
+    }
+    case LV_EVENT_RELEASED:
+    case LV_EVENT_PRESS_LOST: {
+      int32_t pitch = wheelPitch(), to;
+      if (w->drag > 4) {   // a throw carries on for ~10 reads' worth (as lv_roller's), then the nearest row
+        to = (w->pos - w->vel * 10 * 256 / pitch + 128) >> 8;
+      } else {             // a tap: that row to the middle
+        lv_point_t p = { 0, 0 };
+        if (indev) lv_indev_get_point(indev, &p);
+        lv_area_t a;
+        lv_obj_get_coords(o, &a);
+        int32_t dy = p.y - (a.y1 + a.y2 + 1) / 2;
+        to = ((w->pos + 128) >> 8) + (dy + (dy < 0 ? -pitch / 2 : pitch / 2)) / pitch;
+      }
+      wheelGo(o, to);
+      break;
+    }
+    case LV_EVENT_DELETE:
+      lv_anim_delete(o, wheelAnim);
+      lv_free(w);
+      break;
+    default: break;
+  }
+}
+
+static lv_obj_t* wheel(lv_obj_t* parent, uint8_t n, int sel, lv_event_cb_t cb, uintptr_t which) {
+  if (!s_nums[0][0]) for (int i = 0; i < 60; i++) snprintf(s_nums[i], sizeof(s_nums[i]), "%02d", i);
+  Wheel* w = (Wheel*)lv_malloc(sizeof(Wheel));
+  *w = { n, (int32_t)(sel % n) * 256, 0, 0 };
+  lv_obj_t* o = lv_obj_create(parent);
+  styleSurface(o, theme::SURFACE);
+  lv_obj_set_style_radius(o, theme::RADIUS_SM, 0);
+  lv_obj_remove_flag(o, (lv_obj_flag_t)(LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_SCROLL_CHAIN));
+  lv_obj_set_size(o, 60, 84);   // three rows; leaves room for the button below
+  lv_obj_set_user_data(o, w);
+  lv_obj_add_event_cb(o, wheelDraw, LV_EVENT_DRAW_MAIN, NULL);
+  lv_obj_add_event_cb(o, wheelEvent, LV_EVENT_ALL, NULL);
+  lv_obj_add_event_cb(o, cb, LV_EVENT_VALUE_CHANGED, (void*)which);
+  return o;
 }
 
 static lv_obj_t* colon(lv_obj_t* parent) { return label(parent, ":", THEME_FONT_LARGE, theme::TEXT_MUTED); }
@@ -84,9 +208,9 @@ static void onClockTab(lv_event_t* e)    { s_ui->clockTab((int)(uintptr_t)lv_eve
 static void onClockAct(lv_event_t* e)    { s_ui->clockAction((uint8_t)(uintptr_t)lv_event_get_user_data(e)); }
 static void onRingDismiss(lv_event_t* e) { (void)e; s_ui->dismissRing(); }
 
-// Alarm: hour / minute rollers, on switch, repeat. Saved on every change.
-static void onAlarmRoller(lv_event_t* e) {
-  s_ui->setAlarm((int)(uintptr_t)lv_event_get_user_data(e), (int)lv_roller_get_selected((lv_obj_t*)lv_event_get_target(e)));
+// Alarm: hour / minute wheels, on switch, repeat. Saved on every change.
+static void onAlarmWheel(lv_event_t* e) {
+  s_ui->setAlarm((int)(uintptr_t)lv_event_get_user_data(e), clockview::wheelValue((lv_obj_t*)lv_event_get_target(e)));
 }
 static void onAlarmSwitch(lv_event_t* e) {
   s_ui->setAlarm(2, lv_obj_has_state((lv_obj_t*)lv_event_get_target(e), LV_STATE_CHECKED) ? 1 : 0);
@@ -94,8 +218,8 @@ static void onAlarmSwitch(lv_event_t* e) {
 static void onAlarmRepeat(lv_event_t* e) {
   s_ui->setAlarm(3, choiceSelected((lv_obj_t*)lv_event_get_target(e)));
 }
-static void onTimerRoller(lv_event_t* e) {
-  int v = (int)lv_roller_get_selected((lv_obj_t*)lv_event_get_target(e));
+static void onTimerWheel(lv_event_t* e) {
+  int v = clockview::wheelValue((lv_obj_t*)lv_event_get_target(e));
   switch ((uintptr_t)lv_event_get_user_data(e)) {
     case 0: clockview::s_timer_h = (uint8_t)v; break;
     case 1: clockview::s_timer_m = (uint8_t)v; break;
@@ -116,7 +240,6 @@ void UITask::clockTab(int tab) {
 
 void UITask::buildClock() {
   using namespace clockview;
-  buildOptions();
   lv_obj_t* body = newScreen("Clock", true);
   lv_obj_set_style_pad_row(body, 6, 0);
   lv_obj_remove_flag(body, LV_OBJ_FLAG_SCROLLABLE);
@@ -139,9 +262,9 @@ void UITask::buildClock() {
 
   if (s_tab == TAB_ALARM) {
     lv_obj_t* r = row(body);
-    roller(r, s_opts24, _prefs->alarm_hour % 24, onAlarmRoller, 0);
+    wheel(r, 24, _prefs->alarm_hour % 24, onAlarmWheel, 0);
     colon(r);
-    roller(r, s_opts60, _prefs->alarm_min % 60, onAlarmRoller, 1);
+    wheel(r, 60, _prefs->alarm_min % 60, onAlarmWheel, 1);
     lv_obj_t* col = lv_obj_create(r);
     styleSurface(col, theme::BG);
     lv_obj_remove_flag(col, LV_OBJ_FLAG_SCROLLABLE);
@@ -182,11 +305,11 @@ void UITask::buildClock() {
       lv_obj_set_style_pad_ver(s_big, 18, 0);
     } else {
       lv_obj_t* r = row(body);
-      roller(r, s_opts24, s_timer_h, onTimerRoller, 0);
+      wheel(r, 24, s_timer_h, onTimerWheel, 0);
       colon(r);
-      roller(r, s_opts60, s_timer_m, onTimerRoller, 1);
+      wheel(r, 60, s_timer_m, onTimerWheel, 1);
       colon(r);
-      roller(r, s_opts60, s_timer_s, onTimerRoller, 2);
+      wheel(r, 60, s_timer_s, onTimerWheel, 2);
     }
   } else {   // stopwatch
     s_big = label(body, "", THEME_FONT_CLOCK, theme::TEXT);
