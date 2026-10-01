@@ -90,7 +90,11 @@ public:
       s->present = true;
       memset(&s->dsc, 0, sizeof(s->dsc));
       s->dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
+#ifdef UI_FLUSH_DMA
+      s->dsc.header.cf = LV_COLOR_FORMAT_RGB565_SWAPPED;
+#else
       s->dsc.header.cf = LV_COLOR_FORMAT_RGB565;
+#endif
       s->dsc.header.w = TILE_PX;
       s->dsc.header.h = TILE_PX;
       s->dsc.header.stride = TILE_PX * 2;
@@ -151,6 +155,9 @@ private:
     uint32_t t0 = micros();
 #endif
     _job.present = _spare && _job.src->renderTile(_job.z, _job.x, _job.y, _spare);
+#ifdef UI_FLUSH_DMA   // in the display's byte order: drawn as a plain copy (LvglPort.h)
+    if (_job.present) lv_draw_sw_rgb565_swap(_spare, TILE_PX * TILE_PX);
+#endif
 #ifdef UI_PERF_TEST
     uint32_t dt = micros() - t0;
     if (_job.present) { s_perf_tile_us += dt; s_perf_tile_n++; if (dt > s_perf_tile_max) s_perf_tile_max = dt; }

@@ -43,7 +43,12 @@ static void shotCopy(const lv_area_t* a, const uint8_t* px) {
   const int32_t W = lv_display_get_horizontal_resolution(NULL);
   const int32_t w = a->x2 - a->x1 + 1;
   const uint16_t* src = (const uint16_t*)px;
-  for (int32_t y = a->y1; y <= a->y2; y++, src += w) memcpy(s_shot + y * W + a->x1, src, w * 2);
+  for (int32_t y = a->y1; y <= a->y2; y++, src += w) {
+    memcpy(s_shot + y * W + a->x1, src, w * 2);
+#ifdef UI_FLUSH_DMA   // drawn big-endian for the panel
+    lv_draw_sw_rgb565_swap(s_shot + y * W + a->x1, w);
+#endif
+  }
 }
 
 // Saved WiFi networks (Settings > WiFi), most recently saved first. Kept in RAM
@@ -99,7 +104,16 @@ static const int WIFI_SCAN_MAX = 20;
 
 static lgfx::LGFX_Device* s_gfx = nullptr;
 static bool s_swallow = false;   // ignore the touch that woke the display until it lifts
-static uint32_t s_flush_us = 0;  // UI_PERF_TEST: time spent in flushCb
+static uint32_t s_flush_us = 0;  // UI_PERF_TEST: time spent in flushCb (and waiting for it)
+// -D UI_FLUSH_DMA: the panel fed by DMA in the background from buffers in
+// internal RAM, everything drawn in its byte order.
+#ifdef UI_FLUSH_DMA
+  #define FLUSH_DMA 1
+#else
+  #define FLUSH_DMA 0
+#endif
+static bool s_dma = false;       // the buffers are DMA-able: sent in the background
+static bool s_flushing = false;  // a DMA transfer under way
 
 // The CPU clock down to 80 MHz (LoRa, BLE and WiFi all run at that) with the
 // screen off (powerSave()), and with it on while nobody touches it and nothing
@@ -121,15 +135,43 @@ static void flushCb(lv_display_t* disp, const lv_area_t* area, uint8_t* px_map) 
   shotCopy(area, px_map);
   int w = area->x2 - area->x1 + 1;
   int h = area->y2 - area->y1 + 1;
+#if FLUSH_DMA
+  if (s_dma) {
+    // Sent by DMA while LVGL draws the next area into the other buffer (drawn
+    // in the panel's byte order, RGB565_SWAPPED). flushWait() (below) ends it.
+    s_gfx->startWrite();
+    display.panel().flushStart(area->x1, area->y1, w, h, px_map, (uint32_t)w * h * 2);
+    s_flushing = true;
+    return;   // (UI_PERF_TEST: the wait is timed instead)
+  }
+#endif
   s_gfx->startWrite();
   s_gfx->setAddrWindow(area->x1, area->y1, w, h);
-  s_gfx->pushPixels((uint16_t*)px_map, (uint32_t)w * h, true /* LVGL RGB565 is little-endian */);
+  s_gfx->pushPixels((uint16_t*)px_map, (uint32_t)w * h, !FLUSH_DMA /* LVGL RGB565 is little-endian; _SWAPPED as sent */);
   s_gfx->endWrite();
+  lv_display_flush_ready(disp);
 #ifdef UI_PERF_TEST
   s_flush_us += micros() - t;
 #endif
-  lv_display_flush_ready(disp);
 }
+
+#if FLUSH_DMA
+// The area sent last, finished: before LVGL draws into its buffer again, and
+// at the end of every frame -- nothing else on the bus meets a transfer.
+static void flushWait(lv_display_t* disp) {
+  (void)disp;
+  if (!s_flushing) return;
+#ifdef UI_PERF_TEST
+  uint32_t t = micros();
+#endif
+  display.panel().flushWait();
+  s_gfx->endWrite();
+  s_flushing = false;
+#ifdef UI_PERF_TEST
+  s_flush_us += micros() - t;
+#endif
+}
+#endif
 
 static void touchCb(lv_indev_t* indev, lv_indev_data_t* data) {
   (void)indev;
@@ -158,16 +200,45 @@ static bool begin() {
   lv_display_t* disp = lv_display_create(s_gfx->width(), s_gfx->height());
   lv_display_set_flush_cb(disp, flushCb);
 
-  // Two half-screen buffers (75 KB each) in PSRAM: a frame renders in two
-  // passes instead of six (every pass walks the whole tree and lays text out
-  // again) -- measured ~8% faster than 40 lines; internal RAM / DMA / -O2
-  // made no difference (UI_PERF_TEST).
-  const uint32_t buf_sz = (uint32_t)s_gfx->width() * 120 * 2;
-  uint8_t* buf1 = (uint8_t*)heap_caps_malloc(buf_sz, MALLOC_CAP_SPIRAM);
-  uint8_t* buf2 = (uint8_t*)heap_caps_malloc(buf_sz, MALLOC_CAP_SPIRAM);
-  if (!buf1) { buf1 = (uint8_t*)heap_caps_malloc(buf_sz, MALLOC_CAP_8BIT); buf2 = nullptr; }
+  // Sent by DMA (FLUSH_DMA): two 24-line buffers (15 KB each) in internal
+  // RAM, ten passes a frame, each drawn while the last goes out -- 7-11%
+  // faster screens than 48 lines in PSRAM, the map the same. Not PSRAM:
+  // LovyanGFX cuts a transfer into 4092-byte DMA descriptors, and from the
+  // second one on PSRAM isn't 16-byte aligned as the S3's DMA needs it
+  // there (bands shifted, or of stale pixels).
+  // Otherwise two half-screen buffers (75 KB each) in PSRAM: two passes
+  // instead of six (every pass walks the whole tree and lays text out again)
+  // -- measured ~8% faster than 40 lines; internal RAM / -O2 made no
+  // difference (UI_PERF_TEST).
+  uint32_t buf_sz = 0;
+  uint8_t *buf1 = nullptr, *buf2 = nullptr;
+#if FLUSH_DMA
+  buf_sz = (uint32_t)s_gfx->width() * 24 * 2;
+  buf1 = (uint8_t*)heap_caps_malloc(buf_sz, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
+  buf2 = buf1 ? (uint8_t*)heap_caps_malloc(buf_sz, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA) : nullptr;
+  s_dma = buf2 != nullptr;
+  if (!s_dma && buf1) { heap_caps_free(buf1); buf1 = nullptr; }   // no room: sent as it's drawn, as below
+#endif
+  if (!s_dma) {
+    buf_sz = (uint32_t)s_gfx->width() * 120 * 2;
+    buf1 = (uint8_t*)heap_caps_malloc(buf_sz, MALLOC_CAP_SPIRAM);
+    buf2 = (uint8_t*)heap_caps_malloc(buf_sz, MALLOC_CAP_SPIRAM);
+    if (!buf1) { buf1 = (uint8_t*)heap_caps_malloc(buf_sz, MALLOC_CAP_8BIT); buf2 = nullptr; }
+  }
   if (!buf1) return false;
   lv_display_set_buffers(disp, buf1, buf2, buf_sz, LV_DISPLAY_RENDER_MODE_PARTIAL);
+#if FLUSH_DMA
+  // Drawn big-endian, as the panel takes it: swapping a frame's bytes
+  // before sending cost ~6 ms. Pictures are made so too (map tiles, the
+  // frozen screen): an RGB565 one is swapped pixel by pixel as it's drawn.
+  lv_display_set_color_format(disp, LV_COLOR_FORMAT_RGB565_SWAPPED);
+  if (s_dma) lv_display_set_flush_wait_cb(disp, flushWait);
+  lv_display_add_event_cb(disp, [](lv_event_t* e) {   // the frame's last area, done before anything else runs
+    if (!s_flushing) return;
+    flushWait(nullptr);
+    lv_display_flush_ready((lv_display_t*)lv_event_get_current_target(e));
+  }, LV_EVENT_REFR_READY, NULL);
+#endif
 
   lv_indev_t* indev = lv_indev_create();
   lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);

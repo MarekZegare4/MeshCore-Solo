@@ -322,16 +322,26 @@ namespace freeze {
     s_retry = nullptr;
     take((lv_obj_t*)lv_timer_get_user_data(t));
   }
+  // Darkened into the display's own byte order (UI_FLUSH_DMA: big-endian;
+  // lv_snapshot can't make that one itself): drawn then as a plain copy.
+#ifdef UI_FLUSH_DMA
+  static inline uint16_t out565(uint16_t c) { return __builtin_bswap16(c); }
+#else
+  static inline uint16_t out565(uint16_t c) { return c; }
+#endif
   static void darken(lv_draw_buf_t* buf) {   // as the dim layer over it would
     const uint32_t keep = 256 - s_dim;   // what's left under the black
     for (uint32_t y = 0; y < buf->header.h; y++) {
       uint16_t* p = (uint16_t*)(buf->data + y * buf->header.stride);
       for (uint32_t x = 0; x < buf->header.w; x++) {
         uint32_t c = p[x];
-        p[x] = (uint16_t)(((((c >> 11) * keep) >> 8) << 11) | (((((c >> 5) & 0x3F) * keep) >> 8) << 5) |
-                          (((c & 0x1F) * keep) >> 8));
+        p[x] = out565((uint16_t)(((((c >> 11) * keep) >> 8) << 11) | (((((c >> 5) & 0x3F) * keep) >> 8) << 5) |
+                                 (((c & 0x1F) * keep) >> 8)));
       }
     }
+#ifdef UI_FLUSH_DMA
+    buf->header.cf = LV_COLOR_FORMAT_RGB565_SWAPPED;
+#endif
   }
   static lv_draw_buf_t* snap(lv_obj_t* overlay, lv_obj_t* scr, bool top) {
     if (!top) lv_obj_add_flag(overlay, LV_OBJ_FLAG_HIDDEN);

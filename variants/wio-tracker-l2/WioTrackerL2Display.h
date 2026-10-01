@@ -88,13 +88,30 @@ public:
   virtual ~WioTrackerL2Backlight() = default;
 };
 
+// The panel, plus a write that doesn't wait: an area's pixels (already in the
+// panel's byte order, at most 32 KB -- one SPI transaction) go out by DMA
+// while the CPU draws the next one; flushWait() ends it. The library's own
+// writes wait for the wire every time (the ui-lvgl frame's ~8 ms).
+struct Panel_WioTrackerL2 : public lgfx::Panel_NV3031B {
+  void flushStart(int x, int y, int w, int h, const uint8_t* data, uint32_t len) {
+    setWindow(x, y, x + w - 1, y + h - 1);
+    start_qspi();
+    _bus->writeBytes(data, len, true, true);
+  }
+  void flushWait() {
+    _bus->wait();
+    end_qspi();
+  }
+};
+
 class LGFX_WioTrackerL2 : public lgfx::LGFX_Device {
-  lgfx::Panel_NV3031B _panel_instance;
+  Panel_WioTrackerL2 _panel_instance;
   lgfx::Bus_SPI _bus_instance;
   lgfx::Touch_GT911 _touch_instance;
   WioTrackerL2Backlight _light_instance;
 
 public:
+  Panel_WioTrackerL2& panelL2() { return _panel_instance; }
   bool init_impl(bool use_reset, bool use_clear) override {
     // bring up backlight controller while the I2C bus is still clean
     _light_instance.init(_light_instance.getBrightness());
@@ -182,6 +199,7 @@ public:
 
   // direct access to the LGFX device (LVGL flush/touch glue)
   lgfx::LGFX_Device* lgfxDevice() { return &disp; }
+  Panel_WioTrackerL2& panel() { return disp.panelL2(); }
   // LVGL draws straight to the panel: the frame sprite (76 KB of PSRAM) only
   // carried the boot "Loading..." -- given back once LVGL takes over.
   void releaseFrameBuffer() { buffer.deleteSprite(); }
