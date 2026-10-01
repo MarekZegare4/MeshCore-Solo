@@ -157,6 +157,15 @@ static const int QUICK_MSGS_MAX = 10;
 //     scope (e.g. NearbyScreen::FILTER_LABELS), so including any of them from a
 //     second .cpp is a duplicate-symbol link error. Keep them UITask-internal;
 //     anything genuinely shareable belongs in a real header (icons.h, GeoUtils.h).
+// Telemetry (ui-core/Telemetry.h) in this display's font and width: tight for
+// the dashboard's short fields, spaced ("49 m") on the Status screen's rows.
+static const telemetry::Style L1_TELEMETRY = { "\xc2\xb0", false, false, 3 };
+static const telemetry::Style L1_INFO      = { "\xc2\xb0", true,  false, 5 };
+// Altitude (baro or GPS) in Settings > System > Units, always the small unit.
+static void fmtAlt(char* buf, int n, float meters, bool imperial) {
+  telemetry::altText(meters, imperial, L1_TELEMETRY, buf, n);
+}
+
 #include "FullscreenMsgView.h"
 #include "../ui-core/MessageText.h"
 #include "SensorPlaceholders.h"
@@ -178,10 +187,7 @@ static const int QUICK_MSGS_MAX = 10;
 #include "LocatorScreen.h"
 #include "TrailScreen.h"
 #include "CompassScreen.h"
-#if ENV_INCLUDE_GPS == 1 && defined(GPS_SKYVIEW)
-  #include "SatellitesScreen.h"
-#endif
-#include "DiagnosticsScreen.h"
+#include "StatusScreen.h"   // Home › Status (was Tools › Diagnostics + Satellites)
 #include "RepeaterScreen.h"
 #if defined(PIN_GPIO1)
 #include "GpioScreen.h"
@@ -276,27 +282,15 @@ static int drawClockTime(DisplayDriver& d, int top_y, const struct tm* ti,
 static void formatDashVal(uint8_t field, char* val, int val_len, uint16_t batt_mv, uint16_t low_batt_mv,
                           int unread, bool unread_overflow, bool imperial, CayenneLPP* lpp, bool nouns);
 
-// Telemetry (ui-core/Telemetry.h) in this display's font and width.
-static const telemetry::Style L1_TELEMETRY = { "\xf8", false, false, 3 };
-// Altitude (baro or GPS) in Settings > System > Units, always the small unit.
-static void fmtAlt(char* buf, int n, float meters, bool imperial) {
-  telemetry::altText(meters, imperial, L1_TELEMETRY, buf, n);
-}
 
 class HomeScreen : public UIScreen {
   enum HomePage {
     CLOCK,
     FAVOURITES,
     RECENT,
-    RADIO,
+    STATUS,      // radio, GPS, power, mesh at a glance (took over Radio / GPS / Sensors)
     BLUETOOTH,
     ADVERT,
-#if ENV_INCLUDE_GPS == 1
-    GPS,
-#endif
-#if UI_SENSORS_PAGE == 1
-    SENSORS,
-#endif
     SETTINGS,
     MAP,
     TOOLS,
@@ -367,15 +361,9 @@ class HomeScreen : public UIScreen {
     if (page == CLOCK)      return NodePrefs::HPB_CLOCK;
     if (page == FAVOURITES) return NodePrefs::HPB_FAVOURITES;
     if (page == RECENT)    return NodePrefs::HPB_RECENT;
-    if (page == RADIO)     return NodePrefs::HPB_RADIO;
+    if (page == STATUS)    return NodePrefs::HPB_RADIO;   // the old Radio slot
     if (page == BLUETOOTH) return NodePrefs::HPB_BLUETOOTH;
     if (page == ADVERT)    return NodePrefs::HPB_ADVERT;
-#if ENV_INCLUDE_GPS == 1
-    if (page == GPS)       return NodePrefs::HPB_GPS;
-#endif
-#if UI_SENSORS_PAGE == 1
-    if (page == SENSORS)   return NodePrefs::HPB_SENSORS;
-#endif
     if (page == TOOLS)     return NodePrefs::HPB_TOOLS;
     if (page == SHUTDOWN)  return NodePrefs::HPB_SHUTDOWN;
     if (page == MAP)       return NodePrefs::HPB_MAP;
@@ -389,15 +377,9 @@ class HomeScreen : public UIScreen {
       case NodePrefs::HPB_CLOCK:      return CLOCK;
       case NodePrefs::HPB_FAVOURITES: return FAVOURITES;
       case NodePrefs::HPB_RECENT:    return RECENT;
-      case NodePrefs::HPB_RADIO:     return RADIO;
+      case NodePrefs::HPB_RADIO:     return STATUS;
       case NodePrefs::HPB_BLUETOOTH: return BLUETOOTH;
       case NodePrefs::HPB_ADVERT:    return ADVERT;
-#if ENV_INCLUDE_GPS == 1
-      case NodePrefs::HPB_GPS:       return GPS;
-#endif
-#if UI_SENSORS_PAGE == 1
-      case NodePrefs::HPB_SENSORS:   return SENSORS;
-#endif
       case NodePrefs::HPB_TOOLS:     return TOOLS;
       case NodePrefs::HPB_SHUTDOWN:  return SHUTDOWN;
       case NodePrefs::HPB_SETTINGS:  return SETTINGS;
@@ -412,6 +394,8 @@ class HomeScreen : public UIScreen {
     int bit = pageBit(page);
     if (bit < 0) return true;
     uint16_t mask = (_node_prefs && _node_prefs->home_pages_mask) ? _node_prefs->home_pages_mask : NodePrefs::HP_ALL;
+    // Status stands in for the Radio, GPS and Sensors pages: shown if any was.
+    if (page == STATUS) return (mask & (NodePrefs::HP_RADIO | NodePrefs::HP_GPS | NodePrefs::HP_SENSORS)) != 0;
     return (mask >> bit) & 1;
   }
 
@@ -547,7 +531,6 @@ class HomeScreen : public UIScreen {
 
   CayenneLPP sensors_lpp;
   int sensors_nb = 0;
-  int sensors_scroll_offset = 0;
   int next_sensors_refresh = 0;
 
   void refresh_sensors() {
@@ -725,21 +708,75 @@ public:
     return nearest_km;
   }
 
+  // The Status page: four tiles split by dotted rules, each one subject's
+  // headline (icon + main value) over a detail line. Enter opens the Status
+  // screen with all of it.
+  void drawStatusTiles(DisplayDriver& d, int top) {
+    const int W = d.width(), H = d.height() - top;
+    const int lh = d.getLineHeight(), s = miniIconScale(d);
+    const int mid_x = W / 2, mid_y = top + H / 2;
+    d.setColor(DisplayDriver::LIGHT);
+    info::vrule(d, mid_x, top, H);
+    info::rule(d, 0, mid_y, W);
+    auto tile = [&](int col, int row, const MiniIcon* ic, float batt, const char* head, const char* detail) {
+      const int x = col ? mid_x + 3 : 1, y = row ? mid_y + 2 : top + 1;
+      const int w = (col ? W - x : mid_x - 2 - x);
+      const int iy = y + (lh - 5 * s) / 2 - s;
+      int tx = x;
+      if (ic)            { miniIconDraw(d, x, iy, *ic); tx = x + ic->w * s + 2 * s; }
+      else if (batt >= 0) { info::battery(d, x, iy, batt); tx = x + info::batteryW(d) + 2 * s; }
+      d.drawTextEllipsized(tx, y, x + w - tx, head);
+      d.drawTextEllipsized(x, y + lh + 2, w, detail);
+    };
+    char h[20], t[20];
+
+    snprintf(h, sizeof(h), "%.3f", _node_prefs->freq);
+    snprintf(t, sizeof(t), "SF%u %gk", (unsigned)_node_prefs->sf, _node_prefs->bw);
+    tile(0, 0, &ICON_PG_RADIO, -1, h, t);
+
+#if ENV_INCLUDE_GPS == 1
+    {
+      LocationProvider* loc = sensors.getLocationProvider();
+      const bool on = _task->getGPSState();
+      t[0] = 0;
+      if (!loc)               strcpy(h, "No GPS");
+      else if (!on)           strcpy(h, "GPS off");
+      else if (!loc->isValid()) strcpy(h, "No fix");
+      else {
+#ifdef STATUS_HAS_SKY
+        GpsSky* g = skyview::sky();
+        strcpy(h, g && g->fix_mode == 2 ? "2D fix" : "3D fix");
+#else
+        strcpy(h, "Fix");
+#endif
+      }
+      if (loc && on) snprintf(t, sizeof(t), "%ld sats", loc->satellitesCount());
+      tile(1, 0, &ICON_PG_GPS, -1, h, t);
+    }
+#else
+    tile(1, 0, &ICON_PG_GPS, -1, "No GPS", "");
+#endif
+
+    const int mv = _task->getBattMilliVolts();
+    const int pct = battMvToPercent(mv, _node_prefs ? (int)_node_prefs->low_batt_mv : 0);
+    snprintf(h, sizeof(h), "%d%%", pct);
+    snprintf(t, sizeof(t), "%d.%02d V%s", mv / 1000, (mv % 1000) / 10, board.isExternalPowered() ? " USB" : "");
+    tile(0, 1, nullptr, pct / 100.0f, h, t);
+
+    snprintf(h, sizeof(h), "%d nodes", the_mesh.getNumContacts());
+    snprintf(t, sizeof(t), "%d in 1 h", StatusScreen::heardLastHour());
+    tile(1, 1, &ICON_MAP_CONTACT, -1, h, t);
+  }
+
   // Small 5x5 glyph shown in the page-indicator row for each HomePage.
   static const MiniIcon* pageIcon(int page) {
     switch (page) {
       case CLOCK:      return &ICON_PG_CLOCK;
       case FAVOURITES: return &ICON_PG_STAR;
       case RECENT:     return &ICON_PG_RECENT;
-      case RADIO:      return &ICON_PG_RADIO;
+      case STATUS:     return &ICON_CHART;
       case BLUETOOTH:  return &ICON_PG_BT;
       case ADVERT:     return &ICON_PG_ADVERT;
-#if ENV_INCLUDE_GPS == 1
-      case GPS:        return &ICON_PG_GPS;
-#endif
-#if UI_SENSORS_PAGE == 1
-      case SENSORS:    return &ICON_PG_SENSORS;
-#endif
       case SETTINGS:   return &ICON_PG_SETTINGS;
       case MAP:        return &ICON_PG_MAP;
       case TOOLS:      return &ICON_PG_TOOLS;
@@ -994,29 +1031,8 @@ public:
       display.drawPanel(hx - p, hy - p, hw + p*2, lk_lh + p*2);
       display.setCursor(hx, hy);
       display.print(hint);
-    } else if (_page == HomePage::RADIO) {
-      display.setColor(DisplayDriver::LIGHT);
-      // freq / sf
-      display.setCursor(0, content_y);
-      snprintf(tmp, sizeof(tmp),"FQ: %06.3f   SF: %d", _node_prefs->freq, _node_prefs->sf);
-      display.print(tmp);
-
-      display.setCursor(0, content_y + step);
-      snprintf(tmp, sizeof(tmp),"BW: %03.2f     CR: %d", _node_prefs->bw, _node_prefs->cr);
-      display.print(tmp);
-
-      // tx power, noise floor
-      display.setCursor(0, content_y + step * 2);
-      snprintf(tmp, sizeof(tmp),"TX: %ddBm", radio_driver.getTxPower());   // live value (reflects APC)
-      display.print(tmp);
-      display.setCursor(0, content_y + step * 3);
-      // Was gated to "n/a" while duty-cycle RX (Pwr save) was active, on the
-      // assumption that the floor only gets sampled during continuous RX --
-      // stale since RadioLibWrapper's periodic recalibration (noiseFloorCalibCheck(),
-      // NF_CALIB_INTERVAL_MS) started keeping it fresh even under duty-cycle,
-      // same live value Diagnostics already showed unconditionally.
-      snprintf(tmp, sizeof(tmp),"Noise floor: %d", radio_driver.getNoiseFloor());
-      display.print(tmp);
+    } else if (_page == HomePage::STATUS) {
+      drawStatusTiles(display, content_y);
     } else if (_page == HomePage::BLUETOOTH) {
       display.setColor(DisplayDriver::LIGHT);
       display.setTextSize(1);
@@ -1042,114 +1058,6 @@ public:
       display.setColor(DisplayDriver::LIGHT);
       anim_ms = drawHoverIcon(display, display.width() / 2, content_y, BIG_ADVERT);
       display.drawTextCentered(display.width() / 2, content_y + BIG_ADVERT.h + HOVER_GAP, "Advert");
-#if ENV_INCLUDE_GPS == 1
-    } else if (_page == HomePage::GPS) {
-      LocationProvider* nmea = sensors.getLocationProvider();
-      char buf[50];
-      int y = content_y;
-      bool gps_state = _task->getGPSState();
-#ifdef PIN_GPS_SWITCH
-      bool hw_gps_state = digitalRead(PIN_GPS_SWITCH);
-      if (gps_state != hw_gps_state) {
-        strcpy(buf, gps_state ? "gps off(hw)" : "gps off(sw)");
-      } else {
-        strcpy(buf, gps_state ? "gps on" : "gps off");
-      }
-#else
-      strcpy(buf, gps_state ? "gps on" : "gps off");
-#endif
-      display.drawTextLeftAlign(0, y, buf);
-      if (nmea == NULL) {
-        y += step;
-        display.drawTextLeftAlign(0, y, "Can't access GPS");
-      } else {
-        strcpy(buf, nmea->isValid()?"fix":"no fix");
-        display.drawTextRightAlign(display.width()-1, y, buf);
-        y += step;
-        display.drawTextLeftAlign(0, y, "sat");
-        snprintf(buf, sizeof(buf),"%d", nmea->satellitesCount());
-        display.drawTextRightAlign(display.width()-1, y, buf);
-        y += step;
-        display.drawTextLeftAlign(0, y, "pos");
-        // The driver reports 999 deg until a first fix: show a dash, not the
-        // placeholder. After a fix the last known position stays.
-        if (labs(nmea->getLatitude()) > 90000000L) strcpy(buf, "-");
-        else snprintf(buf, sizeof(buf),"%.4f %.4f",
-          nmea->getLatitude()/1000000., nmea->getLongitude()/1000000.);
-        display.drawTextRightAlign(display.width()-1, y, buf);
-        y += step;
-        display.drawTextLeftAlign(0, y, "alt");
-        fmtAlt(buf, sizeof(buf), nmea->getAltitude() / 1000.0f, _node_prefs && _node_prefs->units_imperial);
-        display.drawTextRightAlign(display.width()-1, y, buf);
-        y += step;
-      }
-#endif
-#if UI_SENSORS_PAGE == 1
-    } else if (_page == HomePage::SENSORS) {
-      int y = content_y;
-      refresh_sensors();
-
-      // Enumerate the distinct telemetry types directly from the freshly
-      // populated buffer. (Upstream replaced the per-sensor *_initialized flags
-      // with a generic registration model, so we derive availability from what
-      // querySensors() actually produced instead of asking the manager.)
-      uint8_t avail_types[16];
-      int avail_count = 0;
-      {
-        LPPReader er(sensors_lpp.getBuffer(), sensors_lpp.getSize());
-        uint8_t ech, etype;
-        while (er.readHeader(ech, etype) && avail_count < 16) {
-          er.skipData(etype);
-          bool dup = false;
-          for (int k = 0; k < avail_count; k++) if (avail_types[k] == etype) { dup = true; break; }
-          if (!dup) avail_types[avail_count++] = etype;
-        }
-      }
-      bool need_scroll = avail_count > UI_RECENT_LIST_SIZE;
-      int offset = need_scroll ? (sensors_scroll_offset % avail_count) : 0;
-      int show_n = need_scroll ? UI_RECENT_LIST_SIZE : avail_count;
-
-      for (int i = 0; i < show_n; i++) {
-        uint8_t target = avail_types[(offset + i) % avail_count];
-
-        // scan LPP buffer for this type
-        LPPReader r(sensors_lpp.getBuffer(), sensors_lpp.getSize());
-        uint8_t ch, type;
-        char buf[22] = "--";
-        while (r.readHeader(ch, type)) {
-          if (type == target) {
-            telemetry::lppText(r, type, _node_prefs && _node_prefs->units_imperial, L1_TELEMETRY, buf, sizeof(buf));
-            break;
-          }
-          r.skipData(type);
-        }
-
-        static const struct { uint8_t type; const char* name; } TYPE_NAMES[] = {
-          { LPP_VOLTAGE,            "voltage"  },
-          { LPP_GPS,                "gps"      },
-          { LPP_TEMPERATURE,        "temp"     },
-          { LPP_RELATIVE_HUMIDITY,  "humidity" },
-          { LPP_BAROMETRIC_PRESSURE,"pressure" },
-          { LPP_ALTITUDE,           "altitude" },
-          { LPP_CURRENT,            "current"  },
-          { LPP_POWER,              "power"    },
-          { LPP_LUMINOSITY,         "light"    },
-          { LPP_PERCENTAGE,         "moisture" },
-          { LPP_DISTANCE,           "distance" },
-          { LPP_CONCENTRATION,      "CO2"      },
-        };
-        const char* name = "sensor";
-        for (auto& tn : TYPE_NAMES) { if (tn.type == target) { name = tn.name; break; } }
-
-        display.setCursor(0, y);
-        display.print(name);
-        display.setCursor(display.width() - display.getTextWidth(buf) - 1, y);
-        display.print(buf);
-        y += step;
-      }
-      if (need_scroll) sensors_scroll_offset = (sensors_scroll_offset + 1) % avail_count;
-      else sensors_scroll_offset = 0;
-#endif
     } else if (_page == HomePage::SETTINGS) {
       display.setColor(DisplayDriver::LIGHT);
       display.setTextSize(1);
@@ -1437,19 +1345,10 @@ public:
       }
       return true;
     }
-#if ENV_INCLUDE_GPS == 1
-    if (c == KEY_ENTER && _page == HomePage::GPS) {
-      _task->toggleGPS();
+    if (c == KEY_ENTER && _page == HomePage::STATUS) {
+      _task->gotoStatusScreen(StatusScreen::TAB_RADIO);
       return true;
     }
-#endif
-#if UI_SENSORS_PAGE == 1
-    if (c == KEY_ENTER && _page == HomePage::SENSORS) {
-      // _task->toggleGPS();
-      next_sensors_refresh=0;
-      return true;
-    }
-#endif
     if (c == KEY_ENTER && _page == HomePage::SETTINGS) {
       _task->gotoSettingsScreen();
       return true;
@@ -1593,9 +1492,8 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
   trail_screen       = new TrailScreen(this, &_core->trail.store());
   compass_screen     = new CompassScreen(this);
 #if ENV_INCLUDE_GPS == 1 && defined(GPS_SKYVIEW)
-  satellites_screen  = new SatellitesScreen(this);
 #endif
-  diag_screen        = new DiagnosticsScreen(this);
+  status_screen      = new StatusScreen(this);
   repeater_screen    = new RepeaterScreen(this);
   clock_tools        = new ClockToolsScreen(this, node_prefs);
 #if defined(PIN_GPIO1)
@@ -1628,8 +1526,10 @@ void UITask::openAdminFor(const ContactInfo& ci, bool from_picker) {
 void UITask::gotoDashboardConfig() { setCurrScreen(dashboard_config); }
 void UITask::gotoTrailScreen()     { setCurrScreen(trail_screen); }
 void UITask::gotoCompassScreen()   { setCurrScreen(compass_screen); }
-void UITask::gotoSatellitesScreen() { if (satellites_screen) setCurrScreen(satellites_screen); }
-void UITask::gotoDiagnosticsScreen() { setCurrScreen(diag_screen); }
+void UITask::gotoStatusScreen(uint8_t tab) {
+  ((StatusScreen*)status_screen)->showTab(tab);
+  setCurrScreen(status_screen);
+}
 void UITask::gotoRepeaterScreen()  { setCurrScreen(repeater_screen); }
 void UITask::gotoClockTools()      { setCurrScreen(clock_tools); }
 void UITask::gotoGpioScreen() {
@@ -2459,8 +2359,8 @@ extern uint32_t g_disp_flushes;
 namespace perfl1 {
   // Each step opens a screen directly (so the walk doesn't depend on which
   // Home pages are enabled), then types keys: R/L/U/D/E/X, H = hold Enter.
-  enum Open : uint8_t { NONE, HOME, SETTINGS, MESSAGES, TOOLS, NEARBY, TRAIL, MAP, COMPASS, SATS,
-                        DIAG, LIVE, LOCATOR, ADVERT, REPEATER, BOT, CLOCKTOOLS, CHANNEL0 };
+  enum Open : uint8_t { NONE, HOME, SETTINGS, MESSAGES, TOOLS, NEARBY, TRAIL, MAP, COMPASS, STATUS,
+                        LIVE, LOCATOR, ADVERT, REPEATER, BOT, CLOCKTOOLS, CHANNEL0 };
   struct Step { const char* name; Open open; const char* keys; uint16_t dwell_ms; };
   static const Step STEPS[] = {
     {"boot-idle", NONE, "", 3000},
@@ -2468,6 +2368,8 @@ namespace perfl1 {
     {"home-R1", NONE, "R", 1500}, {"home-R2", NONE, "R", 1500}, {"home-R3", NONE, "R", 1500},
     {"home-R4", NONE, "R", 1500}, {"home-R5", NONE, "R", 1500}, {"home-R6", NONE, "R", 1500},
     {"home-R7", NONE, "R", 1500}, {"home-R8", NONE, "R", 1500},
+    {"home-R9", NONE, "R", 1500}, {"home-R10", NONE, "R", 1500}, {"home-R11", NONE, "R", 1500},
+    {"home-R12", NONE, "R", 1500}, {"home-R13", NONE, "R", 1500},
     {"settings", SETTINGS, "", 2000}, {"set-display", NONE, "E", 2000},
     {"set-scroll", NONE, "DDDDDDDDDDDD", 2000},
     {"messages", MESSAGES, "", 2000}, {"dm-list", NONE, "E", 2000},
@@ -2478,8 +2380,11 @@ namespace perfl1 {
     {"kbd-close", NONE, "XXX", 1500},
     {"nearby", NEARBY, "", 3000}, {"nearby-scroll", NONE, "DDDDDDDDDDDDDDDDDDDD", 2000},
     {"tools", TOOLS, "", 1500}, {"trail", TRAIL, "", 2000}, {"map", MAP, "", 3000},
-    {"compass", COMPASS, "", 3000}, {"sats", SATS, "", 4000}, {"sats-signal", NONE, "R", 3000},
-    {"diag", DIAG, "", 4000}, {"diag-scroll", NONE, "DDDD", 3000},
+    {"compass", COMPASS, "", 3000},
+    {"st-radio", STATUS, "", 3000}, {"st-radio-dn", NONE, "DD", 2000}, {"st-gps", NONE, "UUR", 3000},
+    {"st-gps-dn", NONE, "DDD", 2000}, {"st-sky", NONE, "UUUR", 4000}, {"st-signal", NONE, "E", 3000},
+    {"st-power", NONE, "R", 2000}, {"st-mesh", NONE, "R", 2000}, {"st-mesh-dn", NONE, "DDD", 2000},
+    {"st-system", NONE, "UUUR", 2000}, {"st-system-dn", NONE, "DDDDDD", 2000},
     {"liveshare", LIVE, "", 1500}, {"locator", LOCATOR, "", 1500}, {"autoadvert", ADVERT, "", 1500},
     {"repeater", REPEATER, "", 1500}, {"bot", BOT, "", 1500}, {"clocktools", CLOCKTOOLS, "", 1500},
     {"home-end", HOME, "", 3000},
@@ -2582,16 +2487,11 @@ void UITask::loop() {
     perfl1::disp = _display;
     { static bool sz = false;
       if (!sz && millis() - start > 7000) { sz = true;
-        Serial.printf("SIZE UiCore %u Splash %u Home %u Settings %u Messages %u Tools %u Ringtone %u Bot %u Admin %u Nearby %u Dash %u AutoAdv %u LiveSh %u Locator %u Trail %u Compass %u Sats %u Diag %u Repeater %u ClockTools %u Kbd %u UITask %u StaticPool32 %u Packet %u\n",
+        Serial.printf("SIZE UiCore %u Splash %u Home %u Settings %u Messages %u Tools %u Ringtone %u Bot %u Admin %u Nearby %u Dash %u AutoAdv %u LiveSh %u Locator %u Trail %u Compass %u Status %u Repeater %u ClockTools %u Kbd %u UITask %u StaticPool32 %u Packet %u\n",
           sizeof(UiCore), sizeof(SplashScreen), sizeof(HomeScreen), sizeof(SettingsScreen), sizeof(MessagesScreen), sizeof(ToolsScreen),
           sizeof(RingtoneEditorScreen), sizeof(BotScreen), sizeof(AdminScreen), sizeof(NearbyScreen), sizeof(DashboardConfigScreen),
           sizeof(AutoAdvertScreen), sizeof(LiveShareScreen), sizeof(LocatorScreen), sizeof(TrailScreen), sizeof(CompassScreen),
-#if ENV_INCLUDE_GPS == 1 && defined(GPS_SKYVIEW)
-          sizeof(SatellitesScreen),
-#else
-          0u,
-#endif
-          sizeof(DiagnosticsScreen), sizeof(RepeaterScreen), sizeof(ClockToolsScreen), sizeof(KeyboardWidget), sizeof(UITask),
+          sizeof(StatusScreen), sizeof(RepeaterScreen), sizeof(ClockToolsScreen), sizeof(KeyboardWidget), sizeof(UITask),
           sizeof(StaticPoolPacketManager), sizeof(mesh::Packet));
         TaskStatus_t st[16]; uint32_t tot = 0;
         UBaseType_t n = uxTaskGetSystemState(st, 16, NULL);
@@ -2611,8 +2511,7 @@ void UITask::loop() {
           case perfl1::TRAIL: gotoTrailScreen(); break;
           case perfl1::MAP: gotoMapScreen(); break;
           case perfl1::COMPASS: gotoCompassScreen(); break;
-          case perfl1::SATS: gotoSatellitesScreen(); break;
-          case perfl1::DIAG: gotoDiagnosticsScreen(); break;
+          case perfl1::STATUS: gotoStatusScreen(StatusScreen::TAB_RADIO); break;
           case perfl1::LIVE: gotoLiveShareScreen(); break;
           case perfl1::LOCATOR: gotoLocatorScreen(); break;
           case perfl1::ADVERT: gotoAutoAdvertScreen(); break;
@@ -2629,6 +2528,7 @@ void UITask::loop() {
 #endif
   pollConnection();   // BLE link state -> hasConnection() (see UITaskBase)
   drainCoreEvents();  // react to what the Core filed during mesh processing (alerts, wake, sounds)
+  if (status_screen) ((StatusScreen*)status_screen)->sample();   // Status history lines, once a minute
 #if UI_HAS_JOYSTICK
   uint8_t joy_rot = _node_prefs ? _node_prefs->joystick_rotation : JOYSTICK_ROTATION;
   int ev = user_btn.check();
@@ -3031,7 +2931,7 @@ void UITask::loop() {
         || (_node_prefs && _node_prefs->loc_share_enabled)
         || (_node_prefs && _node_prefs->locator_enabled && _node_prefs->locator_has_target)
         || curr == compass_screen
-        || (satellites_screen && curr == satellites_screen)
+        || (curr == status_screen && ((StatusScreen*)status_screen)->wantsLiveGps())
         || (curr == nearby_screen && ((NearbyScreen*)nearby_screen)->isNavigating())
         || (curr == trail_screen && ((TrailScreen*)trail_screen)->wpNeedsLiveGps())
         || (curr == messages_screen && ((MessagesScreen*)messages_screen)->navActive())

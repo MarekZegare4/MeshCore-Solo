@@ -13,9 +13,9 @@ class ToolsScreen : public UIScreen {
   UITask* _task;
 
   enum Action {
-    ACT_NEARBY, ACT_LIVESHARE, ACT_TRAIL, ACT_LOCATOR, ACT_COMPASS, ACT_SATELLITES,
+    ACT_NEARBY, ACT_LIVESHARE, ACT_TRAIL, ACT_LOCATOR, ACT_COMPASS,
     ACT_BOT, ACT_AUTOADVERT, ACT_REPEATER, ACT_ADMIN,
-    ACT_CLOCK, ACT_RINGTONE, ACT_DIAGNOSTICS
+    ACT_CLOCK, ACT_RINGTONE
 #if defined(PIN_GPIO1)
     , ACT_GPIO
 #endif
@@ -54,14 +54,12 @@ class ToolsScreen : public UIScreen {
       case ACT_TRAIL:       _task->gotoTrailScreen();       break;
       case ACT_LOCATOR:     _task->gotoLocatorScreen();     break;
       case ACT_COMPASS:     _task->gotoCompassScreen();     break;
-      case ACT_SATELLITES:  _task->gotoSatellitesScreen();  break;
       case ACT_BOT:         _task->gotoBotScreen();         break;
       case ACT_AUTOADVERT:  _task->gotoAutoAdvertScreen();  break;
       case ACT_REPEATER:    _task->gotoRepeaterScreen();    break;
       case ACT_ADMIN:       _task->pickAdminTarget();       break;  // Admin is remote-only: pick a node first
       case ACT_CLOCK:       _task->gotoClockTools();        break;
       case ACT_RINGTONE:    _task->gotoRingtoneEditor();    break;
-      case ACT_DIAGNOSTICS: _task->gotoDiagnosticsScreen(); break;
 #if defined(PIN_GPIO1)
       case ACT_GPIO:        _task->gotoGpioScreen();        break;
 #endif
@@ -129,9 +127,6 @@ const ToolsScreen::Tool ToolsScreen::LOCATION_TOOLS[] = {
   { "Trail",        &ICON_TRAIL,        ACT_TRAIL },
   { "Locator",    &ICON_MAP_WAYPOINT, ACT_LOCATOR },
   { "Compass",      &ICON_MAP_NORTH,    ACT_COMPASS },
-#if ENV_INCLUDE_GPS == 1 && defined(GPS_SKYVIEW)
-  { "Satellites",   &ICON_GPS,          ACT_SATELLITES },
-#endif
 };
 const ToolsScreen::Tool ToolsScreen::COMMS_TOOLS[] = {
   { "Remote Bot",     &ICON_BOT,      ACT_BOT },
@@ -142,7 +137,6 @@ const ToolsScreen::Tool ToolsScreen::COMMS_TOOLS[] = {
 const ToolsScreen::Tool ToolsScreen::SYSTEM_TOOLS[] = {
   { "Clock Tools",     &ICON_ALARM, ACT_CLOCK },
   { "Ringtone Editor", &ICON_NOTE,  ACT_RINGTONE },
-  { "Diagnostics",     &ICON_CHART, ACT_DIAGNOSTICS },
 #if defined(PIN_GPIO1)
   { "GPIO",            &ICON_PINS,  ACT_GPIO },
 #endif

@@ -694,7 +694,7 @@ struct NodePrefs {  // persisted to file
   // Array indices match HomePageBit values.
   static const char* homePageLabel(uint8_t bit) {
     static const char* labels[HPB_COUNT] = {
-      "Clock", "Recent", "Radio", "Bluetooth", "Advert",
+      "Clock", "Recent", "Status", "Bluetooth", "Advert",   // Status: the old Radio slot (ui-new)
       "GPS", "Sensors", "Tools", "Shutdown", "Settings", "Messages", "Favourites", "Map"
     };
     return (bit < HPB_COUNT) ? labels[bit] : "";

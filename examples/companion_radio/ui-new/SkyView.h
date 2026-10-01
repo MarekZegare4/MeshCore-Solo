@@ -1,6 +1,6 @@
 #pragma once
-// Tools › Satellites (-D GPS_SKYVIEW): what the GPS receiver sees, in two
-// views swapped with left / right (or Enter):
+// What the GPS receiver sees (-D GPS_SKYVIEW), drawn by Status › Sky in two
+// views swapped with Enter:
 //   Sky    -- a polar plot (the rim is the horizon, the centre straight up,
 //             north at the top): a filled dot is a satellite the fix uses, a
 //             hollow one is tracked but unused, a single pixel is in view with
@@ -12,7 +12,7 @@
 //
 // The data is helpers/sensors/GpsSky.h, fed the board's NMEA by
 // MicroNMEALocationProvider (a made-up sky in the simulator: GpsSkySim.h).
-// The GPS is kept awake while the screen is open (UITask's keep-awake list).
+// The GPS is kept awake while the Sky tab is open (UITask's keep-awake list).
 
 #include <math.h>
 #include <helpers/sensors/GpsSky.h>
@@ -23,13 +23,11 @@
 #endif
 #include "icons.h"   // miniIconScale()
 
-class SatellitesScreen : public UIScreen {
-  UITask* _task;
-  bool _signal = false;   // false: the sky view
+namespace skyview {
 
   // The board's location provider is a MicroNMEALocationProvider wherever
   // GPS_SKYVIEW is set (the flag's contract, as on the L2).
-  static GpsSky* sky() {
+  inline GpsSky* sky() {
 #ifdef SIM_PLATFORM
     return gpsSkySim();
 #else
@@ -38,10 +36,10 @@ class SatellitesScreen : public UIScreen {
 #endif
   }
 
-  static void dot(DisplayDriver& d, int x, int y) { d.fillRect(x, y, 1, 1); }
+  inline void dot(DisplayDriver& d, int x, int y) { d.fillRect(x, y, 1, 1); }
 
   // Midpoint circle; `step` > 1 dots it (every step-th point of each octant).
-  static void circle(DisplayDriver& d, int cx, int cy, int r, int step = 1) {
+  inline void circle(DisplayDriver& d, int cx, int cy, int r, int step = 1) {
     int x = r, y = 0, err = 1 - r, i = 0;
     while (x >= y) {
       if (i++ % step == 0) {
@@ -54,13 +52,13 @@ class SatellitesScreen : public UIScreen {
     }
   }
 
-  static int usedCount(const GpsSky& g) {
+  inline int usedCount(const GpsSky& g) {
     int n = 0;
     for (int i = 0; i < g.count; i++) if (g.used(g.sats[i])) n++;
     return n;
   }
 
-  void renderSky(DisplayDriver& d, GpsSky& g, int top) {
+  inline void renderSky(DisplayDriver& d, GpsSky& g, int top) {
     const int lh = d.getLineHeight();
     const int cw = d.getCharWidth();
     const int s = miniIconScale(d);
@@ -121,7 +119,7 @@ class SatellitesScreen : public UIScreen {
     d.setCursor(x0, y); d.print(buf);
   }
 
-  void renderSignal(DisplayDriver& d, GpsSky& g, int top) {
+  inline void renderSignal(DisplayDriver& d, GpsSky& g, int top) {
     const int lh = d.getLineHeight();
     const int W = d.width();
 
@@ -172,41 +170,24 @@ class SatellitesScreen : public UIScreen {
     }
   }
 
-public:
-  SatellitesScreen(UITask* task) : _task(task) {}
-  void onShow() override {}
-
-  int render(DisplayDriver& display) override {
-    display.setTextSize(1);
-    display.setColor(DisplayDriver::LIGHT);
-    display.drawCenteredHeader(_signal ? "SIGNAL" : "SKY");
-    display.drawTextRightAlign(display.width() - 1, 0, _signal ? "2/2" : "1/2");
-    const int top = display.listStart();
-    const int cx = display.width() / 2, lh = display.getLineHeight();
-
+  // The sky (or, with `signal`, the bars) under `top`, or why there's none.
+  // Returns the ms until the next redraw.
+  inline int render(DisplayDriver& d, int top, bool signal, bool gps_on) {
+    const int cx = d.width() / 2, lh = d.getLineHeight();
     GpsSky* g = sky();
     if (!g) {
-      display.drawTextCentered(cx, top + lh, "No GPS data");
+      d.drawTextCentered(cx, top + lh, "No GPS data");
       return 1000;
     }
     g->expire();
     if (!g->sentences || millis() - g->last_ms > 5000) {
-      bool on = _task->getGPSState();
-      display.drawTextCentered(cx, top + lh, on ? "Waiting for GPS" : "GPS is off");
-      if (!on) { display.drawTextCentered(cx, top + 2 * lh + 2, "Home > GPS page"); return 1000; }
-      return drawLoadingDots(display, cx, top + 3 * lh + 4);
+      d.drawTextCentered(cx, top + lh, gps_on ? "Waiting for GPS" : "GPS is off");
+      if (!gps_on) { d.drawTextCentered(cx, top + 2 * lh + 2, "Enter on GPS tab"); return 1000; }
+      return drawLoadingDots(d, cx, top + 3 * lh + 4);
     }
-    if (_signal) renderSignal(display, *g, top);
-    else renderSky(display, *g, top);
+    if (signal) renderSignal(d, *g, top);
+    else renderSky(d, *g, top);
     return 1000;
   }
 
-  bool handleInput(char c) override {
-    if (c == KEY_CANCEL) { _task->gotoToolsScreen(); return true; }
-    if (c == KEY_LEFT || c == KEY_RIGHT || c == KEY_ENTER || c == KEY_NEXT || c == KEY_PREV) {
-      _signal = !_signal;
-      return true;
-    }
-    return true;
-  }
-};
+}  // namespace skyview

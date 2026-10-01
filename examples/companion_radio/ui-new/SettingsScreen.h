@@ -31,13 +31,7 @@ class SettingsScreen : public UIScreen {
     SCHEMA_SOUND,     // volume, quiet hours, what plays for what
     // Home pages section
     SECTION_HOME_PAGES,
-    HOME_CLOCK, HOME_FAVOURITES, HOME_RADIO, HOME_BT, HOME_ADVERT,
-#if ENV_INCLUDE_GPS == 1
-    HOME_GPS,
-#endif
-#if UI_SENSORS_PAGE == 1
-    HOME_SENSORS,
-#endif
+    HOME_CLOCK, HOME_FAVOURITES, HOME_STATUS, HOME_BT, HOME_ADVERT,
     HOME_SETTINGS, HOME_QUICK_MSG,
     HOME_TOOLS, HOME_SHUTDOWN, HOME_MAP,
     // Radio section
@@ -257,17 +251,10 @@ class SettingsScreen : public UIScreen {
   }
 
   bool isHomePage(int item) const {
-    return item == HOME_CLOCK    || item == HOME_RADIO      || item == HOME_BT      ||
+    return item == HOME_CLOCK    || item == HOME_STATUS     || item == HOME_BT      ||
            item == HOME_ADVERT   || item == HOME_TOOLS      ||
            item == HOME_SHUTDOWN || item == HOME_SETTINGS   || item == HOME_QUICK_MSG ||
-           item == HOME_FAVOURITES || item == HOME_MAP
-#if ENV_INCLUDE_GPS == 1
-           || item == HOME_GPS
-#endif
-#if UI_SENSORS_PAGE == 1
-           || item == HOME_SENSORS
-#endif
-    ;
+           item == HOME_FAVOURITES || item == HOME_MAP;
   }
 
   uint16_t homePageBit(int item) const {
@@ -275,6 +262,8 @@ class SettingsScreen : public UIScreen {
     // SETTINGS and QUICK_MSG are always visible (no mask bit). All other pages
     // — including FAVOURITES — toggle via home_pages_mask.
     if (bit < 0 || bit == NodePrefs::HPB_SETTINGS || bit == NodePrefs::HPB_QUICK_MSG) return 0;
+    // Status took over the Radio, GPS and Sensors pages: it owns all three bits.
+    if (item == HOME_STATUS) return NodePrefs::HP_RADIO | NodePrefs::HP_GPS | NodePrefs::HP_SENSORS;
     return (uint16_t)(1 << bit);
   }
 
@@ -300,15 +289,9 @@ class SettingsScreen : public UIScreen {
   int homePageBitIndex(int item) const {
     if (item == HOME_CLOCK)     return NodePrefs::HPB_CLOCK;
     if (item == HOME_FAVOURITES) return NodePrefs::HPB_FAVOURITES;
-    if (item == HOME_RADIO)     return NodePrefs::HPB_RADIO;
+    if (item == HOME_STATUS)    return NodePrefs::HPB_RADIO;   // the old Radio slot
     if (item == HOME_BT)        return NodePrefs::HPB_BLUETOOTH;
     if (item == HOME_ADVERT)    return NodePrefs::HPB_ADVERT;
-#if ENV_INCLUDE_GPS == 1
-    if (item == HOME_GPS)       return NodePrefs::HPB_GPS;
-#endif
-#if UI_SENSORS_PAGE == 1
-    if (item == HOME_SENSORS)   return NodePrefs::HPB_SENSORS;
-#endif
     if (item == HOME_TOOLS)     return NodePrefs::HPB_TOOLS;
     if (item == HOME_SHUTDOWN)  return NodePrefs::HPB_SHUTDOWN;
     if (item == HOME_MAP)       return NodePrefs::HPB_MAP;
@@ -982,7 +965,9 @@ public:
       }
       if (enter && homePageToggleable(_selected)) {
         if (!p->home_pages_mask) p->home_pages_mask = NodePrefs::HP_ALL;
-        p->home_pages_mask ^= homePageBit(_selected);
+        // Set or clear the page's bits together (Status has three).
+        if (homePageVisible(_selected, p)) p->home_pages_mask &= ~homePageBit(_selected);
+        else                               p->home_pages_mask |= homePageBit(_selected);
         _dirty = true;
         return true;
       }

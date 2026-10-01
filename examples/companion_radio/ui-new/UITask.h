@@ -116,8 +116,7 @@ class UITask : public UITaskBase, public UiCoreHost {
   UIScreen* locator_screen = nullptr;
   UIScreen* trail_screen = nullptr;
   UIScreen* compass_screen = nullptr;
-  UIScreen* satellites_screen = nullptr;   // Tools > Satellites (-D GPS_SKYVIEW)
-  UIScreen* diag_screen = nullptr;
+  UIScreen* status_screen = nullptr;   // Home › Status (radio, GPS, sky, power, mesh, system)
   UIScreen* repeater_screen = nullptr;
   UIScreen* clock_tools = nullptr;
 #if defined(PIN_GPIO1)
@@ -331,8 +330,7 @@ public:
   void gotoTrailScreen();
   void gotoMapScreen();   // opens the Trail screen directly in its Map view
   void gotoCompassScreen();
-  void gotoSatellitesScreen();
-  void gotoDiagnosticsScreen();
+  void gotoStatusScreen(uint8_t tab);   // StatusScreen::Tab
   void gotoRepeaterScreen();
   void gotoGpioScreen();   // no-op on boards without user GPIO pins (see PIN_GPIO1)
   void gotoClockTools();   // Alarm / Timer / Stopwatch (from the home Clock page)
