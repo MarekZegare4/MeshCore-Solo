@@ -31,3 +31,12 @@ graphify-out/
 
 # local assistant notes
 CLAUDE.md
+
+# pioarduino's framework-lib rebuild (custom_sdkconfig, Wio_Tracker_L2_idf_libs)
+# generates an ESP-IDF project in the repo root
+/.dummy/
+/CMakeLists.txt
+/sdkconfig.defaults
+/sdkconfig.*
+/dependencies.lock
+/managed_components/

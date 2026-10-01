@@ -62,7 +62,7 @@ pio run -e <env> -t upload                                  # build and flash ov
 FIRMWARE_VERSION=v1.0.0 bash build.sh build-firmware <env>  # release artifacts into out/
 ```
 
-Environments are the `*_solo_dual` (OLED / e-ink) and `*_solo_lvgl` (touch) entries in `solo/<board>/platformio.ini`. Optional hardware (CardKB, joystick, GPIO, buzzer…) is enabled with [build flags](./docs/solo/developer/build-flags.md). Releasing: [RELEASE.md](./RELEASE.md).
+Environments are the `*_solo_dual` (OLED / e-ink) and `*_solo_lvgl` (touch) entries in `solo/<board>/platformio.ini`. The Wio Tracker L2 needs `pio run -e Wio_Tracker_L2_idf_libs` once before its first build (it rebuilds the framework libs for its ESP-IDF options). Optional hardware (CardKB, joystick, GPIO, buzzer…) is enabled with [build flags](./docs/solo/developer/build-flags.md). Releasing: [RELEASE.md](./RELEASE.md).
 
 This README is protected from upstream merges via `.gitattributes`; after cloning run once `git config merge.ours.driver true`.
 

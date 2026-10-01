@@ -55,6 +55,12 @@ jobs:
             echo "BUILD_VERSION=dev-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
           fi
 
+      # The L2 links framework libs rebuilt for its own ESP-IDF options
+      # (solo/wio-tracker-l2/idf/sdkconfig), which this env builds first.
+      - name: Rebuild framework libs
+        if: matrix.env == 'Wio_Tracker_L2_companion_solo_lvgl'
+        run: pio run -e Wio_Tracker_L2_idf_libs
+
       - name: Build Firmware
         env:
           FIRMWARE_VERSION: ${{ env.BUILD_VERSION }}

@@ -1,0 +1,105 @@
+# The TinyUSB options of the Arduino-ESP32 3.3.12 libs (their values), for
+# the custom_sdkconfig rebuild: the component that declares them lives in
+# esp32-arduino-lib-builder, so without this file they'd drop out of
+# sdkconfig.h and the prebuilt libarduino_tinyusb.a would lose its USB serial.
+menu "Arduino TinyUSB"
+    config TINYUSB_ENABLED
+        bool
+        default y
+    config TINYUSB_CDC_ENABLED
+        bool
+        default y
+    config TINYUSB_DESC_CDC_STRING
+        string
+        default "Espressif CDC Device"
+    config TINYUSB_CDC_RX_BUFSIZE
+        int
+        default 64
+    config TINYUSB_CDC_TX_BUFSIZE
+        int
+        default 64
+    config TINYUSB_CDC_MAX_PORTS
+        int
+        default 2
+    config TINYUSB_MSC_ENABLED
+        bool
+        default y
+    config TINYUSB_DESC_MSC_STRING
+        string
+        default "Espressif MSC Device"
+    config TINYUSB_MSC_BUFSIZE
+        int
+        default 4096
+    config TINYUSB_HID_ENABLED
+        bool
+        default y
+    config TINYUSB_DESC_HID_STRING
+        string
+        default "Espressif HID Device"
+    config TINYUSB_HID_BUFSIZE
+        int
+        default 64
+    config TINYUSB_MIDI_ENABLED
+        bool
+        default y
+    config TINYUSB_DESC_MIDI_STRING
+        string
+        default "Espressif MIDI Device"
+    config TINYUSB_MIDI_RX_BUFSIZE
+        int
+        default 64
+    config TINYUSB_MIDI_TX_BUFSIZE
+        int
+        default 64
+    config TINYUSB_AUDIO_ENABLED
+        bool
+        default y
+    config TINYUSB_DESC_AUDIO_STRING
+        string
+        default "Espressif AUDIO Device"
+    config TINYUSB_VIDEO_ENABLED
+        bool
+        default y
+    config TINYUSB_DESC_VIDEO_STRING
+        string
+        default "Espressif VIDEO Device"
+    config TINYUSB_VIDEO_STREAMING_BUFSIZE
+        int
+        default 64
+    config TINYUSB_VIDEO_STREAMING_IFS
+        int
+        default 1
+    config TINYUSB_DFU_RT_ENABLED
+        bool
+        default y
+    config TINYUSB_DESC_DFU_RT_STRING
+        string
+        default "Espressif DFU_RT Device"
+    config TINYUSB_DFU_ENABLED
+        bool
+        default y
+    config TINYUSB_DESC_DFU_STRING
+        string
+        default "Espressif DFU Device"
+    config TINYUSB_DFU_BUFSIZE
+        int
+        default 4096
+    config TINYUSB_VENDOR_ENABLED
+        bool
+        default y
+    config TINYUSB_DESC_VENDOR_STRING
+        string
+        default "Espressif VENDOR Device"
+    config TINYUSB_VENDOR_RX_BUFSIZE
+        int
+        default 64
+    config TINYUSB_VENDOR_TX_BUFSIZE
+        int
+        default 64
+    config TINYUSB_NCM_ENABLED
+        bool
+        default y
+    config TINYUSB_DEBUG_LEVEL
+        int
+        default 0
+endmenu
