@@ -14,6 +14,7 @@ enum : uint8_t { RP_ON, RP_NETWORK, RP_PRESET, RP_SF, RP_BW, RP_CR, RP_HOPS, RP_
 static const int OPTS_LEN = 768;
 static char* s_opts = psramBuf<char>(OPTS_LEN);   // dropdown options (LVGL copies them)
 static lv_obj_t* s_scopes_sub = nullptr;   // "Extra scopes" row's count, updated from the popup
+static lv_obj_t* s_on_sub = nullptr;       // the Repeater switch's hint
 
 }  // namespace rptview
 
@@ -56,6 +57,7 @@ void UITask::buildRepeater() {
   lv_obj_t* sw = switchRow(g, "Repeater", p->client_repeat ? "Relaying for others" : "Relay others' messages", nullptr);
   if (p->client_repeat) lv_obj_add_state(sw, LV_STATE_CHECKED);
   lv_obj_add_event_cb(sw, onRptSwitch, LV_EVENT_VALUE_CHANGED, (void*)(uintptr_t)RP_ON);
+  s_on_sub = rowSub(lv_obj_get_parent(sw));
   groupNote(body, "Uses more battery; auto power pauses.");
   fill(&UITask::repeaterGroup, 1, 3);   // the rest as the loop goes
 }
@@ -124,6 +126,7 @@ void UITask::repeaterSet(int which, int v) {
   switch (which) {
     case RP_ON:
       rptctl::setEnabled(p, v != 0);
+      if (s_on_sub) lv_label_set_text(s_on_sub, p->client_repeat ? "Relaying for others" : "Relay others' messages");
       break;
     case RP_NETWORK: rptctl::setUseProfile(p, v != 0); break;
     case RP_PRESET:  if (v == 0) return; rptctl::choosePreset(p, v - 1); break;
@@ -135,7 +138,8 @@ void UITask::repeaterSet(int which, int v) {
     case RP_SNR:   p->repeat_min_snr = rptctl::snrFromChoice(v); break;
   }
   prefsSave();
-  if (which <= RP_CR) rebuildRepeater();   // hints, the profile rows and the preset name follow
+  if (which == RP_NETWORK) rebuildSoon(&UITask::rebuildRepeater);   // the profile rows come or go, once it's moved
+  else if (which > RP_NETWORK && which <= RP_CR) rebuildRepeater();   // hints, the profile rows and the preset name follow
   refreshStatusBar();
 }
 

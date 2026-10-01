@@ -397,6 +397,8 @@ private:
   void buildClock();
   void buildRadio();
   void rebuildRadio();
+  void rebuildSchemaSettings();
+  void rebuildSoon(void (UITask::*fn)());   // after the switch that asked for it has moved
   void radioGroup(int i);
   void buildRadioExtras(lv_obj_t* body);
   void buildScopes();

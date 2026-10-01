@@ -131,7 +131,8 @@ void UITask::radioSet(int which, int v) {
     case R_APC: p->tx_apc = (uint8_t)v; radioctl::applyApc(); break;
   }
   prefsSave();
-  rebuildRadio();   // preset name / hints follow
+  if (which == R_APC) rebuildSoon(&UITask::rebuildRadio);   // the TX power hint follows
+  else rebuildRadio();   // preset name / hints follow
 }
 
 // Rebuilds the screen where it was scrolled to.

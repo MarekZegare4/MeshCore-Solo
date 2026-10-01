@@ -322,21 +322,7 @@ namespace freeze {
     s_retry = nullptr;
     take((lv_obj_t*)lv_timer_get_user_data(t));
   }
-  static void take(lv_obj_t* overlay) {
-    if (s_img) return;   // a popup over a popup: dimmed live
-    lv_obj_t* scr = lv_obj_get_screen(overlay);
-    bool top = scr == lv_layer_top();
-    if (top) scr = lv_screen_active();
-    if (moving(scr)) {
-      s_retry = lv_timer_create(retry, 60, overlay);
-      lv_timer_set_repeat_count(s_retry, 1);
-      return;
-    }
-    s_dim = lv_obj_get_style_bg_opa(overlay, LV_PART_MAIN);
-    if (!top) lv_obj_add_flag(overlay, LV_OBJ_FLAG_HIDDEN);
-    lv_draw_buf_t* buf = lv_snapshot_take(scr, LV_COLOR_FORMAT_RGB565);
-    if (!top) lv_obj_remove_flag(overlay, LV_OBJ_FLAG_HIDDEN);
-    if (!buf) return;   // no memory: dimmed live
+  static void darken(lv_draw_buf_t* buf) {   // as the dim layer over it would
     const uint32_t keep = 256 - s_dim;   // what's left under the black
     for (uint32_t y = 0; y < buf->header.h; y++) {
       uint16_t* p = (uint16_t*)(buf->data + y * buf->header.stride);
@@ -346,6 +332,14 @@ namespace freeze {
                           (((c & 0x1F) * keep) >> 8));
       }
     }
+  }
+  static lv_draw_buf_t* snap(lv_obj_t* overlay, lv_obj_t* scr, bool top) {
+    if (!top) lv_obj_add_flag(overlay, LV_OBJ_FLAG_HIDDEN);
+    lv_draw_buf_t* buf = lv_snapshot_take(scr, LV_COLOR_FORMAT_RGB565);
+    if (!top) lv_obj_remove_flag(overlay, LV_OBJ_FLAG_HIDDEN);
+    return buf;
+  }
+  static void show(lv_obj_t* overlay, lv_obj_t* scr, bool top, lv_draw_buf_t* buf) {
     s_img = lv_image_create(scr);
     lv_image_set_src(s_img, buf);
     lv_obj_add_flag(s_img, LV_OBJ_FLAG_IGNORE_LAYOUT);
@@ -355,6 +349,8 @@ namespace freeze {
     lv_obj_add_event_cb(s_img, coversOwnArea, LV_EVENT_COVER_CHECK, NULL);   // no background: its own check says no
     if (!top) lv_obj_move_foreground(overlay);   // the image under the popup, over the rest
     s_owner = overlay;
+  }
+  static void dimmed(lv_obj_t* overlay, bool top) {   // the image holds the dim now
     lv_obj_set_style_bg_opa(overlay, LV_OPA_TRANSP, 0);
     if (top) {   // the status bar, on the top layer too, stays dimmed
       s_strip = lv_obj_create(overlay);
@@ -366,7 +362,42 @@ namespace freeze {
       lv_obj_set_style_bg_opa(s_strip, s_dim, 0);
     }
   }
+  static void take(lv_obj_t* overlay) {
+    if (s_img) return;   // a popup over a popup: dimmed live
+    lv_obj_t* scr = lv_obj_get_screen(overlay);
+    bool top = scr == lv_layer_top();
+    if (top) scr = lv_screen_active();
+    if (moving(scr)) {
+      s_retry = lv_timer_create(retry, 60, overlay);
+      lv_timer_set_repeat_count(s_retry, 1);
+      return;
+    }
+    s_dim = lv_obj_get_style_bg_opa(overlay, LV_PART_MAIN);
+    lv_draw_buf_t* buf = snap(overlay, scr, top);
+    if (!buf) return;   // no memory: dimmed live
+    darken(buf);
+    show(overlay, scr, top, buf);
+    dimmed(overlay, top);
+  }
   static void onDimUp(lv_anim_t* a) { take((lv_obj_t*)a->var); }
+  // A popup opening over a still screen: frozen and dimmed at once, so the
+  // panel's rise redraws only the panel -- a dim fading up over the live
+  // screen redrew all of it every frame (~45 ms each). False when the screen
+  // is still moving or there's no memory: the caller fades the dim up.
+  static bool early(lv_obj_t* overlay, lv_opa_t dim) {
+    if (s_img) return false;
+    lv_obj_t* scr = lv_obj_get_screen(overlay);
+    bool top = scr == lv_layer_top();
+    if (top) scr = lv_screen_active();
+    if (moving(scr)) return false;
+    lv_draw_buf_t* buf = snap(overlay, scr, top);
+    if (!buf) return false;
+    s_dim = dim;
+    darken(buf);
+    show(overlay, scr, top, buf);
+    dimmed(overlay, top);
+    return true;
+  }
   // A dim layer that's up at once, without the fade: frozen now.
   static void now(lv_obj_t* overlay) {
     lv_obj_add_event_cb(overlay, ownerDeleted, LV_EVENT_DELETE, NULL);
@@ -411,11 +442,13 @@ static lv_obj_t* popupOpen(lv_obj_t* parent, PopFit fit, lv_obj_t*& overlay, int
   lv_obj_set_style_pad_all(panel, theme::PAD, 0);
   lv_obj_set_style_pad_row(panel, 4, 0);
   lv_obj_set_flex_flow(panel, LV_FLEX_FLOW_COLUMN);
-  if (fit == POP_BOTTOM) {
-    anim::popup(overlay, LV_OPA_TRANSP);   // over a live screen
+  if (fit == POP_BOTTOM) {   // over a live screen, nothing dimmed
+    lv_obj_set_style_bg_opa(overlay, LV_OPA_TRANSP, 0);
+    anim::rise(panel);
   } else {
     lv_obj_add_event_cb(overlay, freeze::ownerDeleted, LV_EVENT_DELETE, NULL);
-    anim::popup(overlay, LV_OPA_60, freeze::onDimUp);
+    if (freeze::early(overlay, LV_OPA_60)) anim::rise(panel);
+    else anim::popup(overlay, LV_OPA_60, freeze::onDimUp);
   }
   return panel;
 }
@@ -828,13 +861,30 @@ static void pickerOpen(lv_obj_t* c) {
   lv_obj_set_style_pad_hor(t, 4, 0);
   lv_obj_t* card = group(panel, nullptr);
   lv_obj_t* sel_row = nullptr;
+  // Each option one label, a fixed one-line row: a time zone list is ~30 of
+  // them, and a group row's box + text column + label took ~3 ms each.
+  const int32_t H = 38, lh = lv_font_get_line_height(THEME_FONT_BODY), w = innerW(card);
   for (int i = 0; i < ch->count; i++) {
     char v[48];
     bool cur = i == ch->sel;
-    lv_obj_t* r = groupLine(card, true);
-    lv_obj_set_style_min_height(r, 38, 0);
-    groupText(r, choiceItem(ch, i, v, sizeof(v)), nullptr, cur ? theme::ACCENT : theme::TEXT);
-    if (cur) { label(r, LV_SYMBOL_OK, THEME_FONT_BODY, theme::ACCENT); sel_row = r; }
+    lv_obj_t* r = label(card, choiceItem(ch, i, v, sizeof(v)), THEME_FONT_BODY, cur ? theme::ACCENT : theme::TEXT);
+    lv_label_set_long_mode(r, LV_LABEL_LONG_CLIP);
+    lv_obj_set_size(r, w > 0 ? w : LV_PCT(100), H);
+    lv_obj_set_style_pad_left(r, theme::PAD, 0);
+    lv_obj_set_style_pad_right(r, theme::PAD + 20, 0);   // the tick's room
+    lv_obj_set_style_pad_top(r, (H - lh) / 2, 0);
+    if (i > 0) {
+      lv_obj_set_style_border_side(r, LV_BORDER_SIDE_TOP, 0);
+      lv_obj_set_style_border_width(r, 1, 0);
+      lv_obj_set_style_border_color(r, lv_color_hex(theme::SURFACE_2), 0);
+    }
+    rowPressable(r);
+    if (cur) {
+      lv_obj_t* t = label(r, LV_SYMBOL_OK, THEME_FONT_BODY, theme::ACCENT);
+      lv_obj_add_flag(t, LV_OBJ_FLAG_IGNORE_LAYOUT);
+      lv_obj_align(t, LV_ALIGN_RIGHT_MID, 20, 0);   // into the right padding
+      sel_row = r;
+    }
     lv_obj_add_event_cb(r, onPickOption, LV_EVENT_CLICKED, (void*)(uintptr_t)i);
   }
   if (sel_row) { layoutNow(panel); lv_obj_scroll_to_view_recursive(sel_row, LV_ANIM_OFF); }
@@ -1350,6 +1400,147 @@ static void perfDrawProfile(const char* tag) {
   }
   for (int i = 0; i < s_dp_n; i++) lv_obj_remove_event_cb(s_dp_obj[i], dpCb);
 }
+
+// Every switch, slider, segmented row and choice of the active screen used
+// as a tap would (and put back): how long its handler took, then the frames
+// until its animation settled -- count, average, longest.
+struct PerfFrames { uint32_t n = 0, sum = 0, max = 0; };
+static void perfSettle(PerfFrames& f, uint32_t min_ms, uint32_t max_ms = 800) {
+  uint32_t t0 = millis();
+  while (millis() - t0 < max_ms && (millis() - t0 < min_ms || lv_anim_count_running())) {
+    uint32_t u = micros();
+    lv_timer_handler();
+    u = micros() - u;
+    if (u > 3000) { f.n++; f.sum += u; if (u > f.max) f.max = u; }   // a pass that drew
+    delay(1);
+  }
+}
+static const char* perfCtlName(lv_obj_t* ctl) {   // the row's first text
+  struct W { lv_obj_t* skip; const char* t; } w = { ctl, "" };
+  lv_obj_t* row = lv_obj_get_parent(ctl);
+  if (lv_obj_check_type(ctl, &lv_buttonmatrix_class) && lv_obj_get_child_count(row) < 2) return "(segmented)";
+  lv_obj_tree_walk(row, [](lv_obj_t* o, void* u) {
+    W* w = (W*)u;
+    if (o == w->skip) return LV_OBJ_TREE_WALK_SKIP_CHILDREN;
+    if (lv_obj_check_type(o, &lv_label_class) && *lv_label_get_text(o)) { w->t = lv_label_get_text(o); return LV_OBJ_TREE_WALK_END; }
+    return LV_OBJ_TREE_WALK_NEXT;
+  }, &w);
+  return w.t;
+}
+static bool perfIsChoice(lv_obj_t* o) {
+  return lv_obj_get_child_count(o) == 2 && lv_obj_get_user_data(o) && lv_obj_check_type(lv_obj_get_child(o, 1), &lv_label_class)
+      && strcmp(lv_label_get_text(lv_obj_get_child(o, 1)), LV_SYMBOL_DOWN) == 0;
+}
+static int perfCollect(lv_obj_t** out, int max) {
+  struct C { lv_obj_t** out; int n, max; } c = { out, 0, max };
+  lv_obj_tree_walk(lv_screen_active(), [](lv_obj_t* o, void* u) {
+    C* c = (C*)u;
+    if (c->n >= c->max) return LV_OBJ_TREE_WALK_END;
+    if (lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN)) return LV_OBJ_TREE_WALK_SKIP_CHILDREN;
+    if (lv_obj_check_type(o, &lv_switch_class) || lv_obj_check_type(o, &lv_slider_class)
+        || lv_obj_check_type(o, &lv_buttonmatrix_class) || perfIsChoice(o)) {
+      c->out[c->n++] = o;
+      return LV_OBJ_TREE_WALK_SKIP_CHILDREN;
+    }
+    return LV_OBJ_TREE_WALK_NEXT;
+  }, &c);
+  return c.n;
+}
+static void perfControls(const char* tag, void (*fill_flush)()) {
+  static lv_obj_t* ctl[48];
+  lv_obj_t* scr = lv_screen_active();
+  int n = perfCollect(ctl, 48);
+  for (int k = 0; k < n; k++) {
+    lv_obj_t* o = ctl[k];
+    if (!lv_obj_is_valid(o)) continue;
+    char name[28];
+    snprintf(name, sizeof(name), "%s", perfCtlName(o));
+    lv_obj_scroll_to_view_recursive(o, LV_ANIM_OFF);
+    PerfFrames idle; perfSettle(idle, 60);
+    PerfFrames f, back;
+    uint32_t cb = 0;
+    const char* kind = "";
+    bool rb = false;   // the screen was rebuilt: put back on the new one's control
+    auto rebuilt = [&]() { return lv_screen_active() != scr || !lv_obj_is_valid(o); };
+    auto refind = [&]() {   // the controls found again, in the same order
+      scr = lv_screen_active();
+      fill_flush();
+      layoutNow(scr);
+      n = perfCollect(ctl, 48);
+      o = k < n ? ctl[k] : nullptr;
+    };
+    if (lv_obj_check_type(o, &lv_switch_class)) {
+      kind = "switch";
+      auto tap = [&](PerfFrames& fr) {
+        lv_obj_send_event(o, LV_EVENT_PRESSED, NULL);
+        perfSettle(fr, 80);
+        uint32_t t = micros();
+        lv_obj_send_event(o, LV_EVENT_RELEASED, NULL);   // toggles, VALUE_CHANGED
+        t = micros() - t;
+        perfSettle(fr, 250);   // past a rebuildSoon()
+        return t;
+      };
+      cb = tap(f);
+      if (rebuilt()) { refind(); rb = true; }
+      if (o && lv_obj_check_type(o, &lv_switch_class)) tap(back);
+    } else if (lv_obj_check_type(o, &lv_slider_class)) {
+      kind = "slider";
+      int32_t v0 = lv_slider_get_value(o), lo = lv_slider_get_min_value(o), hi = lv_slider_get_max_value(o);
+      lv_obj_send_event(o, LV_EVENT_PRESSED, NULL);
+      for (int s = 0; s <= 12; s++) {   // dragged end to end, a step a frame
+        lv_slider_set_value(o, lo + (hi - lo) * s / 12, LV_ANIM_OFF);
+        uint32_t t = micros();
+        lv_obj_send_event(o, LV_EVENT_VALUE_CHANGED, NULL);
+        t = micros() - t;
+        if (t > cb) cb = t;
+        perfSettle(f, 16, 16);
+      }
+      uint32_t t = micros();
+      lv_obj_send_event(o, LV_EVENT_RELEASED, NULL);
+      t = micros() - t;
+      if (t > cb) cb = t;
+      perfSettle(f, 60);
+      lv_slider_set_value(o, v0, LV_ANIM_OFF);
+      lv_obj_send_event(o, LV_EVENT_VALUE_CHANGED, NULL);
+      lv_obj_send_event(o, LV_EVENT_RELEASED, NULL);
+      perfSettle(back, 60);
+    } else if (lv_obj_check_type(o, &lv_buttonmatrix_class)) {
+      kind = "segment";
+      uint32_t cur = UINT32_MAX, other = UINT32_MAX, cnt = 0;
+      for (const char* const* m = lv_buttonmatrix_get_map(o); **m; m++) if (strcmp(*m, "\n")) cnt++;
+      for (uint32_t i = 0; i < cnt; i++) {
+        if (lv_buttonmatrix_has_button_ctrl(o, i, LV_BUTTONMATRIX_CTRL_CHECKED)) cur = i;
+        else if (other == UINT32_MAX) other = i;
+      }
+      auto pick = [&](uint32_t i, PerfFrames& fr) {
+        lv_buttonmatrix_set_selected_button(o, i);
+        lv_buttonmatrix_set_button_ctrl(o, i, LV_BUTTONMATRIX_CTRL_CHECKED);
+        uint32_t t = micros();
+        lv_obj_send_event(o, LV_EVENT_VALUE_CHANGED, &i);
+        t = micros() - t;
+        perfSettle(fr, 250);
+        return t;
+      };
+      if (other == UINT32_MAX) continue;
+      cb = pick(other, f);
+      if (rebuilt()) { refind(); rb = true; }
+      if (cur != UINT32_MAX && o && lv_obj_check_type(o, &lv_buttonmatrix_class)) pick(cur, back);
+    } else {
+      kind = "choice";   // the options popup: opened, then closed unchanged
+      uint32_t t = micros();
+      lv_obj_send_event(o, LV_EVENT_CLICKED, NULL);
+      cb = micros() - t;
+      perfSettle(f, 120);
+      pickerClose();
+      perfSettle(back, 120);
+    }
+    Serial.printf("PERF ctl %-7s %-7s %-24s handler %5.1f ms | frames %2lu avg %4.1f max %5.1f | back %2lu avg %4.1f max %5.1f%s\n",
+                  tag, kind, name, cb / 1000.0f, (unsigned long)f.n, f.n ? f.sum / 1000.0f / f.n : 0.0f, f.max / 1000.0f,
+                  (unsigned long)back.n, back.n ? back.sum / 1000.0f / back.n : 0.0f, back.max / 1000.0f,
+                  rb ? "  (screen rebuilt)" : "");
+    if (o && rebuilt()) refind();
+  }
+}
 #endif
 
 #ifdef PERF_WRAP_TEXT
@@ -1576,33 +1767,50 @@ void UITask::loop() {
         one("admin", 0, &UITask::showAdminPick);
         one("contacts", 0, &UITask::showContacts);
         one("chats", 0, &UITask::showChats);
+#ifdef PERF_CONTROLS
+        {   // -D PERF_CONTROLS: every control on the settings screens used once (perfControls)
+          auto ctls = [this](const char* tag, int page, void (UITask::*fn)()) {
+            if (fn) (this->*fn)(); else if (page >= 0) showSchemaSettings(page);   // -1: shown already
+            fillFlush();
+            layoutNow(lv_screen_active());
+            lv_refr_now(NULL);
+            perfControls(tag, []() { s_ui->fillFlush(); });
+          };
+          auto prefs = [this](const char* when) {
+            Serial.printf("PERF prefs %s: imperial %d repeat %d use_profile %d auto_power %d\n", when, _prefs->units_imperial,
+                          _prefs->client_repeat, _prefs->repeater_use_profile, _prefs->tx_apc);
+          };
+          prefs("before");
+          char tag[8];
+          for (int pg = 0; pg < PG_ALL; pg++) { snprintf(tag, sizeof(tag), "page%d", pg); ctls(tag, pg, nullptr); }
+          ctls("radio", 0, &UITask::showRadio);
+          ctls("rptr", 0, &UITask::showRepeater);
+          ctls("bot", 0, &UITask::showBot);
+          ctls("clock", 0, &UITask::showClock);
+          ctls("quick", 0, &UITask::showQuickMsgs);
+          showChannelEdit(0); ctls("channel", -1, nullptr);
+          prefs("after");
+        }
+#endif
         showHome();
         lv_refr_now(NULL);
         perfDrawProfile("home");
-        {   // a popup over Home: a full frame under it dimmed live, then frozen
+        {   // a popup over Home, the screen under it frozen as it opened
           lv_obj_t* ov = nullptr;
+          uint32_t t = micros();
           lv_obj_t* p = popupOpen(lv_layer_top(), POP_FIT, ov);
+          float took = (micros() - t) / 1000.0f;
           for (int i = 0; i < 6; i++) label(p, "A popup row", THEME_FONT_BODY, theme::TEXT);
-          lv_anim_delete(ov, NULL);   // the dim at once, and no freeze yet
           lv_anim_delete(p, NULL);
-          lv_obj_set_style_bg_opa(ov, LV_OPA_60, 0);
           lv_obj_set_style_opa(p, LV_OPA_COVER, 0);
           lv_obj_set_style_translate_y(p, 0, 0);
           lv_refr_now(NULL);
-          auto full = []() {
-            uint32_t t = micros();
-            for (int i = 0; i < 5; i++) { lv_obj_invalidate(lv_screen_active()); lv_refr_now(NULL); }
-            return (micros() - t) / 5000.0f;
-          };
-          float live = full();
-          uint32_t t = micros();
-          freeze::take(ov);
-          float took = (micros() - t) / 1000.0f;
-          lv_refr_now(NULL);
-          float frozen = full();
+          uint32_t tf = micros();
+          for (int i = 0; i < 5; i++) { lv_obj_invalidate(lv_screen_active()); lv_refr_now(NULL); }
+          float frozen = (micros() - tf) / 5000.0f;
           perfDrawProfile("frozen");
-          Serial.printf("PERF popup over home: full frame live %.1f ms, frozen %.1f ms (freezing took %.1f ms, %s)\n",
-                        live, frozen, took, freeze::s_img ? "frozen" : "NOT frozen");
+          Serial.printf("PERF popup over home: full frame %.1f ms (opening with the freeze took %.1f ms, %s)\n",
+                        frozen, took, freeze::s_img ? "frozen" : "NOT frozen");
           lv_obj_delete(ov);
           Serial.printf("PERF popup closed: image %s\n", freeze::s_img ? "LEFT" : "gone");
           lv_refr_now(NULL);
@@ -4141,13 +4349,32 @@ void UITask::setSchemaValue(int idx, int v) {
   settings::set(*_prefs, st, (uint8_t)v);
   if (st.changed) st.changed(*_core);
   prefsSave();
-  if (st.offset == offsetof(NodePrefs, units_imperial) && _screen == SCR_SETTINGS_NAV) {   // other labels depend on it
-    lv_obj_t* body = _body;
-    int32_t y = body ? lv_obj_get_scroll_y(body) : 0;
-    buildSchemaSettings();
-    fillFlush();
-    if (_body) { layoutNow(_body); lv_obj_scroll_to_y(_body, y, LV_ANIM_OFF); }
-  }
+  if (st.offset == offsetof(NodePrefs, units_imperial) && _screen == SCR_SETTINGS_NAV)   // other labels depend on it
+    rebuildSoon(&UITask::rebuildSchemaSettings);
+}
+
+void UITask::rebuildSchemaSettings() {
+  int32_t y = _body ? lv_obj_get_scroll_y(_body) : 0;
+  buildSchemaSettings();
+  fillFlush();
+  if (_body) { layoutNow(_body); lv_obj_scroll_to_y(_body, y, LV_ANIM_OFF); }
+}
+
+// A screen rebuilt for what a switch or segmented row changed (hints, rows
+// that come and go), once its knob has moved: rebuilt at once, the 80-130 ms
+// cut the animation short and the knob jumped. Not if the screen's gone by then.
+static lv_timer_t* s_rebuild_t = nullptr;
+void UITask::rebuildSoon(void (UITask::*fn)()) {
+  static void (UITask::*s_fn)() = nullptr;
+  static uint8_t s_scr = 0;
+  s_fn = fn;
+  s_scr = (uint8_t)_screen;
+  if (s_rebuild_t) lv_timer_delete(s_rebuild_t);
+  s_rebuild_t = lv_timer_create([](lv_timer_t*) {
+    s_rebuild_t = nullptr;
+    if ((uint8_t)s_ui->_screen == s_scr && !lv_display_get_screen_prev(NULL)) (s_ui->*s_fn)();
+  }, 150, nullptr);
+  lv_timer_set_repeat_count(s_rebuild_t, 1);
 }
 
 void UITask::showSettings() {
