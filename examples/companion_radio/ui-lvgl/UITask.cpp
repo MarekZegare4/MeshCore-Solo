@@ -1310,6 +1310,7 @@ void UITask::begin(DisplayDriver* display_drv, SensorManager* sensors, NodePrefs
 
   buildStatusBar();
   applyDisplayPrefs();   // a slider percentage overrides the level main.cpp set
+  { char c[24]; lvport::crashSummary(c, sizeof(c)); }   // the dump in flash read now (~45 ms), not on the first Diagnostics
   showHome();
   if (pinSet()) lockScreen();   // a reboot doesn't get round the PIN
   showSplash();                // over both; fades out by itself
@@ -1756,7 +1757,7 @@ void UITask::loop() {
             if (lv_obj_get_style_layout(o, LV_PART_MAIN) == LV_LAYOUT_FLEX) ++*(uint32_t*)u;
             return LV_OBJ_TREE_WALK_NEXT; }, &nf);
           Serial.printf("PERF   flex containers %lu\n", (unsigned long)nf);
-          if ((!fn && (page == 7 || page == 1)) || fn == &UITask::showContacts) {
+          if ((!fn && (page == 7 || page == 1)) || fn == &UITask::showContacts || fn == &UITask::showNearby) {
             char tag[12]; snprintf(tag, sizeof(tag), "%s%d", fn ? "list" : "page", page);
             fillFlush();   // the whole page, not only its first section
             perfDrawProfile(tag);
@@ -1777,6 +1778,7 @@ void UITask::loop() {
         one("admin", 0, &UITask::showAdminPick);
         one("contacts", 0, &UITask::showContacts);
         one("chats", 0, &UITask::showChats);
+        one("nearby", 0, &UITask::showNearby);
 #ifdef PERF_CONTROLS
         {   // -D PERF_CONTROLS: every control on the settings screens used once (perfControls)
           auto ctls = [this](const char* tag, int page, void (UITask::*fn)()) {
@@ -2501,6 +2503,9 @@ void UITask::fillStep() {
 }
 
 void UITask::fillTick() {
+  // Not while the screen moves in: its frames came a budget apart (Nodes,
+  // 57 rows: 33 ms a frame, up to 65). What it shows first is built already.
+  if (!s_fill_n || (_body && lv_anim_get(_body, NULL)) || lv_display_get_screen_prev(NULL)) return;
   uint32_t t0 = micros();
   while (s_fill_n) {
     fillStep();
