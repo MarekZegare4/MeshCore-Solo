@@ -1,8 +1,10 @@
 # Tools
 
 On joystick devices, the tools are in **Tools**, grouped into Location, Comms
-and System. The navigation tools are on the [Navigation](./navigation.md)
-page, Nodes and Admin on [Contacts](./contacts.md).
+and System; the Tools home page keeps the two you used last. The navigation
+tools are on the [Navigation](./navigation.md) page, Nodes and Admin on
+[Contacts](./contacts.md); the [Status](#status) screen opens from its own
+home page.
 
 > [!NOTE]
 > **Wio Tracker L2:** the tools are apps on the home screen: Messages, Nodes,
@@ -12,8 +14,9 @@ page, Nodes and Admin on [Contacts](./contacts.md).
 
 ## Clock
 
-The **Clock** home page shows the time, the date and up to three fields you
-choose (hold Enter): battery, temperature, humidity, pressure, altitude
+The **Clock** home page shows the time with a bar under it that fills with
+the seconds (Settings › Display › Clock seconds), the date, and up to three
+fields you choose (hold Enter): battery, temperature, humidity, pressure, altitude
 (barometric or GPS), light, CO₂, GPS position, satellites, contacts, unread
 messages. The time comes from GPS or the phone app; the time zone is in
 Settings.
@@ -73,7 +76,7 @@ it off; **Network = Current** relays on your own frequency instead.
 Optional filters keep a mobile repeater from adding noise: skip adverts, a
 maximum hop count, **Yield** (let fixed repeaters go first), a minimum SNR,
 drop duplicates already relayed by someone else, and relay only your
-**scopes**. Diagnostics shows how much it forwards.
+**scopes**. The Status screen's **Mesh** tab shows how much it forwards.
 
 ## Ringtones
 
@@ -84,31 +87,32 @@ single contact or channel from its options.
 > [!NOTE]
 > **Wio Tracker L2:** the melody editor is under Settings › Sound.
 
-## Diagnostics
+## Status
 
-**Tools › Diagnostics** shows live counters (packets received and sent by
-type, forwarded, errors), memory, the radio's noise floor and the last
-packet's signal; a **System** tab with the firmware and radio settings; and a
-**Font** tab with a sample of every script the font covers. Hold Enter on the
-live tab to reset the counters.
+The **Status** home page sums up the radio, GPS, battery and mesh in four
+tiles; **Enter** opens the Status screen, one tab per subject (**Left /
+Right** between them, **Up / Down** scrolls):
+
+| Tab | Shows |
+| --- | ----- |
+| **Radio** | Frequency, SF / BW / CR, TX power, the noise floor over the last half hour, the last packet's signal |
+| **GPS** | On / off (**Enter** switches it), fix, satellites, position, altitude, speed, precision, time to first fix |
+| **Sky** | The satellites on a sky plot, or each one's signal as bars (**Enter** swaps them); Wio Tracker L1 |
+| **Power** | Battery level, voltage, source and trend, then the readings of any sensors |
+| **Mesh** | Packets received and sent with a traffic line, forwarded, nodes heard, contacts; **hold Enter** resets the counters |
+| **System** | Uptime, firmware, device, memory, the send queue, errors, and a sample of every script the font covers |
+
+**GPS pwr** in Settings › System turns the GPS off between fixes to save
+battery; anything that needs your position (the trail, live share, the
+locator) keeps it on.
 
 > [!NOTE]
 > **Wio Tracker L2:** the Diagnostics app, with a **Noise** tab that
-> measures the noise floor over time.
+> measures the noise floor over time, and the **GPS** app, which draws a sky
+> plot of the satellites and each one's signal strength.
 
 ## GPIO
 
 *Wio Tracker L1 only.* **Tools › GPIO** sets four spare pins as input,
 output or (GPIO1–2) analog input, shows their level and switches outputs. The
 bot's `!gpio1`…`!gpio4` commands read and set the same pins.
-
-## GPS and sensors
-
-The **GPS** home page shows the fix and satellites; **Sensors** shows the
-readings of the sensors the board has. **GPS pwr** in Settings › System turns
-the GPS off between fixes to save battery; anything that needs your position
-(the trail, live share, the locator) keeps it on.
-
-> [!NOTE]
-> **Wio Tracker L2:** the **GPS** app draws a sky plot of the satellites and
-> each one's signal strength.

@@ -7,11 +7,11 @@ board supports are shown.
 
 | Section | What's there |
 | ------- | ------------ |
-| **Display** | Brightness, auto-off, lock screen and [PIN](./lock.md), battery as icon / % / volts, clock format and seconds, wake on message; on e-ink also rotation and full refresh |
+| **Display** | Brightness, auto-off, wake on message, lock screen, the lock clock's look and the [PIN](./lock.md), battery as icon / % / volts, time zone, clock format and seconds; on e-ink also rotation and full refresh |
 | **Sound** | Buzzer on / off / auto (quiet while the app is connected), volume, quiet hours, the melody for messages, channels and adverts |
 | **Home Pages** | Order of the home pages, and which are shown |
 | **Radio** | TX power, preset, frequency, SF / BW / CR, saved presets, Auto pwr, the scope list |
-| **System** | Device name, time zone, low-battery shutdown, GPS power saving, units, reboot |
+| **System** | Device name, low-battery shutdown, GPS power saving, units, the battery curve, reboot |
 | **Keyboard** | ABC or T9 layout, the two scripts, CardKB mode |
 | **Contacts** | Show all or favourites only (DMs, channels, rooms), favourites on top, contact expiry and prune |
 | **Messages** | Automatic resend of direct messages, the ten quick messages |
@@ -27,12 +27,17 @@ A few notes:
   types the same name gets the same scope; it isn't encryption.
 - **Low battery** shuts the device down at the voltage you choose, which is
   also 0 % on the battery indicator.
+- **Batt curve** sets the cell voltage at 0, 10 … 100 % for a battery that
+  doesn't follow the usual LiPo curve: **Left / Right** move a point by
+  10 mV, **Reset** goes back to LiPo. The current voltage is shown, so a point
+  can be set against what the battery reads.
 
 > [!NOTE]
 > **Wio Tracker L2:** one list of pages:
 >
 > - **Device**: Display (including the lock and **Tap to wake**), Home apps,
->   Power (battery, GPS), Sound (with the melody editor), Keyboard, Messages
+>   Power (battery, GPS, and the **Battery curve** as a chart whose points you
+>   drag), Sound (with the melody editor), Keyboard, Messages
 >   & contacts.
 > - **Connections**: Radio, Bluetooth, WiFi, GPS.
 > - **Map & data**: Map (trail, live sharing and arrival alert options),

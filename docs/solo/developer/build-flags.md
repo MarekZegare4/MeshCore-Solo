@@ -31,7 +31,7 @@ per-user. Listed here so the rest of this page can assume them.
 | `TRAIL_CAPACITY=<n>` | Points the GPS trail holds (16 B each). Default 512 for the nRF52's RAM; the L2 sets 32768 in PSRAM. At most 65535 (the save format's count). |
 | `TRAIL_SIMPLIFY=0` | Keeps every trail sample instead of storing straight stretches as their two ends. For boards with the memory for it (the L2). |
 | `TRAIL_FIXED_MIN_DELTA_M=<m>` | A fixed distance between trail points instead of the Point spacing setting, which is then hidden (the L2: 5 m, against GPS jitter). |
-| `UI_SENSORS_PAGE=1` | Enables the on-device sensors dashboard page. |
+| `UI_SENSORS_PAGE=1` | Only the default Home page order in the solo UI: sensor readings are on the Status screen's Power tab whenever the board has sensors. |
 | `BLE_PIN_CODE=<n>` | See below — not a plain fixed value in practice. |
 | `DISPLAY_CLASS=<Class>` | Selects the display driver (e.g. `SSD1306Display`, `GxEPDDisplay`, `ST7789Display` — see `src/helpers/ui/` for the full set). Fixed by whatever panel the board actually has; only relevant if you're wiring on a *different* display than stock, in which case the matching driver's `.cpp` also needs adding to `build_src_filter`. |
 
@@ -56,7 +56,6 @@ existing `solo/<board>/platformio.ini` for what's already claimed).
 | `UI_HAS_JOYSTICK=1` + `UI_HAS_JOYSTICK_UPDOWN=1` (optional) + `JOYSTICK_UP` / `JOYSTICK_DOWN` / `JOYSTICK_LEFT` / `JOYSTICK_RIGHT` + `PIN_USER_BTN` + `PIN_BACK_BTN` | A wired joystick (four direction contacts + a press contact for Enter). Replaces single-button navigation entirely once enabled. See [External Keyboard & Joystick](../hardware.md#external-keyboard-and-joystick). |
 | `PIN_GPIO1` .. `PIN_GPIO4` | Up to four general-purpose pins, each independently switchable between Off / Input / Output (GPIO1/GPIO2 also get an Analog step, if wired to an ADC-capable pin) from Tools › GPIO, and via the `!gpio1`..`!gpio4` bot commands. Not restricted to any particular board — works anywhere the pins are actually free. See [Tools › GPIO](../tools.md#gpio). |
 | `PIN_HALL_SENSOR` + `HALL_ACTIVE_HIGH=1` (optional) | A Hall-effect or reed sensor for a magnetic flip cover: closing locks and blanks the screen instantly, opening unlocks and wakes it, no combo either way. `HALL_ACTIVE_HIGH` is only for a module wired to pull the pin high (rather than low) when the magnet is near. See [Screen lock › Magnetic cover](../lock.md#magnetic-cover). |
-| `PIN_GPS_SWITCH` | A physical on/off switch for GPS power, read alongside the software GPS toggle — the Tools screen shows `gps off(hw)` / `gps off(sw)` when the two disagree, instead of silently trusting one over the other. |
 
 ---
 
@@ -75,9 +74,7 @@ existing `solo/<board>/platformio.ini` for what's already claimed).
 | --- | --- |
 | `ENV_INCLUDE_GPS=1` | Compiles in GPS support (NMEA parsing, location provider) at all. |
 | `GPS_BAUD_RATE=<n>` | Baud rate for the GPS module's serial link (`Serial1`). Match your module's default. |
-
-`PIN_GPS_SWITCH` (above) is independent of both — it's a hardware kill switch
-layered on top of GPS support, not a requirement for it.
+| `GPS_SKYVIEW` | Keeps every satellite in view (constellation, elevation, azimuth, signal) for the Status screen's Sky tab and the L2's GPS app (~1.5 KB RAM). Set on the Wio Tracker L1 and L2. |
 
 ---
 
@@ -90,7 +87,6 @@ layered on top of GPS support, not a requirement for it.
 | `ENABLE_SCREENSHOT` | Lets the site's [USB tools](https://solo.marekzegarek.com/#pc-tools) (or `tools/screenshot.py`) capture the screen over USB. A colour screen (the L2) renders a fresh frame and sends it as RGB565. |
 | `KEEP_DISPLAY_ON_USB` | Refreshes the auto-off deadline continuously while externally (USB) powered, so the auto-off timer only starts counting once power is actually removed. Off by default because OLED panels burn in quickly with a permanently-lit screen — only worth enabling for an LCD/e-ink target, or a display you don't mind replacing. |
 | `AUTO_OFF_MILLIS=<ms>` | How long the display stays on before auto-off. Default 15000 (15s); `0` disables auto-off entirely. |
-| `UI_RECENT_LIST_SIZE=<n>` | How many entries the recent-activity lists show before scrolling. Default 4. |
 
 ---
 
@@ -116,4 +112,6 @@ values above that are set from the phone app or the CLI.
 | Flag | Meaning |
 | --- | --- |
 | `ADVERT_NAME='"name"'` | Sets the default node name baked into a fresh device, instead of the hex of the first 4 bytes of its public key. Note the doubled quoting — it's a C string literal passed through a build flag. |
+| `MAP_VECTOR` | Wio Tracker L2: turns on the unfinished vector map (regions from `tools/maps/osm_vector.py`). Without it the vector map stays off whatever was saved. |
+| `HIST_ARCHIVE` | Wio Tracker L2: message history also kept on the SD card (`ui-lvgl/HistoryStore.h`). Set in its solo build. |
 | `MESHCORE_VERSION='"x.y"'` | Overrides the upstream MeshCore base-version string shown in diagnostics, for boards whose port hasn't been rebased onto the latest yet. Cosmetic only — doesn't change protocol behaviour. |

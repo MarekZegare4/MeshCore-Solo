@@ -63,7 +63,9 @@ public:
    Only screens needing a *parameter* at entry add a typed call after it (e.g.
    `gotoRingtoneEditor` → `selectSlot(slot)`, `gotoMapScreen` → `showMapView()`).
 4. Reach it from somewhere — usually a row in `ToolsScreen.h` (add an `Action`
-   enum value, a row in the right section table, and a `dispatch()` case).
+   enum value, a row in the right section table, and a `run()` case). The
+   Tools home page lists the last two tools used; give the new one a state
+   in `HomeScreen::toolState()` (`UITask.cpp`) if it has one worth showing.
 
 That's the whole contract. Steps 1, 3 and 4 are compiler-checked (a mismatch
 won't link); only a forgotten step 2 can slip through — every screen pointer is
@@ -95,14 +97,19 @@ pixel sizes** — derive everything from these:
 
 Drawing helpers (all clip/measure for you):
 
-- `drawCenteredHeader(title, menu_hint=false, menu_open=false)` — plain centered
-  title + separator.
-- `drawInvertedHeader(label, menu_hint=false, menu_open=false)` — filled title
-  bar (used by detail views).
-- Both take an optional `menu_hint`: pass `true` on a screen with a Hold-Enter
-  context menu to reserve a `≡` glyph (`menuHintWidth()`/`drawContextMenuHint()`)
-  in the header, so the menu is discoverable without already knowing the
-  shortcut; `menu_open` highlights it while the menu is actually up.
+- `drawScreenHeader(d, title, page=-1, pages=0, menu_hint=false, menu_open=false)`
+  (`ui-new/icons.h`) — every screen's title bar: the title (title case, no
+  icon) centred over the separator, page dots at the right for a screen with
+  views (`page` of `pages`, e.g. Trail's Summary / Map / List), and the `≡`
+  hint when the screen has a Hold-Enter menu, so the menu is discoverable
+  without knowing the shortcut; `menu_open` highlights it while the menu is
+  up. A title too long to centre goes left and ends in an ellipsis.
+- `drawInvertedHeader(label, menu_hint=false, menu_open=false)` — a filled
+  title bar, kept for the node detail and Navigate views.
+- `drawSoftRect` / `fillSoftRect` — a box with its corner pixels left out;
+  every frame and fill in the UI uses them (selections, pills, buttons).
+  `drawPanel(x, y, w, h)` is a box floating over the view (alert, popup,
+  hint): it clears a 1 px moat, fills dark and draws the soft border.
 - `drawSelectionRow(x, y, w, h, sel)` — the highlight bar behind a list row.
 - `drawTextEllipsized(x, y, max_w, str, selected=false)` — truncates with `…`;
   **use this for any user string** (names, labels) so long/UTF-8 text can't
@@ -160,6 +167,8 @@ calculator (`scrollIndicatorReserve`) are exposed for hand-laid lists.
 | `DigitEditor` | `DigitEditor.h` | scroll-edit one number, digit by digit |
 | `FullscreenMsgView` | `FullscreenMsgView.h` | scrollable full-message reader + word wrap |
 | `NavView` | `NavView.h` | bearing/distance/ETA "navigate to a point" view |
+| `TabBar` | `TabBar.h` | a row of tabs: the current one a soft pill, whole tabs only, ◂ ▸ where more are off screen |
+| `info::` rows and blocks | `InfoKit.h` | settings rows, data screens (below) |
 
 All follow the same shape: a `begin(...)` to open, an `active` flag, a
 `handleInput(c)` returning a small `Result` enum, and a `render()`/`draw()`.
@@ -211,6 +220,24 @@ to pick, Enter to insert via the shared `insertGlyph()` helper, Cancel to
 dismiss. Holding a letter with no variants, or any T9/alt-alphabet/symbols
 cell, is a no-op.
 
+**InfoKit** (`ui-new/InfoKit.h`, namespace `info`) is the shared look of
+settings and data screens. Rows (drawn after `drawRowSelection()`, in its
+ink): `valueRow(d, y, label, value, sel, reserve, x0)` — label left, value
+flush right with its unit after a space ("50 m"), cut and marquee-scrolled
+when selected; `switchRow` — a yes/no setting as an on/off switch
+(`toggle()`); `listRow` — picks between the two for a formatter that returns
+exactly "ON" / "OFF". `rowWrapped` gives a long value its own line instead of
+an ellipsis nobody can scroll. Blocks for data screens: `section` (a centred
+"··· Font ···" divider), `meter`, `battery`, `chip`, `big` (a 2× number with
+its unit), `History<N>` + `spark` (a sparkline), `rule` / `vrule`. `Flow`
+places blocks top-down, skips the ones scrolled off and tells whether more
+are below, which gives the scroll indicator for free (see `StatusScreen.h`).
+
+Other drawing helpers in `icons.h`: `drawButton` (a push button, soft pill,
+filled while selected), `drawDisclosure` (▸ / ▾ on an accordion section),
+`drawPageDots`, `drawLoadingDots` (the waiting animation), `drawSignalBars`
+(SNR as four bars).
+
 `FullscreenMsgView::wrapLines()` is a standalone pixel-accurate word-wrapper
 (O(n), variable-width-font aware) reusable by any multi-line layout; it writes
 into the shared `s_wrap_trans` / `s_wrap_lines` scratch (single-threaded render,
@@ -260,21 +287,19 @@ MINI_ICON(ICON_FOO, 5,
 ```
 
 Draw with `miniIconDraw(display, x, topY, ICON_FOO)` (auto-scaled & centered),
-`miniIconDrawTop` (exact placement), or the boxed/slot variants
-(`drawBoxedIcon` = lit when active, `drawSlotIcon` = plain). Bigger page glyphs
-use `BIG_ICON` / `bigIconDraw`. The home status bar composes these right-to-left
-with a `blinkOn()` cadence for "leave it on and forget" broadcasts (auto-advert,
-Live Share, trail, repeater) — follow that pattern when adding an indicator:
-always shown on e-ink, blinking on OLED.
+`miniIconDrawTop` (exact placement), `miniIconDrawCentered`, or `drawSlotIcon`
+(centred in a status-bar slot). Use icons sparingly: headers and the Tools
+list have none, the Home page row is the main place for them.
 
-Icons are drawn from a fixed priority-ordered table (`HomeScreen::renderBatteryIndicator()`,
-`UITask.cpp`); once the row runs out of horizontal space the loop just stops,
-so the lowest-priority icons silently drop first rather than the whole bar
-crushing the node name. A blinking icon still reserves its width on the
-off-phase of its blink, so the row's layout can't visibly shift width as icons
-blink in and out.
+The home status bar (`HomeScreen::renderBatteryIndicator()`, `UITask.cpp`)
+draws plain glyphs right to left from a fixed, priority-ordered table, with
+no boxes and no blinking: each icon tells a state by its shape (Bluetooth only
+while a phone is connected, the GPS reticle broken until a fix, a pin while
+the trail records). Once the row runs out of room the loop stops, so the
+lowest-priority icons drop first instead of the bar crushing the time. Add an
+indicator as one more row in that table, at its priority.
 
-Screens with a Hold-Enter context menu (Nodes, Bot, Admin, Diagnostics, …) pass
+Screens with a Hold-Enter context menu (Nodes, Messages, Bot, Admin, …) pass
 `menu_hint=true` to their header call (see §2) so a `≡` glyph advertises the
 menu; `KEY_CONTEXT_MENU` (Hold-Enter) opens it.
 
@@ -363,7 +388,13 @@ with `resolvePersonPos()` (live `[LOC]` share, else last-advertised fix).
   `chanctl::onRemoved()` (ui-core/ChannelControl.h). New per-contact or
   per-channel state should clear there too.
 - **Toasts:** `_task->showAlert("msg", duration_ms)` overlays a transient banner
-  over any screen; no redraw plumbing needed.
+  over any screen (not over the keyboard); no redraw plumbing needed. Use one
+  only for what the screen doesn't already show: a failure ("Send failed",
+  "Contacts full") or an outcome somewhere else. No echo of an action whose
+  result is in view ("Sent", "Deleted", "Counters reset").
+- **Time:** `millis()` wraps after ~49.7 days. Compare deadlines as
+  `(int32_t)(millis() - deadline) >= 0`, never `millis() >= deadline`, and use
+  0 as "now / none" (`UITask::refreshDue()`, `alertShowing()`).
 - **Strings:** always `strncpy`+NUL or `snprintf`; treat every name/label as
   untrusted-length and render through `drawTextEllipsized`.
 
@@ -374,7 +405,8 @@ with `resolvePersonPos()` (live `[LOC]` share, else last-advertised fix).
 ```cpp
 // ui-new/MyToolScreen.h  — included by UITask.cpp near the other screens
 #pragma once
-#include "icons.h"          // drawList + mini-icons
+#include "icons.h"          // drawList, drawScreenHeader, mini-icons
+#include "InfoKit.h"        // valueRow / switchRow
 #include "../NodePrefs.h"
 
 class MyToolScreen : public UIScreen {
@@ -389,13 +421,15 @@ public:
 
   int render(DisplayDriver& d) override {
     d.setTextSize(1);
-    d.drawCenteredHeader("MY TOOL");
+    drawScreenHeader(d, "My tool");
+    int next = 500;
     drawList(d, ROWS, _sel, _scroll, [&](int i, int y, bool sel, int reserve) {
       drawRowSelection(d, y, sel, reserve);
-      d.setCursor(4, y);
-      d.print(i == 0 ? "Alpha" : i == 1 ? "Bravo" : "Charlie");
+      static const char* const L[ROWS] = { "Alpha", "Bravo", "Charlie" };
+      const int m = info::valueRow(d, y, L[i], "50 m", sel, reserve);   // value flush right
+      if (m > 0 && m < next) next = m;                                   // a marquee moving
     });
-    return 500;
+    return next;
   }
 
   bool handleInput(char c) override {

@@ -6,14 +6,22 @@ messages still arrive, alarms still ring and the phone app still connects.
 ## Locking and unlocking
 
 **Hold Back and press Enter three times** within 3 seconds; the same locks
-and unlocks. A hint on the lock screen counts the presses. With a CardKB,
-**Fn+Esc** does it in one press.
+and unlocks. With a CardKB, **Fn+Esc** does it in one press.
 
 **Settings › Display › Lock screen** locks the device whenever the screen
 turns off by itself.
 
-The lock screen shows the time, the date and the first two of the Clock
-page's fields, but not the device's name.
+The lock screen has the status bar on top and one of two looks, set in
+Settings › Display › **Lock clock**:
+
+- **Big**: the time in large digits, the date, and how many messages are
+  unread.
+- **Compact**: a smaller time with the date beside it, and the Clock page's
+  fields as rows below (unread messages too, if no field shows them).
+
+The key that wakes the screen does nothing else, so a glance shows the data.
+A key pressed on the lit lock screen brings up the unlock hint at the bottom
+for a few seconds; it counts the presses. On e-ink the hint stays up.
 
 > [!NOTE]
 > **Wio Tracker L2:** with **Lock screen** on (Settings › Display), waking

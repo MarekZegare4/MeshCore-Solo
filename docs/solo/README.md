@@ -19,7 +19,8 @@ still connects as with the stock firmware, over Bluetooth or USB.
 - **Nearby nodes**: who's around, signal and distance, ping, and remote
   admin of your repeaters and rooms.
 - **Tools**: clock with alarm, timer and stopwatch, a remote bot that answers
-  commands over the mesh, repeater mode, a ringtone editor, diagnostics.
+  commands over the mesh, repeater mode, a ringtone editor, and a status
+  screen with the radio, GPS, battery and mesh counters.
 - **Screen lock** with an optional PIN.
 - **On the Wio Tracker L2**: an offline map, message history on the SD card,
   the SD card as a USB drive, updates over WiFi.
@@ -40,7 +41,7 @@ These docs mark the differences with notes like this:
 
 | OLED / e-ink | | Wio Tracker L2 |
 | :---: | :---: | :---: |
-| ![Clock page](./img/oled-clock.png) | ![Messages](./img/oled-messages.png) | ![Home screen](./img/l2-home.png) |
+| ![Clock page](./img/oled-clock.png) | ![Status page](./img/oled-status.png) | ![Home screen](./img/l2-home.png) |
 
 The joystick and keyboard devices share one interface, sized for small OLED
 and e-ink screens. The Wio Tracker L2 has its own, built for a 320 × 240
@@ -49,11 +50,11 @@ history on the SD card and updates over WiFi.
 
 ## Pages
 
-- [Getting started](./getting-started.md): controls, the home screen, the phone app, updates
+- [Getting started](./getting-started.md): controls, the home screen and its quick panels, the phone app, updates
 - [Messages](./messages.md): channels, direct messages, rooms, typing
 - [Contacts](./contacts.md): nearby nodes, favourites, remote admin
 - [Navigation](./navigation.md): GPS, trail, waypoints, compass, sharing your location, the map
-- [Tools](./tools.md): clock tools, bot, repeater, ringtones, diagnostics
+- [Tools](./tools.md): clock tools, bot, repeater, ringtones, the Status screen
 - [Settings](./settings.md): what is where
 - [Screen lock](./lock.md): locking, auto-lock, PIN
 - [Hardware](./hardware.md): external keyboards and joysticks, e-ink, SD card, WiFi

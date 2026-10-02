@@ -11,9 +11,10 @@ Unread counts show on each conversation, on the list and on the home screen.
 ## Reading
 
 Open a conversation to see its history as chat bubbles: yours on the right,
-received ones on the left, newest at the bottom. Each bubble shows the sender,
-its age and a small hop count: on a received message, how many repeaters it
-came through; on your own, how many repeaters were heard passing it on.
+received ones on the left, newest at the bottom. Each bubble shows its age
+and a small hop count: on a received message, how many repeaters it came
+through; on your own, how many repeaters were heard passing it on. In
+channels and rooms it also names the sender.
 
 **Enter** on a message opens it full screen; **Left / Right** there pages to the
 older and newer one.
@@ -44,10 +45,12 @@ haven't read, its unread count gets a **+** (for example `48+`).
 
 ## Writing
 
-Open a conversation and choose **[+ send]** (or Enter at the bottom of the
+Open a conversation and choose **+ Send** (or Enter at the bottom of the
 history). Pick a quick message or **Custom message** for the keyboard.
 
 - **Quick messages**: ten of your own, edited in Settings › Messages.
+- If a message can't be sent, you stay where you were: the keyboard keeps
+  the text (its label reads **Not sent**), so you can send it again.
 - **Placeholders** fill in live data when the message is sent:
   `{loc}` (your GPS position), `{time}`, `{batt}`, and the readings of any
   sensor the device has: `{temp}`, `{hum}`, `{pres}`, `{alt}`, `{lux}`,

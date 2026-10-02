@@ -7,7 +7,7 @@ hardware is needed. Distances and speeds follow Settings › System › Units
 ## Trail
 
 **Tools › Trail** records your route in the background while you use the rest
-of the device (a blinking **G** in the status bar). Straight stretches are
+of the device (a pin in the status bar). Straight stretches are
 stored as their two ends, so the 512 points cover a long route. **Left / Right**
 switches between the **Summary** (distance, time, speed or pace), the **Map**
 (your route, waypoints, people sharing their position, the target) and the
@@ -110,9 +110,11 @@ in one step. The target shows as a flag on the map.
 
 ## Map
 
-The **Map** home page shows your position, the trail, waypoints, people
-sharing their position and the target. **Enter** opens the trail map;
-**hold Enter** shares your position.
+The **Map** home page shows a small map on the left (your position, the
+trail, people sharing their position and the target) and four lines beside
+it: GPS, the trail's distance, live shares, and the distance to the target
+(or the waypoint count when there is none).
+**Enter** opens the trail map; **hold Enter** shares your position.
 
 > [!NOTE]
 > **Wio Tracker L2:** a real map with offline tiles on the SD card. Drag to
@@ -122,8 +124,10 @@ sharing their position and the target. **Enter** opens the trail map;
 >   Downloaded areas can be renamed, refreshed or deleted.
 > - **Live tiles**: with WiFi on, tiles for where you look are fetched and
 >   cached, up to the size set in Settings › Storage.
-> - **Vector regions**: whole regions as packs made with
->   `tools/maps/osm_vector.py`, copied to the card.
+> - **Vector regions** (only in a build with `-D MAP_VECTOR`, unfinished):
+>   whole regions as packs made with `tools/maps/osm_vector.py`, copied to
+>   the card.
 >
 > The minimap on the home screen shows your surroundings at a glance; tap it
-> for the full map. The **Nodes** map shows every node with a position.
+> for the full map. The **Nodes** map is the same map with every node that
+> has a position on it; Back returns to Nodes.

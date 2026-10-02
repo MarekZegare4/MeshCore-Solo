@@ -26,10 +26,26 @@ combinations), Enter and Esc. [Hardware](./hardware.md) has the key maps.
 ## Home screen
 
 The home screen is a row of pages. On joystick devices, **Left / Right** steps
-through them and **Enter** opens the one shown:
+through them (on Favourites it moves between the slots first). The default
+order:
 
-Clock, Recent, Radio, Bluetooth, Advert, GPS, Sensors, Tools, Shutdown,
-Settings, Messages, Favourites, Map.
+| Page | Shows |
+| ---- | ----- |
+| **Clock** | The time, the date and up to three fields of your choice; Enter opens the clock tools |
+| **Favourites** | Six slots for the conversations you open most ([Contacts](./contacts.md#favourites)) |
+| **Status** | Radio, GPS, battery and mesh at a glance; Enter opens the [Status screen](./tools.md#status) |
+| **Bluetooth** | Bluetooth on / off and the phone: connected, or the pairing PIN |
+| **Advert** | Send an advert now, and the auto-advert interval |
+| **Settings** | Brightness, GPS on / off, then all settings |
+| **Map** | Your position, the trail, people sharing theirs and the target ([Navigation](./navigation.md#map)) |
+| **Tools** | The two tools you used last with their state, then all tools |
+| **Messages** | The two latest conversations with their unread counts, then all messages |
+| **Shutdown** | Lock the screen, or hibernate (with the battery level) |
+
+Most pages are **quick panels**: a few rows and a last one that opens the
+full screen. **Up / Down** picks a row and **Enter** acts on it. A value row
+(brightness, auto-advert) goes into editing: **Left / Right** change it while
+you watch, **Enter** or **Back** keeps it.
 
 Settings › Home Pages sets their order and hides the ones you don't use;
 Settings and Messages are always shown.
