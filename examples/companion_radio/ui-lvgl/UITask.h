@@ -70,7 +70,7 @@ public:
   void setSchemaValue(int idx, int v);
   void showNearby();
   void showMap();                  // in its current mode
-  void openMap(bool nav);          // Nodes map (false) or Navigation map (true)
+  void openMap(bool nav);          // the one map; false: from Nodes, with the nodes on it and Back to Nodes
   void mapLongPress(int x, int y);
   void mapZoom(int delta);
   void mapCenterOnMe();
@@ -284,6 +284,10 @@ public:
   void diagReset();
   void diagNoiseRun();
   void showCompass();
+  void showBattCurve();            // Settings > Power > Battery curve (BatteryScreen.h)
+  void refreshBattCurve();
+  int  battMv() const { return _batt_mv; }   // smoothed cell voltage, 0 before the first read
+  NodePrefs* prefsMut() const { return _prefs; }   // for the free helpers that change a setting
   void favTap(int slot);
   void favHold(int slot);
   void favAction(uint8_t act);
@@ -298,7 +302,7 @@ public:
   void openAdminFor(const ContactInfo& ci, bool from_picker) { (void)from_picker; openAdmin(ci.id.pub_key); }
 
 private:
-  enum Screen : uint8_t { SCR_HOME, SCR_CHATS, SCR_CONTACTS, SCR_THREAD, SCR_SETTINGS, SCR_NEARBY, SCR_NODE, SCR_MAP, SCR_WIFI, SCR_SETTINGS_NAV, SCR_CLOCK, SCR_RADIO, SCR_CHANNEL_EDIT, SCR_ADMIN, SCR_BOT, SCR_DIAG, SCR_COMPASS, SCR_SCOPES, SCR_REPEATER, SCR_MELODY, SCR_QUICK, SCR_ADMIN_PICK, SCR_OTA, SCR_STORAGE, SCR_GPS };
+  enum Screen : uint8_t { SCR_HOME, SCR_CHATS, SCR_CONTACTS, SCR_THREAD, SCR_SETTINGS, SCR_NEARBY, SCR_NODE, SCR_MAP, SCR_WIFI, SCR_SETTINGS_NAV, SCR_CLOCK, SCR_RADIO, SCR_CHANNEL_EDIT, SCR_ADMIN, SCR_BOT, SCR_DIAG, SCR_COMPASS, SCR_SCOPES, SCR_REPEATER, SCR_MELODY, SCR_QUICK, SCR_ADMIN_PICK, SCR_OTA, SCR_STORAGE, SCR_GPS, SCR_BATT };
 
   void buildStatusBar();
   void refreshStatusBar();
@@ -575,6 +579,7 @@ private:
 
   // Navigation map (SCR_MAP with _map_nav)
   bool      _map_nav = false;
+  bool      _map_nodes = false;       // opened from Nodes: their markers too, Back returns there
   uint32_t  _next_nav_bar_ms = 0;
   lv_obj_t* _nav_bar = nullptr;       // target bar along the bottom
   lv_obj_t* _nav_title = nullptr;

@@ -308,6 +308,12 @@ void UITask::buildDiag() {
       if (sp) *sp = '\0';
       infoRow(card, lines[i], sp ? sp + 1 : "", theme::TEXT, THEME_FONT_TITLE);
     }
+    // Colour emoji (Twemoji images the text fonts fall back to) and a flag,
+    // two regional indicator letters swapped for one glyph. L2 only: the L1
+    // font has none, so this isn't in the shared list.
+    infoRow(card, "Emoji", "\xF0\x9F\x98\x80 \xF0\x9F\x91\x8D \xE2\x9D\xA4 \xF0\x9F\x94\xA5 "
+                           "\xF0\x9F\x93\xA1 \xE2\x9B\xB0 \xF0\x9F\x87\xB5\xF0\x9F\x87\xB1",
+            theme::TEXT, THEME_FONT_TITLE);   // grin, thumbs up, heart, fire, antenna, mountain, PL
     return;
   }
   // System: this build and the radio settings.

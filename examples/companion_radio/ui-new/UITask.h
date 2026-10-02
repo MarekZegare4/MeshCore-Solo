@@ -112,6 +112,7 @@ class UITask : public UITaskBase, public UiCoreHost {
   UIScreen* nearby_screen = nullptr;
   UIScreen* dashboard_config = nullptr;
   UIScreen* auto_advert_screen = nullptr;
+  UIScreen* batt_curve_screen = nullptr;
   UIScreen* live_share_screen = nullptr;
   UIScreen* locator_screen = nullptr;
   UIScreen* trail_screen = nullptr;
@@ -287,6 +288,7 @@ public:
   void gotoNearbyScreen();
   void gotoDashboardConfig();
   void gotoAutoAdvertScreen();
+  void gotoBatteryCurve();   // Settings > System > Battery curve
   void gotoLiveShareScreen();
   // Live share session control (ui-core/LiveShareEngine.h): restart = new
   // session (re-announce + fresh clock); clock-only = changed "Stop after".

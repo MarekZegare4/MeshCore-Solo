@@ -1283,6 +1283,7 @@ void UITask::begin(DisplayDriver* display_drv, SensorManager* sensors, NodePrefs
   _sensors = sensors;
   _prefs = node_prefs;
   s_prefs = node_prefs;
+  if (node_prefs) battery::useCurve(node_prefs->batt_curve_mv);   // Settings > Battery curve
 
   _core = new UiCore();
   _core->begin(node_prefs, sensors, this);
@@ -1960,6 +1961,7 @@ void UITask::loop() {
       refreshDiag();
       refreshCompass();
       refreshGps();
+      refreshBattCurve();
     }
     if (locked()) lockPoll();
     else if (_screen == SCR_HOME) { homeSwipePoll(); homeMapLoop(); }
@@ -2712,6 +2714,7 @@ void UITask::back() {
     case SCR_ADMIN_PICK: showHome(); break;
     case SCR_OTA:      otaLeave(); break;
     case SCR_COMPASS:  showHome(); break;
+    case SCR_BATT:     showSchemaSettings(PG_POWER); break;
     case SCR_GPS:      if (_gps_from_settings) showSettings(); else showHome(); break;
     case SCR_ADMIN:    if (_nav_overlay) navClosePopup(); else adminLeave(); break;
     case SCR_SETTINGS: if (_nav_overlay) navClosePopup(); else showHome(); break;
@@ -2766,7 +2769,7 @@ void UITask::back() {
       if (_nav_overlay) navClosePopup();
       else if (areaSelecting()) areaSelectEnd();
       else if (_dl_overlay) mapDownloadClose();
-      else if (!_map_nav) showNearby();   // the Nodes map opens from Nearby
+      else if (_map_nodes || !_map_nav) showNearby();   // opened from Nodes
       else showHome();
       break;
     case SCR_WIFI:     showSettings(); break;
@@ -3676,10 +3679,10 @@ void UITask::buildNode() {
   if (e.has_key) list[n++] = { LV_SYMBOL_LOOP, " Ping", NODE_PING, false };
   if (pos) list[n++] = { UI_SYMBOL_COMPASS, "", NODE_NAV, false };
   if (pos) list[n++] = { UI_SYMBOL_FLAG, "", NODE_WAYPOINT, false };   // save where it was seen
-  if (contact) list[n++] = { UI_SYMBOL_STAR, admin ? "" : e.fav ? " Unfav" : " Fav", NODE_FAV, e.fav && admin };
+  if (contact) list[n++] = { UI_SYMBOL_STAR, admin ? "" : e.fav ? " Unfav" : " Fav", NODE_FAV, e.fav };   // lit while it is one
   if (admin) list[n++] = { LV_SYMBOL_SETTINGS, " Admin", NODE_ADMIN, false };
   if (!contact && e.has_key && !e.is_known) list[n++] = { LV_SYMBOL_PLUS, " Add", NODE_ADD, true };
-  if (contact && e.has_key) list[n++] = { UI_SYMBOL_PIN, "", NODE_PIN, favslots::findContact(_prefs, e.pub_key) >= 0 };
+  if (contact && e.has_key) list[n++] = { UI_SYMBOL_TACK, "", NODE_PIN, favslots::findContact(_prefs, e.pub_key) >= 0 };
   if (contact) list[n++] = { LV_SYMBOL_TRASH, "", NODE_DELETE, false };
   for (int i = 0; i < n; i++) {   // five or more: icons only, so every button fits one row
     char t[24];
@@ -4499,6 +4502,7 @@ static void onHomeApps(lv_event_t* e) { (void)e; s_ui->homeEdit(true); }
 static void onPruneContacts(lv_event_t* e) { (void)e; s_ui->pruneContacts(); }
 static void onOpenQuickMsgs(lv_event_t* e);
 static void onPinSetup(lv_event_t* e);   // DeviceScreen.h
+static void onBattCurve(lv_event_t* e) { (void)e; s_ui->showBattCurve(); }
 static void onOpenOta(lv_event_t* e);    // OtaScreen.h
 static void bluetoothRow(lv_obj_t* body);
 static void onVolumeSlider(lv_event_t* e) {
@@ -4593,6 +4597,8 @@ void UITask::buildSchemaSettings() {
       lv_obj_t* g = group(body, "BATTERY");
       schemaRow(g, SETTING(batt_display_mode));
       schemaRow(g, SETTING(low_batt_mv));
+      listRow(g, "Battery curve", _prefs && battery::validCurve(_prefs->batt_curve_mv) ? "Your own" : "LiPo (built in)",
+              onBattCurve, NULL);
       g = group(body, "GPS");
       schemaRow(g, SETTING(gps_interval));
       return;
@@ -4865,6 +4871,7 @@ void UITask::setKeyboardAlphabets(int main_idx, int alt_sel) {
 #include "DeviceScreen.h"
 #include "DiagScreen.h"
 #include "CompassScreen.h"
+#include "BatteryScreen.h"
 #include "GpsScreen.h"
 #include "RadioExtras.h"
 #include "RepeaterScreen.h"
@@ -4905,6 +4912,10 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_open(const char* name) {
   for (auto& s : SCREENS) if (!strcmp(s.n, name)) { (s_ui->*s.fn)(); return; }
   if (!strncmp(name, "page", 4)) { s_ui->showSchemaSettings(atoi(name + 4)); return; }
   if (!strcmp(name, "map")) { s_ui->openMap(true); return; }
+  if (!strcmp(name, "nodesmap")) { s_ui->openMap(false); return; }   // as from Nodes
+  if (!strcmp(name, "battcurve")) { s_ui->showBattCurve(); return; }
+  if (!strcmp(name, "homeedit")) { s_ui->showHome(); s_ui->homeEdit(true); return; }   // arranging the apps
+  if (!strncmp(name, "accent@", 7)) { theme::setAccent(atoi(name + 7)); return; }   // "accent@4": Cyan
   if (!strncmp(name, "map@", 4)) { s_ui->simMapAt(name + 4); return; }   // "map@lat,lon,z"
   if (!strcmp(name, "vector")) { s_ui->setVectorMap(true); return; }
   if (!strcmp(name, "maptools")) { s_ui->navToolsPopup(); return; }

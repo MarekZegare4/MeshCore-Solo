@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include "DataStore.h"
 #include "Features.h"   // FEAT_JOYSTICK_ROTATION_SETTING (else `#if !FEAT_…` is always true)
+#include "ui-core/Battery.h"   // validCurve() for the saved battery curve
 #include <target.h>     // radio_driver — repeater-profile freq bounds (getFreqBounds)
 
 #if defined(EXTRAFS) || defined(QSPIFLASH)
@@ -642,6 +643,10 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
   rd(_prefs.lock_screen_password, sizeof(_prefs.lock_screen_password));
   rd(_prefs.lock_screen_password_salt, sizeof(_prefs.lock_screen_password_salt));
 
+  // batt_curve_mv: any point out of range or not rising -> the built-in curve.
+  rd(_prefs.batt_curve_mv, sizeof(_prefs.batt_curve_mv));
+  if (!battery::validCurve(_prefs.batt_curve_mv)) memset(_prefs.batt_curve_mv, 0, sizeof(_prefs.batt_curve_mv));
+
   // Schema sentinel: bumped on layout changes. Mismatch means an older file
   // (or a different schema); rd() and the clamps above already keep every
   // field within its valid range regardless, so we just log it here —
@@ -653,6 +658,9 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
                        (unsigned)sentinel, (unsigned)NodePrefs::SCHEMA_SENTINEL);
     // 0xC0DE0030 → 0xC0DE0031: the lock-screen PIN appended; from an older
     // file it holds its sentinel's bytes, which would read as a PIN nobody knows.
+    // 0xC0DE0031 → 0xC0DE0032: the battery curve appended; an older file
+    // leaves stray bytes in it, so the built-in curve.
+    if (sentinel < 0xC0DE0032) memset(_prefs.batt_curve_mv, 0, sizeof(_prefs.batt_curve_mv));
     if (sentinel < 0xC0DE0031) {
       memset(_prefs.lock_screen_password, 0, sizeof(_prefs.lock_screen_password));
       memset(_prefs.lock_screen_password_salt, 0, sizeof(_prefs.lock_screen_password_salt));
@@ -857,6 +865,7 @@ void DataStore::savePrefs(const NodePrefs& _prefs, double node_lat, double node_
     file.write((uint8_t *)&_prefs.quiet_to, sizeof(_prefs.quiet_to));
     file.write((uint8_t *)_prefs.lock_screen_password, sizeof(_prefs.lock_screen_password));
     file.write((uint8_t *)_prefs.lock_screen_password_salt, sizeof(_prefs.lock_screen_password_salt));
+    file.write((uint8_t *)_prefs.batt_curve_mv, sizeof(_prefs.batt_curve_mv));
 
     // Tail sentinel — must be last. See NodePrefs::SCHEMA_SENTINEL. Its write is
     // the one we check: once the flash fills, writes return 0, so a good

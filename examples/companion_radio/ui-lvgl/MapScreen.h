@@ -350,7 +350,9 @@ void UITask::perfMap(bool reset) {
 #endif
 
 void UITask::openMap(bool nav) {
-  _map_nav = nav;
+  // One map everywhere (trail, target, tools); from Nodes it adds the nodes.
+  _map_nav = true;
+  _map_nodes = !nav;
   showMap();
 }
 
@@ -693,7 +695,7 @@ void UITask::rebuildMapMarkers() {
   mapview::s_mark_prev = mapview::s_mark_count;
   mapview::s_mark_count = 0;
   if (_map_nav) rebuildNavMarkers();
-  else rebuildNodeMarkers();
+  if (_map_nodes || !_map_nav) rebuildNodeMarkers();
   for (int k = mapview::s_mark_count; k < mapview::s_mark_prev; k++) lv_obj_delete(mapview::s_marks[k].obj);
   mapview::s_mark_prev = 0;
   layoutNow(_map_marks);   // so layoutMap() knows where each dot sits in its marker
@@ -704,6 +706,7 @@ void UITask::rebuildNodeMarkers() {
   for (int i = 0; i < _nearby->count() && mapview::s_mark_count < mapview::MAX_MARKS; i++) {
     const NearbyModel::Entry& e = _nearby->at(i);
     if (e.lat_e6 == 0 && e.lon_e6 == 0) continue;
+    if (e.is_live && _map_nav) continue;   // the live share's own marker shows it
     uint32_t col = e.is_live ? theme::OK : e.type == ADV_TYPE_CHAT ? theme::TEXT : theme::TEXT_MUTED;
     addMapMark(mapview::MK_NODE, i, e.lat_e6, e.lon_e6, col, e.name[0] ? e.name : "?");
   }

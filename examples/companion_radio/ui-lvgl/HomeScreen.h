@@ -153,7 +153,8 @@ static mapview::Grid s_grid;   // under the tiles, as on the map
 static void onTap(lv_event_t* e) { (void)e; s_ui->openMap(true); }
 
 static lv_obj_t* dot(uint8_t kind) {
-  static const struct { uint8_t d; uint32_t col, border; } LOOK[] = {
+  // Not static: the accent can change after the first dot (Settings > Display).
+  const struct { uint8_t d; uint32_t col, border; } LOOK[] = {
     { 14, theme::ACCENT, theme::BG }, { 14, theme::BG, theme::ACCENT },   // you; no fix: the last position, hollow
     { 12, theme::BG, theme::ACCENT }, { 12, theme::OK, theme::BG },       // the target; live shares
   };
@@ -199,7 +200,9 @@ static lv_obj_t* homeTile(lv_obj_t* parent, const char* icon, const char* text, 
 // Every app is on the pages, a hidden one dimmed with a "+" (the others a
 // "-"). A tap hides / shows it; a drag lifts a copy of the tile on the top
 // layer (the tile dims in place) and drops the app into the slot under the
-// finger; held at a screen edge, it goes to that side's page. Done, or the
+// finger. While it's dragged the page already shows where it would land: the
+// dimmed tile takes that slot and the tiles it pushes glide, names and all, to
+// theirs. Held at a screen edge, it goes to that side's page. Done, or the
 // side button, ends it.
 namespace home {
 static lv_obj_t* s_ghost = nullptr;
@@ -208,12 +211,17 @@ static bool s_dragged = false;       // past the slop: the release is a drop, no
 static lv_point_t s_drag_start, s_ghost_org;
 static uint32_t s_edge_since = 0;
 static const int DRAG_SLOP = 8, EDGE_PX = 20;
-static const uint32_t EDGE_MS = 600;
+static const uint32_t EDGE_MS = 600, GLIDE_MS = 160;
+static lv_point_t s_slot_c[PER_PAGE];   // the slots' centres as the page was laid out
+static int s_slots = 0;
+static int s_preview = -1;              // the slot the dragged tile shows in now
 
 static void dragEnd() {
   if (s_ghost) { lv_obj_delete(s_ghost); s_ghost = nullptr; }
   s_drag_pos = -1;
   s_edge_since = 0;
+  s_slots = 0;
+  s_preview = -1;
 }
 // Leaving Home: arranging ends and the order is saved (UITask::newScreen).
 static void leave() {
@@ -222,17 +230,54 @@ static void leave() {
   flushOrder();
 }
 
-// The tile on this page nearest the point, as a slot 0..PER_PAGE-1.
+// Where the slots are, taken once when a drag starts: the tiles then move
+// about under the finger, the slots don't.
+static void captureSlots() {
+  s_slots = 0;
+  for (int i = 0; i < (int)lv_obj_get_child_count(s_page_box) && i < PER_PAGE; i++) {
+    lv_area_t a;
+    lv_obj_get_coords(lv_obj_get_child(s_page_box, i), &a);
+    s_slot_c[s_slots++] = { (a.x1 + a.x2) / 2, (a.y1 + a.y2) / 2 };
+  }
+}
+
+// The slot on this page nearest the point, 0..PER_PAGE-1.
 static int slotAt(lv_point_t p) {
   int best = 0;
   int32_t bd = INT32_MAX;
-  for (int i = 0; i < (int)lv_obj_get_child_count(s_page_box); i++) {
-    lv_area_t a;
-    lv_obj_get_coords(lv_obj_get_child(s_page_box, i), &a);
-    int32_t dx = p.x - (a.x1 + a.x2) / 2, dy = p.y - (a.y1 + a.y2) / 2;
+  for (int i = 0; i < s_slots; i++) {
+    int32_t dx = p.x - s_slot_c[i].x, dy = p.y - s_slot_c[i].y;
     if (dx * dx + dy * dy < bd) { bd = dx * dx + dy * dy; best = i; }
   }
   return best;
+}
+
+// The dragged tile `t` into `slot`, the others closing up round it: each
+// tile is laid out at its new place, then glides there from where it showed.
+static void previewSlot(lv_obj_t* t, int slot) {
+  if (slot == s_preview) return;
+  s_preview = slot;
+  const int n = (int)lv_obj_get_child_count(s_page_box);
+  lv_obj_t* objs[PER_PAGE];
+  lv_point_t was[PER_PAGE];
+  for (int i = 0; i < n && i < PER_PAGE; i++) {
+    objs[i] = lv_obj_get_child(s_page_box, i);
+    lv_area_t a;
+    lv_obj_get_coords(objs[i], &a);   // where it shows, mid-glide included
+    was[i] = { a.x1, a.y1 };
+    lv_anim_delete(objs[i], anim::setTx);
+    lv_anim_delete(objs[i], anim::setTy);
+    lv_obj_set_style_translate_x(objs[i], 0, 0);
+    lv_obj_set_style_translate_y(objs[i], 0, 0);
+  }
+  lv_obj_move_to_index(t, slot);
+  lv_obj_update_layout(s_page_box);
+  for (int i = 0; i < n && i < PER_PAGE; i++) {
+    lv_area_t a;
+    lv_obj_get_coords(objs[i], &a);
+    if (was[i].x != a.x1) anim::run(objs[i], anim::setTx, was[i].x - a.x1, 0, GLIDE_MS);
+    if (was[i].y != a.y1) anim::run(objs[i], anim::setTy, was[i].y - a.y1, 0, GLIDE_MS);
+  }
 }
 
 // The page is rebuilt after the event that changed it, not inside it.
@@ -274,10 +319,13 @@ static void onEditTile(lv_event_t* e) {
       lv_obj_get_coords(t, &c);
       s_ghost_org = { c.x1, c.y1 };
       lv_obj_set_style_opa(t, LV_OPA_20, 0);
+      captureSlots();
+      s_preview = lv_obj_get_index(t);
     }
     lv_obj_set_pos(s_ghost, s_ghost_org.x + p.x - s_drag_start.x, s_ghost_org.y + p.y - s_drag_start.y);
     int w = lv_display_get_horizontal_resolution(NULL);
     int side = p.x < EDGE_PX ? -1 : p.x >= w - EDGE_PX ? 1 : 0;
+    if (!side) previewSlot(t, slotAt(p));
     int page = s_page + side;
     if (!side || page < APPS || page >= pageCount()) { s_edge_since = 0; return; }
     if (!s_edge_since) { s_edge_since = millis() | 1; return; }
@@ -290,10 +338,11 @@ static void onEditTile(lv_event_t* e) {
     return;
   }
   bool dropped = s_dragged && s_ghost;
+  int slot = s_preview >= 0 ? s_preview : slotAt(p);   // where the page already shows it
   dragEnd();
-  if (code == LV_EVENT_PRESS_LOST) { lv_obj_set_style_opa(t, LV_OPA_COVER, 0); return; }
+  if (code == LV_EVENT_PRESS_LOST) { later(pos, pos, -1, false); return; }   // rebuilt as it was
   if (!dropped) { later(pos, 0, -1, true); return; }   // a tap
-  int to = (s_page - APPS) * PER_PAGE + slotAt(p);
+  int to = (s_page - APPS) * PER_PAGE + slot;
   later(pos, to < APP_COUNT ? to : APP_COUNT - 1, -1, false);
 }
 

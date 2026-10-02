@@ -177,6 +177,7 @@ static void fmtAlt(char* buf, int n, float meters, bool imperial) {
 #include "NearbyScreen.h"
 #include "DashboardConfigScreen.h"
 #include "AutoAdvertScreen.h"
+#include "BatteryCurveScreen.h"
 #include "LiveShareScreen.h"
 #include "LocatorScreen.h"
 #include "TrailScreen.h"
@@ -1623,6 +1624,7 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
   _sensors = sensors;
   _node_prefs = node_prefs;
   _kb.prefs = node_prefs;
+  if (node_prefs) battery::useCurve(node_prefs->batt_curve_mv);   // Settings > Battery curve
   uint32_t aoff = autoOffMillis();
   _auto_off = millis() + (aoff > 0 ? aoff : AUTO_OFF_MILLIS);
 
@@ -1719,6 +1721,7 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
   nearby_screen = new NearbyScreen(this);
   dashboard_config = new DashboardConfigScreen(this, node_prefs);
   auto_advert_screen = new AutoAdvertScreen(this, node_prefs);
+  batt_curve_screen = new BatteryCurveScreen(this, node_prefs);
   live_share_screen = new LiveShareScreen(this, node_prefs);
   locator_screen  = new LocatorScreen(this, node_prefs);
   trail_screen       = new TrailScreen(this, &_core->trail.store());
@@ -1853,6 +1856,7 @@ void UITask::gotoMapScreen() {
 
 void UITask::gotoLocatorScreen()    { setCurrScreen(locator_screen); }
 void UITask::gotoAutoAdvertScreen() { setCurrScreen(auto_advert_screen); }
+void UITask::gotoBatteryCurve() { setCurrScreen(batt_curve_screen); }
 
 bool UITask::startPing(const uint8_t* pub_key) {
   PingEngine::StartResult r = _core->ping.start(pub_key);

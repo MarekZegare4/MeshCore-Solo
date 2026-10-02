@@ -9,6 +9,7 @@
 #include "AccordionList.h"
 #include "PopupMenu.h"   // scope list management's per-row action menu
 #include "InfoKit.h"     // value / switch rows
+#include "../ui-core/Battery.h"   // the Battery curve row
 
 class SettingsScreen : public UIScreen {
   UITask* _task;
@@ -49,6 +50,7 @@ class SettingsScreen : public UIScreen {
     SECTION_SYSTEM,
     DEVICE_NAME,
     SCHEMA_SYSTEM,    // power, units
+    BATT_CURVE,
     REBOOT,
     // Keyboard section
     SECTION_KEYBOARD,
@@ -78,6 +80,7 @@ class SettingsScreen : public UIScreen {
   int  _selected = 0;   // SettingItem under the cursor, resolved per input/render
   int  _reserve = 0;    // right-edge px reserved for the scrollbar (0 when list fits)
   bool _dirty = false;
+  bool _keep_place = false;   // set when opening a screen from a row, so Back lands on it
 
   AccordionList _acc;
   static const int NUM_SECTIONS = 8;
@@ -512,6 +515,8 @@ class SettingsScreen : public UIScreen {
       sw("Lock PIN", _task->passwordLockEnabled());
     } else if (item == DEVICE_NAME) {
       val("Name", the_mesh.getNodeName());
+    } else if (item == BATT_CURVE) {
+      val("Batt curve", p && battery::validCurve(p->batt_curve_mv) ? "Custom" : "LiPo");
     } else if (item == REBOOT) {
       display.print("Reboot");   // action row: Enter reboots this device
     } else if (item == KEYBOARD_TYPE) {
@@ -629,6 +634,8 @@ public:
 
 
   void onShow() override {
+    const bool keep = _keep_place;   // back from a screen opened here: same row
+    _keep_place = false;
     _dirty = false;
     _edit_name = false;
     _scope_mgmt_active = false;
@@ -638,7 +645,7 @@ public:
     _prune_confirm.active = false;
     _edit_lock_pass = false;
     _lock_pass_first[0] = '\0';
-    resetList();
+    if (!keep) resetList();
     _editor.freq.active = false;
   }
 
@@ -979,6 +986,12 @@ public:
       _scope_mgmt_active = true;
       _scope_mgmt_sel = 0;
       _scope_mgmt_scroll = 0;
+      return true;
+    }
+    if (_selected == BATT_CURVE && enter) {
+      _keep_place = true;   // back from it to this row, not a folded list
+      _task->savePrefsIfDirty(_dirty);
+      _task->gotoBatteryCurve();
       return true;
     }
     if (_selected == REBOOT && enter) {

@@ -94,7 +94,7 @@ void UITask::channelMenu(int idx) {
   struct { const char* text; uint8_t act; } btns[] = {
     { UI_SYMBOL_STAR " Fav", A_FAV },
     { LV_SYMBOL_OK " Read", A_READ },
-    { UI_SYMBOL_PIN, A_PIN },
+    { UI_SYMBOL_TACK, A_PIN },
     { LV_SYMBOL_EDIT " Edit", A_EDIT },
     { LV_SYMBOL_TRASH, A_DELETE },
   };

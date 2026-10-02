@@ -160,7 +160,7 @@ void UITask::conversationMenu(const uint8_t* pub_key) {
   lv_obj_t* acts = buttonBar(panel);
   s_fav_btn = barButton(acts, UI_SYMBOL_STAR " Fav", onConvAction, A_FAV, contactctl::favourite(ci));
   if (!room && _core->dmUnread(ci.id.pub_key) > 0) barButton(acts, LV_SYMBOL_OK " Read", onConvAction, A_READ, false);
-  barButton(acts, UI_SYMBOL_PIN, onConvAction, A_PIN, favslots::findContact(_prefs, ci.id.pub_key) >= 0);
+  barButton(acts, UI_SYMBOL_TACK, onConvAction, A_PIN, favslots::findContact(_prefs, ci.id.pub_key) >= 0);
   if (room) {
     barButton(acts, LV_SYMBOL_EDIT " Login", onConvAction, A_LOGIN, false);
     if (_core->rooms.isLoggedIn(ci.id.pub_key)) barButton(acts, LV_SYMBOL_CLOSE " Logout", onConvAction, A_LOGOUT, false);

@@ -49,7 +49,8 @@ namespace theme {
   #define UI_SYMBOL_USERS   "\xEF\x83\x80"   // U+F0C0, Nearby
   #define UI_SYMBOL_COMPASS "\xEF\x85\x8E"   // U+F14E, Navigate
   #define UI_SYMBOL_FLAG    "\xEF\x80\xA4"   // U+F024, waypoint
-  #define UI_SYMBOL_PIN     "\xEF\x8F\x85"   // U+F3C5, mark here
+  #define UI_SYMBOL_PIN     "\xEF\x8F\x85"   // U+F3C5, mark here (a place on the map)
+  #define UI_SYMBOL_TACK    "\xEF\x82\x8D"   // U+F08D, thumbtack: pin to the Home dial
   #define UI_SYMBOL_CLOCK   "\xEF\x80\x97"   // U+F017, Clock tools
   #define UI_SYMBOL_STOPWATCH "\xEF\x8B\xB2" // U+F2F2
   #define UI_SYMBOL_RADIO   "\xEF\x94\x99"   // U+F519, broadcast tower
