@@ -118,24 +118,6 @@ inline void shortVersion(char* out, size_t n) {
   out[len] = '\0';
 }
 
-// Static system card, one full-width line each. Returns the line count.
-inline int systemLines(Line* lines) {
-  int n = 0;
-  char sv[24];
-  shortVersion(sv, sizeof(sv));
-  addLine(lines, n, "FW %s", sv);
-  addLine(lines, n, "Built %s", FIRMWARE_BUILD_DATE);
-  addLine(lines, n, "Dev %s", board.getManufacturerName());
-  addLine(lines, n, "Node %s", the_mesh.getNodeName());
-  NodePrefs* p = the_mesh.getNodePrefs();
-  if (p) {
-    addLine(lines, n, "Freq %.3f MHz", p->freq);
-    addLine(lines, n, "SF%u BW%.0f CR%u", (unsigned)p->sf, p->bw, (unsigned)p->cr);
-    addLine(lines, n, "TX %d dBm", (int)p->tx_power_dbm);
-  }
-  return n;
-}
-
 // One sample per script the UI font covers, to check coverage by eye. "Acc"
 // takes one letter from each of the keyboard's accent-popup groups.
 inline int fontLines(Line* lines) {

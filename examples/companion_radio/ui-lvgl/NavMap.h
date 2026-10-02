@@ -1131,7 +1131,7 @@ bool UITask::saveTrailToCard(char* name_out, size_t n) {
 // ring (the oldest points dropping off) is rewritten, at most every 10 min.
 namespace navmap {
 static const char* const LIVE_TRAIL = "/sdcard/trails/.live.trl";
-static const long LIVE_HDR = 12;   // magic, version, reserved, count (uint16), time (uint32)
+static const long TRAIL_HDR = 12;   // a trail file's header (TrailStore::writeTo): magic, version, flags, count (uint16), time (uint32)
 static uint32_t s_j_gen = 0xFFFFFFFF, s_j_seq = 0, s_j_next = 0, s_j_full_at = 0;
 static int s_j_n = 0;
 static uint8_t s_j_rec = 0;   // the "recording" byte last written
@@ -1202,7 +1202,7 @@ void UITask::savedTrailsPopup() {
     navmap::trailTitle(navmap::s_st_names[i], title, sizeof(title));
     snprintf(path, sizeof(path), "%s/%s", navmap::TRAILS_DIR, navmap::s_st_names[i]);
     struct stat st;
-    long pts = stat(path, &st) == 0 ? ((long)st.st_size - 12) / (long)sizeof(TrailPoint) : 0;
+    long pts = stat(path, &st) == 0 ? ((long)st.st_size - navmap::TRAIL_HDR) / (long)sizeof(TrailPoint) : 0;
     snprintf(sub, sizeof(sub), "%ld points", pts > 0 ? pts : 0);
     listRow(list, title, sub, onSavedTrail, (void*)(intptr_t)i);
   }

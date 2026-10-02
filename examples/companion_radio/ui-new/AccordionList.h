@@ -35,10 +35,8 @@ public:
     rebuild();
   }
 
-  int  visibleCount() const            { return _vis_count; }
   bool collapsed(int sec) const        { return (_collapsed >> sec) & 1; }
   const Row& selected() const          { return _rows[_sel]; }
-  bool onHeader() const                { return _vis_count && _rows[_sel].item < 0; }
 
   // Paint via the shared drawList skeleton. `header(sec, y, sel, reserve,
   // collapsed)` and `item(sec, item, y, sel, reserve)` each draw one row

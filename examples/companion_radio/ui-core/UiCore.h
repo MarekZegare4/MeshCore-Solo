@@ -1,6 +1,7 @@
 #pragma once
 // UI Core: hardware-independent UI state and logic shared by every frontend
-// (ui-new today, ui-lvgl later). See docs/solo/developer/ui-core.md.
+// (ui-new on the OLED / e-ink boards, ui-lvgl on the L2). See
+// docs/solo/developer/ui-core.md.
 //
 // The Core is MyMesh's Listener: it files incoming/outgoing messages into the
 // history, keeps the unread counters, runs the engines, and tells the frontend
@@ -89,7 +90,6 @@ public:
   void    clearAllDMUnread()                      { dm_unread.clearAll(); }
   // Every conversation read: direct, channels, rooms.
   void    markAllRead() { _room_unread = 0; dm_unread.clearAll(); history.clearAllChannelUnread(); }
-  void    reconcileDMUnread()                     { dm_unread.reconcile(history); }
 
   // ── Actions ───────────────────────────────────────────────────────────────
   // Send a DM composed on the device and file it (with end-to-end ACK tracking

@@ -543,14 +543,6 @@ extern "C" EMSCRIPTEN_KEEPALIVE int sim_test_set_timezone_hours(int hours) {
   return 1;
 }
 
-// auto_off_secs (NodePrefs.h) defaults to 15 -- a real device's screen
-// (and, if auto_lock is also set, the UI itself) turns off/locks 15s
-// after the last input, real power-saving behaviour a battery-powered
-// board actually needs. UITask::autoOffMillis() (ui-new/UITask.h) treats
-// 0 as "never" and skips the whole turnOff()/auto_lock branch in
-// UITask::loop() entirely -- there's no separate flag to touch. A demo
-// running on a visitor's screen has no battery to save and no reason to
-// go dark or lock itself while they're reading it.
 // Renames this instance (NodePrefs::node_name, what Settings > Name sets) so
 // a host page's peers have readable names in screenshots, instead of the
 // default hex of their public key. In memory only; the next advert carries it.
@@ -562,6 +554,14 @@ extern "C" EMSCRIPTEN_KEEPALIVE int sim_test_set_node_name(const char* name) {
   return 1;
 }
 
+// auto_off_secs (NodePrefs.h) defaults to 15 -- a real device's screen
+// (and, if auto_lock is also set, the UI itself) turns off/locks 15s
+// after the last input, real power-saving behaviour a battery-powered
+// board actually needs. UITask::autoOffMillis() (ui-new/UITask.h) treats
+// 0 as "never" and skips the whole turnOff()/auto_lock branch in
+// UITask::loop() entirely -- there's no separate flag to touch. A demo
+// running on a visitor's screen has no battery to save and no reason to
+// go dark or lock itself while they're reading it.
 extern "C" EMSCRIPTEN_KEEPALIVE int sim_test_disable_screen_timeout() {
   if (!g_sim_ready) return 0;
   NodePrefs* prefs = the_mesh.getNodePrefs();

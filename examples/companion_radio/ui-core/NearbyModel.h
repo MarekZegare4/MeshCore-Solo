@@ -68,16 +68,6 @@ public:
     }
   }
 
-  static const char* typeShort(uint8_t t) {
-    switch (t) {
-      case ADV_TYPE_REPEATER: return "Rpt";
-      case ADV_TYPE_SENSOR:   return "Snsr";
-      case ADV_TYPE_ROOM:     return "Room";
-      case ADV_TYPE_CHAT:     return "Comp";
-      default:                return "?";
-    }
-  }
-
   void bindModel(UiCore* core, NodePrefs* prefs) { _core = core; _prefs = prefs; }
 
   int          count() const          { return _count; }

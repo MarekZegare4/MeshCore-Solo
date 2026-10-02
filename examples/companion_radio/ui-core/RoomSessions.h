@@ -43,7 +43,6 @@ public:
 
   bool loggingIn() const { return _pending; }
   bool loggingIn(const uint8_t* pub_key) const { return _pending && memcmp(_pending_key, pub_key, 4) == 0; }
-  const uint8_t* pendingKey() const { return _pending_key; }
 
   // Local only: the room ACL has no session to tear down (MyMesh::logoutRoom()).
   void logout(const uint8_t* pub_key) {

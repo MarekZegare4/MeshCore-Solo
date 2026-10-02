@@ -48,10 +48,6 @@
 
 #define LONG_PRESS_MILLIS   1200
 
-#ifndef UI_RECENT_LIST_SIZE
-  #define UI_RECENT_LIST_SIZE 4
-#endif
-
 
 #include "icons.h"
 #include "../ui-core/Lettering.h"   // boot splash wordmark + lettering (shared with the L2)
@@ -140,6 +136,11 @@ public:
 static const int QUICK_MSGS_MAX = 10;
 
 
+// Telemetry (ui-core/Telemetry.h) in this display's font and width: tight for
+// the dashboard's short fields, spaced ("49 m") on the Status screen's rows.
+static const telemetry::Style L1_TELEMETRY = { "\xc2\xb0", false, false, 3 };
+static const telemetry::Style L1_INFO      = { "\xc2\xb0", true,  false, 5 };
+
 // ── Screen fragments — included into THIS translation unit only ───────────────
 // These headers are not standalone: they are compiled solely as part of
 // UITask.cpp, in the order below. Two consequences a new screen must respect:
@@ -151,14 +152,6 @@ static const int QUICK_MSGS_MAX = 10;
 //     scope (e.g. NearbyScreen::FILTER_LABELS), so including any of them from a
 //     second .cpp is a duplicate-symbol link error. Keep them UITask-internal;
 //     anything genuinely shareable belongs in a real header (icons.h, GeoUtils.h).
-// Telemetry (ui-core/Telemetry.h) in this display's font and width: tight for
-// the dashboard's short fields, spaced ("49 m") on the Status screen's rows.
-static const telemetry::Style L1_TELEMETRY = { "\xc2\xb0", false, false, 3 };
-static const telemetry::Style L1_INFO      = { "\xc2\xb0", true,  false, 5 };
-// Altitude (baro or GPS) in Settings > System > Units, always the small unit.
-static void fmtAlt(char* buf, int n, float meters, bool imperial) {
-  telemetry::altText(meters, imperial, L1_TELEMETRY, buf, n);
-}
 
 #include "FullscreenMsgView.h"
 #include "../ui-core/MessageText.h"
@@ -191,9 +184,6 @@ static void fmtAlt(char* buf, int n, float meters, bool imperial) {
 #include "ClockToolsScreen.h"   // Alarm / Timer / Stopwatch (Clock page › Enter)
 
 #include "../ui-core/Battery.h"
-
-// Voltage -> battery %, from the Core (top bar and dashboard Batt% alike).
-static int battMvToPercent(int mv, int low_mv) { return battery::percent(mv, low_mv); }
 
 // The time on a tall portrait panel (e-ink in portrait -- height > width): HH
 // and MM stacked on two lines in the huge built-in font (size 4, ~56 px tall)
@@ -300,7 +290,6 @@ class HomeScreen : public UIScreen {
   enum HomePage {
     CLOCK,
     FAVOURITES,
-    RECENT,
     STATUS,      // radio, GPS, power, mesh at a glance (took over Radio / GPS / Sensors)
     BLUETOOTH,
     ADVERT,
@@ -393,6 +382,7 @@ class HomeScreen : public UIScreen {
   };
   uint8_t _quick_sel = 0;
   bool    _quick_edit = false;   // the selected row is being changed with Left/Right
+  bool    _quick_dirty = false;  // ...and has moved: saved once when it ends
   static bool isQuickPage(int p) {
     return p == SETTINGS || p == QUICK_MSG || p == BLUETOOTH || p == ADVERT || p == TOOLS || p == SHUTDOWN;
   }
@@ -536,7 +526,7 @@ class HomeScreen : public UIScreen {
       // The charge left, which is what you weigh before switching off.
       const int mv = _task->getBattMilliVolts();
       snprintf(rows[n - 1].value, sizeof(rows[0].value), "%d%%%s",
-               battMvToPercent(mv, _node_prefs ? (int)_node_prefs->low_batt_mv : 0),
+               battery::percent(mv, _node_prefs ? (int)_node_prefs->low_batt_mv : 0),
                board.isExternalPowered() ? " USB" : "");
     }
     return n;
@@ -637,7 +627,6 @@ class HomeScreen : public UIScreen {
   int pageBit(int page) const {
     if (page == CLOCK)      return NodePrefs::HPB_CLOCK;
     if (page == FAVOURITES) return NodePrefs::HPB_FAVOURITES;
-    if (page == RECENT)    return NodePrefs::HPB_RECENT;
     if (page == STATUS)    return NodePrefs::HPB_RADIO;   // the old Radio slot
     if (page == BLUETOOTH) return NodePrefs::HPB_BLUETOOTH;
     if (page == ADVERT)    return NodePrefs::HPB_ADVERT;
@@ -653,7 +642,6 @@ class HomeScreen : public UIScreen {
     switch (bit) {
       case NodePrefs::HPB_CLOCK:      return CLOCK;
       case NodePrefs::HPB_FAVOURITES: return FAVOURITES;
-      case NodePrefs::HPB_RECENT:    return RECENT;
       case NodePrefs::HPB_RADIO:     return STATUS;
       case NodePrefs::HPB_BLUETOOTH: return BLUETOOTH;
       case NodePrefs::HPB_ADVERT:    return ADVERT;
@@ -667,7 +655,6 @@ class HomeScreen : public UIScreen {
   }
 
   bool isPageVisible(int page) const {
-    if (page == RECENT) return false;  // Recent adverts folded into Nearby Nodes; page retired
     int bit = pageBit(page);
     if (bit < 0) return true;
     uint16_t mask = (_node_prefs && _node_prefs->home_pages_mask) ? _node_prefs->home_pages_mask : NodePrefs::HP_ALL;
@@ -711,13 +698,11 @@ class HomeScreen : public UIScreen {
   }
 
   // reserve_left: how much width from x=0 must stay clear of status icons --
-  // the node name on every other page (name_min below), or the LOCK page's
-  // own clock (see the LOCK branch in render(), which passes its actual
-  // footprint here so the icon row sheds low-priority icons instead of
-  // drawing over the clock). -1 = use the normal name reserve.
+  // the time / node name on the pages (name_min below); the lock page passes
+  // 0, its clock sits under the bar. -1 = use the normal name reserve.
   int renderBatteryIndicator(DisplayDriver& display, uint16_t batteryMilliVolts, int reserve_left = -1) {
     int low_mv = _node_prefs ? (int)_node_prefs->low_batt_mv : 0;
-    int pct = battMvToPercent((int)batteryMilliVolts, low_mv);
+    int pct = battery::percent((int)batteryMilliVolts, low_mv);
 
     uint8_t mode = battery::mode(_node_prefs ? _node_prefs->batt_display_mode : 0);
 
@@ -760,10 +745,9 @@ class HomeScreen : public UIScreen {
     }
 
     // Secondary status icons, laid out right→left in PRIORITY order so a crowded
-    // bar sheds its least-important cues instead of crushing the node name. Once
-    // an icon won't fit above the reserved name area, every lower-priority icon
-    // after it is dropped too (the list is ordered high→low). A blinking icon
-    // still reserves its slot while off, so the name width doesn't flicker.
+    // bar sheds its least-important cues instead of crushing the time. Once an
+    // icon won't fit above the reserved area, every lower-priority icon after
+    // it is dropped too (the list is ordered high→low).
     //
     // Priority: BT > GPS fix > alarm > mute > auto-advert > trail > live-share >
     // repeater. Battery (drawn above) is always rightmost. The background modes
@@ -1260,7 +1244,7 @@ public:
 #endif
 
     const int mv = _task->getBattMilliVolts();
-    const int pct = battMvToPercent(mv, _node_prefs ? (int)_node_prefs->low_batt_mv : 0);
+    const int pct = battery::percent(mv, _node_prefs ? (int)_node_prefs->low_batt_mv : 0);
     snprintf(h, sizeof(h), "%d%%", pct);
     snprintf(t, sizeof(t), "%d.%02d V%s", mv / 1000, (mv % 1000) / 10, board.isExternalPowered() ? " USB" : "");
     tile(0, 1, nullptr, pct / 100.0f, h, t);
@@ -1279,7 +1263,6 @@ public:
     switch (page) {
       case CLOCK:      return &ICON_PG_CLOCK;
       case FAVOURITES: return &ICON_PG_STAR;
-      case RECENT:     return &ICON_PG_RECENT;
       case STATUS:     return &ICON_CHART;
       case BLUETOOTH:  return &ICON_PG_BT;
       case ADVERT:     return &ICON_PG_ADVERT;
@@ -1611,16 +1594,24 @@ public:
         const int d = c == KEY_RIGHT ? 1 : -1;
         if (act == QA_BRIGHTNESS) {
           uint8_t& b = _node_prefs->display_brightness;
-          b = (uint8_t)constrain((int)b + d, 0, 4);
-          _task->applyDisplayPrefs();
+          const uint8_t nb = (uint8_t)constrain((int)b + d, 0, 4);
+          if (nb != b) { b = nb; _quick_dirty = true; _task->applyDisplayPrefs(); }
         } else if (act == QA_AUTO_ADVERT) {
           const int i = constrain(AutoAdvertScreen::indexOf(_node_prefs->advert_auto_interval_sec) + d,
                                   0, AutoAdvertScreen::OPT_COUNT - 1);
-          _node_prefs->advert_auto_interval_sec = AutoAdvertScreen::OPTS[i];
+          if (_node_prefs->advert_auto_interval_sec != AutoAdvertScreen::OPTS[i]) {
+            _node_prefs->advert_auto_interval_sec = AutoAdvertScreen::OPTS[i];
+            _quick_dirty = true;
+          }
         }
         return true;
       }
-      if (c == KEY_ENTER || c == KEY_CANCEL) { _quick_edit = false; the_mesh.savePrefs(); return true; }
+      if (c == KEY_ENTER || c == KEY_CANCEL) {
+        _quick_edit = false;
+        _task->savePrefsIfDirty(_quick_dirty);
+        _quick_dirty = false;
+        return true;
+      }
       return true;   // nothing else while editing
     }
     if (isQuickPage(_page)) {

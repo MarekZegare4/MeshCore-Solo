@@ -11,9 +11,8 @@
 
 namespace info {
 
-// Label at the left, value flush right with its unit after a space ("50 m").
-// `reserve` keeps the value clear of a scroll column.
 // Whether a value fits on its label's line (else rowH() gives it a line below).
+// `reserve` keeps the value clear of a scroll column.
 inline bool rowFits(DisplayDriver& d, const char* label, const char* value, int reserve = 0, int x0 = 1) {
   if (!value || !*value) return true;
   const int room = d.width() - reserve - 2 - (x0 + d.getTextWidth(label) + d.getCharWidth());
@@ -38,17 +37,6 @@ inline void rowWrapped(DisplayDriver& d, int y, const char* label, const char* v
   const int vy = y + d.getLineHeight();
   if ((int)d.getTextWidth(value) <= room) d.drawTextRightAlign(right, vy, value);
   else d.drawTextEllipsized(right - room, vy, room, value);
-}
-
-// A value too long for the space left beside its label ends in an ellipsis.
-inline void row(DisplayDriver& d, int y, const char* label, const char* value, int reserve = 0, int x0 = 1) {
-  d.setCursor(x0, y);
-  d.print(label);
-  if (!value || !*value) return;
-  const int right = d.width() - reserve - 2;
-  const int room = right - (x0 + d.getTextWidth(label) + d.getCharWidth());
-  if ((int)d.getTextWidth(value) <= room) d.drawTextRightAlign(right, y, value);
-  else if (room > d.getCharWidth()) d.drawTextEllipsized(right - room, y, room, value);
 }
 
 // A dotted rule across [x, x + w), the separator between categories.
@@ -146,8 +134,9 @@ inline void toggle(DisplayDriver& d, int x_right, int y, bool on, bool inv = fal
 }
 
 // ── List rows (call after drawRowSelection(); text is already in the row's ink)
-// A setting or field: label at x0, value flush right. A value too long for the
-// room beside the label is cut, and scrolls while the row is selected.
+// A setting or field: label at x0, value flush right with its unit after a
+// space ("50 m"). A value too long for the room beside the label is cut, and
+// scrolls while the row is selected (sel).
 // Returns that marquee's next-step delay (0: nothing moving).
 inline int valueRow(DisplayDriver& d, int y, const char* label, const char* value, bool sel,
                     int reserve, int x0 = 2) {

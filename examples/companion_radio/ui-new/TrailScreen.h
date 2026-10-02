@@ -525,15 +525,15 @@ private:
     }
     if (f.place(d.lineStep())) {
       snprintf(a, sizeof(a), "%d", _store->count());
-      info::row(d, f.at, "Points", a, rsv);
+      info::valueRow(d, f.at, "Points", a, false, rsv, 1);
       const int x0 = 1 + d.getTextWidth("Points") + 6, x1 = right - d.getTextWidth("000") - 6;
       if (x1 - x0 > 10) info::meter(d, x0, f.at, x1 - x0, lh - 1, (float)_store->count() / TrailStore::CAPACITY);
     }
     if (f.place(d.lineStep())) {
       formatAvgPaceOrSpeed(a, sizeof(a), _task->getNodePrefs());
       char* c = strstr(a, ": ");                    // "Avg: 5 km/h" -> label + value
-      if (c) { *c = 0; info::row(d, f.at, a, c + 2, rsv); }
-      else   info::row(d, f.at, a, nullptr, rsv);
+      if (c) { *c = 0; info::valueRow(d, f.at, a, c + 2, false, rsv, 1); }
+      else   info::valueRow(d, f.at, a, nullptr, false, rsv, 1);
     }
   }
 

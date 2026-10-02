@@ -107,7 +107,7 @@ private:
     if (f.place(d.lineStep())) {   // label, the last half hour, the value now
       const int nf = (int)radio_driver.getNoiseFloor();
       if (nf) snprintf(a, sizeof(a), "%d dBm", nf); else strcpy(a, "-");
-      info::row(d, f.at, "Noise", a, rsv);
+      info::valueRow(d, f.at, "Noise", a, false, rsv, 1);
       const int x0 = 1 + d.getTextWidth("Noise") + 6;
       const int x1 = d.width() - rsv - 2 - d.getTextWidth(a) - 6;
       if (x1 - x0 > 12) info::spark(d, x0, f.at, x1 - x0, lh - 1, _noise);
@@ -115,7 +115,7 @@ private:
     if (f.place(d.lineStep())) {
       const float snr = radio_driver.getLastSNR();
       snprintf(b, sizeof(b), "%d dBm", (int)radio_driver.getLastRSSI());
-      info::row(d, f.at, "Last RX", b, rsv);
+      info::valueRow(d, f.at, "Last RX", b, false, rsv, 1);
       drawSignalBars(d, d.width() - rsv - 2 - d.getTextWidth(b) - 5, f.at, (int)(snr * 4));
     }
     snprintf(b, sizeof(b), "%.1f dB", radio_driver.getLastSNR());
@@ -128,7 +128,7 @@ private:
     const int lh = d.getLineHeight();
     const bool on = _task->getGPSState();
     if (f.place(d.lineStep())) {
-      info::row(d, f.at, "GPS", nullptr, rsv);
+      info::valueRow(d, f.at, "GPS", nullptr, false, rsv, 1);
       info::toggle(d, d.width() - rsv - 2, f.at, on);
     }
     LocationProvider* loc = sensors.getLocationProvider();

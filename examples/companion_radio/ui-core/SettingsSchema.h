@@ -249,8 +249,6 @@ static const char* shortLabel(const Setting& s) {
   for (auto& l : SHORT_LABELS) if (l.offset == s.offset) return l.text;
   return s.label;
 }
-// A switch: two values, no labels of its own (on / off, however it's stored).
-static bool isSwitch(const Setting& s) { return !s.option && s.count == 2; }
 // The index of the setting over NodePrefs field `offset`; -1 if none.
 static int indexOf(uint16_t offset) {
   for (int i = 0; i < COUNT; i++) if (ALL[i].offset == offset) return i;

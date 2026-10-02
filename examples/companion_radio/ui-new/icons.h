@@ -93,16 +93,6 @@ inline void drawSlotIcon(DisplayDriver& d, int x, int box_w, int box_h, const Mi
   miniIconDrawTop(d, ix, iy, ic);
 }
 
-// Inverted status indicator: fill the box [x, 0, box_w, box_h] LIGHT, draw the
-// glyph DARK and centred, then restore ink to LIGHT.
-inline void drawBoxedIcon(DisplayDriver& d, int x, int box_w, int box_h, const MiniIcon& ic) {
-  d.setColor(DisplayDriver::LIGHT);
-  d.fillRect(x, 0, box_w, box_h);
-  d.setColor(DisplayDriver::DARK);
-  drawSlotIcon(d, x, box_w, box_h, ic);
-  d.setColor(DisplayDriver::LIGHT);
-}
-
 // Horizontal row of `count` square dots (scaled, vertically centred). Used by
 // the "awaiting ACK" marker, where the dot count = number of send attempts.
 inline void miniIconDotRow(DisplayDriver& d, int x, int top_y, int count) {
@@ -275,37 +265,11 @@ MINI_ICON(ICON_GPS_SEARCH, 5,   // the reticle broken, no dot: GPS on, still sea
   packRow("#...#"),
   packRow(".#.#."));
 
-// Tools-menu glyphs (auto-reply bot, ringtone editor, diagnostics, system).
-MINI_ICON(ICON_BOT, 5,   // robot head: antenna + eyes + grille (auto-reply bot)
-  packRow("..#.."),
-  packRow("#####"),
-  packRow("#.#.#"),
-  packRow("#####"),
-  packRow("#.#.#"),
-  packRow("#####"));
-MINI_ICON(ICON_NOTE, 5,   // ♪ quaver — ringtone editor
-  packRow("...##"),
-  packRow("...##"),
-  packRow("...#."),
-  packRow("...#."),
-  packRow("...#."),
-  packRow("####."),
-  packRow("####."));
-MINI_ICON(ICON_CHART, 5,   // ascending bars — diagnostics / stats
+// The Status page's glyph.
+MINI_ICON(ICON_CHART, 5,   // ascending bars — Home › Status
   packRow("....#"),
   packRow("..#.#"),
   packRow("..#.#"),
-  packRow("#.#.#"),
-  packRow("#.#.#"),
-  packRow("#####"));
-MINI_ICON(ICON_KEY, 5,   // padlock — remote admin (privileged/password-gated access)
-  packRow(".###."),
-  packRow("#...#"),
-  packRow("#...#"),
-  packRow("#####"),
-  packRow("##.##"),
-  packRow("#####"));
-MINI_ICON(ICON_PINS, 5,   // 3-pin header — GPIO
   packRow("#.#.#"),
   packRow("#.#.#"),
   packRow("#####"));
@@ -325,12 +289,6 @@ MINI_ICON(ICON_PG_STAR, 5,       // favourites
   packRow(".###."),
   packRow("##.##"),
   packRow("#...#"));
-MINI_ICON(ICON_PG_RECENT, 5,     // stacked lines — recent list
-  packRow("#####"),
-  packRow("....."),
-  packRow("#####"),
-  packRow("....."),
-  packRow("#####"));
 MINI_ICON(ICON_PG_RADIO, 5,      // antenna tower — radio params
   packRow("..#.."),
   packRow(".###."),
@@ -421,12 +379,6 @@ MINI_ICON(ICON_MAP_NORTH, 5,      // "N" with a peaked roof — compass north ma
   packRow("#.#.#"),
   packRow("#..##"),
   packRow("#...#"));
-MINI_ICON(ICON_MAP_ARROW, 5,      // → distance-to-nearest-tracked-contact indicator
-  packRow("..#.."),
-  packRow("...#."),
-  packRow("#####"),
-  packRow("...#."),
-  packRow("..#.."));
 MINI_ICON(ICON_MAP_TARGET, 5,     // ⚑ flag on a pole — the active Locator/Nav target
   packRow("####."),
   packRow("#..#."),
@@ -469,15 +421,6 @@ MINI_ICON(ICON_SPACE_R, 8,
   packRow(".......#"),
   packRow("########"));
 
-// Scroll-indicator caps — small up/down triangles (authored on the 1× grid).
-MINI_ICON(ICON_SCROLL_UP, 5,   // ▲
-  packRow("..#.."),
-  packRow(".###."),
-  packRow("#####"));
-MINI_ICON(ICON_SCROLL_DOWN, 5, // ▼
-  packRow("#####"),
-  packRow(".###."),
-  packRow("..#.."));
 
 // Width of the right-edge column drawScrollIndicator occupies, or 0 when the
 // list fits and no indicator is drawn. Subtract from a row's content width so

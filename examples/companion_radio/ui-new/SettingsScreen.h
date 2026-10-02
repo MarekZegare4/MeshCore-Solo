@@ -400,8 +400,9 @@ class SettingsScreen : public UIScreen {
       }
     }
     // Default: CLOCK FAVOURITES RECENT RADIO BT ADVERT [GPS] [SENSORS] SETTINGS
-    // MAP TOOLS MESSAGES SHUTDOWN — mirrors the home-carousel enum order. Every
-    // page has an explicit slot now (PAGE_ORDER_LEN == HPB_COUNT).
+    // MAP TOOLS MESSAGES SHUTDOWN. Every bit keeps a slot (PAGE_ORDER_LEN ==
+    // HPB_COUNT), retired ones too: RECENT shows nowhere, and Status stands in
+    // the RADIO slot for the old Radio, GPS and Sensors pages.
     int j = 0;
     p->page_order[j++] = NodePrefs::HPB_CLOCK      + 1;
     p->page_order[j++] = NodePrefs::HPB_FAVOURITES + 1;

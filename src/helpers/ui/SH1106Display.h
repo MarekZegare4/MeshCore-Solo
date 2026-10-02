@@ -33,13 +33,11 @@ class SH1106Display : public DisplayDriver
   uint8_t _precharge;
   bool _single_font = true;   // OLED is single-font (misc-fixed 6x9); the Lemon/default switch is retired here
   int  _text_sz;
-  // Frame-skip: endFrame() hashes the GFX buffer (FNV-1a, no external dep — the
-  // CRC32 lib is only wired into e-ink builds) and skips the I²C flush when it's
-  // byte-identical to the last one pushed. _force_redraw guarantees the first
-  // frame and the frame after turnOn()/clear() always flush.
-  // Each frame is hashed per 32-column block of each 8-px page (FNV-1a), and
-  // only blocks whose hash changed are sent: a clock tick or a moved selection
-  // is a few blocks, not the whole screen. No frame copy needed.
+  // Frame-skip: endFrame() hashes each 32-column block of each 8-px page
+  // (FNV-1a, no external dep) and sends only the blocks whose hash changed: a
+  // clock tick or a moved selection is a few blocks, not the whole screen, and
+  // an unchanged frame sends nothing. No frame copy needed. _force_redraw
+  // guarantees the first frame and the frame after turnOn()/clear() go out whole.
   static const uint8_t BLOCK_W = 32;
   static const uint8_t BLOCKS = (128 / BLOCK_W) * (64 / 8);
   uint32_t _block_hash[BLOCKS] = {};

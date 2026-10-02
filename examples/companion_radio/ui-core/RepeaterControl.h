@@ -61,11 +61,6 @@ static int currentPreset(const NodePrefs* p) {
   return -1;
 }
 
-static const char* currentPresetName(const NodePrefs* p) {
-  const char* name; float f, b; uint8_t s, c;
-  return radioctl::presetAt(p, currentPreset(p), name, f, b, s, c) ? name : "Custom";
-}
-
 static bool choosePreset(NodePrefs* p, int idx) {
   const char* name; float f, b; uint8_t s, c;
   if (!p || !radioctl::presetAt(p, idx, name, f, b, s, c)) return false;

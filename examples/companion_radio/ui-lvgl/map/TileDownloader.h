@@ -95,7 +95,6 @@ public:
 
   State state() const       { return _state; }
   const TileArea& area() const { return _area; }   // of the current / last job
-  bool withTrails() const   { return _trails; }
   bool  active() const      { return _state == CONNECTING || _state == RUNNING; }
   uint32_t total() const    { return _total; }
   uint32_t processed() const { return _done + _skipped + _failed; }

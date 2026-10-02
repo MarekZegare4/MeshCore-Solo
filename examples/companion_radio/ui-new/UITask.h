@@ -418,7 +418,6 @@ public:
   int findFavouriteChannelSlot(uint8_t ch_idx) const { return favslots::findChannel(_node_prefs, ch_idx); }
   bool isFavouriteSlotEmpty(int slot) const { return favslots::isEmpty(_node_prefs, slot); }
   void setFavouriteSlot(int slot, const uint8_t* pub_key) { favslots::setContact(_node_prefs, slot, pub_key); }
-  void setFavouriteChannelSlot(int slot, uint8_t ch_idx) { favslots::setChannel(_node_prefs, slot, ch_idx); }
   void clearFavouriteSlot(int slot) { favslots::clear(_node_prefs, slot); }
   bool isButtonPressed() const;
 

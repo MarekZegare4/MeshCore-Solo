@@ -2786,7 +2786,6 @@ static void onOpenSettings(lv_event_t* e) { (void)e; s_ui->showSettings(); }
 
 static void onOpenNearby(lv_event_t* e) { (void)e; s_ui->showNearby(); }
 static void onOpenNodesMap(lv_event_t* e) { (void)e; s_ui->openMap(false); }
-static void onOpenNav(lv_event_t* e) { (void)e; s_ui->openMap(true); }
 static void onOpenClock(lv_event_t* e);   // ClockScreen.h
 static void onOpenBot(lv_event_t* e);     // BotScreen.h
 static void onOpenCompass(lv_event_t* e);   // CompassScreen.h
