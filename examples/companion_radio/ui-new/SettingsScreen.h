@@ -538,7 +538,7 @@ class SettingsScreen : public UIScreen {
 #endif
 #if FEAT_DISPLAY_ROTATION_SETTING
     } else if (item == ROTATION) {
-      val("Rotation", rotLabel(p ? p->display_rotation : 0));
+      val("Rotation", rotLabel(p ? p->display_rotation - DISPLAY_ROTATION : 0));
 #endif
 #if FEAT_JOYSTICK_ROTATION_SETTING
     } else if (item == JOY_ROTATION) {
@@ -1040,7 +1040,7 @@ public:
 #endif
 #if FEAT_DISPLAY_ROTATION_SETTING
     if (_selected == ROTATION && p && (left || right || enter)) {
-      p->display_rotation = (p->display_rotation + (left ? 3 : 1)) & 3;
+      p->display_rotation ^= 2;   // the build's shape, either way up
       _task->applyRotation();
       _dirty = true;
       return true;

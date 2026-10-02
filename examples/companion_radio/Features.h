@@ -46,6 +46,13 @@
 // would split the build the day this is flipped to 1.
 #define FEAT_RX_POWERSAVE 0
 
+// The display rotation at which the joystick's own up reads as up. An e-ink
+// panel turned from it turns the joystick with it (UITask), on top of the
+// Joystick setting. Unset, the build's own rotation: only a flip turns it.
+#if defined(DISPLAY_ROTATION) && !defined(JOYSTICK_UPRIGHT_ROTATION)
+  #define JOYSTICK_UPRIGHT_ROTATION DISPLAY_ROTATION
+#endif
+
 namespace Features {
 
 #if defined(EINK_DISPLAY_MODEL)

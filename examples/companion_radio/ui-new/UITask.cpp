@@ -2803,6 +2803,9 @@ void UITask::loop() {
   if (status_screen) ((StatusScreen*)status_screen)->sample();   // Status history lines, once a minute
 #if UI_HAS_JOYSTICK
   uint8_t joy_rot = _node_prefs ? _node_prefs->joystick_rotation : JOYSTICK_ROTATION;
+#if FEAT_DISPLAY_ROTATION_SETTING && defined(JOYSTICK_UPRIGHT_ROTATION)
+  if (_node_prefs) joy_rot += (JOYSTICK_UPRIGHT_ROTATION - _node_prefs->display_rotation) & 3;
+#endif
   int ev = user_btn.check();
   if (ev == BUTTON_EVENT_CLICK) {
     if (back_btn.isPressed() && !_unlock_kb) {
@@ -3606,6 +3609,13 @@ void UITask::applyBrightness() {
 
 void UITask::applyRotation() {
   if (_display != NULL && _node_prefs != NULL) {
+#if FEAT_DISPLAY_ROTATION_SETTING && defined(DISPLAY_ROTATION)
+    // Each build is laid out for one shape and only turns it upside down: a
+    // rotation of the other shape (a fresh device's 0, another build's, or
+    // from before the split) comes back to this build's own.
+    uint8_t& rot = _node_prefs->display_rotation;
+    if ((rot ^ DISPLAY_ROTATION) & 1) rot = DISPLAY_ROTATION & 3;
+#endif
     _display->setDisplayRotation(_node_prefs->display_rotation);
     _next_refresh = 0;
   }

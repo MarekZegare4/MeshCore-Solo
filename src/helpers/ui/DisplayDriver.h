@@ -81,8 +81,11 @@ public:
 #else
   bool isLandscape()         const { return false; }
 #endif
-  // separator line thickness: 2px on landscape e-ink, 1px everywhere else
-  int sepH()                 const { return isLandscape() ? 2 : 1; }
+  // How many panel pixels draw one layout pixel: 2 where a driver doubles
+  // everything (landscape e-ink without its large font), else 1.
+  virtual int pixelScale()   const { return 1; }
+  // separator line thickness: one layout pixel
+  int sepH()                 const { return pixelScale(); }
   virtual void drawTextCentered(int mid_x, int y, const char* str) {
     char tmp[256]; translateUTF8ToBlocks(tmp, str, sizeof(tmp));
     int w = getTextWidth(tmp);
