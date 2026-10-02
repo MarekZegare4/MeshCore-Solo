@@ -216,18 +216,24 @@ class SettingsScreen : public UIScreen {
     return true;
   }
 
-  // A schema setting: its short label, the value in the value column (a
-  // switch as ON / OFF, brightness and volume as bars). A value too long for
-  // the column starts further left, clear of the label, else scrolls.
+  // The number pad for the lock PIN, with what it's asking for.
   void beginPinEntry(const char* prompt) {
     _kb->beginPin("", KeyboardWidget::PIN_MAX_LEN, false, prompt);
     _kb->clearPlaceholders();   // a PIN is literal, not a template message
   }
 
+  // Brightness and volume: a row of level boxes, stopping at both ends.
+  static bool isBar(const settings::Setting& st) {
+    return st.offset == offsetof(NodePrefs, display_brightness) || st.offset == offsetof(NodePrefs, buzzer_volume);
+  }
+
+  // A schema setting: its short label, the value flush right (a switch for
+  // on / off, brightness and volume as bars); a value too long for the room
+  // beside the label is cut, and scrolls while selected.
   int renderSchema(DisplayDriver& display, const settings::Setting& st, NodePrefs* p, int y, bool sel) {
     const char* label = settings::shortLabel(st);
     if (!p) { display.setCursor(2, y); display.print(label); return 0; }
-    if (st.offset == offsetof(NodePrefs, display_brightness) || st.offset == offsetof(NodePrefs, buzzer_volume)) {
+    if (isBar(st)) {
       display.setCursor(2, y);
       display.print(label);
       renderBar(display, valCol(display), y, settings::get(*p, st) + 1, st.count);
@@ -899,7 +905,15 @@ public:
 
     if (_selected >= SCHEMA_ITEM) {
       if (!p || !(left || right || enter)) return false;
-      settings::step(*p, settings::ALL[_selected - SCHEMA_ITEM], left ? -1 : 1, _task->core());
+      const settings::Setting& st = settings::ALL[_selected - SCHEMA_ITEM];
+      if (isBar(st)) {
+        const int v = settings::get(*p, st) + (left ? -1 : 1);
+        if (v < 0 || v >= st.count) return true;
+        settings::set(*p, st, (uint8_t)v);
+        if (st.changed) st.changed(_task->core());
+      } else {
+        settings::step(*p, st, left ? -1 : 1, _task->core());
+      }
       _dirty = true;
       return true;
     }

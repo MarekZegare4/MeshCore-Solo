@@ -131,7 +131,7 @@ public:
   }
 
   void poll() override {
-    if (millis() >= dismiss_after) {
+    if ((int32_t)(millis() - dismiss_after) >= 0) {
       _task->gotoHomeScreen();
     }
   }
@@ -805,10 +805,10 @@ class HomeScreen : public UIScreen {
 
   CayenneLPP sensors_lpp;
   int sensors_nb = 0;
-  int next_sensors_refresh = 0;
+  unsigned long next_sensors_refresh = 0;   // 0: read on the next call
 
   void refresh_sensors() {
-    if (millis() > next_sensors_refresh) {
+    if (!next_sensors_refresh || (int32_t)(millis() - next_sensors_refresh) >= 0) {
       sensors_lpp.reset();
       sensors_nb = 0;
       sensors_lpp.addVoltage(TELEM_CHANNEL_SELF, (float)board.getBattMilliVolts() / 1000.0f);
@@ -820,9 +820,9 @@ class HomeScreen : public UIScreen {
         sensors_nb ++;
       }
 #if AUTO_OFF_MILLIS > 0
-      next_sensors_refresh = millis() + 5000; // refresh sensor values every 5 sec
+      next_sensors_refresh = (millis() + 5000) | 1; // refresh sensor values every 5 sec
 #else
-      next_sensors_refresh = millis() + 60000; // refresh sensor values every 1 min
+      next_sensors_refresh = (millis() + 60000) | 1; // refresh sensor values every 1 min
 #endif
     }
   }
@@ -2045,7 +2045,7 @@ void UITask::clearAllDMUnread() { _core->clearAllDMUnread(); }
 
 void UITask::showAlert(const char* text, int duration_millis) {
   snprintf(_alert, sizeof(_alert), "%s", text);
-  _alert_expiry = millis() + duration_millis;
+  _alert_expiry = (millis() + duration_millis) | 1;   // 0 means none
 }
 
 void UITask::notify(UIEventType t) {
@@ -2117,7 +2117,7 @@ void UITask::onMessageArrived(const UiEvent& ev) {
     if (_display->isOn()) {
       uint32_t aoff = autoOffMillis();
       if (aoff > 0) _auto_off = millis() + aoff;
-      _next_refresh = 100;
+      _next_refresh = 0;
     }
   }
   notify(ev.kind);
@@ -2173,7 +2173,7 @@ void UITask::setCurrScreen(UIScreen* c) {
   if (!c) return;
   curr = c;
   c->onShow();          // central per-visit reset hook (see UIScreen::onShow)
-  _next_refresh = 100;
+  _next_refresh = 0;
 }
 
 void UITask::syncLockToHome() {
@@ -2203,7 +2203,7 @@ void UITask::cancelUnlockPrompt() {
   _kb.buf[0] = '\0'; // clear input
   _kb.len = 0;
   _kb.cursor_pos = 0;
-  _next_refresh = 100;
+  _next_refresh = 0;
 }
 
 void UITask::handleUnlockKey(char c) {
@@ -2359,6 +2359,7 @@ static void formatDashVal(uint8_t field, char* val, int val_len, uint16_t batt_m
   in.imperial = imperial;
 #if ENV_INCLUDE_GPS == 1
   in.loc = sensors.getLocationProvider();
+  { NodePrefs* np = the_mesh.getNodePrefs(); in.gps_on = np && np->gps_enabled; }   // off: no stale satellite count
 #endif
   if (telemetry::isSensor(field)) {
     if (!lpp) { static CayenneLPP s_lpp(200); s_lpp.reset(); sensors.querySensors(0xFF, s_lpp); lpp = &s_lpp; }
@@ -3031,7 +3032,7 @@ void UITask::loop() {
       // Lock-screen password keyboard: Consume every key press
       char k;
       while (dequeueKey(k)) handleUnlockKey(k);
-      _next_refresh = 100;  // redraw immediately after key press
+      _next_refresh = 0;  // redraw immediately after key press
     } else if (!_locked && curr) {
       // Apply the whole queued burst, then redraw once — N taps captured during
       // a blocking refresh become N navigation steps at the cost of one refresh.
@@ -3041,7 +3042,7 @@ void UITask::loop() {
       // Note timing no longer depends on render cadence (TIMER1 IRQ advances
       // notes directly — see buzzer.cpp), so a redraw right after a keypress
       // can't clip a note; no need to hold it back while buzzer.isPlaying().
-      _next_refresh = 100;  // trigger refresh immediately
+      _next_refresh = 0;  // trigger refresh immediately
     } else {
       _kq_head = _kq_tail = 0;  // locked or no screen: eat all queued keys
       // Locked: wake window is set only when display first turns on
@@ -3068,18 +3069,18 @@ void UITask::loop() {
     }
     if (_locked && !_unlock_kb && (int32_t)(millis() - _lock_wake_until) >= 0) {
       _display->turnOff();
-    } else if (_locked && _unlock_kb && millis() >= _next_refresh) {
+    } else if (_locked && _unlock_kb && refreshDue()) {
       // While the prompt is up the password keyboard replaces the lockscreen view
       PERF_T0();
       _display->startFrame();
       _kb.beginFrame();
       int delay_millis = _kb.render(*_display);
-      if (millis() < _alert_expiry) renderAlertOverlay();   // "Wrong PIN", and a ringing alarm
+      if (alertShowing()) renderAlertOverlay();   // "Wrong PIN", and a ringing alarm
       PERF_T1();
       _display->endFrame();
       PERF_T2();
       _next_refresh = millis() + delay_millis;
-    } else if (_locked && millis() >= _next_refresh && home) {
+    } else if (_locked && refreshDue() && home) {
       PERF_T0();
       _display->startFrame();
       if (curr && curr != home && (millis() - ui_started_at < BOOT_SCREEN_MILLIS)) {
@@ -3091,11 +3092,11 @@ void UITask::loop() {
       }
       // Alert overlay on top — without this a ringing alarm on a locked device
       // played its melody against a screen that never said what was ringing.
-      if (millis() < _alert_expiry) renderAlertOverlay();
+      if (alertShowing()) renderAlertOverlay();
       PERF_T1();
       _display->endFrame();
       PERF_T2();
-    } else if (!_locked && millis() >= _next_refresh && curr) {
+    } else if (!_locked && refreshDue() && curr) {
       PERF_T0();
       _display->startFrame();
       _kb.beginFrame();
@@ -3106,14 +3107,14 @@ void UITask::loop() {
       // full-screen text entry, not just message compose. Otherwise a message
       // arriving mid-typing blanks out the letter grid for 3s with no way to
       // see what's being typed.
-      if (millis() < _alert_expiry && !_kb.isVisible()) {  // alert overlay on top of any (non-keyboard) screen
+      if (alertShowing() && !_kb.isVisible()) {  // alert overlay on top of any (non-keyboard) screen
         renderAlertOverlay();
         // Keep refreshing the underlying screen at its own cadence (capped at the
         // alert's expiry) so layouts that settle over a frame — e.g. the message-
         // history scrollbar reserve — don't stay stuck behind the alert. Unchanged
         // frames are skipped by the display CRC, so e-ink isn't thrashed.
         _next_refresh = millis() + delay_millis;
-        if (_next_refresh > _alert_expiry) _next_refresh = _alert_expiry;
+        if ((int32_t)(_next_refresh - _alert_expiry) > 0) _next_refresh = _alert_expiry;
       } else {
         _next_refresh = millis() + delay_millis;
       }

@@ -344,6 +344,10 @@ public:
   void wakeForAlarm();
   // Clear any active alert overlay early (alarm dismiss).
   void clearAlert() { _alert_expiry = 0; }
+  // Wrap-safe (millis() rolls over after ~49.7 days). _next_refresh 0 = draw
+  // on the next pass; _alert_expiry 0 = no alert.
+  bool refreshDue() const { return !_next_refresh || (int32_t)(millis() - _next_refresh) >= 0; }
+  bool alertShowing() const { return _alert_expiry && (int32_t)(_alert_expiry - millis()) > 0; }
   // Clock tools engine API (ui-core/ClockEngine.h) — ClockToolsScreen drives
   // these; the engine runs from tickCore() so it fires regardless of the screen.
   void onAlarmChanged();

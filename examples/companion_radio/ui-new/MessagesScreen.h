@@ -570,25 +570,28 @@ class MessagesScreen : public UIScreen {
     drawButton(d, d.width() - buttonWidth(d, ctxt), cby, ctxt, sel);
   }
 
-  void afterSend(bool ok, const char* msg) {
+  // A failed send leaves the screen as it was -- the keyboard with the text
+  // still in it, or the quick-message list -- so it can be sent again.
+  // Alerts don't show over the keyboard, so there its field label says it.
+  void afterSend(bool ok) {
+    if (!ok) {
+      if (_phase == KEYBOARD) _kb->prompt = "Not sent";
+      else _task->showAlert("Send failed", 1500);
+      return;
+    }
     _reply_mode = false;
     _share_mode = false;
-    if (ok && _sending_to_channel) {
+    if (_sending_to_channel) {
       _hist_sel = 0;
       _hist_scroll = 0;
       // Filed at index 0 by sendText(): the unread index range is stale, and
       // the user is active in this channel -- fully read.
       _unread_at_entry = 0;
       _viewing_max_seen = 0;
-      _task->showAlert("Sent", 600);
-    } else if (ok) {
+    } else {
       _dm_hist_sel = 0;
       _dm_hist_scroll = 0;
       _phase = DM_HIST;
-      _task->showAlert("Sent", 600);
-    } else {
-      _task->showAlert("Send failed", 1500);
-      _task->gotoHomeScreen();
     }
   }
 
@@ -2485,7 +2488,7 @@ public:
             expandMsg(_kb->buf, expanded, sizeof(expanded));
           }
           bool ok = sendText(expanded);
-          afterSend(ok, expanded);
+          afterSend(ok);
         }
       }
       return true;
@@ -2520,7 +2523,7 @@ public:
           expandMsg(tmpl, msg, sizeof(msg));
         }
         bool ok = sendText(msg);
-        afterSend(ok, msg);
+        afterSend(ok);
         return true;
       }
     }
