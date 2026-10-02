@@ -741,7 +741,7 @@ class MessagesScreen : public UIScreen {
       if (fav_only && !fav) continue;
       uint8_t k = rooms ? 0 : _history.dmHistCountForContact(c.id.pub_key);
       if (k > 127) k = 127;
-      if (fav && !(p && p->fav_sort_off)) k += 128;
+      if (fav && (!p || p->fav_sort)) k += 128;
       keys[_num_contacts] = k;
       // Store the RAW table index (not the bare loop counter) -- every other
       // call site in this file (render()'s mesh_idx, toggleFav(), the
@@ -772,7 +772,7 @@ class MessagesScreen : public UIScreen {
       _channel_indices[_num_channels++] = (uint8_t)i;
     }
     // Favourites to the front, everything else keeping channel-slot order.
-    if (!p || p->fav_sort_off) return;
+    if (!p || !p->fav_sort) return;
     int front = 0;
     for (int i = 0; i < _num_channels; i++) {
       if (!chIsFav(_channel_indices[i])) continue;

@@ -45,14 +45,11 @@ static inline float defaultRepeaterFreqForBand(float companion_freq) {
 #define ADVERT_SOUND_SCOPE_ZERO_HOP   1
 
 struct NodePrefs {  // persisted to file
-  // Fields below are grouped thematically for readability. This grouping is
-  // purely a source-level convenience: on-disk order is defined solely by the
-  // explicit rd()/wr() call sequence in DataStore::loadPrefsInt()/savePrefs(),
-  // not by this struct's declaration order, so reordering fields here never
-  // touches the file format. That file format is still strictly append-only
-  // (see the serialization tripwire below) — a handful of fields below note
-  // that their on-disk position is at the struct's tail even though they're
-  // declared here beside their logical siblings.
+  // Saved to /prefs as it is in memory (DataStore::savePrefs): a new field
+  // goes at the END of the struct and needs nothing else -- an older file is
+  // shorter, so the field keeps its default (MyMesh's constructor). Moving,
+  // resizing or removing a field shifts the ones after it: bump PREFS_VERSION
+  // then, and every device starts again from the defaults.
 
   // ── Identity & scope ──────────────────────────────────────────────────
   char node_name[32];
@@ -96,9 +93,7 @@ struct NodePrefs {  // persisted to file
   // External LoRa FEM gain (LNA/PA), from upstream companion-v1.17.1 —
   // board-level only right now (BaseCustomBoard::setLoRaFemLnaEnabled/
   // PaGainEnabled, both default no-op false), no companion CLI/UI to set
-  // these yet, so — matching upstream's own decision — NOT persisted here:
-  // always reset to the constructor default (MyMesh.cpp) on boot. Not part
-  // of the DataStore save/load tripwire below.
+  // these yet: they keep the constructor default (MyMesh.cpp).
   uint8_t radio_fem_rxgain;
   uint8_t radio_fem_txgain;
   // User-saved radio presets, written by the "Save current..." entry in the
@@ -136,9 +131,6 @@ struct NodePrefs {  // persisted to file
   int8_t   repeat_min_snr;
   static const int8_t REPEAT_SNR_DISABLED = -128;
   uint8_t  repeat_suppress_dup;
-  // On-disk position is at the struct's append-only tail (see the
-  // serialization tripwire below), even though grouped here with the rest of
-  // repeat_* for readability.
   //  repeat_scope_only: 1 = only forward flood packets matching this device's
   //    own scope (Settings > Radio > Scope, default_scope_key) or one of the
   //    repeat_extra_scopes below — drops unscoped floods and floods tagged for
@@ -146,20 +138,10 @@ struct NodePrefs {  // persisted to file
   //    no scope is configured at all, so enabling this on an unconfigured
   //    device can't silently blackhole all flood traffic.
   uint8_t  repeat_scope_only;
-  // Extra region names this repeater also relays for, beyond its own
-  // Settings > Radio > Scope (comma-separated, e.g. "eu,de") — see
-  // MyMesh::rebuildRepeatScopes(). Relay-only: never affects what scope the
-  // companion's own messages send under, only what repeat_scope_only accepts.
-  // Superseded by repeat_extra_scope_mask below (a scope-list toggle,
-  // replacing free-typed names); left allocated/unused rather than removed
-  // so the on-disk layout of every field after it stays put.
-  char     repeat_extra_scopes[24];
-  // On-disk position is at the struct's append-only tail (0xC0DE002B), even
-  // though grouped here with the rest of repeat_*. Bit i = scope-list index
+  // The scopes this repeater also relays for, beyond its own. Bit i = scope-list index
   // (i+1) is in this repeater's accept set (index 0, "*", isn't a real scope
   // so isn't toggleable here) — see ScopeList/MyMesh::rebuildRepeatScopes().
-  // Same MAX_REPEAT_SCOPES=4 runtime cap as before, just resolved from the
-  // shared named-scope list instead of comma-tokenizing repeat_extra_scopes.
+  // At most MAX_REPEAT_SCOPES (4) of them count.
   uint16_t repeat_extra_scope_mask;
   // Optional dedicated radio profile for repeater mode. When repeater_use_profile
   // is 1, enabling the repeater switches the radio to repeater_freq/bw/sf/cr and
@@ -207,9 +189,7 @@ struct NodePrefs {  // persisted to file
   // Validity gated by page_order_set magic (see below) — not by entry value range,
   // so a junk byte in 1..HPB_COUNT cannot trigger custom-order mode.
   // Declared as a literal (not HPB_COUNT) so the field offset stays stable across
-  // builds that add HomePageBit entries. The first PAGE_ORDER_LEN_V1 bytes persist
-  // at this offset (backward-compatible); the remaining slots live at the file
-  // tail (see DataStore) so pre-0x0019 saves still load without shifting.
+  // builds that add HomePageBit entries.
   uint8_t  page_order[13];
   uint8_t  page_order_set;      // 0xA5 = page_order is user-configured; anything else = use default
   static const uint8_t PAGE_ORDER_MAGIC = 0xA5;
@@ -232,9 +212,7 @@ struct NodePrefs {  // persisted to file
   // Portuguese/Nordic) used to each be their own full alt-alphabet page here;
   // they're now reached instead by holding Enter on a Latin letter that has
   // accented variants (see KeyboardWidget.h's KB_ACCENT_VARIANTS), so this
-  // enum only covers actual non-Latin scripts. Not a schema change: an old
-  // saved value of 3+ (one of the removed languages) just clamps to 0 (Latin)
-  // via DataStore.cpp's existing `>= KB_ALPHABET_COUNT` range check.
+  // enum only covers actual non-Latin scripts.
   static const uint8_t KB_ALPHABET_LATIN_ONLY = 0;
   static const uint8_t KB_ALPHABET_CYRILLIC   = 1;
   static const uint8_t KB_ALPHABET_GREEK      = 2;
@@ -243,17 +221,12 @@ struct NodePrefs {  // persisted to file
     static const char* L[KB_ALPHABET_COUNT] = { "Latin", "Cyrillic", "Greek" };
     return L[idx < KB_ALPHABET_COUNT ? idx : 0];
   }
-  // On-disk position is at the struct's append-only tail (see the
-  // serialization tripwire below); declared here with keyboard_type for
-  // readability.
   uint8_t  keyboard_alt_alphabet;
   // Which script (KB_ALPHABET_LATIN_ONLY/CYRILLIC/GREEK) occupies the on-screen
   // keyboard's page 0 -- its default/opening page -- vs. keyboard_alt_alphabet
   // above, which occupies page 1. Settings > Keyboard's Main/Additional rows.
   // Equal to keyboard_alt_alphabet means no second page (see KeyboardWidget's
-  // hasAltAlphabet()). On-disk position is at the tail (see the serialization
-  // tripwire below); default 0 (Latin) matches the keyboard's original always-
-  // Latin-main behaviour for upgraders.
+  // hasAltAlphabet()). Default 0 (Latin).
   uint8_t  keyboard_main_alphabet;
   // Settings > Keyboard's "Ext. KB" row (boards with a second I2C bus for an
   // optional CardKB, see ENV_PIN_SDA/ENV_PIN_SCL, only). When on, the
@@ -262,8 +235,7 @@ struct NodePrefs {  // persisted to file
   // one-line status (current script/page, caps) instead; the accent and
   // placeholder popups still render on top exactly as before (see
   // KeyboardWidget::render()). Manual toggle rather than auto-detected, so it
-  // stays put even if the module is briefly unplugged. Default 0 (full grid,
-  // unchanged behaviour) on upgrade.
+  // stays put even if the module is briefly unplugged. Default 0 (full grid).
   uint8_t  keyboard_cardkb_compact;
 
   // ── Clock & alarm ─────────────────────────────────────────────────────
@@ -284,9 +256,7 @@ struct NodePrefs {  // persisted to file
   uint8_t  alarm_hour;  // 0-23, local time
   uint8_t  alarm_min;   // 0-59
   // Repeat-days bitmask — see the alarm doc comment above for the full
-  // explanation (bit i = 1<<tm_wday). On-disk position is at the struct's
-  // append-only tail (see the serialization tripwire below); grouped here
-  // with alarm_on/hour/min purely for source readability.
+  // explanation (bit i = 1<<tm_wday).
   uint8_t  alarm_repeat_mask;
   static const uint8_t ALARM_REPEAT_NONE     = 0x00;  // one-shot (default)
   static const uint8_t ALARM_REPEAT_DAILY    = 0x7F;  // every day
@@ -325,12 +295,9 @@ struct NodePrefs {  // persisted to file
   uint8_t  quiet_hours;         // 0=off (default), 1=on
   uint8_t  quiet_from;          // default 22
   uint8_t  quiet_to;            // default 7
-  // Settings > Display > "Msg wake". Stored inverted (same reason as
-  // fav_sort_off below) so both a fresh memset and an older prefs file (no
-  // bytes here at all) mean "on" -- today's behaviour, where an incoming
-  // message turns the display on (UITask::newMsg()) if it was off and no
-  // companion app is already showing it.
-  uint8_t  msg_wake_screen_off; // 0=wake display for incoming msgs (default), 1=disabled
+  // Settings > Display > "Msg wake": an incoming message turns the display on
+  // (UITask::newMsg()) if it was off and no companion app is already showing it.
+  uint8_t  msg_wake;            // 1=wake display for incoming msgs (default), 0=not
   uint8_t  ringtone_bpm_idx;   // index into {60,90,120,150,180}
   uint8_t  ringtone_len;        // number of notes in custom ringtone (0 = use default)
   uint8_t  ringtone_notes[32]; // packed: bits0-2=pitch, bits3-4=octave-4, bits5-6=dur_idx
@@ -347,11 +314,8 @@ struct NodePrefs {  // persisted to file
   // Per-channel melody override (2 bitmasks, 1 bit per channel)
   uint64_t ch_notif_melody_set;  // bit i = channel i has explicit melody [del→onChannelRemoved]
   uint64_t ch_notif_melody_2;    // bit i = use melody 2 (else melody 1, when set bit is set)
-  // On-disk position is at the struct's append-only tail (0xC0DE002B), even
-  // though grouped here with the other per-channel overrides. Scope-list
-  // index per channel (see ScopeList) -- 0 ("*"/unscoped) is the correct
-  // zero-init default, matching today's unconfigured behaviour exactly, so
-  // no migration is needed for this field itself. Fixed at 64 slots (not
+  // Scope-list index per channel (see ScopeList) -- 0 ("*"/unscoped) by
+  // default. Fixed at 64 slots (not
   // MAX_GROUP_CHANNELS, which varies by board/variant and would make
   // sizeof(NodePrefs) variant-dependent) -- same implicit channel-count cap
   // every ch_notif_*/ch_fav_bitmask uint64_t bitmask above already has.
@@ -397,17 +361,13 @@ struct NodePrefs {  // persisted to file
   // Per-target Commands toggle for channel/room, splitting what used to be
   // one bot_commands_enabled shared across all three (see that field's doc
   // comment) — e.g. answer !ping in DM but stay quiet on a public channel.
-  // Upgraders: DataStore seeds both from the old shared bot_commands_enabled
-  // on first load past the schema bump, so existing behaviour is preserved
-  // until the user deliberately splits them apart.
   uint8_t  bot_commands_room;
   // Per-target toggle for bot *action* commands (!buzz/!gps/!advert) --
   // separate from bot_commands_ch/bot_commands_room above, which only gate
   // the read-only query commands (!ping/!batt/...). Nested under that
   // Commands toggle (Commands=off means neither queries nor actions run for
   // that target); Actions=on additionally lets the state-changing commands
-  // through. Default 0 (off) -- these change device behaviour remotely, so
-  // upgraders don't get them silently enabled.
+  // through. Default 0 (off) -- these change device behaviour remotely.
   uint8_t  bot_actions_room;
   uint8_t  bot_quiet_start;     // quiet-hours start hour, local 0-23 (start==end → disabled)
   uint8_t  bot_quiet_end;       // quiet-hours end hour, local 0-23
@@ -420,9 +380,7 @@ struct NodePrefs {  // persisted to file
   uint8_t  units_imperial;
   // GPS trail cadence. Logging on/off is a runtime state (Tools › Trail),
   // not a persisted preference.
-  uint8_t trail_interval_idx;   // reserved — sampling cadence is now fixed at TrailStore::SAMPLING_SECS
   uint8_t trail_min_delta_idx;  // min-distance gate level (0=finest..3); metres or feet per units_imperial
-  uint8_t trail_units_idx;      // legacy: old combined speed/pace+unit index (km/h, mph, min/km, min/mi)
   // Trail Summary readout: 0=speed (km/h or mph), 1=pace (min/km or min/mi).
   // The km-vs-mi choice now comes from units_imperial, so this is just the mode.
   uint8_t  trail_show_pace;
@@ -509,21 +467,15 @@ struct NodePrefs {  // persisted to file
   static const uint8_t FAV_KIND_MAX     = 1;
   uint8_t favourite_contacts[FAVOURITES_COUNT][FAVOURITE_PREFIX_LEN]; // [del→onContactRemoved/onChannelRemoved]
   // What each favourite_contacts[] slot holds (see FAV_KIND_* above).
-  // On-disk position is at the struct's append-only tail (see the
-  // serialization tripwire below), even though declared here beside
-  // favourite_contacts for readability. Zero-init = every slot is a contact,
-  // which is what pre-0x28 saves are.
+  // Zero-init = every slot is a contact.
   uint8_t  favourite_kinds[FAVOURITES_COUNT];  // [del→onContactRemoved/onChannelRemoved] -- clearFavouriteSlot() clears both fields together, called from either handler depending on the slot's kind
-  // Settings > Contacts > "Favs top". Stored inverted so that both a fresh
-  // memset and an older prefs file (no bytes here at all) mean "on", which is
-  // the default -- a positive flag would read back as off for every upgrader.
-  uint8_t  fav_sort_off;       // 0 = favourites first in every list (default), 1 = natural order
+  // Settings > Contacts > "Favs top".
+  uint8_t  fav_sort;           // 1 = favourites first in every list (default), 0 = natural order
   // Settings > Contacts > "Expire" + "Prune now". Index into
   // contactExpiryDays()/contactExpiryLabel() below (0=Off/never, 1=7d, 2=30d,
   // 3=90d) -- a contact whose ContactInfo::lastmod is older than this is
   // eligible for the manual Prune-now sweep. Favourites are always exempt
-  // regardless of age. On-disk position is the struct's append-only tail (see
-  // the serialization tripwire below), same as fav_sort_off above.
+  // regardless of age.
   uint8_t  contact_expiry_idx;   // 0 = off (default)
 
   // ── Advert ─────────────────────────────────────────────────────────────
@@ -539,7 +491,7 @@ struct NodePrefs {  // persisted to file
   // 0=Off 1=Input 2=Output(low) 3=Output(high) 4=Analog. Mode 4 is only
   // meaningful for gpio1/gpio2 (the nRF52840's AIN0/AIN5 -- gpio3/gpio4 have
   // no ADC channel), so those two fields are clamped to 0-3 on load, not 0-4
-  // (see DataStore::loadPrefsInt). Default 0 (off/disconnected) on upgrade.
+  // (see DataStore's sanitize). Default 0 (off/disconnected).
   uint8_t  gpio1_mode;
   uint8_t  gpio2_mode;
   uint8_t  gpio3_mode;
@@ -548,7 +500,7 @@ struct NodePrefs {  // persisted to file
   // ── Custom messages ────────────────────────────────────────────────────
   char custom_msgs[10][140];   // user-defined quick messages (supports {loc}, {time})
 
-  // ── Screen lock PIN (0xC0DE0031) ───────────────────────────────────────
+  // ── Screen lock PIN ────────────────────────────────────────────────────
   // SHA-256 of salt + PIN (see ScreenLock.h); all zeros = no PIN. It locks the
   // screen only: the radio and the app link keep working.
   static const uint8_t LOCK_HASH_LEN = 32;
@@ -556,14 +508,14 @@ struct NodePrefs {  // persisted to file
   uint8_t lock_screen_password[LOCK_HASH_LEN];
   uint8_t lock_screen_password_salt[LOCK_SALT_LEN];
 
-  // ── Battery curve (0xC0DE0032) ─────────────────────────────────────────
+  // ── Battery curve ──────────────────────────────────────────────────────
   // The cell voltage (mV) at 0, 10, ... 100 %, for the battery percentage
   // (ui-core/Battery.h). All zeros = the built-in LiPo curve. Settings >
   // Battery curve edits it; anything not rising point to point reads as unset.
   static const uint8_t BATT_CURVE_PTS = 11;
   uint16_t batt_curve_mv[BATT_CURVE_PTS];
 
-  // ── Lock screen look (0xC0DE0033) ──────────────────────────────────────
+  // ── Lock screen look ───────────────────────────────────────────────────
   // ui-new: 0 = big clock + date + unread pill, 1 = compact clock with the
   // clock fields as rows below. The L2 has its own lock screen.
   uint8_t  lock_compact;
@@ -646,16 +598,9 @@ struct NodePrefs {  // persisted to file
     return L[idx < CONTACT_EXPIRY_COUNT ? idx : 0];
   }
 
-  // Tail sentinel written at the end of /new_prefs. Bump the low byte when
-  // adding/removing/reordering fields in DataStore::savePrefs/loadPrefsInt so
-  // older saves are detected on load and skipped (zero-init defaults kept).
-  // High 24 bits identify the file format; low byte is the schema revision.
-  // 0xC0DE0026 is BURNED — it briefly named a layout that put repeat_scope_only
-  // + repeat_extra_scopes in the middle of the stream (next to the other
-  // repeat_* fields) instead of at the tail, which shifted every field after
-  // them by 25 bytes when loading an older file. Never released, but a dev
-  // build wrote it, so the number must not be reused for anything else.
-  static const uint32_t SCHEMA_SENTINEL = 0xC0DE0033;
+  // /prefs' layout (see the comment at the top). A file of another version
+  // isn't read: the defaults stand.
+  static const uint16_t PREFS_VERSION = 1;
 
   // Bit-index for each home page. Used by page_order (entries store bit+1) and
   // by home_pages_mask. Single source of truth — both HomeScreen::pageBit/bitToPage
@@ -681,11 +626,6 @@ struct NodePrefs {  // persisted to file
   // every page can be reordered. Any page still missing from a saved order is
   // appended at navigation time via buildVisibleOrder's fallback.
   static const uint8_t PAGE_ORDER_LEN = 13;
-  // Bytes of page_order persisted at the original file offset. Slots beyond this
-  // (PAGE_ORDER_LEN - PAGE_ORDER_LEN_V1) are stored at the file tail, so a
-  // pre-0x0019 save — whose order was exactly this long — loads without shifting
-  // every field written after page_order.
-  static const uint8_t PAGE_ORDER_LEN_V1 = 11;
 
   // Bitmasks for home_pages_mask (bit=1 → page visible; 0 field = all visible).
   // SETTINGS and QUICK_MSG have no mask bit — they're always visible.
@@ -757,96 +697,6 @@ static inline bool inQuietHours(const NodePrefs& p, uint32_t utc) {
   int h;
   return p.quiet_hours && localHour(utc, p.tz_offset_hours, h) && hourInWindow(h, p.quiet_from, p.quiet_to);
 }
-
-// ── Serialization tripwire ───────────────────────────────────────────────────
-// NodePrefs is written/read field-by-field, in order, by DataStore::savePrefs()
-// and loadPrefsInt(); the on-disk format IS the struct's field layout. There is
-// no automatic check that those two hand-written sequences match the struct, so
-// a forgotten read/write silently misaligns EVERY field after it.
-//
-// This assert is the manual checkpoint. Changing a data member changes sizeof
-// and trips it. When it trips, do ALL of the following, then update the number:
-//   0. put the new field at the TAIL of the struct, even when it logically
-//      belongs beside older siblings. loadPrefsInt()'s rd() is a plain
-//      sequential reader gated only on file.available() — there is no per-field
-//      versioning — so a field inserted mid-stream is read out of an older
-//      file's bytes and shifts EVERY field after it (repeat_scope_only +
-//      repeat_extra_scopes did exactly that in the burned 0xC0DE0026 layout).
-//      "In struct order" below therefore means "appended in both places".
-//   1. add the field's rd(...)   in DataStore::loadPrefsInt(), in struct order
-//   2. add the field's write(...) in DataStore::savePrefs(),   in struct order
-//   3. clamp it on load (an upgrader's file lacks it → stray bytes; the first
-//      few are that file's own 4-byte sentinel tail, so a plausible-looking
-//      value like 0x23 shows up rather than 0)
-//   4. bump SCHEMA_SENTINEL's low byte
-// (Padding can also shift sizeof; a "false" trip just means re-check + rebump.)
-// keyboard_cardkb_compact (0xC0DE0023) also landed in existing tail padding --
-// confirmed via a real build -- leaving sizeof unchanged at 2720.
-// keyboard_main_alphabet (added in an earlier bump) landed in existing tail
-// padding -- confirmed via a real build's sizeof() -- so that bump left the
-// size unchanged. bot_actions_dm/ch/room and gpio1..4_mode (the last two
-// bumps, 7 more uint8_t total) added 8 bytes, not 7 -- one byte of tail
-// padding got consumed along the way. 2720 confirmed via a real
-// WioTrackerL1Eink_companion_solo_dual build.
-// interference_threshold + cad_enabled (0xC0DE0024) are the new struct tail --
-// added 8 bytes, not 2 -- the 2 real bytes rounded the struct up to its next
-// alignment boundary. Confirmed via a real Heltec_v3_companion_radio_ble build.
-// repeat_scope_only (0xC0DE0025) landed in the padding left over from the
-// 0xC0DE0024 bump -- confirmed via a real build, sizeof unchanged at 2728.
-// repeat_extra_scopes[24] (0xC0DE0026) added exactly 24 bytes, no leftover
-// padding this time -- confirmed via a real build, sizeof now 2752.
-// 0xC0DE0027 moved those same two fields out of the repeat_* group and down to
-// the struct tail (the 0xC0DE0026 mid-stream layout was unreadable for older
-// files, see the sentinel comment) -- padding worked out identically either
-// way, so sizeof stays 2752. Confirmed via a real Heltec_v3 build.
-// favourite_kinds[6] (0xC0DE0028) added 8 bytes, not 6 -- the struct had no
-// spare tail padding left after 0xC0DE0026, so the 6 real bytes rounded up to
-// the next alignment boundary. Confirmed via a real Heltec_v3 build.
-// fav_sort_off (0xC0DE0029) landed in the 2 bytes of padding the 0xC0DE0028
-// bump left over -- confirmed via a real Heltec_v3 build, sizeof unchanged.
-//
-// 2026-09: fields reordered into thematic groups for source readability (see
-// the comment at the top of the struct) -- NOT a schema change. No field was
-// added, removed, resized, or re-sequenced in DataStore's rd()/wr() calls, so
-// the on-disk format and SCHEMA_SENTINEL are untouched. The reorder happened
-// to let the compiler pack same-size fields together with less padding,
-// dropping sizeof from 2760 to 2752 -- confirmed via a real
-// Heltec_v3_companion_radio_ble build. Purely a compile-time in-memory
-// layout change; this static_assert exists precisely to catch that kind of
-// accidental drift, so the trip was expected here and this comment is that
-// re-check. dashboard_fields[3] was then moved from the favourites group to
-// Display (a better thematic fit), which shifted padding again and put
-// sizeof back at 2760 -- also confirmed via a real
-// Heltec_v3_companion_radio_ble build. Still no schema change.
-// msg_wake_screen_off (0xC0DE002A) landed in the 1 byte of padding the
-// 0xC0DE0029 bump left over -- confirmed via a real sim_companion_radio
-// (native) build, sizeof unchanged at 2760.
-// repeat_extra_scope_mask + ch_scope_idx[64] (0xC0DE002B) added 64 bytes,
-// not 66 -- the struct had 2 bytes of spare tail padding left over from an
-// earlier bump -- confirmed via a real sim_companion_radio (native) build
-// and a real WioTrackerL1_companion_solo_dual (nRF52/ARM) build, sizeof
-// 2824 on both.
-// contact_expiry_idx (0xC0DE002C) landed in existing padding elsewhere in
-// the struct -- confirmed via a real sim_companion_radio (native) build and a
-// real WioTrackerL1_companion_solo_dual (nRF52/ARM) build, sizeof unchanged
-// at 2824 on both.
-// loc_share_scope (0xC0DE002D) landed in existing padding next to the other
-// loc_share_* bytes -- confirmed via real sim_companion_radio (native),
-// WioTrackerL1_companion_solo_dual (nRF52/ARM) and Heltec_v3_companion_radio_ble
-// (ESP32) builds, sizeof unchanged at 2824. loc_share_duration_idx (0xC0DE002E)
-// likewise (sim build; see the check below). display_brightness_pct (0xC0DE002F)
-// likewise (L2 ESP32 + L1 nRF52 builds).
-// quiet_hours / quiet_from / quiet_to (0xC0DE0030) added 8 bytes, not 3 (next
-// to buzzer_auto, rounded up to the alignment) -- sizeof 2832, confirmed via real
-// WioTrackerL1_companion_solo_dual (nRF52/ARM) and L2 (ESP32) builds.
-// lock_screen_password / _salt (0xC0DE0031) added 48 bytes -- sizeof 2880.
-// batt_curve_mv[11] (0xC0DE0032) added 16 bytes, not 22 (6 went into tail
-// padding) -- sizeof 2896, confirmed via real L1 (nRF52) and L2 (ESP32) builds.
-// lock_compact (0xC0DE0033) added 8 bytes, not 1 (the struct rounds up to its
-// alignment) -- sizeof 2904, confirmed via real L1 (nRF52) and L2 (ESP32) builds.
-static_assert(sizeof(NodePrefs) == 2904,
-              "NodePrefs layout changed — sync DataStore save/load + clamp, bump "
-              "SCHEMA_SENTINEL, then update this size (see steps above).");
 
 // Bounds for a usable repeater radio profile. The frequency range is passed in
 // by the caller from RadioLibWrapper::getFreqBounds() — the radio chip's own

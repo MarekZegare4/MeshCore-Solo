@@ -2202,7 +2202,7 @@ void UITask::onMessageArrived(const UiEvent& ev) {
   }
 
   if (_display != NULL && !_locked) {
-    bool wake_disabled = _node_prefs && (_node_prefs->msg_wake_screen_off || inQuietHours(*_node_prefs, rtc_clock.getCurrentTime()));
+    bool wake_disabled = _node_prefs && (!_node_prefs->msg_wake || inQuietHours(*_node_prefs, rtc_clock.getCurrentTime()));
     if (!wake_disabled && !_display->isOn() && !isClientConnected()) {   // wake for the msg unless an app (BLE/USB) is already showing it, or the user disabled msg-wake
       _display->turnOn();
     }

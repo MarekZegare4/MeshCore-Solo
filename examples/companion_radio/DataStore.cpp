@@ -217,674 +217,219 @@ bool DataStore::saveMainIdentity(const mesh::LocalIdentity &identity) {
   return identity_store.save("_main", identity);
 }
 
-void DataStore::loadPrefs(NodePrefs& prefs, double& node_lat, double& node_lon) {
-  if (_fs->exists("/new_prefs")) {
-    loadPrefsInt("/new_prefs", prefs, node_lat, node_lon); // new filename
-  } else if (_fs->exists("/node_prefs")) {
-    loadPrefsInt("/node_prefs", prefs, node_lat, node_lon);
-    savePrefs(prefs, node_lat, node_lon);                // save to new filename
-    _fs->remove("/node_prefs"); // remove old
+// ── Prefs ──
+// /prefs: a header, the node's position, then NodePrefs as it is in memory
+// (see the comment at the top of NodePrefs.h). Only the build that wrote it
+// reads it back, so the struct's padding and alignment are no concern.
+struct PrefsHeader {
+  uint32_t magic;     // PREFS_MAGIC
+  uint16_t version;   // NodePrefs::PREFS_VERSION
+  uint16_t size;      // sizeof(NodePrefs) when written
+  uint32_t crc;       // CRC-32 of the position and the struct's bytes
+};
+static const uint32_t PREFS_MAGIC = 0x534F4C4F;   // "SOLO"
+
+static uint32_t crc32(uint32_t crc, const uint8_t* p, size_t n) {
+  crc = ~crc;
+  while (n--) {
+    crc ^= *p++;
+    for (int k = 0; k < 8; k++) crc = (crc >> 1) ^ (0xEDB88320u & (0u - (crc & 1)));
   }
+  return ~crc;
 }
 
-void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& node_lat, double& node_lon) {
-  // Set hardware defaults before reading — if the file is older and lacks these fields,
-  // the compile-time values apply rather than the zero from memset in MyMesh::begin().
-#ifdef DISPLAY_ROTATION
-  _prefs.display_rotation = DISPLAY_ROTATION;
+// Every value inside its range, whatever the file held: a damaged byte reads
+// as the default rather than as a setting no screen can show.
+static void sanitize(NodePrefs& p) {
+#if !FEAT_JOYSTICK_ROTATION_SETTING
+  p.joystick_rotation = 0;   // no setting for it on this build
 #endif
-  // 0 is a valid SNR threshold, so the "off" state needs its own sentinel set
-  // before reading — an older file lacking this field must read as disabled,
-  // not as "filter everything below 0 dB".
-  _prefs.repeat_min_snr = NodePrefs::REPEAT_SNR_DISABLED;
-  File file = openRead(_fs, filename);
-  if (!file) return;
-
-  uint8_t pad[8];
-
-  // Core fields — present in every saved file (written unconditionally since the beginning).
-  file.read((uint8_t *)&_prefs.airtime_factor, sizeof(_prefs.airtime_factor));
-  file.read((uint8_t *)_prefs.node_name, sizeof(_prefs.node_name));
-  file.read(pad, 4);
-  file.read((uint8_t *)&node_lat, sizeof(node_lat));
-  file.read((uint8_t *)&node_lon, sizeof(node_lon));
-  file.read((uint8_t *)&_prefs.freq, sizeof(_prefs.freq));
-  file.read((uint8_t *)&_prefs.sf, sizeof(_prefs.sf));
-  file.read((uint8_t *)&_prefs.cr, sizeof(_prefs.cr));
-  file.read((uint8_t *)&_prefs.client_repeat, sizeof(_prefs.client_repeat));
-  file.read((uint8_t *)&_prefs.manual_add_contacts, sizeof(_prefs.manual_add_contacts));
-  file.read((uint8_t *)&_prefs.bw, sizeof(_prefs.bw));
-  file.read((uint8_t *)&_prefs.tx_power_dbm, sizeof(_prefs.tx_power_dbm));
-  file.read((uint8_t *)&_prefs.telemetry_mode_base, sizeof(_prefs.telemetry_mode_base));
-  file.read((uint8_t *)&_prefs.telemetry_mode_loc, sizeof(_prefs.telemetry_mode_loc));
-  file.read((uint8_t *)&_prefs.telemetry_mode_env, sizeof(_prefs.telemetry_mode_env));
-  file.read((uint8_t *)&_prefs.rx_delay_base, sizeof(_prefs.rx_delay_base));
-  file.read((uint8_t *)&_prefs.advert_loc_policy, sizeof(_prefs.advert_loc_policy));
-  file.read((uint8_t *)&_prefs.multi_acks, sizeof(_prefs.multi_acks));
-  file.read((uint8_t *)&_prefs.path_hash_mode, sizeof(_prefs.path_hash_mode));
-  file.read(pad, 1);
-  file.read((uint8_t *)&_prefs.ble_pin, sizeof(_prefs.ble_pin));
-  file.read((uint8_t *)&_prefs.buzzer_quiet, sizeof(_prefs.buzzer_quiet));
-  file.read((uint8_t *)&_prefs.gps_enabled, sizeof(_prefs.gps_enabled));
-  file.read((uint8_t *)&_prefs.gps_interval, sizeof(_prefs.gps_interval));
-  // Only today's duty-cycle presets are meaningful now (see SettingsScreen's
-  // GPS_DUTY_OPTS). Anything else -- out of range, or a leftover value from
-  // the pre-v1.13 "GPS Interval" setting this byte used to hold (its own
-  // 30s option isn't one of today's presets) -- wouldn't match a Settings
-  // choice, so "GPS pwr" would misleadingly show OFF while still silently
-  // duty-cycling GPS on that stale value. Snap anything unrecognised to OFF.
-  {
+  {   // only the duty-cycle presets Settings offers
     static const uint32_t GPS_DUTY_PRESETS[] = { 0, 60, 300, 900, 1800, 3600 };
     bool known = false;
-    for (uint32_t v : GPS_DUTY_PRESETS) { if (_prefs.gps_interval == v) { known = true; break; } }
-    if (!known) _prefs.gps_interval = 0;
+    for (uint32_t v : GPS_DUTY_PRESETS) if (p.gps_interval == v) { known = true; break; }
+    if (!known) p.gps_interval = 0;
   }
-  file.read((uint8_t *)&_prefs.autoadd_config, sizeof(_prefs.autoadd_config));
-  file.read((uint8_t *)&_prefs.autoadd_max_hops, sizeof(_prefs.autoadd_max_hops));
-  file.read((uint8_t *)&_prefs.rx_boosted_gain, sizeof(_prefs.rx_boosted_gain));
-  file.read((uint8_t *)_prefs.default_scope_name, sizeof(_prefs.default_scope_name));
-  file.read((uint8_t *)_prefs.default_scope_key, sizeof(_prefs.default_scope_key));
-  file.read((uint8_t *)&_prefs.display_brightness, sizeof(_prefs.display_brightness));
-  file.read((uint8_t *)&_prefs.auto_off_secs, sizeof(_prefs.auto_off_secs));
-  file.read((uint8_t *)&_prefs.tz_offset_hours, sizeof(_prefs.tz_offset_hours));
-  file.read((uint8_t *)&_prefs.low_batt_mv, sizeof(_prefs.low_batt_mv));
-  file.read((uint8_t *)&_prefs.batt_display_mode, sizeof(_prefs.batt_display_mode));
-
-  // Extension fields — append-only, newest at the bottom.
-  // Each read is gated on file.available(); fields absent in older files stay at their
-  // zero-initialised or hardware-default values set above.
-  auto rd = [&](void* p, size_t n) {
-    if (file.available() >= (int)n) file.read((uint8_t*)p, n);
-  };
-
-  rd(_prefs.custom_msgs,                sizeof(_prefs.custom_msgs));
-  rd(&_prefs.ch_notif_override,         sizeof(_prefs.ch_notif_override));
-  rd(&_prefs.ch_notif_muted,            sizeof(_prefs.ch_notif_muted));
-  rd(&_prefs.dm_show_all,               sizeof(_prefs.dm_show_all));
-  rd(&_prefs.room_fav_only,             sizeof(_prefs.room_fav_only));
-  rd(&_prefs.buzzer_volume,             sizeof(_prefs.buzzer_volume));
-  rd(&_prefs.ringtone_bpm_idx,          sizeof(_prefs.ringtone_bpm_idx));
-  rd(&_prefs.ringtone_len,              sizeof(_prefs.ringtone_len));
-  if (_prefs.ringtone_len > 32) _prefs.ringtone_len = 0;
-  rd(_prefs.ringtone_notes,             sizeof(_prefs.ringtone_notes));
-  rd(&_prefs.home_pages_mask,           sizeof(_prefs.home_pages_mask));
-  rd(&_prefs.bot_enabled,               sizeof(_prefs.bot_enabled));
-  rd(&_prefs.bot_channel_enabled,       sizeof(_prefs.bot_channel_enabled));
-  rd(&_prefs.bot_channel_idx,           sizeof(_prefs.bot_channel_idx));
-  rd(_prefs.bot_trigger,                sizeof(_prefs.bot_trigger));
-  rd(_prefs.bot_reply_dm,               sizeof(_prefs.bot_reply_dm));
-  rd(_prefs.bot_reply_ch,               sizeof(_prefs.bot_reply_ch));
-  rd(&_prefs.clock_hide_seconds,        sizeof(_prefs.clock_hide_seconds));
-  rd(&_prefs.buzzer_auto,               sizeof(_prefs.buzzer_auto));
-  rd(_prefs.dm_notif,                   sizeof(_prefs.dm_notif));
-  rd(_prefs.dashboard_fields,           sizeof(_prefs.dashboard_fields));
-  rd(&_prefs.advert_auto_interval_sec,  sizeof(_prefs.advert_auto_interval_sec));
-  rd(&_prefs.ringtone2_bpm_idx,         sizeof(_prefs.ringtone2_bpm_idx));
-  rd(&_prefs.ringtone2_len,             sizeof(_prefs.ringtone2_len));
-  if (_prefs.ringtone2_len > 32) _prefs.ringtone2_len = 0;
-  rd(_prefs.ringtone2_notes,            sizeof(_prefs.ringtone2_notes));
-  rd(&_prefs.notif_melody_dm,           sizeof(_prefs.notif_melody_dm));
-  if (_prefs.notif_melody_dm > 3) _prefs.notif_melody_dm = 0;
-  rd(&_prefs.notif_melody_ch,           sizeof(_prefs.notif_melody_ch));
-  if (_prefs.notif_melody_ch > 3) _prefs.notif_melody_ch = 0;
-  rd(&_prefs.ch_notif_melody_set,       sizeof(_prefs.ch_notif_melody_set));
-  rd(&_prefs.ch_notif_melody_2,         sizeof(_prefs.ch_notif_melody_2));
-  rd(_prefs.dm_melody,                  sizeof(_prefs.dm_melody));
-  rd(&_prefs.auto_lock,                 sizeof(_prefs.auto_lock));
-  rd(&_prefs.clock_12h,                 sizeof(_prefs.clock_12h));
-  rd(&_prefs.use_lemon_font,            sizeof(_prefs.use_lemon_font));
-  rd(&_prefs.display_rotation,          sizeof(_prefs.display_rotation));
-  rd(_prefs.page_order,                 NodePrefs::PAGE_ORDER_LEN_V1);  // tail slots read below (append-only)
-  rd(&_prefs.joystick_rotation,         sizeof(_prefs.joystick_rotation));
-#if !FEAT_JOYSTICK_ROTATION_SETTING
-  // No UI to change it on this build, so force the default — this also corrects
-  // a stale value migrated from another build (e.g. e-ink rotation=2). On builds
-  // that DO expose the setting the stored value is kept; the old code clobbered
-  // it unconditionally (FEAT_* was undefined here because Features.h wasn't
-  // included → `#if !FEAT_…` was always true), so the setting never persisted.
-  _prefs.joystick_rotation = 0;
-#endif
-  rd(&_prefs.eink_full_refresh_every,   sizeof(_prefs.eink_full_refresh_every));
-  rd(&_prefs.page_order_set,            sizeof(_prefs.page_order_set));
-  // Migration: pre-magic firmware wrote page_order without a flag. If we see a plausible
-  // first entry from such a save, accept it once — savePrefs will then persist the magic.
-  if (_prefs.page_order_set != NodePrefs::PAGE_ORDER_MAGIC
-      && _prefs.page_order[0] >= 1 && _prefs.page_order[0] <= NodePrefs::HPB_COUNT) {
-    _prefs.page_order_set = NodePrefs::PAGE_ORDER_MAGIC;
-  }
-
-  rd(_prefs.favourite_contacts, sizeof(_prefs.favourite_contacts));
-  rd(&_prefs.trail_interval_idx,  sizeof(_prefs.trail_interval_idx));
-  rd(&_prefs.trail_min_delta_idx, sizeof(_prefs.trail_min_delta_idx));
-  rd(&_prefs.trail_units_idx,     sizeof(_prefs.trail_units_idx));
-  rd(&_prefs.ch_fav_bitmask,      sizeof(_prefs.ch_fav_bitmask));
-  rd(&_prefs.ch_fav_only,         sizeof(_prefs.ch_fav_only));
-  rd(&_prefs.notif_melody_ad,     sizeof(_prefs.notif_melody_ad));
-  rd(&_prefs.units_imperial,      sizeof(_prefs.units_imperial));
-  rd(&_prefs.trail_show_pace,     sizeof(_prefs.trail_show_pace));
-  rd(&_prefs.advert_sound_scope,  sizeof(_prefs.advert_sound_scope));
-  rd(&_prefs.rx_powersave,        sizeof(_prefs.rx_powersave));
-  rd(&_prefs.tx_apc,              sizeof(_prefs.tx_apc));
-  rd(&_prefs.dm_resend_count,     sizeof(_prefs.dm_resend_count));
-  rd(&_prefs.bot_commands_enabled, sizeof(_prefs.bot_commands_enabled));
-  rd(&_prefs.bot_quiet_start,     sizeof(_prefs.bot_quiet_start));
-  rd(&_prefs.bot_quiet_end,       sizeof(_prefs.bot_quiet_end));
-  rd(_prefs.bot_trigger_ch,       sizeof(_prefs.bot_trigger_ch));
-  rd(_prefs.user_radio_presets,   sizeof(_prefs.user_radio_presets));
-  // Repeater forwarding-filter knobs -- an older file's stray bytes here
-  // clamp back to their "off" defaults.
-  rd(&_prefs.repeat_skip_adverts, sizeof(_prefs.repeat_skip_adverts));
-  rd(&_prefs.repeat_max_hops,     sizeof(_prefs.repeat_max_hops));
-  rd(&_prefs.repeat_delay_boost,  sizeof(_prefs.repeat_delay_boost));
-  rd(&_prefs.repeat_min_snr,      sizeof(_prefs.repeat_min_snr));
-  rd(&_prefs.repeat_suppress_dup, sizeof(_prefs.repeat_suppress_dup));
-  if (_prefs.repeat_skip_adverts > 1) _prefs.repeat_skip_adverts = 0;
-  if (_prefs.repeat_max_hops > 64)    _prefs.repeat_max_hops = 0;
-  if (_prefs.repeat_delay_boost > 8)  _prefs.repeat_delay_boost = 0;
-  if (_prefs.repeat_min_snr != NodePrefs::REPEAT_SNR_DISABLED &&
-      (_prefs.repeat_min_snr < -20 || _prefs.repeat_min_snr > 10))
-    _prefs.repeat_min_snr = NodePrefs::REPEAT_SNR_DISABLED;   // match the UI's -20..10 range
-  if (_prefs.repeat_suppress_dup > 1) _prefs.repeat_suppress_dup = 0;
-  // NOTE: repeat_scope_only/repeat_extra_scopes are read at the TAIL, not here
-  // beside their siblings — see the append-only rule in NodePrefs.h.
-  rd(&_prefs.repeater_use_profile, sizeof(_prefs.repeater_use_profile));
-  rd(&_prefs.repeater_freq,        sizeof(_prefs.repeater_freq));
-  rd(&_prefs.repeater_bw,          sizeof(_prefs.repeater_bw));
-  rd(&_prefs.repeater_sf,          sizeof(_prefs.repeater_sf));
-  rd(&_prefs.repeater_cr,          sizeof(_prefs.repeater_cr));
-  // Stray byte from an older file clamps to "off".
-  rd(&_prefs.track_shared_loc,     sizeof(_prefs.track_shared_loc));
-  if (_prefs.track_shared_loc > 1) _prefs.track_shared_loc = 0;
-  // Live location sharing. Stray bytes from an older file clamp each field
-  // back to its default (sharing off).
-  rd(&_prefs.loc_share_enabled,     sizeof(_prefs.loc_share_enabled));
-  rd(&_prefs.loc_share_target_type, sizeof(_prefs.loc_share_target_type));
-  rd(&_prefs.loc_share_channel_idx, sizeof(_prefs.loc_share_channel_idx));
-  rd(_prefs.loc_share_dm_prefix,    sizeof(_prefs.loc_share_dm_prefix));
-  rd(&_prefs.loc_share_move_idx,    sizeof(_prefs.loc_share_move_idx));
-  rd(&_prefs.loc_share_interval_idx, sizeof(_prefs.loc_share_interval_idx));
-  rd(&_prefs.loc_share_heartbeat_idx, sizeof(_prefs.loc_share_heartbeat_idx));
-  if (_prefs.loc_share_enabled > 1)     _prefs.loc_share_enabled = 0;
-  if (_prefs.loc_share_target_type > 1) _prefs.loc_share_target_type = 0;
-  if (_prefs.loc_share_channel_idx >= MAX_GROUP_CHANNELS) _prefs.loc_share_channel_idx = 0;
-  if (_prefs.loc_share_move_idx >= NodePrefs::LOC_SHARE_MOVE_COUNT)         _prefs.loc_share_move_idx = 1;
-  if (_prefs.loc_share_interval_idx >= NodePrefs::LOC_SHARE_INTERVAL_COUNT) _prefs.loc_share_interval_idx = 1;
-  if (_prefs.loc_share_heartbeat_idx >= NodePrefs::LOC_SHARE_HEARTBEAT_COUNT) _prefs.loc_share_heartbeat_idx = 0;
-  // Locator + trail auto-pause. Stray bytes from an older file clamp both
-  // back to off.
-  rd(&_prefs.locator_enabled,    sizeof(_prefs.locator_enabled));
-  rd(&_prefs.locator_has_target, sizeof(_prefs.locator_has_target));
-  rd(&_prefs.locator_radius_idx, sizeof(_prefs.locator_radius_idx));
-  rd(&_prefs.locator_mode,       sizeof(_prefs.locator_mode));
-  rd(&_prefs.locator_lat_1e6,    sizeof(_prefs.locator_lat_1e6));
-  rd(&_prefs.locator_lon_1e6,    sizeof(_prefs.locator_lon_1e6));
-  rd(_prefs.locator_label,       sizeof(_prefs.locator_label));
-  rd(&_prefs.trail_autopause_idx,  sizeof(_prefs.trail_autopause_idx));
-  if (_prefs.locator_enabled > 1)    _prefs.locator_enabled = 0;
-  if (_prefs.locator_has_target > 1) _prefs.locator_has_target = 0;
-  if (_prefs.locator_radius_idx >= NodePrefs::LOCATOR_RADIUS_COUNT) _prefs.locator_radius_idx = 1;
-  if (_prefs.locator_mode >= NodePrefs::LOCATOR_MODE_COUNT)         _prefs.locator_mode = 0;
-  if (_prefs.trail_autopause_idx >= NodePrefs::TRAIL_AUTOPAUSE_COUNT)   _prefs.trail_autopause_idx = 0;
-  _prefs.locator_label[sizeof(_prefs.locator_label) - 1] = '\0';
-  // Locator proximity beeper.
-  rd(&_prefs.locator_beeper, sizeof(_prefs.locator_beeper));
-  if (_prefs.locator_beeper > 1) _prefs.locator_beeper = 0;
-  // Locator can target a live contact (kind + pubkey prefix).
-  rd(&_prefs.locator_target_kind, sizeof(_prefs.locator_target_kind));
-  rd(_prefs.locator_key,          sizeof(_prefs.locator_key));
-  if (_prefs.locator_target_kind > 2) _prefs.locator_target_kind = 0;
-  // GPS-averaging duration for waypoint marking.
-  rd(&_prefs.gps_avg_idx, sizeof(_prefs.gps_avg_idx));
-  if (_prefs.gps_avg_idx >= NodePrefs::GPS_AVG_COUNT) _prefs.gps_avg_idx = 0;
-  // One-shot alarm clock (local time-of-day + armed flag).
-  rd(&_prefs.alarm_on,   sizeof(_prefs.alarm_on));
-  rd(&_prefs.alarm_hour, sizeof(_prefs.alarm_hour));
-  rd(&_prefs.alarm_min,  sizeof(_prefs.alarm_min));
-  if (_prefs.alarm_on > 1)    _prefs.alarm_on = 0;
-  if (_prefs.alarm_hour > 23) _prefs.alarm_hour = 0;
-  if (_prefs.alarm_min > 59)  _prefs.alarm_min = 0;
-  // Keyboard type (QWERTY/T9). Stray bytes from an older file clamp back to
-  // the QWERTY default.
-  rd(&_prefs.keyboard_type, sizeof(_prefs.keyboard_type));
-  if (_prefs.keyboard_type > 1) _prefs.keyboard_type = 0;
-  // A stray/garbage byte here means no valid saved profile, same as a
-  // never-configured device -- default to a profile in the same band as the
-  // companion's own network (_prefs.freq, already read above) rather than
-  // "Current" -- a repeater silently following the companion onto whatever
-  // private network it later joins isn't the MeshCore community norm; that
-  // stays opt-in. Band-matched rather than a flat frequency so the default
-  // can't land outside what's legal where the companion is set up.
-  if (_prefs.repeater_use_profile > 1) _prefs.repeater_use_profile = 0;
-  float rpt_lo, rpt_hi; radio_driver.getFreqBounds(rpt_lo, rpt_hi);
-  if (!isValidRepeaterProfile(_prefs.repeater_freq, _prefs.repeater_bw, _prefs.repeater_sf, _prefs.repeater_cr, rpt_lo, rpt_hi)) {
-    seedDefaultRepeaterProfile(_prefs);
-  }
-  // Bot commands + quiet-hours. Stray bytes from an older file clamp to
-  // off / no quiet hours.
-  if (_prefs.bot_commands_enabled > 1)  _prefs.bot_commands_enabled = 0;
-  if (_prefs.bot_quiet_start > 23)      _prefs.bot_quiet_start = 0;
-  if (_prefs.bot_quiet_end   > 23)      _prefs.bot_quiet_end   = 0;
-  // These fields were appended over successive schema bumps; an older file
-  // can leave stray bytes here, so clamp out-of-range values back to defaults.
-  // Values for notif_melody_ad: 0=built-in, 1=melody1, 2=melody2, 3=none.
-  if (_prefs.notif_melody_ad > 3) _prefs.notif_melody_ad = 0;
-  // A stale value >1 from an older multi-font build would read as "Lemon" (all
-  // sites test != 0) until the user toggles Font; clamp it to default here.
-  if (_prefs.use_lemon_font  > 1) _prefs.use_lemon_font  = 0;
-  if (_prefs.units_imperial  > 1) _prefs.units_imperial  = 0;
-  if (_prefs.trail_show_pace > 1) _prefs.trail_show_pace = 0;
-  if (_prefs.advert_sound_scope > 1) _prefs.advert_sound_scope = ADVERT_SOUND_SCOPE_ALL;
-  if (_prefs.rx_powersave    > 1) _prefs.rx_powersave    = 0;
-  if (_prefs.tx_apc          > 1) _prefs.tx_apc          = 0;
-  // An old (0xC0DE0009) file leaves the low byte of its sentinel here (0x09),
-  // which is out of range — fall back to the default of 2 resends.
-  if (_prefs.dm_resend_count > 5) _prefs.dm_resend_count = 2;
-
-  // page_order grew 11 → 13 so Shutdown and Map become reorderable. The extra
-  // slots are appended here at the tail (not inline) so an older, shorter
-  // save still loads without shifting every field after it. Stray/EOF bytes
-  // here clamp to 0 (empty); ensurePageOrderInit then appends the missing
-  // pages into the freed slots.
-  for (uint8_t i = NodePrefs::PAGE_ORDER_LEN_V1; i < NodePrefs::PAGE_ORDER_LEN; i++) {
-    rd(&_prefs.page_order[i], sizeof(_prefs.page_order[i]));
-    if (_prefs.page_order[i] > NodePrefs::HPB_COUNT) _prefs.page_order[i] = 0;
-  }
-
-  // trail_autosave_lowbatt. rd() zero-inits when absent and the clamp below
-  // turns any stray value into 0 (off).
-  rd(&_prefs.trail_autosave_lowbatt, sizeof(_prefs.trail_autosave_lowbatt));
-  if (_prefs.trail_autosave_lowbatt > 1) _prefs.trail_autosave_lowbatt = 0;
-
-  // alarm_repeat_mask. Any value that isn't one of the four presets (stray
-  // bytes from an older file included) clamps to 0 (no repeat / one-shot).
-  rd(&_prefs.alarm_repeat_mask, sizeof(_prefs.alarm_repeat_mask));
-  if (NodePrefs::alarmRepeatIdxForMask(_prefs.alarm_repeat_mask) == 0) _prefs.alarm_repeat_mask = 0;
-
-  // keyboard_alt_alphabet. Stray/EOF bytes clamp to 0 (Latin only).
-  rd(&_prefs.keyboard_alt_alphabet, sizeof(_prefs.keyboard_alt_alphabet));
-  if (_prefs.keyboard_alt_alphabet >= NodePrefs::KB_ALPHABET_COUNT) _prefs.keyboard_alt_alphabet = 0;
-
-  // bot_dm_scope + the room-server bot fields. rd() zero-inits when absent,
-  // so an older file defaults to bot_dm_scope=0 (all DMs) and the room bot
-  // fully disabled (bot_room_enabled clamps to 0; an empty trigger never
-  // matches even if somehow set).
-  rd(&_prefs.bot_dm_scope, sizeof(_prefs.bot_dm_scope));
-  if (_prefs.bot_dm_scope > 1) _prefs.bot_dm_scope = 0;
-
-  rd(&_prefs.bot_room_enabled, sizeof(_prefs.bot_room_enabled));
-  if (_prefs.bot_room_enabled > 1) _prefs.bot_room_enabled = 0;
-  rd(_prefs.bot_room_prefix,  sizeof(_prefs.bot_room_prefix));
-  rd(_prefs.bot_trigger_room, sizeof(_prefs.bot_trigger_room));
-  rd(_prefs.bot_reply_room,   sizeof(_prefs.bot_reply_room));
-
-  // Per-target bot-commands toggle for channel/room too (DM keeps the
-  // original field). Stray/missing bytes clamp both to 0 (off) -- an
-  // upgrader from a version old enough to lack these re-enables channel/room
-  // bot commands manually rather than inheriting the old shared setting.
-  rd(&_prefs.bot_commands_ch, sizeof(_prefs.bot_commands_ch));
-  if (_prefs.bot_commands_ch > 1) _prefs.bot_commands_ch = 0;
-  rd(&_prefs.bot_commands_room, sizeof(_prefs.bot_commands_room));
-  if (_prefs.bot_commands_room > 1) _prefs.bot_commands_room = 0;
-
-  // keyboard_main_alphabet. Stray/EOF bytes clamp to 0 (Latin).
-  rd(&_prefs.keyboard_main_alphabet, sizeof(_prefs.keyboard_main_alphabet));
-  if (_prefs.keyboard_main_alphabet >= NodePrefs::KB_ALPHABET_COUNT) _prefs.keyboard_main_alphabet = 0;
-
-  // Per-target bot-actions toggles. Stray/missing bytes clamp to 0 (off) --
-  // these gate state-changing bot commands (!buzz/!gps/!advert), so an
-  // upgrader must opt in deliberately rather than get them silently enabled.
-  rd(&_prefs.bot_actions_dm, sizeof(_prefs.bot_actions_dm));
-  if (_prefs.bot_actions_dm > 1) _prefs.bot_actions_dm = 0;
-  rd(&_prefs.bot_actions_ch, sizeof(_prefs.bot_actions_ch));
-  if (_prefs.bot_actions_ch > 1) _prefs.bot_actions_ch = 0;
-  rd(&_prefs.bot_actions_room, sizeof(_prefs.bot_actions_room));
-  if (_prefs.bot_actions_room > 1) _prefs.bot_actions_room = 0;
-
-  // User-assignable GPIO pin modes (0=Off 1=In 2=Out-low 3=Out-high
-  // 4=Analog). Stray/missing bytes clamp to 0 (off). gpio1/gpio2 (AIN0/AIN5)
-  // allow mode 4; gpio3/gpio4 have no ADC channel, so their clamp stops at 3
-  // -- a stray 4 there falls back to Off rather than doing something undefined.
-  rd(&_prefs.gpio1_mode, sizeof(_prefs.gpio1_mode));
-  if (_prefs.gpio1_mode > 4) _prefs.gpio1_mode = 0;
-  rd(&_prefs.gpio2_mode, sizeof(_prefs.gpio2_mode));
-  if (_prefs.gpio2_mode > 4) _prefs.gpio2_mode = 0;
-  rd(&_prefs.gpio3_mode, sizeof(_prefs.gpio3_mode));
-  if (_prefs.gpio3_mode > 3) _prefs.gpio3_mode = 0;
-  rd(&_prefs.gpio4_mode, sizeof(_prefs.gpio4_mode));
-  if (_prefs.gpio4_mode > 3) _prefs.gpio4_mode = 0;
-
-  // External-keyboard compact-display toggle. Missing byte clamps to 0
-  // (full grid, unchanged behaviour for upgraders).
-  rd(&_prefs.keyboard_cardkb_compact, sizeof(_prefs.keyboard_cardkb_compact));
-  if (_prefs.keyboard_cardkb_compact > 1) _prefs.keyboard_cardkb_compact = 0;
-
-  // interference_threshold + cad_enabled. An older, shorter file has no bytes
-  // here, so these can read that file's own sentinel tail rather than zeroes;
-  // clamp both to 0/off. interference_threshold is dB above the measured
-  // noise floor (see RadioLibWrapper::isChannelActive()); anything past
-  // ~30 dB would never trigger anyway, so treat it as a stray byte and fall
-  // back to off.
-  rd(&_prefs.interference_threshold, sizeof(_prefs.interference_threshold));
-  if (_prefs.interference_threshold > 30) _prefs.interference_threshold = 0;
-  rd(&_prefs.cad_enabled, sizeof(_prefs.cad_enabled));
-  if (_prefs.cad_enabled > 1) _prefs.cad_enabled = 0;
-
-  // repeat_scope_only + repeat_extra_scopes, read at the tail (an earlier,
-  // now-burned layout had them mid-stream, which shifted every later field
-  // when reading an older file — see NodePrefs.h). Missing bytes clamp the
-  // flag to 0 (off) and leave the name list zero-initialised (empty string).
-  rd(&_prefs.repeat_scope_only, sizeof(_prefs.repeat_scope_only));
-  if (_prefs.repeat_scope_only > 1) _prefs.repeat_scope_only = 0;
-  rd(_prefs.repeat_extra_scopes, sizeof(_prefs.repeat_extra_scopes));
-  _prefs.repeat_extra_scopes[sizeof(_prefs.repeat_extra_scopes) - 1] = '\0';
-
-  // favourite_kinds. An older, shorter file has its own sentinel tail
-  // sitting here instead -- clamp anything unknown to CONTACT, which is
-  // what every slot saved before this field existed actually was.
-  rd(_prefs.favourite_kinds, sizeof(_prefs.favourite_kinds));
-  for (uint8_t i = 0; i < NodePrefs::FAVOURITES_COUNT; i++) {
-    if (_prefs.favourite_kinds[i] > NodePrefs::FAV_KIND_MAX)
-      _prefs.favourite_kinds[i] = NodePrefs::FAV_KIND_CONTACT;
-  }
-
-  // fav_sort_off. Inverted (see NodePrefs), so both a stray byte from an
-  // older file and a file that ends before this field clamp/zero to 0 =
-  // favourites on top, the default.
-  rd(&_prefs.fav_sort_off, sizeof(_prefs.fav_sort_off));
-  if (_prefs.fav_sort_off > 1) _prefs.fav_sort_off = 0;
-
-  // msg_wake_screen_off. Inverted (see NodePrefs), so both a stray byte from
-  // an older file and a file that ends before this field clamp/zero to 0 =
-  // wake screen for incoming msgs, the default.
-  rd(&_prefs.msg_wake_screen_off, sizeof(_prefs.msg_wake_screen_off));
-  if (_prefs.msg_wake_screen_off > 1) _prefs.msg_wake_screen_off = 0;
-
-  // repeat_extra_scope_mask + ch_scope_idx. An older, shorter file has stray
-  // sentinel-tail bytes sitting here instead -- read as-is; unlike the fields
-  // above these can't be range-clamped (every bit/byte value is technically a
-  // "valid" mask or index), so an upgrade from a version old enough to lack
-  // these two fields may see them start on a stray pick rather than empty.
-  // Re-saving prefs (e.g. any Settings change) overwrites it for good.
-  rd(&_prefs.repeat_extra_scope_mask, sizeof(_prefs.repeat_extra_scope_mask));
-  rd(_prefs.ch_scope_idx, sizeof(_prefs.ch_scope_idx));
-
-  // contact_expiry_idx. Stray byte from an older file clamps anything outside
-  // the real option range (see NodePrefs::contactExpiryDays) back to 0/Off --
-  // an upgrader must opt into pruning deliberately.
-  rd(&_prefs.contact_expiry_idx, sizeof(_prefs.contact_expiry_idx));
-  if (_prefs.contact_expiry_idx >= NodePrefs::CONTACT_EXPIRY_COUNT) _prefs.contact_expiry_idx = 0;
-
-  // loc_share_scope. 0 = follow the target. A stray byte from an older file is
-  // out of range (or is zeroed below on the sentinel transition) -> follow.
-  rd(&_prefs.loc_share_scope, sizeof(_prefs.loc_share_scope));
-  if (_prefs.loc_share_scope > ScopeList::MAX_SCOPE_ENTRIES + 1) _prefs.loc_share_scope = 0;
-
-  // loc_share_duration_idx. A stray byte from an older file is out of range -> 1 h.
-  rd(&_prefs.loc_share_duration_idx, sizeof(_prefs.loc_share_duration_idx));
-  if (_prefs.loc_share_duration_idx >= NodePrefs::LOC_SHARE_DURATION_COUNT) _prefs.loc_share_duration_idx = 0;
-
-  // display_brightness_pct. Over 100 -> 0 (use the level); an older file's
-  // sentinel byte landing here is zeroed below on the sentinel mismatch.
-  rd(&_prefs.display_brightness_pct, sizeof(_prefs.display_brightness_pct));
-  if (_prefs.display_brightness_pct > 100) _prefs.display_brightness_pct = 0;
-
-  // quiet_hours / quiet_from / quiet_to. Out of range -> off, 22-7; an older
-  // file's sentinel bytes landing here are reset below on the mismatch.
-  rd(&_prefs.quiet_hours, sizeof(_prefs.quiet_hours));
-  rd(&_prefs.quiet_from, sizeof(_prefs.quiet_from));
-  rd(&_prefs.quiet_to, sizeof(_prefs.quiet_to));
-  if (_prefs.quiet_hours > 1) _prefs.quiet_hours = 0;
-  if (_prefs.quiet_from > 23) _prefs.quiet_from = 22;
-  if (_prefs.quiet_to > 23) _prefs.quiet_to = 7;
-
-  // lock_screen_password / _salt: a salted SHA-256 of the screen PIN, all
-  // zeros = no PIN. An older file's sentinel bytes landing here are cleared
-  // below on the mismatch.
-  rd(_prefs.lock_screen_password, sizeof(_prefs.lock_screen_password));
-  rd(_prefs.lock_screen_password_salt, sizeof(_prefs.lock_screen_password_salt));
-
-  // batt_curve_mv: any point out of range or not rising -> the built-in curve.
-  rd(_prefs.batt_curve_mv, sizeof(_prefs.batt_curve_mv));
-  if (!battery::validCurve(_prefs.batt_curve_mv)) memset(_prefs.batt_curve_mv, 0, sizeof(_prefs.batt_curve_mv));
-  rd(&_prefs.lock_compact, sizeof(_prefs.lock_compact));
-  if (_prefs.lock_compact > 1) _prefs.lock_compact = 0;
-
-  // Schema sentinel: bumped on layout changes. Mismatch means an older file
-  // (or a different schema); rd() and the clamps above already keep every
-  // field within its valid range regardless, so we just log it here —
-  // next savePrefs() writes the current sentinel.
-  uint32_t sentinel = 0;
-  rd(&sentinel, sizeof(sentinel));
-  if (sentinel != NodePrefs::SCHEMA_SENTINEL) {
-    MESH_DEBUG_PRINTLN("prefs schema sentinel mismatch: got 0x%08X, expected 0x%08X — re-saving on next change",
-                       (unsigned)sentinel, (unsigned)NodePrefs::SCHEMA_SENTINEL);
-    // 0xC0DE0030 → 0xC0DE0031: the lock-screen PIN appended; from an older
-    // file it holds its sentinel's bytes, which would read as a PIN nobody knows.
-    // 0xC0DE0031 → 0xC0DE0032: the battery curve appended; an older file
-    // leaves stray bytes in it, so the built-in curve.
-    // 0xC0DE0032 → 0xC0DE0033: the lock screen look appended; big by default.
-    if (sentinel < 0xC0DE0033) _prefs.lock_compact = 0;
-    if (sentinel < 0xC0DE0032) memset(_prefs.batt_curve_mv, 0, sizeof(_prefs.batt_curve_mv));
-    if (sentinel < 0xC0DE0031) {
-      memset(_prefs.lock_screen_password, 0, sizeof(_prefs.lock_screen_password));
-      memset(_prefs.lock_screen_password_salt, 0, sizeof(_prefs.lock_screen_password_salt));
-    }
-    // 0xC0DE002F → 0xC0DE0030: quiet hours appended; from an older file they
-    // hold its sentinel's bytes, so start off, 22:00-07:00.
-    if (sentinel < 0xC0DE0030) { _prefs.quiet_hours = 0; _prefs.quiet_from = 22; _prefs.quiet_to = 7; }
-    // 0xC0DE002E → 0xC0DE002F: display_brightness_pct appended; from an older
-    // file it holds a stray sentinel byte (0x2E = "46 %"), so start from the level.
-    if (sentinel < 0xC0DE002F) _prefs.display_brightness_pct = 0;
-    // 0xC0DE002A (v1.27) → 0xC0DE002B: repeat_extra_scope_mask + ch_scope_idx
-    // appended. Unlike the range-clamped fields, these can't be left with whatever
-    // stray bytes rd() picked up from a pre-0x2B file's own sentinel tail:
-    // every bit/byte value is "valid" (any mask or index could be a real pick),
-    // so garbage here isn't caught by a range clamp -- it just silently
-    // masquerades as a real one, and can even reactivate later once the scope
-    // list grows long enough to reach an index that used to be out of range.
-    // Zero both outright on this transition; a fresh scope list is empty
-    // anyway, so there's nothing genuine to lose.
-    if (sentinel < 0xC0DE002B) {
-      _prefs.repeat_extra_scope_mask = 0;
-      memset(_prefs.ch_scope_idx, 0, sizeof(_prefs.ch_scope_idx));
-    }
-    // 0xC0DE002C → 0xC0DE002D: loc_share_scope appended. A 0x2C file's sentinel
-    // tail (0x2C) lands here and is in range, so zero it explicitly.
-    if (sentinel < 0xC0DE002D) _prefs.loc_share_scope = 0;
-  }
-
-  file.close();
+  auto flag = [](uint8_t& v, uint8_t def) { if (v > 1) v = def; };
+  if (p.ringtone_len > 32) p.ringtone_len = 0;
+  if (p.ringtone2_len > 32) p.ringtone2_len = 0;
+  if (p.notif_melody_dm > 3) p.notif_melody_dm = 0;
+  if (p.notif_melody_ch > 3) p.notif_melody_ch = 0;
+  if (p.notif_melody_ad > 3) p.notif_melody_ad = 0;
+  if (p.page_order_set != NodePrefs::PAGE_ORDER_MAGIC) p.page_order_set = 0;
+  for (uint8_t i = 0; i < NodePrefs::PAGE_ORDER_LEN; i++)
+    if (p.page_order[i] > NodePrefs::HPB_COUNT) p.page_order[i] = 0;
+  flag(p.repeat_skip_adverts, 0);
+  if (p.repeat_max_hops > 64) p.repeat_max_hops = 0;
+  if (p.repeat_delay_boost > 8) p.repeat_delay_boost = 0;
+  if (p.repeat_min_snr != NodePrefs::REPEAT_SNR_DISABLED && (p.repeat_min_snr < -20 || p.repeat_min_snr > 10))
+    p.repeat_min_snr = NodePrefs::REPEAT_SNR_DISABLED;   // the UI's -20..10
+  flag(p.repeat_suppress_dup, 0);
+  flag(p.repeat_scope_only, 0);
+  flag(p.repeater_use_profile, 0);
+  float lo, hi;
+  radio_driver.getFreqBounds(lo, hi);
+  if (!isValidRepeaterProfile(p.repeater_freq, p.repeater_bw, p.repeater_sf, p.repeater_cr, lo, hi))
+    seedDefaultRepeaterProfile(p);
+  flag(p.track_shared_loc, 0);
+  flag(p.loc_share_enabled, 0);
+  flag(p.loc_share_target_type, 0);
+  if (p.loc_share_channel_idx >= MAX_GROUP_CHANNELS) p.loc_share_channel_idx = 0;
+  if (p.loc_share_move_idx >= NodePrefs::LOC_SHARE_MOVE_COUNT) p.loc_share_move_idx = 1;
+  if (p.loc_share_interval_idx >= NodePrefs::LOC_SHARE_INTERVAL_COUNT) p.loc_share_interval_idx = 1;
+  if (p.loc_share_heartbeat_idx >= NodePrefs::LOC_SHARE_HEARTBEAT_COUNT) p.loc_share_heartbeat_idx = 0;
+  if (p.loc_share_scope > ScopeList::MAX_SCOPE_ENTRIES + 1) p.loc_share_scope = 0;
+  if (p.loc_share_duration_idx >= NodePrefs::LOC_SHARE_DURATION_COUNT) p.loc_share_duration_idx = 0;
+  flag(p.locator_enabled, 0);
+  flag(p.locator_has_target, 0);
+  flag(p.locator_beeper, 0);
+  if (p.locator_radius_idx >= NodePrefs::LOCATOR_RADIUS_COUNT) p.locator_radius_idx = 1;
+  if (p.locator_mode >= NodePrefs::LOCATOR_MODE_COUNT) p.locator_mode = 0;
+  if (p.locator_target_kind > 2) p.locator_target_kind = 0;
+  p.locator_label[sizeof(p.locator_label) - 1] = '\0';
+  if (p.trail_autopause_idx >= NodePrefs::TRAIL_AUTOPAUSE_COUNT) p.trail_autopause_idx = 0;
+  flag(p.trail_autosave_lowbatt, 0);
+  if (p.gps_avg_idx >= NodePrefs::GPS_AVG_COUNT) p.gps_avg_idx = 0;
+  flag(p.alarm_on, 0);
+  if (p.alarm_hour > 23) p.alarm_hour = 0;
+  if (p.alarm_min > 59) p.alarm_min = 0;
+  if (NodePrefs::alarmRepeatIdxForMask(p.alarm_repeat_mask) == 0) p.alarm_repeat_mask = 0;
+  flag(p.keyboard_type, 0);
+  if (p.keyboard_alt_alphabet >= NodePrefs::KB_ALPHABET_COUNT) p.keyboard_alt_alphabet = 0;
+  if (p.keyboard_main_alphabet >= NodePrefs::KB_ALPHABET_COUNT) p.keyboard_main_alphabet = 0;
+  flag(p.keyboard_cardkb_compact, 0);
+  flag(p.bot_commands_enabled, 0);
+  flag(p.bot_commands_ch, 0);
+  flag(p.bot_commands_room, 0);
+  flag(p.bot_actions_dm, 0);
+  flag(p.bot_actions_ch, 0);
+  flag(p.bot_actions_room, 0);
+  flag(p.bot_dm_scope, 0);
+  flag(p.bot_room_enabled, 0);
+  if (p.bot_quiet_start > 23) p.bot_quiet_start = 0;
+  if (p.bot_quiet_end > 23) p.bot_quiet_end = 0;
+  flag(p.use_lemon_font, 0);
+  flag(p.units_imperial, 0);
+  flag(p.trail_show_pace, 0);
+  if (p.advert_sound_scope > 1) p.advert_sound_scope = ADVERT_SOUND_SCOPE_ALL;
+  flag(p.rx_powersave, 0);
+  flag(p.tx_apc, 0);
+  if (p.dm_resend_count > 5) p.dm_resend_count = 2;
+  if (p.gpio1_mode > 4) p.gpio1_mode = 0;   // gpio1/2 can be analog (AIN0/AIN5)
+  if (p.gpio2_mode > 4) p.gpio2_mode = 0;
+  if (p.gpio3_mode > 3) p.gpio3_mode = 0;
+  if (p.gpio4_mode > 3) p.gpio4_mode = 0;
+  if (p.interference_threshold > 30) p.interference_threshold = 0;
+  flag(p.cad_enabled, 0);
+  for (uint8_t i = 0; i < NodePrefs::FAVOURITES_COUNT; i++)
+    if (p.favourite_kinds[i] > NodePrefs::FAV_KIND_MAX) p.favourite_kinds[i] = NodePrefs::FAV_KIND_CONTACT;
+  flag(p.fav_sort, 1);
+  flag(p.msg_wake, 1);
+  if (p.contact_expiry_idx >= NodePrefs::CONTACT_EXPIRY_COUNT) p.contact_expiry_idx = 0;
+  if (p.display_brightness_pct > 100) p.display_brightness_pct = 0;
+  flag(p.quiet_hours, 0);
+  if (p.quiet_from > 23) p.quiet_from = 22;
+  if (p.quiet_to > 23) p.quiet_to = 7;
+  if (!battery::validCurve(p.batt_curve_mv)) memset(p.batt_curve_mv, 0, sizeof(p.batt_curve_mv));
+  flag(p.lock_compact, 0);
 }
 
-void DataStore::savePrefs(const NodePrefs& _prefs, double node_lat, double node_lon) {
-  // Atomic temp-then-rename (see commitTempFile) so an interrupted save can't
-  // wipe settings; loadPrefs() still validates the tail sentinel on read.
-  File file = ::openWrite(_fs, "/new_prefs.tmp");
+// The settings a firmware before 2.0 kept in /new_prefs that still matter
+// after the update: its first block, laid out the same in upstream MeshCore
+// and in every Solo -- the node's name and position, its radio, the BLE PIN
+// and the default scope. Without them a device would come back on the
+// default radio, deaf to its mesh. The rest starts from the defaults.
+static void importOldPrefs(File& f, NodePrefs& p, double& lat, double& lon) {
+  uint8_t pad[4];
+  f.read((uint8_t*)&p.airtime_factor, sizeof(p.airtime_factor));
+  f.read((uint8_t*)p.node_name, sizeof(p.node_name));
+  f.read(pad, 4);
+  f.read((uint8_t*)&lat, sizeof(lat));
+  f.read((uint8_t*)&lon, sizeof(lon));
+  f.read((uint8_t*)&p.freq, sizeof(p.freq));
+  f.read((uint8_t*)&p.sf, sizeof(p.sf));
+  f.read((uint8_t*)&p.cr, sizeof(p.cr));
+  f.read((uint8_t*)&p.client_repeat, sizeof(p.client_repeat));
+  f.read((uint8_t*)&p.manual_add_contacts, sizeof(p.manual_add_contacts));
+  f.read((uint8_t*)&p.bw, sizeof(p.bw));
+  f.read((uint8_t*)&p.tx_power_dbm, sizeof(p.tx_power_dbm));
+  f.read((uint8_t*)&p.telemetry_mode_base, sizeof(p.telemetry_mode_base));
+  f.read((uint8_t*)&p.telemetry_mode_loc, sizeof(p.telemetry_mode_loc));
+  f.read((uint8_t*)&p.telemetry_mode_env, sizeof(p.telemetry_mode_env));
+  f.read((uint8_t*)&p.rx_delay_base, sizeof(p.rx_delay_base));
+  f.read((uint8_t*)&p.advert_loc_policy, sizeof(p.advert_loc_policy));
+  f.read((uint8_t*)&p.multi_acks, sizeof(p.multi_acks));
+  f.read((uint8_t*)&p.path_hash_mode, sizeof(p.path_hash_mode));
+  f.read(pad, 1);
+  f.read((uint8_t*)&p.ble_pin, sizeof(p.ble_pin));
+  f.read((uint8_t*)&p.buzzer_quiet, sizeof(p.buzzer_quiet));
+  f.read((uint8_t*)&p.gps_enabled, sizeof(p.gps_enabled));
+  f.read((uint8_t*)&p.gps_interval, sizeof(p.gps_interval));
+  f.read((uint8_t*)&p.autoadd_config, sizeof(p.autoadd_config));
+  f.read((uint8_t*)&p.autoadd_max_hops, sizeof(p.autoadd_max_hops));
+  f.read((uint8_t*)&p.rx_boosted_gain, sizeof(p.rx_boosted_gain));
+  f.read((uint8_t*)p.default_scope_name, sizeof(p.default_scope_name));
+  f.read((uint8_t*)p.default_scope_key, sizeof(p.default_scope_key));
+  p.node_name[sizeof(p.node_name) - 1] = '\0';
+  p.default_scope_name[sizeof(p.default_scope_name) - 1] = '\0';
+  if (p.client_repeat > 1) p.client_repeat = 0;
+  if (p.buzzer_quiet > 1) p.buzzer_quiet = 0;
+}
+
+// `prefs` comes in holding the defaults; what the file holds replaces them.
+void DataStore::loadPrefs(NodePrefs& prefs, double& node_lat, double& node_lon) {
+  File file = openRead(_fs, "/prefs");
   if (file) {
-    uint8_t pad[8];
-    memset(pad, 0, sizeof(pad));
-
-    file.write((uint8_t *)&_prefs.airtime_factor, sizeof(float));
-    file.write((uint8_t *)_prefs.node_name, sizeof(_prefs.node_name));
-    file.write(pad, 4);
-    file.write((uint8_t *)&node_lat, sizeof(node_lat));
-    file.write((uint8_t *)&node_lon, sizeof(node_lon));
-    file.write((uint8_t *)&_prefs.freq, sizeof(_prefs.freq));
-    file.write((uint8_t *)&_prefs.sf, sizeof(_prefs.sf));
-    file.write((uint8_t *)&_prefs.cr, sizeof(_prefs.cr));
-    file.write((uint8_t *)&_prefs.client_repeat, sizeof(_prefs.client_repeat));
-    file.write((uint8_t *)&_prefs.manual_add_contacts, sizeof(_prefs.manual_add_contacts));
-    file.write((uint8_t *)&_prefs.bw, sizeof(_prefs.bw));
-    file.write((uint8_t *)&_prefs.tx_power_dbm, sizeof(_prefs.tx_power_dbm));
-    file.write((uint8_t *)&_prefs.telemetry_mode_base, sizeof(_prefs.telemetry_mode_base));
-    file.write((uint8_t *)&_prefs.telemetry_mode_loc, sizeof(_prefs.telemetry_mode_loc));
-    file.write((uint8_t *)&_prefs.telemetry_mode_env, sizeof(_prefs.telemetry_mode_env));
-    file.write((uint8_t *)&_prefs.rx_delay_base, sizeof(_prefs.rx_delay_base));
-    file.write((uint8_t *)&_prefs.advert_loc_policy, sizeof(_prefs.advert_loc_policy));
-    file.write((uint8_t *)&_prefs.multi_acks, sizeof(_prefs.multi_acks));
-    file.write((uint8_t *)&_prefs.path_hash_mode, sizeof(_prefs.path_hash_mode));
-    file.write(pad, 1);
-    file.write((uint8_t *)&_prefs.ble_pin, sizeof(_prefs.ble_pin));
-    file.write((uint8_t *)&_prefs.buzzer_quiet, sizeof(_prefs.buzzer_quiet));
-    file.write((uint8_t *)&_prefs.gps_enabled, sizeof(_prefs.gps_enabled));
-    file.write((uint8_t *)&_prefs.gps_interval, sizeof(_prefs.gps_interval));
-    file.write((uint8_t *)&_prefs.autoadd_config, sizeof(_prefs.autoadd_config));
-    file.write((uint8_t *)&_prefs.autoadd_max_hops, sizeof(_prefs.autoadd_max_hops));
-    file.write((uint8_t *)&_prefs.rx_boosted_gain, sizeof(_prefs.rx_boosted_gain));
-    file.write((uint8_t *)_prefs.default_scope_name, sizeof(_prefs.default_scope_name));
-    file.write((uint8_t *)_prefs.default_scope_key, sizeof(_prefs.default_scope_key));
-    file.write((uint8_t *)&_prefs.display_brightness, sizeof(_prefs.display_brightness));
-    file.write((uint8_t *)&_prefs.auto_off_secs, sizeof(_prefs.auto_off_secs));
-    file.write((uint8_t *)&_prefs.tz_offset_hours, sizeof(_prefs.tz_offset_hours));
-    file.write((uint8_t *)&_prefs.low_batt_mv, sizeof(_prefs.low_batt_mv));
-    file.write((uint8_t *)&_prefs.batt_display_mode, sizeof(_prefs.batt_display_mode));
-    file.write((uint8_t *)_prefs.custom_msgs, sizeof(_prefs.custom_msgs));
-    file.write((uint8_t *)&_prefs.ch_notif_override, sizeof(_prefs.ch_notif_override));
-    file.write((uint8_t *)&_prefs.ch_notif_muted, sizeof(_prefs.ch_notif_muted));
-    file.write((uint8_t *)&_prefs.dm_show_all, sizeof(_prefs.dm_show_all));
-    file.write((uint8_t *)&_prefs.room_fav_only, sizeof(_prefs.room_fav_only));
-    file.write((uint8_t *)&_prefs.buzzer_volume, sizeof(_prefs.buzzer_volume));
-    file.write((uint8_t *)&_prefs.ringtone_bpm_idx, sizeof(_prefs.ringtone_bpm_idx));
-    file.write((uint8_t *)&_prefs.ringtone_len, sizeof(_prefs.ringtone_len));
-    file.write((uint8_t *)_prefs.ringtone_notes, sizeof(_prefs.ringtone_notes));
-    file.write((uint8_t *)&_prefs.home_pages_mask, sizeof(_prefs.home_pages_mask));
-    file.write((uint8_t *)&_prefs.bot_enabled, sizeof(_prefs.bot_enabled));
-    file.write((uint8_t *)&_prefs.bot_channel_enabled, sizeof(_prefs.bot_channel_enabled));
-    file.write((uint8_t *)&_prefs.bot_channel_idx, sizeof(_prefs.bot_channel_idx));
-    file.write((uint8_t *)_prefs.bot_trigger, sizeof(_prefs.bot_trigger));
-    file.write((uint8_t *)_prefs.bot_reply_dm, sizeof(_prefs.bot_reply_dm));
-    file.write((uint8_t *)_prefs.bot_reply_ch, sizeof(_prefs.bot_reply_ch));
-    file.write((uint8_t *)&_prefs.clock_hide_seconds, sizeof(_prefs.clock_hide_seconds));
-    file.write((uint8_t *)&_prefs.buzzer_auto, sizeof(_prefs.buzzer_auto));
-    file.write((uint8_t *)_prefs.dm_notif, sizeof(_prefs.dm_notif));
-    file.write((uint8_t *)_prefs.dashboard_fields, sizeof(_prefs.dashboard_fields));
-    file.write((uint8_t *)&_prefs.advert_auto_interval_sec, sizeof(_prefs.advert_auto_interval_sec));
-    file.write((uint8_t *)&_prefs.ringtone2_bpm_idx, sizeof(_prefs.ringtone2_bpm_idx));
-    file.write((uint8_t *)&_prefs.ringtone2_len, sizeof(_prefs.ringtone2_len));
-    file.write((uint8_t *)_prefs.ringtone2_notes, sizeof(_prefs.ringtone2_notes));
-    file.write((uint8_t *)&_prefs.notif_melody_dm, sizeof(_prefs.notif_melody_dm));
-    file.write((uint8_t *)&_prefs.notif_melody_ch, sizeof(_prefs.notif_melody_ch));
-    file.write((uint8_t *)&_prefs.ch_notif_melody_set, sizeof(_prefs.ch_notif_melody_set));
-    file.write((uint8_t *)&_prefs.ch_notif_melody_2, sizeof(_prefs.ch_notif_melody_2));
-    file.write((uint8_t *)_prefs.dm_melody, sizeof(_prefs.dm_melody));
-    file.write((uint8_t *)&_prefs.auto_lock, sizeof(_prefs.auto_lock));
-    file.write((uint8_t *)&_prefs.clock_12h, sizeof(_prefs.clock_12h));
-    file.write((uint8_t *)&_prefs.use_lemon_font, sizeof(_prefs.use_lemon_font));
-    file.write((uint8_t *)&_prefs.display_rotation, sizeof(_prefs.display_rotation));
-    file.write((uint8_t *)_prefs.page_order, NodePrefs::PAGE_ORDER_LEN_V1);  // head; tail slots written below
-    file.write((uint8_t *)&_prefs.joystick_rotation, sizeof(_prefs.joystick_rotation));
-    file.write((uint8_t *)&_prefs.eink_full_refresh_every, sizeof(_prefs.eink_full_refresh_every));
-    file.write((uint8_t *)&_prefs.page_order_set, sizeof(_prefs.page_order_set));
-    file.write((uint8_t *)_prefs.favourite_contacts, sizeof(_prefs.favourite_contacts));
-    file.write((uint8_t *)&_prefs.trail_interval_idx,  sizeof(_prefs.trail_interval_idx));
-    file.write((uint8_t *)&_prefs.trail_min_delta_idx, sizeof(_prefs.trail_min_delta_idx));
-    file.write((uint8_t *)&_prefs.trail_units_idx,     sizeof(_prefs.trail_units_idx));
-    file.write((uint8_t *)&_prefs.ch_fav_bitmask,      sizeof(_prefs.ch_fav_bitmask));
-    file.write((uint8_t *)&_prefs.ch_fav_only,         sizeof(_prefs.ch_fav_only));
-    file.write((uint8_t *)&_prefs.notif_melody_ad,     sizeof(_prefs.notif_melody_ad));
-    file.write((uint8_t *)&_prefs.units_imperial,      sizeof(_prefs.units_imperial));
-    file.write((uint8_t *)&_prefs.trail_show_pace,     sizeof(_prefs.trail_show_pace));
-    file.write((uint8_t *)&_prefs.advert_sound_scope,  sizeof(_prefs.advert_sound_scope));
-    file.write((uint8_t *)&_prefs.rx_powersave,        sizeof(_prefs.rx_powersave));
-    file.write((uint8_t *)&_prefs.tx_apc,              sizeof(_prefs.tx_apc));
-    file.write((uint8_t *)&_prefs.dm_resend_count,     sizeof(_prefs.dm_resend_count));
-    file.write((uint8_t *)&_prefs.bot_commands_enabled, sizeof(_prefs.bot_commands_enabled));
-    file.write((uint8_t *)&_prefs.bot_quiet_start,     sizeof(_prefs.bot_quiet_start));
-    file.write((uint8_t *)&_prefs.bot_quiet_end,       sizeof(_prefs.bot_quiet_end));
-    file.write((uint8_t *)_prefs.bot_trigger_ch,       sizeof(_prefs.bot_trigger_ch));
-    file.write((uint8_t *)_prefs.user_radio_presets,   sizeof(_prefs.user_radio_presets));
-    file.write((uint8_t *)&_prefs.repeat_skip_adverts,  sizeof(_prefs.repeat_skip_adverts));
-    file.write((uint8_t *)&_prefs.repeat_max_hops,      sizeof(_prefs.repeat_max_hops));
-    file.write((uint8_t *)&_prefs.repeat_delay_boost,   sizeof(_prefs.repeat_delay_boost));
-    file.write((uint8_t *)&_prefs.repeat_min_snr,       sizeof(_prefs.repeat_min_snr));
-    file.write((uint8_t *)&_prefs.repeat_suppress_dup,  sizeof(_prefs.repeat_suppress_dup));
-    // repeat_scope_only/repeat_extra_scopes are written at the TAIL — see loadPrefsInt().
-    file.write((uint8_t *)&_prefs.repeater_use_profile, sizeof(_prefs.repeater_use_profile));
-    file.write((uint8_t *)&_prefs.repeater_freq,        sizeof(_prefs.repeater_freq));
-    file.write((uint8_t *)&_prefs.repeater_bw,          sizeof(_prefs.repeater_bw));
-    file.write((uint8_t *)&_prefs.repeater_sf,          sizeof(_prefs.repeater_sf));
-    file.write((uint8_t *)&_prefs.repeater_cr,          sizeof(_prefs.repeater_cr));
-    file.write((uint8_t *)&_prefs.track_shared_loc,     sizeof(_prefs.track_shared_loc));
-    file.write((uint8_t *)&_prefs.loc_share_enabled,     sizeof(_prefs.loc_share_enabled));
-    file.write((uint8_t *)&_prefs.loc_share_target_type, sizeof(_prefs.loc_share_target_type));
-    file.write((uint8_t *)&_prefs.loc_share_channel_idx, sizeof(_prefs.loc_share_channel_idx));
-    file.write((uint8_t *)_prefs.loc_share_dm_prefix,    sizeof(_prefs.loc_share_dm_prefix));
-    file.write((uint8_t *)&_prefs.loc_share_move_idx,    sizeof(_prefs.loc_share_move_idx));
-    file.write((uint8_t *)&_prefs.loc_share_interval_idx, sizeof(_prefs.loc_share_interval_idx));
-    file.write((uint8_t *)&_prefs.loc_share_heartbeat_idx, sizeof(_prefs.loc_share_heartbeat_idx));
-    file.write((uint8_t *)&_prefs.locator_enabled,    sizeof(_prefs.locator_enabled));
-    file.write((uint8_t *)&_prefs.locator_has_target, sizeof(_prefs.locator_has_target));
-    file.write((uint8_t *)&_prefs.locator_radius_idx, sizeof(_prefs.locator_radius_idx));
-    file.write((uint8_t *)&_prefs.locator_mode,       sizeof(_prefs.locator_mode));
-    file.write((uint8_t *)&_prefs.locator_lat_1e6,    sizeof(_prefs.locator_lat_1e6));
-    file.write((uint8_t *)&_prefs.locator_lon_1e6,    sizeof(_prefs.locator_lon_1e6));
-    file.write((uint8_t *)_prefs.locator_label,       sizeof(_prefs.locator_label));
-    file.write((uint8_t *)&_prefs.trail_autopause_idx,  sizeof(_prefs.trail_autopause_idx));
-    file.write((uint8_t *)&_prefs.locator_beeper,     sizeof(_prefs.locator_beeper));
-    file.write((uint8_t *)&_prefs.locator_target_kind, sizeof(_prefs.locator_target_kind));
-    file.write((uint8_t *)_prefs.locator_key,         sizeof(_prefs.locator_key));
-    file.write((uint8_t *)&_prefs.gps_avg_idx,        sizeof(_prefs.gps_avg_idx));
-    file.write((uint8_t *)&_prefs.alarm_on,           sizeof(_prefs.alarm_on));
-    file.write((uint8_t *)&_prefs.alarm_hour,         sizeof(_prefs.alarm_hour));
-    file.write((uint8_t *)&_prefs.alarm_min,          sizeof(_prefs.alarm_min));
-    file.write((uint8_t *)&_prefs.keyboard_type,      sizeof(_prefs.keyboard_type));
-    // page_order tail slots (see loadPrefsInt): entries beyond PAGE_ORDER_LEN_V1,
-    // appended here so the on-disk head stays the original 11 bytes.
-    file.write((uint8_t *)&_prefs.page_order[NodePrefs::PAGE_ORDER_LEN_V1],
-               NodePrefs::PAGE_ORDER_LEN - NodePrefs::PAGE_ORDER_LEN_V1);
-    file.write((uint8_t *)&_prefs.trail_autosave_lowbatt, sizeof(_prefs.trail_autosave_lowbatt));
-    file.write((uint8_t *)&_prefs.alarm_repeat_mask,      sizeof(_prefs.alarm_repeat_mask));
-    file.write((uint8_t *)&_prefs.keyboard_alt_alphabet,  sizeof(_prefs.keyboard_alt_alphabet));
-    file.write((uint8_t *)&_prefs.bot_dm_scope,      sizeof(_prefs.bot_dm_scope));
-    file.write((uint8_t *)&_prefs.bot_room_enabled,  sizeof(_prefs.bot_room_enabled));
-    file.write((uint8_t *)_prefs.bot_room_prefix,    sizeof(_prefs.bot_room_prefix));
-    file.write((uint8_t *)_prefs.bot_trigger_room,   sizeof(_prefs.bot_trigger_room));
-    file.write((uint8_t *)_prefs.bot_reply_room,     sizeof(_prefs.bot_reply_room));
-    file.write((uint8_t *)&_prefs.bot_commands_ch,   sizeof(_prefs.bot_commands_ch));
-    file.write((uint8_t *)&_prefs.bot_commands_room, sizeof(_prefs.bot_commands_room));
-    file.write((uint8_t *)&_prefs.keyboard_main_alphabet, sizeof(_prefs.keyboard_main_alphabet));
-    file.write((uint8_t *)&_prefs.bot_actions_dm,   sizeof(_prefs.bot_actions_dm));
-    file.write((uint8_t *)&_prefs.bot_actions_ch,   sizeof(_prefs.bot_actions_ch));
-    file.write((uint8_t *)&_prefs.bot_actions_room, sizeof(_prefs.bot_actions_room));
-    file.write((uint8_t *)&_prefs.gpio1_mode, sizeof(_prefs.gpio1_mode));
-    file.write((uint8_t *)&_prefs.gpio2_mode, sizeof(_prefs.gpio2_mode));
-    file.write((uint8_t *)&_prefs.gpio3_mode, sizeof(_prefs.gpio3_mode));
-    file.write((uint8_t *)&_prefs.gpio4_mode, sizeof(_prefs.gpio4_mode));
-    file.write((uint8_t *)&_prefs.keyboard_cardkb_compact, sizeof(_prefs.keyboard_cardkb_compact));
-    file.write((uint8_t *)&_prefs.interference_threshold, sizeof(_prefs.interference_threshold));
-    file.write((uint8_t *)&_prefs.cad_enabled, sizeof(_prefs.cad_enabled));
-    file.write((uint8_t *)&_prefs.repeat_scope_only,  sizeof(_prefs.repeat_scope_only));
-    file.write((uint8_t *)_prefs.repeat_extra_scopes, sizeof(_prefs.repeat_extra_scopes));
-    file.write((uint8_t *)_prefs.favourite_kinds, sizeof(_prefs.favourite_kinds));
-    file.write((uint8_t *)&_prefs.fav_sort_off, sizeof(_prefs.fav_sort_off));
-    file.write((uint8_t *)&_prefs.msg_wake_screen_off, sizeof(_prefs.msg_wake_screen_off));
-    file.write((uint8_t *)&_prefs.repeat_extra_scope_mask, sizeof(_prefs.repeat_extra_scope_mask));
-    file.write((uint8_t *)_prefs.ch_scope_idx, sizeof(_prefs.ch_scope_idx));
-    file.write((uint8_t *)&_prefs.contact_expiry_idx, sizeof(_prefs.contact_expiry_idx));
-    file.write((uint8_t *)&_prefs.loc_share_scope, sizeof(_prefs.loc_share_scope));
-    file.write((uint8_t *)&_prefs.loc_share_duration_idx, sizeof(_prefs.loc_share_duration_idx));
-    file.write((uint8_t *)&_prefs.display_brightness_pct, sizeof(_prefs.display_brightness_pct));
-    file.write((uint8_t *)&_prefs.quiet_hours, sizeof(_prefs.quiet_hours));
-    file.write((uint8_t *)&_prefs.quiet_from, sizeof(_prefs.quiet_from));
-    file.write((uint8_t *)&_prefs.quiet_to, sizeof(_prefs.quiet_to));
-    file.write((uint8_t *)_prefs.lock_screen_password, sizeof(_prefs.lock_screen_password));
-    file.write((uint8_t *)_prefs.lock_screen_password_salt, sizeof(_prefs.lock_screen_password_salt));
-    file.write((uint8_t *)_prefs.batt_curve_mv, sizeof(_prefs.batt_curve_mv));
-    file.write((uint8_t *)&_prefs.lock_compact, sizeof(_prefs.lock_compact));
-
-    // Tail sentinel — must be last. See NodePrefs::SCHEMA_SENTINEL. Its write is
-    // the one we check: once the flash fills, writes return 0, so a good
-    // sentinel write means the whole record fit. Only then swap it in.
-    uint32_t sentinel = NodePrefs::SCHEMA_SENTINEL;
-    bool ok = (file.write((uint8_t *)&sentinel, sizeof(sentinel)) == sizeof(sentinel));
-
-    file.close();
+    PrefsHeader h;
+    NodePrefs* tmp = new NodePrefs(prefs);   // a field the file is too short for keeps its default
+    double lat = 0, lon = 0;
+    bool ok = file.read((uint8_t*)&h, sizeof(h)) == sizeof(h)
+           && h.magic == PREFS_MAGIC && h.version == NodePrefs::PREFS_VERSION
+           && file.read((uint8_t*)&lat, sizeof(lat)) == sizeof(lat)
+           && file.read((uint8_t*)&lon, sizeof(lon)) == sizeof(lon);
     if (ok) {
-      commitTempFile(_fs, "/new_prefs.tmp", "/new_prefs");
-    } else {
-      _fs->remove("/new_prefs.tmp");   // keep the previous good /new_prefs
+      const size_t n = h.size < sizeof(NodePrefs) ? h.size : sizeof(NodePrefs);
+      ok = file.read((uint8_t*)tmp, n) == (int)n;
+      uint32_t crc = crc32(0, (const uint8_t*)&lat, sizeof(lat));
+      crc = crc32(crc, (const uint8_t*)&lon, sizeof(lon));
+      ok = ok && crc32(crc, (const uint8_t*)tmp, n) == h.crc;
+    }
+    file.close();
+    if (ok) { prefs = *tmp; node_lat = lat; node_lon = lon; }
+    else MESH_DEBUG_PRINTLN("prefs: /prefs unreadable (another version or damaged), defaults kept");
+    delete tmp;
+  } else {   // first boot after an update from before 2.0 (/node_prefs: older still, the same layout)
+    for (const char* old : { "/new_prefs", "/node_prefs" }) {
+      if (!_fs->exists(old)) continue;
+      if ((file = openRead(_fs, old))) {
+        importOldPrefs(file, prefs, node_lat, node_lon);
+        file.close();
+        savePrefs(prefs, node_lat, node_lon);
+      }
+      _fs->remove(old);
+      break;
     }
   }
+  sanitize(prefs);
+}
+
+void DataStore::savePrefs(const NodePrefs& prefs, double node_lat, double node_lon) {
+  // Atomic temp-then-rename (see commitTempFile): an interrupted save leaves
+  // the previous /prefs in place.
+  File file = ::openWrite(_fs, "/prefs.tmp");
+  if (!file) return;
+  PrefsHeader h = { PREFS_MAGIC, NodePrefs::PREFS_VERSION, (uint16_t)sizeof(NodePrefs), 0 };
+  h.crc = crc32(0, (const uint8_t*)&node_lat, sizeof(node_lat));
+  h.crc = crc32(h.crc, (const uint8_t*)&node_lon, sizeof(node_lon));
+  h.crc = crc32(h.crc, (const uint8_t*)&prefs, sizeof(NodePrefs));
+  // Once the flash fills, writes come back short: only a whole record replaces the old one.
+  bool ok = file.write((const uint8_t*)&h, sizeof(h)) == sizeof(h)
+         && file.write((const uint8_t*)&node_lat, sizeof(node_lat)) == sizeof(node_lat)
+         && file.write((const uint8_t*)&node_lon, sizeof(node_lon)) == sizeof(node_lon)
+         && file.write((const uint8_t*)&prefs, sizeof(NodePrefs)) == sizeof(NodePrefs);
+  file.close();
+  if (ok) commitTempFile(_fs, "/prefs.tmp", "/prefs");
+  else _fs->remove("/prefs.tmp");
 }
 
 void DataStore::saveRTCTime() {

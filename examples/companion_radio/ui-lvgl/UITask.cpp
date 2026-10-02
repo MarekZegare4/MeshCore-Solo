@@ -2248,7 +2248,7 @@ void UITask::onMessageArrived(const UiEvent& ev) {
   }
   // Wake for the message unless an app is already showing it, or the user
   // turned message-wake off.
-  bool wake_disabled = _prefs && (_prefs->msg_wake_screen_off || inQuietHours(*_prefs, rtc_clock.getCurrentTime()));   // quiet hours: dark too
+  bool wake_disabled = _prefs && (!_prefs->msg_wake || inQuietHours(*_prefs, rtc_clock.getCurrentTime()));   // quiet hours: dark too
   if (_asleep && !wake_disabled && !isClientConnected()) wake();
   else if (!_asleep) lv_display_trigger_activity(NULL);
   bool open_here = _screen == SCR_THREAD &&
@@ -3226,7 +3226,7 @@ void UITask::fillChats() {
   bool ch_fav_only = _prefs && _prefs->ch_fav_only;
   chatSection(body, "CHANNELS", FOLD_CHANNELS, _core->history.getTotalChannelUnread(), CF_CHANNELS, ch_fav_only);
   own();
-  bool fav_first = !(_prefs && _prefs->fav_sort_off);
+  bool fav_first = !_prefs || _prefs->fav_sort;
   int ch_rows = 0;
   for (int pass = fav_first ? 0 : 1; pass < 2 && !chatFolded(FOLD_CHANNELS); pass++) {
     for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
@@ -4636,7 +4636,7 @@ void UITask::buildSchemaSettings() {
       lv_obj_t* g = group(body, "SCREEN");
       schemaRow(g, SETTING(display_brightness));
       schemaRow(g, SETTING(auto_off_secs));
-      schemaRow(g, SETTING(msg_wake_screen_off));
+      schemaRow(g, SETTING(msg_wake));
       lv_obj_t* tw = switchRow(g, "Tap to wake", "Off: only the top button wakes it", nullptr);   // in NVS
       if (_tap_wake) lv_obj_add_state(tw, LV_STATE_CHECKED);
       lv_obj_add_event_cb(tw, onTapWake, LV_EVENT_VALUE_CHANGED, NULL);

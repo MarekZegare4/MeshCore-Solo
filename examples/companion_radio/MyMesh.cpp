@@ -1848,14 +1848,15 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   _prefs.bw = LORA_BW;
   _prefs.cr = LORA_CR;
   _prefs.tx_power_dbm = LORA_TX_POWER;
-  // Repeater profile default for a true first boot (no prefs file yet, so
-  // loadPrefs() below is a no-op) — same band-matched seed as the upgrade
-  // path in DataStore.cpp.
+  // The repeater's own radio profile, in the companion's band.
   seedDefaultRepeaterProfile(_prefs);
   _prefs.gps_enabled = 0;       // GPS disabled by default
   _prefs.gps_interval = 0;      // No automatic GPS updates by default
   _prefs.radio_fem_rxgain = 1;
   _prefs.radio_fem_txgain = 0;
+#ifdef DISPLAY_ROTATION
+  _prefs.display_rotation = DISPLAY_ROTATION;
+#endif
   _prefs.display_brightness = 2; // medium brightness by default
   _prefs.buzzer_volume = 4;      // max volume by default
   _prefs.quiet_from = 22;        // quiet hours (off by default) 22:00-07:00
@@ -1877,6 +1878,8 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   _prefs.bot_quiet_start = 0;
   _prefs.bot_quiet_end = 0;       // start==end → quiet hours disabled
   _prefs.dm_show_all = 1;        // show all contacts by default
+  _prefs.fav_sort = 1;           // favourites first in lists
+  _prefs.msg_wake = 1;           // a new message turns the screen on
   _prefs.dm_resend_count = 2;    // auto-resend on-device DMs twice by default
   memset(_prefs.dm_notif, 0, sizeof(_prefs.dm_notif));
   _prefs.auto_off_secs = 15;    // 15 seconds auto-off by default
@@ -1886,8 +1889,7 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   _prefs.batt_display_mode = 0; // icon by default
   //_prefs.rx_delay_base = 10.0f;  enable once new algo fixed
   _prefs.client_repeat = 0;
-  // 0 dB is a real threshold, so "off" is its own sentinel. DataStore sets it
-  // too, but only when a prefs file exists -- a fresh device must start off.
+  // 0 dB is a real threshold, so "off" is its own sentinel.
   _prefs.repeat_min_snr = NodePrefs::REPEAT_SNR_DISABLED;
 #if defined(USE_SX1262) || defined(USE_SX1268)
 #ifdef SX126X_RX_BOOSTED_GAIN

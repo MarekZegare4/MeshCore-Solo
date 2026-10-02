@@ -325,46 +325,23 @@ class SettingsScreen : public UIScreen {
   }
 
   // Initialises page_order to the default display sequence if not already set.
-  // Also repairs a partially-initialised order where CLOCK is absent; migrates
-  // older orders by inserting FAVOURITES after CLOCK; and appends any pages that
-  // are absent from a stale saved order (e.g. TOOLS/MESSAGES added by later firmware).
+  // Also repairs a partially-initialised order where CLOCK is absent, and
+  // appends any pages absent from a saved order (pages a later firmware added).
   void ensurePageOrderInit(NodePrefs* p) const {
     if (!p) return;
     if (p->page_order_set == NodePrefs::PAGE_ORDER_MAGIC) {
       bool has_clock = false;
-      bool has_fav   = false;
-      int  len       = 0;
-      int  clock_at  = -1;
       for (int i = 0; i < NodePrefs::PAGE_ORDER_LEN; i++) {
         uint8_t v = p->page_order[i];
         if (v < 1 || v > NodePrefs::HPB_COUNT) break;
-        if ((int)(v - 1) == NodePrefs::HPB_CLOCK)      { has_clock = true; clock_at = i; }
-        if ((int)(v - 1) == NodePrefs::HPB_FAVOURITES) { has_fav = true; }
-        len = i + 1;
+        if ((int)(v - 1) == NodePrefs::HPB_CLOCK) has_clock = true;
       }
       if (!has_clock) {
         // Corrupted/partial — full re-init below.
         memset(p->page_order, 0, sizeof(p->page_order));
       } else {
-        if (!has_fav) {
-          // Insert FAVOURITES right after CLOCK. Real orders are shorter than
-          // PAGE_ORDER_LEN so there's room; only a pathologically full order would
-          // drop its last entry, which buildVisibleOrder's fallback re-appends.
-          int insert_at = clock_at + 1;
-          // Guard against a saved order with all PAGE_ORDER_LEN slots already
-          // valid and CLOCK in the last one: insert_at would be PAGE_ORDER_LEN,
-          // one past the array, and the shift loop below wouldn't run (tail is
-          // clamped to the last index) to catch it -- the write would land one
-          // byte past page_order, into whatever NodePrefs field follows.
-          if (insert_at < NodePrefs::PAGE_ORDER_LEN) {
-            int tail = (len < NodePrefs::PAGE_ORDER_LEN) ? len : NodePrefs::PAGE_ORDER_LEN - 1;
-            for (int i = tail; i > insert_at; i--) p->page_order[i] = p->page_order[i - 1];
-            p->page_order[insert_at] = NodePrefs::HPB_FAVOURITES + 1;
-          }
-        }
         // Append any pages that are absent from the saved order (e.g. added by a
-        // later firmware version). Recount first since the block above may have
-        // just inserted FAVOURITES.
+        // later firmware version).
         {
           uint16_t present = 0;
           int cur_len = 0;
@@ -375,8 +352,8 @@ class SettingsScreen : public UIScreen {
             cur_len++;
           }
           // Every page has a slot now (PAGE_ORDER_LEN == HPB_COUNT), so all pages
-          // are required — any missing from a stale saved order (SHUTDOWN and MAP
-          // for pre-0x0019 upgraders) is appended into the free tail slots below.
+          // are required — any missing from a saved order is appended into the
+          // free tail slots below.
           static const uint8_t REQUIRED[] = {
             NodePrefs::HPB_CLOCK, NodePrefs::HPB_FAVOURITES,
             NodePrefs::HPB_RECENT, NodePrefs::HPB_RADIO,

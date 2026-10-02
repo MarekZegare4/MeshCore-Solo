@@ -348,12 +348,16 @@ slow e-ink refresh:
 Device settings live in one `NodePrefs` struct (`NodePrefs.h`), saved via
 `the_mesh.savePrefs()` and loaded by `DataStore.cpp`. Rules when adding a field:
 
-- **Append only**, and bump `NodePrefs::SCHEMA_SENTINEL`. Serialization is
-  binary-positional, so order is the on-disk format; never insert in the middle.
-- Add a matching `rd(...)` in `DataStore::loadPrefsInt()` and a `file.write(...)`
-  in `savePrefs()`, in the same position, and **clamp on load** (an upgrader's
-  file lacks the field and reads stray bytes — clamp to a sane default). Saves
-  are atomic (temp-file + rename), so a crash mid-save can't corrupt settings.
+- `/prefs` holds the struct as it is in memory, behind a header with a format
+  version and a CRC. **Add a new field at the end of the struct**; nothing
+  else is needed: an older file is shorter, so the field keeps its default
+  (set in `MyMesh`'s constructor).
+- Moving, resizing or removing a field shifts the ones after it: bump
+  `NodePrefs::PREFS_VERSION`, and every device starts again from the
+  defaults.
+- Give a field with a range a line in `sanitize()` (`DataStore.cpp`), so a
+  damaged byte reads as the default. Saves are atomic (temp-file + rename),
+  so a crash mid-save can't corrupt settings.
 
 **The `_dirty` convention:** a multi-field editor screen mutates `_node_prefs`
 live for instant feedback but only persists once, on exit, gated by a `_dirty`

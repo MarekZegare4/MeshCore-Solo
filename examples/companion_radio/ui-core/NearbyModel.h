@@ -290,7 +290,7 @@ protected:
 
   void sortStored() {
     uint32_t now_ts = rtc_clock.getCurrentTime();
-    const bool fav_first = !(_prefs && _prefs->fav_sort_off);
+    const bool fav_first = (!_prefs || _prefs->fav_sort);
     for (int i = 0; i < _count - 1; i++) {
       int best = i;
       for (int j = i + 1; j < _count; j++) {

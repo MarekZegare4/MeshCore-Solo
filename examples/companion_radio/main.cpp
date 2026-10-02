@@ -512,9 +512,8 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_radio_get_params(float* out_freq, float
 // A brand-new device's home_pages_mask defaults to 0 = all pages visible
 // (see NodePrefs.h and MyMesh.cpp) -- this is now a no-op on a freshly
 // booted sim instance, but is kept for a saved-prefs instance whose mask
-// was narrowed by an actual Settings > Home Pages visit (an upgrader whose
-// IDBFS identity predates this default, or a visitor who toggled some
-// pages off before this hook runs on a later boot).
+// was narrowed by an actual Settings > Home Pages visit (a visitor who
+// toggled some pages off before this hook runs on a later boot).
 extern "C" EMSCRIPTEN_KEEPALIVE int sim_test_show_all_home_pages() {
   if (!g_sim_ready) return 0;
   NodePrefs* prefs = the_mesh.getNodePrefs();
@@ -581,7 +580,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE int sim_test_disable_screen_timeout() {
   return 1;
 }
 
-// Sets NodePrefs::msg_wake_screen_off directly (the same field Settings >
+// Sets NodePrefs::msg_wake directly (the same field Settings >
 // Display > "Msg wake" toggles -- SettingsScreen.h's MSG_WAKE item), so a test
 // harness can verify UITask::newMsg()'s wake-gating without scripting the
 // on-device Settings accordion navigation key-by-key.
@@ -589,7 +588,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE int sim_test_set_msg_wake_disabled(int disabled)
   if (!g_sim_ready) return 0;
   NodePrefs* prefs = the_mesh.getNodePrefs();
   if (!prefs) return 0;
-  prefs->msg_wake_screen_off = disabled ? 1 : 0;
+  prefs->msg_wake = disabled ? 0 : 1;
   return 1;
 }
 

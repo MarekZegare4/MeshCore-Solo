@@ -195,8 +195,7 @@ static const Setting ALL[] = {
 
   IDX("Brightness", nullptr, SEC_DISPLAY, display_brightness, 5, optBrightness, applyDisplay),
   MAP("Screen off after", "Without a touch", SEC_DISPLAY, auto_off_secs, AUTO_OFF, optAutoOff, nullptr),
-  MAP("Wake on message", "Screen on for new messages", SEC_DISPLAY, msg_wake_screen_off, INVERTED,
-      nullptr, nullptr),
+  SW("Wake on message", "Screen on for new messages", SEC_DISPLAY, msg_wake, nullptr),
   SW("Lock screen", "Slide to unlock after sleep", SEC_DISPLAY, auto_lock, nullptr),
   IDX("Lock clock", "Big, or compact with the clock fields", SEC_DISPLAY, lock_compact, 2, optLockLook, nullptr),
   IDX("Battery display", "In the status bar", SEC_DISPLAY, batt_display_mode, 3, optBattDisplay, nullptr),
@@ -215,7 +214,7 @@ static const Setting ALL[] = {
 
   IDX("Contact expiry", "Prune after inactivity", SEC_CONTACTS, contact_expiry_idx,
       NodePrefs::CONTACT_EXPIRY_COUNT, optExpiry, nullptr),
-  MAP("Favourites first", "In contact and node lists", SEC_CONTACTS, fav_sort_off, INVERTED, nullptr, nullptr),
+  SW("Favourites first", "In contact and node lists", SEC_CONTACTS, fav_sort, nullptr),
 
   // On / Off / Auto spans two fields (soundctl::setMode): the frontend's own row.
   IDX("Volume", nullptr, SEC_SOUND, buzzer_volume, 5, optVolume, applySound),
@@ -234,12 +233,12 @@ static const int COUNT = (int)(sizeof(ALL) / sizeof(ALL[0]));
 // eight-character value); a setting not listed uses its own.
 static const struct { uint16_t offset; const char* text; } SHORT_LABELS[] = {
   { NP_OFF(display_brightness), "Bright" },      { NP_OFF(auto_off_secs), "Auto off" },
-  { NP_OFF(msg_wake_screen_off), "Msg wake" },   { NP_OFF(auto_lock), "Auto lock" },
+  { NP_OFF(msg_wake), "Msg wake" },              { NP_OFF(auto_lock), "Auto lock" },
   { NP_OFF(batt_display_mode), "Batt disp" },    { NP_OFF(low_batt_mv), "Low batt" },
   { NP_OFF(gps_interval), "GPS pwr" },           { NP_OFF(clock_12h), "12h clock" },
   { NP_OFF(clock_hide_seconds), "Seconds" },     { NP_OFF(units_imperial), "Imperial" },
   { NP_OFF(dm_resend_count), "Resend" },         { NP_OFF(contact_expiry_idx), "Expire" },
-  { NP_OFF(fav_sort_off), "Favs top" },          { NP_OFF(buzzer_volume), "Buzzer vol" },
+  { NP_OFF(fav_sort), "Favs top" },              { NP_OFF(buzzer_volume), "Buzzer vol" },
   { NP_OFF(quiet_hours), "Quiet hrs" },          { NP_OFF(quiet_from), " from" },
   { NP_OFF(quiet_to), " until" },                { NP_OFF(notif_melody_dm), "DM sound" },
   { NP_OFF(notif_melody_ch), "Ch sound" },       { NP_OFF(notif_melody_ad), "AD sound" },
