@@ -8,6 +8,7 @@
 #include "RadioPresetPicker.h"
 #include "AccordionList.h"
 #include "PopupMenu.h"   // scope list management's per-row action menu
+#include "InfoKit.h"     // value / switch rows
 
 class SettingsScreen : public UIScreen {
   UITask* _task;
@@ -107,13 +108,16 @@ class SettingsScreen : public UIScreen {
     return L[r & 3];
   }
 
+  // Level boxes ending at the row's right edge, like every other value.
   void renderBar(DisplayDriver& display, int x, int y, int value, int max_val) {
     const int gap     = 2;
-    const int avail   = display.width() - x - _reserve;
+    const int right   = display.width() - _reserve - 2;
+    const int avail   = right - x;
     const int raw     = (avail - (max_val - 1) * gap) / max_val;
     const int cap     = display.getLineHeight() - 2;
     const int box_h   = raw < cap ? (raw < 2 ? 2 : raw) : cap;
     const int box_w   = box_h;
+    x = right - (max_val * box_w + (max_val - 1) * gap);
     for (int i = 0; i < max_val; i++) {
       int bx = x + i * (box_w + gap);
       display.drawRect(bx, y, box_w, box_h);
@@ -219,22 +223,20 @@ class SettingsScreen : public UIScreen {
 
   int renderSchema(DisplayDriver& display, const settings::Setting& st, NodePrefs* p, int y, bool sel) {
     const char* label = settings::shortLabel(st);
-    display.print(label);
-    if (!p) return 0;
+    if (!p) { display.setCursor(2, y); display.print(label); return 0; }
     if (st.offset == offsetof(NodePrefs, display_brightness) || st.offset == offsetof(NodePrefs, buzzer_volume)) {
+      display.setCursor(2, y);
+      display.print(label);
       renderBar(display, valCol(display), y, settings::get(*p, st) + 1, st.count);
       return 0;
     }
-    char v[24];
-    settings::text(*p, st, v, sizeof(v), "ON", "OFF");
-    int right = display.width() - _reserve;
-    int x = valCol(display), w = display.getTextWidth(v);
-    if (x + w > right) {
-      int min_x = 2 + display.getTextWidth(label) + display.getCharWidth();
-      x = right - w > min_x ? right - w : min_x;
+    if (!st.option) {   // a switch
+      info::switchRow(display, y, label, settings::get(*p, st) != 0, sel, _reserve);
+      return 0;
     }
-    int r = display.drawTextEllipsized(x, y, right - x, v, sel);
-    return sel && r > 0 ? r : 0;
+    char v[24];
+    settings::text(*p, st, v, sizeof(v));
+    return info::valueRow(display, y, label, v, sel, _reserve);
   }
 
   // (Re)load the section sizes into the accordion (folds all, resets the cursor).
@@ -445,173 +447,117 @@ class SettingsScreen : public UIScreen {
   // to keep a marquee animation going (see DisplayDriver::drawTextEllipsized).
   int renderItem(DisplayDriver& display, int item, int y, bool sel) {
     NodePrefs* p = _task->getNodePrefs();
-    int mq_delay = 0;
+    int mq = 0;
+    char buf[24];
+    auto val = [&](const char* label, const char* v) { mq = info::valueRow(display, y, label, v, sel, _reserve); };
+    auto sw  = [&](const char* label, bool on) { info::switchRow(display, y, label, on, sel, _reserve); };
 
     drawRowSelection(display, y, sel, _reserve);
-
     display.setCursor(2, y);
 
     if (item >= SCHEMA_ITEM) {
-      mq_delay = renderSchema(display, settings::ALL[item - SCHEMA_ITEM], p, y, sel);
+      mq = renderSchema(display, settings::ALL[item - SCHEMA_ITEM], p, y, sel);
     } else if (item == BUZZER) {
-      display.print("Buzzer");
-      display.setCursor(valCol(display), y);
 #ifdef PIN_BUZZER
-      { static const char* labels[] = { "ON", "OFF", "Auto" };
-        int m = _task->getBuzzerMode();
-        display.print(labels[m < 3 ? m : 0]); }
+      static const char* labels[] = { "On", "Off", "Auto" };
+      int m = _task->getBuzzerMode();
+      val("Buzzer", labels[m < 3 ? m : 0]);
 #else
-      display.print("N/A");
+      val("Buzzer", "N/A");
 #endif
     } else if (isHomePage(item)) {
       if (p) ensurePageOrderInit(p);
       int pos = homePagePosition(item, p);
-      if (pos > 0) {
-        char pb[5]; snprintf(pb, sizeof(pb), "%2d ", pos);
-        display.print(pb);
-      }
-      display.print(homePageLabel(item));
-      display.setCursor(display.width() - 6 * display.getCharWidth() - _reserve, y);
-      if (!homePageToggleable(item))
-        display.print("always");
-      else
-        display.print(homePageVisible(item, p) ? "ON" : "OFF");
+      char label[24];
+      if (pos > 0) snprintf(label, sizeof(label), "%2d %s", pos, homePageLabel(item));
+      else         snprintf(label, sizeof(label), "%s", homePageLabel(item));
+      if (!homePageToggleable(item)) val(label, "always");
+      else                           sw(label, homePageVisible(item, p));
     } else if (item == TX_POWER) {
-      display.print("TX Pwr");
-      char buf[8];
-      snprintf(buf, sizeof(buf),"%ddBm", p ? p->tx_power_dbm : 0);
-      display.setCursor(valCol(display), y);
-      display.print(buf);
+      snprintf(buf, sizeof(buf), "%d dBm", p ? p->tx_power_dbm : 0);
+      val("TX Pwr", buf);
     } else if (item == RADIO_PRESET) {
-      display.print("Preset");
-      const char* name = p ? _picker.currentName(p, radioTarget(p)) : "Custom";
-      int xc = valCol(display);
-      int r = display.drawTextEllipsized(xc, y, display.width() - xc - _reserve, name, sel);
-      if (sel && r > 0) mq_delay = r;
+      val("Preset", p ? _picker.currentName(p, radioTarget(p)) : "Custom");
     } else if (item == CUSTOM_FREQ) {
-      display.print("Freq");
-      int xc = valCol(display);
-      if (sel && _editor.active()) {
-        _editor.render(display, xc, y);
+      if (sel && _editor.active()) {   // the digit editor where the value stands
+        display.print("Freq");
+        _editor.render(display, display.width() - _reserve - 2 - display.getTextWidth("000.000"), y);
       } else {
-        char buf[10];
         snprintf(buf, sizeof(buf), "%.3f", p ? p->freq : 0.0f);
-        display.setCursor(xc, y);
-        display.print(buf);
+        val("Freq", buf);
       }
     } else if (item == CUSTOM_SF) {
-      display.print("SF");
-      char buf[6];
       snprintf(buf, sizeof(buf), "%d", p ? (int)p->sf : 0);
-      display.setCursor(valCol(display), y);
-      display.print(buf);
+      val("SF", buf);
     } else if (item == CUSTOM_BW) {
-      display.print("BW");
-      char buf[10];
-      snprintf(buf, sizeof(buf), "%.1f", p ? p->bw : 0.0f);
-      display.setCursor(valCol(display), y);
-      display.print(buf);
+      snprintf(buf, sizeof(buf), "%.1f kHz", p ? p->bw : 0.0f);
+      val("BW", buf);
     } else if (item == CUSTOM_CR) {
-      display.print("CR");
-      char buf[6];
       snprintf(buf, sizeof(buf), "%d", p ? (int)p->cr : 0);
-      display.setCursor(valCol(display), y);
-      display.print(buf);
+      val("CR", buf);
 #if FEAT_RX_POWERSAVE
     } else if (item == POWER_SAVE) {
-      display.print("Pwr save");
-      display.setCursor(valCol(display), y);
       // Forced off (and locked) while the repeater is on — it must hear all traffic.
-      if (p && p->client_repeat) display.print("--");
-      else display.print((p && p->rx_powersave) ? "ON" : "OFF");
+      if (p && p->client_repeat) val("Pwr save", "--");
+      else sw("Pwr save", p && p->rx_powersave);
 #endif
     } else if (item == TX_APC) {
-      display.print("Auto pwr");
-      display.setCursor(valCol(display), y);
       // Suppressed (and locked) while repeating — a repeater holds full TX power.
-      if (p && p->client_repeat) display.print("--");
-      else display.print((p && p->tx_apc) ? "ON" : "OFF");
+      if (p && p->client_repeat) val("Auto pwr", "--");
+      else sw("Auto pwr", p && p->tx_apc);
     } else if (item == SCOPE_NAME) {
-      display.print("Scope");
-      int vx = valCol(display);
       const ScopeList& sl = the_mesh.scopeList();
-      int r = display.drawTextEllipsized(vx, y, display.width() - vx - _reserve,
-                                  sl.name(sl.default_idx), sel);
-      if (sel && r > 0) mq_delay = r;
+      val("Scope", sl.name(sl.default_idx));
     } else if (item == LOCK_PIN) {
-      display.print("Lock PIN");
-      display.setCursor(valCol(display), y);
-      display.print(_task->passwordLockEnabled() ? "ON" : "OFF");
+      sw("Lock PIN", _task->passwordLockEnabled());
     } else if (item == DEVICE_NAME) {
-      display.print("Name");
-      int vx = valCol(display);
-      int r = display.drawTextEllipsized(vx, y, display.width() - vx - _reserve, the_mesh.getNodeName(), sel);
-      if (sel && r > 0) mq_delay = r;
+      val("Name", the_mesh.getNodeName());
     } else if (item == REBOOT) {
       display.print("Reboot");   // action row: Enter reboots this device
     } else if (item == KEYBOARD_TYPE) {
-      display.print("Type");
-      display.setCursor(valCol(display), y);
-      display.print((p && p->keyboard_type) ? "T9" : "ABC");
+      val("Type", (p && p->keyboard_type) ? "T9" : "ABC");
     } else if (item == KEYBOARD_MAIN_ALPHABET) {
-      display.print("Main");
-      display.setCursor(valCol(display), y);
-      display.print(NodePrefs::keyboardAlphabetLabel(p ? p->keyboard_main_alphabet : 0));
+      val("Main", NodePrefs::keyboardAlphabetLabel(p ? p->keyboard_main_alphabet : 0));
     } else if (item == KEYBOARD_ALPHABET) {
-      display.print("Additional");
-      display.setCursor(valCol(display), y);
-      display.print(NodePrefs::keyboardAlphabetLabel(p ? p->keyboard_alt_alphabet : 0));
+      val("Additional", NodePrefs::keyboardAlphabetLabel(p ? p->keyboard_alt_alphabet : 0));
 #if defined(CARDKB_I2C)
     } else if (item == KEYBOARD_CARDKB_COMPACT) {
-      display.print("Ext. KB");
-      display.setCursor(valCol(display), y);
-      display.print((p && p->keyboard_cardkb_compact) ? "Compact" : "Full");
+      val("Ext. KB", (p && p->keyboard_cardkb_compact) ? "Compact" : "Full");
 #endif
 #if FEAT_DISPLAY_ROTATION_SETTING
     } else if (item == ROTATION) {
-      display.print("Rotation");
-      display.setCursor(valCol(display), y);
-      display.print(rotLabel(p ? p->display_rotation : 0));
+      val("Rotation", rotLabel(p ? p->display_rotation : 0));
 #endif
 #if FEAT_JOYSTICK_ROTATION_SETTING
     } else if (item == JOY_ROTATION) {
-      display.print("Joystick");
-      display.setCursor(valCol(display), y);
-      display.print(rotLabel(p ? p->joystick_rotation : 0));
+      val("Joystick", rotLabel(p ? p->joystick_rotation : 0));
 #endif
 #if FEAT_FULL_REFRESH_SETTING
     } else if (item == EINK_FULL_REFRESH) {
-      display.print("Full rfsh");
-      display.setCursor(valCol(display), y);
-      { uint8_t idx = p ? p->eink_full_refresh_every : 0;
-        if (idx >= EINK_FULL_REFRESH_COUNT) idx = 0;
-        display.print(EINK_FULL_REFRESH_LABELS[idx]); }
+      uint8_t idx = p ? p->eink_full_refresh_every : 0;
+      if (idx >= EINK_FULL_REFRESH_COUNT) idx = 0;
+      val("Full rfsh", EINK_FULL_REFRESH_LABELS[idx]);
 #endif
     } else if (item == DM_FILTER) {
-      display.print("DMs");
-      display.setCursor(valCol(display), y);
-      display.print((p && p->dm_show_all) ? "All" : "Fav");
+      val("DMs", (p && p->dm_show_all) ? "All" : "Fav");
     } else if (item == CH_FILTER) {
-      display.print("Channels");
-      display.setCursor(valCol(display), y);
-      display.print((p && p->ch_fav_only) ? "Fav" : "All");
+      val("Channels", (p && p->ch_fav_only) ? "Fav" : "All");
     } else if (item == ROOM_FILTER) {
-      display.print("Rooms");
-      display.setCursor(valCol(display), y);
-      display.print((p && p->room_fav_only) ? "Fav" : "All");
+      val("Rooms", (p && p->room_fav_only) ? "Fav" : "All");
     } else if (item == PRUNE_NOW) {
       display.print("Prune now");   // action row: Enter counts + confirms + removes
     } else if (isMsgSlot(item)) {
+      // A message template reads from the left, cut at the edge (scrolls when selected).
       int slot = msgSlotIndex(item);
       char label[5];
       snprintf(label, sizeof(label), "Q%d:", slot + 1);
       display.print(label);
       const char* tmpl = (p && p->custom_msgs[slot][0]) ? p->custom_msgs[slot] : "(empty)";
       int xm = 8 + display.getCharWidth() * 4;
-      int r = display.drawTextEllipsized(xm, y, display.width() - xm - _reserve, tmpl, sel);
-      if (sel && r > 0) mq_delay = r;
+      int r = display.drawTextEllipsized(xm, y, display.width() - xm - _reserve - 2, tmpl, sel);
+      if (sel && r > 0) mq = r;
     }
-    return mq_delay;
+    return mq;
   }
 
   // Keyboard state for editing message slots
@@ -656,7 +602,7 @@ class SettingsScreen : public UIScreen {
       } else {
         display.print(sl.name((uint8_t)idx));
         if ((uint8_t)idx == sl.default_idx)
-          display.drawTextRightAlign(display.width() - reserve - 2, y, "[default]");
+          display.drawTextRightAlign(display.width() - reserve - 2, y, "default");
       }
       display.setColor(DisplayDriver::LIGHT);
     });
@@ -1138,5 +1084,5 @@ public:
 };
 
 #if FEAT_FULL_REFRESH_SETTING
-const char* SettingsScreen::EINK_FULL_REFRESH_LABELS[5] = { "OFF", "5", "10", "20", "30" };
+const char* SettingsScreen::EINK_FULL_REFRESH_LABELS[5] = { "Off", "5", "10", "20", "30" };
 #endif

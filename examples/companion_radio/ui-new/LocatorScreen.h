@@ -15,6 +15,7 @@
 // (UITask::setTargetNow()), bypassing this picker entirely.
 // Included by UITask.cpp after LiveShareScreen.h.
 
+#include "InfoKit.h"
 #include "../NodePrefs.h"
 #include "../Waypoint.h"
 #include "../LiveTrack.h"
@@ -92,7 +93,7 @@ public:
         break;
       case K_RADIUS: {
         uint16_t r = NodePrefs::locatorRadiusMeters(_prefs ? _prefs->locator_radius_idx : 1);
-        geo::fmtDist(buf, n, r / 1000.0f, _task && _task->useImperial());
+        geo::fmtDist(buf, n, r / 1000.0f, _task && _task->useImperial(), true);
         break;
       }
       case K_MODE:
@@ -113,19 +114,14 @@ public:
 
     const int rc = visibleRows();
     if (_sel >= rc) _sel = rc - 1;   // beeper row may have just been hidden
-    const int valx = display.width() / 2 + 6;
     int mq_delay = 0;
     drawList(display, rc, _sel, _scroll, [&](int i, int y, bool sel, int reserve) {
       Row r = rows(i);
       drawRowSelection(display, y, sel, reserve);
-      display.setCursor(4, y);
-      display.print(r.label);
       char val[24];
       valueLabel(r.kind, val, sizeof(val));
-      if (val[0]) {
-        int mqr = display.drawTextEllipsized(valx, y, display.width() - valx - reserve, val, sel);
-        if (sel && mqr > 0) mq_delay = mqr;
-      }
+      int mqr = info::listRow(display, y, r.label, val, sel, reserve);
+      if (mqr > 0) mq_delay = mqr;
     });
     return (mq_delay > 0 && mq_delay < 500) ? mq_delay : 500;
   }

@@ -16,6 +16,7 @@
 //               can't land outside what's legal for the operator's region).
 // Included by UITask.cpp.
 
+#include "InfoKit.h"
 #include <helpers/ui/DisplayDriver.h>
 #include <helpers/ui/UIScreen.h>
 #include "icons.h"
@@ -113,12 +114,12 @@ class RepeaterScreen : public UIScreen {
       case IT_RPRESET:  strncpy(buf, _picker.currentName(p, rptTarget(p)), n); break;
       case IT_RFREQ:    snprintf(buf, n, "%.3f", p->repeater_freq); break;
       case IT_RSF:      snprintf(buf, n, "%d", (int)p->repeater_sf); break;
-      case IT_RBW:      snprintf(buf, n, "%.1f", p->repeater_bw); break;
+      case IT_RBW:      snprintf(buf, n, "%.1f kHz", p->repeater_bw); break;
       case IT_RCR:      snprintf(buf, n, "%d", (int)p->repeater_cr); break;
       case IT_SKIP:     strncpy(buf, p->repeat_skip_adverts ? "ON" : "OFF", n); break;
-      case IT_HOPS:     rptctl::fmtHops(buf, n, p->repeat_max_hops, "OFF"); break;
-      case IT_YIELD:    rptctl::fmtYield(buf, n, p->repeat_delay_boost, "OFF"); break;
-      case IT_SNR:      rptctl::fmtSnr(buf, n, p->repeat_min_snr, "OFF"); break;
+      case IT_HOPS:     rptctl::fmtHops(buf, n, p->repeat_max_hops); break;    // "Off": a value, not a switch
+      case IT_YIELD:    rptctl::fmtYield(buf, n, p->repeat_delay_boost); break;
+      case IT_SNR:      rptctl::fmtSnr(buf, n, p->repeat_min_snr); break;
       case IT_SUPPRESS: strncpy(buf, p->repeat_suppress_dup ? "ON" : "OFF", n); break;
       case IT_SCOPE:    strncpy(buf, p->repeat_scope_only ? "ON" : "OFF", n); break;
       case IT_SCOPE_EXTRA: {
@@ -151,18 +152,18 @@ public:
     display.setColor(DisplayDriver::LIGHT);
     display.drawCenteredHeader("REPEATER");
 
-    // Config only — live forwarding stats live on Tools › Diagnostics.
+    // Config only — live forwarding stats live on Status › Mesh.
     drawList(display, _item_count, _sel, _scroll, [&](int row, int y, bool sel, int reserve) {
       int item = _items[row];
       drawRowSelection(display, y, sel, reserve);
-      display.setCursor(2, y);
-      display.print(itemLabel(item));
-      if (item == IT_RFREQ && sel && _editor.active()) {
-        _editor.render(display, display.valCol(), y);
+      if (item == IT_RFREQ && sel && _editor.active()) {   // the digit editor where the value stands
+        display.setCursor(2, y);
+        display.print(itemLabel(item));
+        _editor.render(display, display.width() - reserve - 2 - display.getTextWidth("000.000"), y);
       } else {
-        char val[16];
+        char val[24];
         itemValue(item, p, val, sizeof(val));
-        display.drawTextRightAlign(display.width() - reserve - 2, y, val);
+        info::listRow(display, y, itemLabel(item), val, sel, reserve);
       }
       display.setColor(DisplayDriver::LIGHT);
     });

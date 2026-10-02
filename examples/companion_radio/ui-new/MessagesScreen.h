@@ -554,25 +554,25 @@ class MessagesScreen : public UIScreen {
     return { outgoing ? (full_avail - w) : 0, w };
   }
 
-  // Bottom-right "[+ send]" compose button, shared by both history lists:
+  // Bottom-right "+ Send" compose button, shared by both history lists:
   // bordered when idle, inverted (filled) when selected. Right-aligned to
   // match the outgoing ("Me") bubbles anchored on that side, so composing
   // sits under your own messages rather than the other side's. Box is exactly
-  // lh tall (no added border padding) — the text has no descenders ("[+
-  // send]"), so padding sized against the font's full ascent+descent cell
+  // lh tall (no added border padding) — the text has no descenders ("+
+  // Send"), so padding sized against the font's full ascent+descent cell
   // read as a lopsided 1px-top/3px-bottom gap instead of an even border;
   // tight framing avoids that and gives the history list back the 2px. Always
   // reset to LIGHT first so it stays visible regardless of the ink the
   // message loop left.
   static void drawComposeButton(DisplayDriver& d, int cby, int lh, bool sel) {
-    const char* ctxt = "[+ send]";
+    const char* ctxt = "+ Send";
     int ctw = d.getTextWidth(ctxt);
-    int bw = ctw + 4;
+    int bw = ctw + 6;
     int bx = d.width() - bw;
     d.setColor(DisplayDriver::LIGHT);
     if (sel) { d.fillSoftRect(bx, cby, bw, lh); d.setColor(DisplayDriver::DARK); }
     else       d.drawSoftRect(bx, cby, bw, lh);
-    d.setCursor(bx + 2, cby);
+    d.setCursor(bx + 3, cby);
     d.print(ctxt);
     d.setColor(DisplayDriver::LIGHT);
   }
@@ -2535,5 +2535,5 @@ public:
   }
 };
 
-const char* const MessagesScreen::NOTIF_LABELS[3]  = { "Default", "OFF", "ON" };
+const char* const MessagesScreen::NOTIF_LABELS[3]  = { "Default", "Off", "On" };   // three states: text, not a switch
 const char* const MessagesScreen::MELODY_LABELS[3] = { "Global", "M1", "M2" };

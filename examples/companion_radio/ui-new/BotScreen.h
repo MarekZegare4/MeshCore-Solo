@@ -2,6 +2,7 @@
 // Custom screen — not part of upstream UITask.cpp
 // Included by UITask.cpp after KeyboardWidget.h is defined.
 
+#include "InfoKit.h"
 #include "TabBar.h"
 #include "../ui-core/BotConfig.h"
 
@@ -89,8 +90,6 @@ public:
       return _kb->render(display);
     }
 
-    int val_x = display.valCol();
-
     // Reply counter, right-aligned in the header — reserve its width from the
     // tab bar before drawing so a right-side tab can't run under it.
     uint16_t sent = the_mesh.botReplyCount();
@@ -112,44 +111,33 @@ public:
     drawList(display, n, _sel, _scroll, [&](int i, int y, bool sel, int reserve) {
       Row r = tabRow(_tab, i);
       drawRowSelection(display, y, sel, reserve);
-      display.setCursor(2, y);
-      display.print(r.label);
-      display.setCursor(val_x, y);
 
       int cap;
       const char* txt = botcfg::text(_prefs, r.kind, cap);
       const uint8_t* fl = botcfg::flag(_prefs, r.kind);
       char name[32];
+      const char* shown = "";
       if (fl) {
-        display.print(r.kind == botcfg::DM_SCOPE ? (*fl ? "Fav" : "All") : (*fl ? "ON" : "OFF"));
+        shown = r.kind == botcfg::DM_SCOPE ? (*fl ? "Fav" : "All") : (*fl ? "ON" : "OFF");
       } else if (txt) {
-        int mqr = display.drawTextEllipsized(val_x, y, display.width() - val_x - 1 - reserve,
-                                             botcfg::shownText(txt, botcfg::isTrigger(r.kind)), sel);
-        if (sel && mqr > 0) mq_delay = mqr;
+        shown = botcfg::shownText(txt, botcfg::isTrigger(r.kind));
       } else if (r.kind == botcfg::CHANNEL || r.kind == botcfg::ROOM) {
         bool any = r.kind == botcfg::CHANNEL ? _num_channels > 0 : _num_rooms > 0;
         bool ok = r.kind == botcfg::CHANNEL ? botcfg::channelName(_prefs, name, sizeof(name))
                                             : botcfg::roomName(_prefs, name, sizeof(name));
-        if (!any) display.print("(none)");
-        else if (!ok) display.print("?");
-        else {
-          int mqr = display.drawTextEllipsized(val_x, y, display.width() - val_x - 1 - reserve, name, sel);
-          if (sel && mqr > 0) mq_delay = mqr;
-        }
+        shown = !any ? "(none)" : !ok ? "?" : name;
       } else if (botcfg::isHour(r.kind)) {
         char hb[10];
-        if (botcfg::quietOff(_prefs)) strcpy(hb, "OFF");
+        if (botcfg::quietOff(_prefs)) strcpy(hb, "Off");
         else snprintf(hb, sizeof(hb), "%02d:00", botcfg::hour(_prefs, r.kind));
         // Bracket the value while the stepper sub-mode is open on this row,
         // as a visual cue that UP/DOWN now steps it instead of moving rows.
-        if (_stepper_row == i) {
-          char bracketed[14];
-          snprintf(bracketed, sizeof(bracketed), "[%s]", hb);
-          display.print(bracketed);
-        } else {
-          display.print(hb);
-        }
+        if (_stepper_row == i) snprintf(name, sizeof(name), "[%s]", hb);
+        else                   snprintf(name, sizeof(name), "%s", hb);
+        shown = name;
       }
+      int mqr = info::listRow(display, y, r.label, shown, sel, reserve);
+      if (mqr > 0) mq_delay = mqr;
       display.setColor(DisplayDriver::LIGHT);
     });
     return 2000;

@@ -5,6 +5,7 @@
 // accidentally stops tracking.
 // Included by UITask.cpp after Trail store + ToolsScreen.
 
+#include "InfoKit.h"
 #include "../Trail.h"
 #include "../GeoUtils.h"
 #include "GfxUtils.h"
@@ -92,7 +93,6 @@ class TrailScreen : public UIScreen {
   char      _act_autosave_label[24];
   char      _act_toggle_label[20];
 
-  static const int SUMMARY_ITEM_COUNT = 5;
 
 public:
   TrailScreen(UITask* task, TrailStore* store)
@@ -505,67 +505,51 @@ private:
     snprintf(buf, n, "Pace: %u:%02u %s", pm, ps, unit);
   }
 
-  void summaryItem(int i, char* buf, size_t n) const {
-    switch (i) {
-      case 0: {
-        const char* st;
-        if (!_store->isActive())     st = "stopped";
-        else if (_store->isPaused()) st = "paused";
-        else if (_store->empty())    st = "waiting fix";
-        else                          st = "tracking";
-        snprintf(buf, n, "Status: %s", st);
-        break;
-      }
-      case 1:
-        snprintf(buf, n, "Points: %d / %d", _store->count(), TrailStore::CAPACITY);
-        break;
-      case 2: {
-        uint32_t d = _store->totalDistanceMeters();
-        char ds[12];
-        geo::fmtDist(ds, sizeof(ds), d / 1000.0f, useImperial());
-        snprintf(buf, n, "Dist: %s", ds);
-        break;
-      }
-      case 3: {
-        uint32_t es = _store->elapsedSeconds();
-        // Unit-suffixed so "1h 05m" can't be misread as "1m 05s".
-        if (es < 3600) snprintf(buf, n, "Time: %lum %02lus",
-                                  (unsigned long)(es / 60), (unsigned long)(es % 60));
-        else           snprintf(buf, n, "Time: %luh %02lum",
-                                  (unsigned long)(es / 3600), (unsigned long)((es % 3600) / 60));
-        break;
-      }
-      case 4:
-        formatAvgPaceOrSpeed(buf, n, _task->getNodePrefs());
-        break;
-      default:
-        buf[0] = '\0';
+  // The summary: the distance large with the time and state beside it, the
+  // points stored as a meter, then the average speed (or pace).
+  void summaryBlocks(DisplayDriver& d, info::Flow& f, int rsv) {
+    const int lh = d.getLineHeight(), right = d.width() - rsv - 2;
+    char a[28], b[28];
+    if (f.place(info::bigH(d) + 3)) {
+      geo::fmtDist(a, sizeof(a), _store->totalDistanceMeters() / 1000.0f, useImperial());
+      char* u = a;                                  // "2.4km" -> "2.4" + "km"
+      while (*u && (isdigit((unsigned char)*u) || *u == '.')) u++;
+      snprintf(b, sizeof(b), "%s", u);
+      *u = 0;
+      info::big(d, 1, f.at, a, b);
+      const uint32_t es = _store->elapsedSeconds();
+      // Unit-suffixed so "1h 05m" can't be misread as "1m 05s".
+      if (es < 3600) snprintf(a, sizeof(a), "%lum %02lus", (unsigned long)(es / 60), (unsigned long)(es % 60));
+      else           snprintf(a, sizeof(a), "%luh %02lum", (unsigned long)(es / 3600), (unsigned long)((es % 3600) / 60));
+      d.drawTextRightAlign(right, f.at, a);
+      const char* st = !_store->isActive() ? "stopped" : _store->isPaused() ? "paused"
+                     : _store->empty() ? "waiting fix" : "tracking";
+      d.drawTextRightAlign(right, f.at + lh + 1, st);
+    }
+    if (f.place(d.lineStep())) {
+      snprintf(a, sizeof(a), "%d", _store->count());
+      info::row(d, f.at, "Points", a, rsv);
+      const int x0 = 1 + d.getTextWidth("Points") + 6, x1 = right - d.getTextWidth("000") - 6;
+      if (x1 - x0 > 10) info::meter(d, x0, f.at, x1 - x0, lh - 1, (float)_store->count() / TrailStore::CAPACITY);
+    }
+    if (f.place(d.lineStep())) {
+      formatAvgPaceOrSpeed(a, sizeof(a), _task->getNodePrefs());
+      char* c = strstr(a, ": ");                    // "Avg: 5 km/h" -> label + value
+      if (c) { *c = 0; info::row(d, f.at, a, c + 2, rsv); }
+      else   info::row(d, f.at, a, nullptr, rsv);
     }
   }
 
   void renderSummary(DisplayDriver& display) {
-    const int y0     = display.listStart();
-    const int step   = display.lineStep();
-    const int avail  = display.height() - y0 - 2;
-    int visible      = avail / step;
-    if (visible < 1) visible = 1;
-    if (visible > SUMMARY_ITEM_COUNT) visible = SUMMARY_ITEM_COUNT;
-
-    int max_scroll = SUMMARY_ITEM_COUNT - visible;
-    if (_summary_scroll > max_scroll) _summary_scroll = max_scroll;
-    if (_summary_scroll < 0)          _summary_scroll = 0;
-    _summary_max_scroll = max_scroll;
-
-    for (int i = 0; i < visible; i++) {
-      int idx = _summary_scroll + i;
-      if (idx >= SUMMARY_ITEM_COUNT) break;
-      char buf[28];
-      summaryItem(idx, buf, sizeof(buf));
-      display.setCursor(2, y0 + i * step);
-      display.print(buf);
-    }
-
-    drawScrollIndicator(display, y0, visible * step, SUMMARY_ITEM_COUNT, visible, _summary_scroll);
+    const int top = display.listStart(), bottom = display.height();
+    info::Flow m = info::Flow::measure();
+    summaryBlocks(display, m, 0);
+    const long view = bottom - top;
+    const int rsv = m.total_px > view ? scrollIndicatorColWidth(display) : 0;
+    info::Flow f(top, bottom, _summary_scroll);
+    summaryBlocks(display, f, rsv);
+    _summary_max_scroll = f.more ? _summary_scroll + 1 : _summary_scroll;
+    if (rsv) drawScrollIndicatorPx(display, top, view, f.total_px, view, f.skipped_px);
   }
 
   void renderList(DisplayDriver& display) {

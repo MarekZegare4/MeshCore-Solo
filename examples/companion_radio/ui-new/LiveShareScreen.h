@@ -8,6 +8,7 @@
 // one-shot "Share my pos" lives on the Map screen.
 // Included by UITask.cpp after AutoAdvertScreen.h.
 
+#include "InfoKit.h"
 #include "../NodePrefs.h"
 #include "icons.h"   // drawList (shared scrolling-list helper)
 
@@ -65,7 +66,7 @@ public:
         snprintf(buf, n, "%s", (_prefs && _prefs->loc_share_enabled) ? "ON" : "OFF");
         break;
       case K_DURATION:
-        snprintf(buf, n, "%uh", (unsigned)(NodePrefs::locShareDurationMins(_prefs ? _prefs->loc_share_duration_idx : 0) / 60));
+        snprintf(buf, n, "%u h", (unsigned)(NodePrefs::locShareDurationMins(_prefs ? _prefs->loc_share_duration_idx : 0) / 60));
         break;
       case K_TARGET:
         currentTargetName(buf, n);
@@ -79,18 +80,18 @@ public:
         break;
       }
       case K_MOVE:
-        snprintf(buf, n, "%um", (unsigned)NodePrefs::locShareMoveMeters(_prefs ? _prefs->loc_share_move_idx : 1));
+        snprintf(buf, n, "%u m", (unsigned)NodePrefs::locShareMoveMeters(_prefs ? _prefs->loc_share_move_idx : 1));
         break;
       case K_GAP: {
         uint16_t s = NodePrefs::locShareIntervalSecs(_prefs ? _prefs->loc_share_interval_idx : 1);
-        if (s < 60) snprintf(buf, n, "%us", (unsigned)s);
-        else        snprintf(buf, n, "%um", (unsigned)(s / 60));
+        if (s < 60) snprintf(buf, n, "%u s", (unsigned)s);
+        else        snprintf(buf, n, "%u min", (unsigned)(s / 60));
         break;
       }
       case K_HB: {
         uint16_t s = NodePrefs::locShareHeartbeatSecs(_prefs ? _prefs->loc_share_heartbeat_idx : 0);
-        if (s == 0) snprintf(buf, n, "OFF");
-        else        snprintf(buf, n, "%um", (unsigned)(s / 60));
+        if (s == 0) snprintf(buf, n, "Off");
+        else        snprintf(buf, n, "%u min", (unsigned)(s / 60));
         break;
       }
       default: buf[0] = '\0';
@@ -102,19 +103,14 @@ public:
     display.setColor(DisplayDriver::LIGHT);
     display.drawCenteredHeader("LIVE SHARE");
 
-    const int valx = display.width() / 2 + 6;
     int mq_delay = 0;
     drawList(display, ROW_COUNT, _sel, _scroll, [&](int i, int y, bool sel, int reserve) {
       Row r = rows(i);
       drawRowSelection(display, y, sel, reserve);
-      display.setCursor(4, y);
-      display.print(r.label);
       char val[24];
       valueLabel(r.kind, val, sizeof(val));
-      if (val[0]) {
-        int mqr = display.drawTextEllipsized(valx, y, display.width() - valx - reserve, val, sel);
-        if (sel && mqr > 0) mq_delay = mqr;
-      }
+      int mqr = info::listRow(display, y, r.label, val, sel, reserve);
+      if (mqr > 0) mq_delay = mqr;
     });
     return (mq_delay > 0 && mq_delay < 500) ? mq_delay : 500;
   }

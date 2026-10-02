@@ -1,4 +1,5 @@
 #pragma once
+#include "InfoKit.h"
 // Configures periodic automatic 0-hop advert with GPS position.
 // Included by UITask.cpp after DashboardConfigScreen.h.
 
@@ -28,14 +29,10 @@ public:
     display.setTextSize(1);
     display.setColor(DisplayDriver::LIGHT);
     display.drawCenteredHeader("AUTO-ADVERT");
-    const int valx = display.width() / 2 + 6;
     int sel = 0, scroll = 0;
     drawList(display, 1, sel, scroll, [&](int, int y, bool is_sel, int reserve) {
       drawRowSelection(display, y, is_sel, reserve);
-      display.setCursor(4, y);
-      display.print("Interval");
-      display.setCursor(valx, y);
-      display.print(OPT_LABELS[currentIdx()]);
+      info::valueRow(display, y, "Interval", OPT_LABELS[currentIdx()], is_sel, reserve);
     });
     return 5000;
   }
@@ -60,4 +57,4 @@ public:
 };
 
 const uint32_t AutoAdvertScreen::OPTS[AutoAdvertScreen::OPT_COUNT]       = { 0, 30, 60, 120, 300, 600, 1800, 3600 };
-const char*    AutoAdvertScreen::OPT_LABELS[AutoAdvertScreen::OPT_COUNT] = { "OFF", "30s", "1min", "2min", "5min", "10min", "30min", "1h" };
+const char*    AutoAdvertScreen::OPT_LABELS[AutoAdvertScreen::OPT_COUNT] = { "Off", "30 s", "1 min", "2 min", "5 min", "10 min", "30 min", "1 h" };

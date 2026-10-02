@@ -10,6 +10,7 @@
 // Included by UITask.cpp.
 #if defined(PIN_GPIO1)
 
+#include "InfoKit.h"
 #include <helpers/ui/DisplayDriver.h>
 #include <helpers/ui/UIScreen.h>
 #include "icons.h"
@@ -65,11 +66,11 @@ class GpioScreen : public UIScreen {
       case 3: strncpy(buf, "Output", n); break;
       case 4: {
         int mv = 0;
-        if (_task->botGetGPIOAnalog(pin + 1, mv)) snprintf(buf, n, "%dmV", mv);
+        if (_task->botGetGPIOAnalog(pin + 1, mv)) snprintf(buf, n, "%d mV", mv);
         else strncpy(buf, "Analog", n);
         break;
       }
-      default: strncpy(buf, "OFF", n); break;
+      default: strncpy(buf, "Off", n); break;
     }
     buf[n - 1] = '\0';
   }
@@ -116,20 +117,17 @@ public:
     drawList(display, _item_count, _sel, _scroll, [&](int row, int y, bool sel, int reserve) {
       const Row& it = _items[row];
       drawRowSelection(display, y, sel, reserve);
-      display.setCursor(2, y);
       char val[16];
       if (it.kind == ROW_MODE) {
         char lbl[8];
         snprintf(lbl, sizeof(lbl), "GPIO%d", it.pin + 1);
-        display.print(lbl);
         modeRowValue(it.pin, val, sizeof(val));
         uint8_t m = gpioModeOf(it.pin);
         if (m == 1 || m == 4) any_live = true;   // Input / Analog need a live-refreshed reading
-      } else {
-        display.print("  State");   // indented: reads as GPIOn's sub-row
-        strncpy(val, gpioModeOf(it.pin) == 3 ? "ON" : "OFF", sizeof(val));
+        info::valueRow(display, y, lbl, val, sel, reserve);
+      } else {   // indented: reads as GPIOn's sub-row
+        info::switchRow(display, y, "  State", gpioModeOf(it.pin) == 3, sel, reserve);
       }
-      display.drawTextRightAlign(display.width() - reserve - 2, y, val);
       display.setColor(DisplayDriver::LIGHT);
     });
     return any_live ? 500 : 2000;   // faster refresh only while a row needs a live reading

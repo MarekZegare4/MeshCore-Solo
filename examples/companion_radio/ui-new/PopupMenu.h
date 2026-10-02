@@ -1,4 +1,5 @@
 #pragma once
+#include "InfoKit.h"
 #include <helpers/ui/DisplayDriver.h>
 #include <Arduino.h>
 #include "icons.h"   // scalable scroll indicator (track + thumb), matches the rest of the UI
@@ -88,6 +89,21 @@ struct PopupMenu {
     setSelected(1);
   }
 
+  // A value row reads "Label: value": split it so the value can stand at the
+  // right edge (a switch for ON / OFF), like a settings row.
+  bool splitValue(int i, char* lab, int n, const char*& val) const {
+    if (!(_value_mask & (1u << i))) return false;
+    const char* c = strstr(_items[i], ": ");
+    if (!c || c - _items[i] >= n) return false;
+    memcpy(lab, _items[i], c - _items[i]);
+    lab[c - _items[i]] = '\0';
+    val = c + 2;
+    return true;
+  }
+  static int valueWidth(DisplayDriver& d, const char* v) {
+    return (!strcmp(v, "ON") || !strcmp(v, "OFF")) ? info::switchW(d) : d.getTextWidth(v);
+  }
+
   int render(DisplayDriver& display) {
     // Everything is derived from the live font metrics so the box fits its
     // content on every display — including landscape e-ink, where the font (and
@@ -130,7 +146,10 @@ struct PopupMenu {
     // gutter; clamped to the screen with a sane minimum.
     int content_w = _title ? display.getTextWidth(_title) : 0;
     for (int i = 0; i < _count; i++) {
-      int w = display.getTextWidth(_items[i]);
+      char lab[32]; const char* val;
+      int w = splitValue(i, lab, sizeof(lab), val)
+            ? display.getTextWidth(lab) + 2 * cw + valueWidth(display, val)
+            : display.getTextWidth(_items[i]);
       if (w > content_w) content_w = w;
     }
     int box_w = _has_checkboxes ? (checkboxWidth(display) + pad) : 0;
@@ -171,7 +190,11 @@ struct PopupMenu {
       }
       // Return value not needed here: this popup already redraws every 50ms
       // (below), faster than any marquee step, so the animation is already smooth.
-      display.drawTextEllipsized(bx + pad, py, text_w, _items[idx], idx == _sel);
+      char lab[32]; const char* val;
+      if (splitValue(idx, lab, sizeof(lab), val))   // "Label: value" -> label left, value / switch right
+        info::listRow(display, py, lab, val, idx == _sel, display.width() - (bx + pad + text_w) - 2, bx + pad);
+      else
+        display.drawTextEllipsized(bx + pad, py, text_w, _items[idx], idx == _sel);
       if (_has_checkboxes) drawCheckbox(display, bx + bw - arrow_w - pad - checkboxWidth(display), py, isChecked(idx));
       display.setColor(DisplayDriver::LIGHT);
     }

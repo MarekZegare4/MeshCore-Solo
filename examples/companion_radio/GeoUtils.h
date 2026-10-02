@@ -46,18 +46,20 @@ static inline const char* bearingCardinal(int deg) {
 }
 
 // Human distance string. Metric: "850m" / "2.3km" / "140km". Imperial:
-// "850ft" / "2.3mi" / "140mi" (feet below ~1000 ft, then miles).
-static inline void fmtDist(char* buf, int n, float km, bool imperial) {
+// "850ft" / "2.3mi" / "140mi" (feet below ~1000 ft, then miles). `spaced`
+// puts a space before the unit ("850 m"), for value rows with room for it.
+static inline void fmtDist(char* buf, int n, float km, bool imperial, bool spaced = false) {
+  const char* sp = spaced ? " " : "";
   if (imperial) {
     float ft = km * 3280.84f;
-    if (ft < 1000.0f) { snprintf(buf, n, "%dft", (int)(ft + 0.5f)); return; }
+    if (ft < 1000.0f) { snprintf(buf, n, "%d%sft", (int)(ft + 0.5f), sp); return; }
     float mi = km * 0.621371f;
-    if (mi < 100.0f)  snprintf(buf, n, "%.1fmi", mi);
-    else              snprintf(buf, n, "%dmi",  (int)(mi + 0.5f));
+    if (mi < 100.0f)  snprintf(buf, n, "%.1f%smi", mi, sp);
+    else              snprintf(buf, n, "%d%smi",  (int)(mi + 0.5f), sp);
   } else {
-    if      (km < 1.0f)   snprintf(buf, n, "%dm",   (int)(km * 1000 + 0.5f));
-    else if (km < 100.0f) snprintf(buf, n, "%.1fkm", km);
-    else                  snprintf(buf, n, "%dkm",  (int)(km + 0.5f));
+    if      (km < 1.0f)   snprintf(buf, n, "%d%sm",   (int)(km * 1000 + 0.5f), sp);
+    else if (km < 100.0f) snprintf(buf, n, "%.1f%skm", km, sp);
+    else                  snprintf(buf, n, "%d%skm",  (int)(km + 0.5f), sp);
   }
 }
 

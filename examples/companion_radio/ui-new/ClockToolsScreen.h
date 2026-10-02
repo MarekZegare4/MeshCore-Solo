@@ -28,6 +28,7 @@
 // (and immediately on any key); the millis() timing underneath is unaffected.
 // Included by UITask.cpp after the other screen fragments.
 
+#include "InfoKit.h"
 #include "../NodePrefs.h"
 #include "icons.h"        // drawList / drawRowSelection
 
@@ -166,19 +167,18 @@ class ClockToolsScreen : public UIScreen {
     if (!_prefs) return 60000;
     const char* rows[3] = { "Time", "Repeat", "Armed" };
     if (_sel > 2) _sel = 2;
-    const int valx = d.width() / 2 + 6;
     int mq_delay = 0;
     drawList(d, 3, _sel, _scroll, [&](int i, int y, bool sel, int reserve) {
       drawRowSelection(d, y, sel, reserve);
-      d.setCursor(4, y); d.print(rows[i]);
-      if (i == 0) {
-        drawAlarmTime(d, y, valx, sel && _alarm_editing);
+      if (i == 0) {   // the time, flush right like every value (digits edited in place)
+        d.setCursor(2, y); d.print(rows[i]);
+        drawAlarmTime(d, y, d.width() - reserve - 2 - d.getTextWidth("00:00"), sel && _alarm_editing);
       } else if (i == 1) {
-        int mqr = d.drawTextEllipsized(valx, y, d.width() - valx - reserve,
-                             NodePrefs::alarmRepeatLabel(NodePrefs::alarmRepeatIdxForMask(_prefs->alarm_repeat_mask)), sel);
-        if (sel && mqr > 0) mq_delay = mqr;
+        int mqr = info::valueRow(d, y, rows[i],
+                    NodePrefs::alarmRepeatLabel(NodePrefs::alarmRepeatIdxForMask(_prefs->alarm_repeat_mask)), sel, reserve);
+        if (mqr > 0) mq_delay = mqr;
       } else {
-        d.drawTextEllipsized(valx, y, d.width() - valx - reserve, _prefs->alarm_on ? "ON" : "OFF");
+        info::switchRow(d, y, rows[i], _prefs->alarm_on, sel, reserve);
       }
     });
     if (_alarm_editing) return 50;

@@ -6,6 +6,7 @@
 // fixed 128x64, so a larger-font e-ink layout gets them scaled for free.
 
 #include <helpers/ui/DisplayDriver.h>
+#include <string.h>
 #include "icons.h"
 
 namespace info {
@@ -124,19 +125,58 @@ inline int bigH(DisplayDriver& d) { return 2 * d.getLineHeight(); }
 
 // An on/off switch, right edge at x_right, centred on a text line at y: a
 // filled pill with the knob right when on, an outline with the knob left off.
+// `inv` draws it in a selected row's colours (dark on the light bar) and
+// leaves the ink dark, as the row found it.
 inline int switchW(DisplayDriver& d) { return 13 * miniIconScale(d); }
-inline void toggle(DisplayDriver& d, int x_right, int y, bool on) {
+inline void toggle(DisplayDriver& d, int x_right, int y, bool on, bool inv = false) {
+  const DisplayDriver::Color ink = inv ? DisplayDriver::DARK : DisplayDriver::LIGHT;
+  const DisplayDriver::Color paper = inv ? DisplayDriver::LIGHT : DisplayDriver::DARK;
   const int s = miniIconScale(d), w = switchW(d), h = 7 * s;
   const int x = x_right - w, ty = y + (d.getLineHeight() - h) / 2;
+  d.setColor(ink);
   if (on) {
     d.fillSoftRect(x, ty, w, h);
-    d.setColor(DisplayDriver::DARK);
+    d.setColor(paper);
     d.fillRect(x + w - 5 * s, ty + s, 3 * s, h - 2 * s);
-    d.setColor(DisplayDriver::LIGHT);
   } else {
     d.drawSoftRect(x, ty, w, h);
     d.fillRect(x + 2 * s, ty + 2 * s, 3 * s, h - 4 * s);
   }
+  d.setColor(ink);
+}
+
+// ── List rows (call after drawRowSelection(); text is already in the row's ink)
+// A setting or field: label at x0, value flush right. A value too long for the
+// room beside the label is cut, and scrolls while the row is selected.
+// Returns that marquee's next-step delay (0: nothing moving).
+inline int valueRow(DisplayDriver& d, int y, const char* label, const char* value, bool sel,
+                    int reserve, int x0 = 2) {
+  d.setCursor(x0, y);
+  d.print(label);
+  if (!value || !*value) return 0;
+  const int right = d.width() - reserve - 2;
+  const int lx = x0 + (*label ? d.getTextWidth(label) + d.getCharWidth() : 0);
+  if (lx + (int)d.getTextWidth(value) <= right) { d.drawTextRightAlign(right, y, value); return 0; }
+  const int r = d.drawTextEllipsized(lx, y, right - lx, value, sel);
+  return sel && r > 0 ? r : 0;
+}
+// A row from a screen's value formatter: exactly "ON" / "OFF" is a yes/no
+// setting and gets the switch; anything else (an option that can be "Off"
+// among numbers included) is a value. Returns valueRow()'s marquee delay.
+inline void switchRow(DisplayDriver& d, int y, const char* label, bool on, bool sel, int reserve, int x0 = 2);
+inline int listRow(DisplayDriver& d, int y, const char* label, const char* value, bool sel,
+                   int reserve, int x0 = 2) {
+  if (value && (!strcmp(value, "ON") || !strcmp(value, "OFF"))) {
+    switchRow(d, y, label, value[1] == 'N', sel, reserve, x0);
+    return 0;
+  }
+  return valueRow(d, y, label, value, sel, reserve, x0);
+}
+// An on/off row: the label, then a switch at the right edge.
+inline void switchRow(DisplayDriver& d, int y, const char* label, bool on, bool sel, int reserve, int x0) {
+  d.setCursor(x0, y);
+  d.print(label);
+  toggle(d, d.width() - reserve - 2, y, on, sel);
 }
 
 // The last N samples of one reading, oldest first, for a history line.
