@@ -335,25 +335,10 @@ class HomeScreen : public UIScreen {
   uint8_t       _slide_from = 0;
   unsigned long _slide_t0 = 0;
 
-  // A wide screen (landscape e-ink) sets the page icons on the header line,
-  // between the time and the status icons, instead of on a row of their own.
-  // Measured for every page at full spacing, so it doesn't flip as pages are
-  // shown or hidden.
-  static int stripHalfW(DisplayDriver& d) {
-    const int s = miniIconScale(d);
-    return (10 * s * ((int)Count - 1) + 5 * s + 8) / 2;
-  }
-  static bool stripOnHeader(DisplayDriver& d) {
-    const int mid = d.width() / 2, half = stripHalfW(d);
-    // Left: the time and a gap. Right: the battery icon and two status icons.
-    const int right_need = 2 * d.getLineHeight() + 6 + 2 * (d.getCharWidth() + 3);
-    return mid - half >= 6 * d.getCharWidth() && mid + half <= d.width() - right_need;
-  }
   // First row under the header and the page-icon row (see render()).
   static int contentTop(DisplayDriver& d) {
-    const int pg_half = (5 * miniIconScale(d) + 1) / 2, lh = d.getLineHeight();
-    if (stripOnHeader(d)) return (lh > 2 * pg_half + 2 ? lh : 2 * pg_half + 2) + 3;
-    return lh + 2 * pg_half + 4;
+    const int pg_half = (PAGE_ICON_PX * miniIconScale(d) + 1) / 2;
+    return d.getLineHeight() + 2 * pg_half + 4;
   }
   // 0..1 eased progress of the running slide, or -1 when none.
   float slideProgress() {
@@ -759,7 +744,11 @@ class HomeScreen : public UIScreen {
       const int iconW = lh * 2;
       const int bm = display.pixelScale() > 1 ? 3 : 2;  // inner margin: 3px on a doubled panel, else 2px
       battLeftX = display.width() - iconW - 3;
-      display.drawRect(battLeftX, 0, iconW, iconH);
+      // The outline with its corner pixels left out, softly rounded.
+      display.fillRect(battLeftX + 1, 0, iconW - 2, 1);
+      display.fillRect(battLeftX + 1, iconH - 1, iconW - 2, 1);
+      display.fillRect(battLeftX, 1, 1, iconH - 2);
+      display.fillRect(battLeftX + iconW - 1, 1, 1, iconH - 2);
       // Nub height/2, vertically centred by remaining-space/2 rather than a flat
       // iconH/4 margin — the flat form only centres when iconH is a multiple of
       // 4 (true for the old built-in font's lh=8, false for misc-fixed's 7/9),
@@ -1296,7 +1285,7 @@ public:
     auto tile = [&](int col, int row, const MiniIcon* ic, float batt, const char* head, const char* detail) {
       const int x = col ? mid_x + 3 : 1, y = row ? mid_y + 2 : top + 1;
       const int w = (col ? W - x : mid_x - 2 - x);
-      const int iy = y + (lh - 5 * s) / 2 - s;
+      const int iy = y + (lh - info::batteryH(d)) / 2 - s;
       int tx = x;
       if (ic)            { miniIconDraw(d, x, iy, *ic); tx = x + ic->w * s + 2 * s; }
       else if (batt >= 0) { info::battery(d, x, iy, batt); tx = x + info::batteryW(d) + 2 * s; }
@@ -1371,15 +1360,12 @@ public:
     display.setTextSize(1);
     const int lh      = display.getLineHeight();  // line height at sz1
     const int step    = display.lineStep();        // lh + 2
-    // Page-indicator row: small (5px) page icons replace the old dots. Centre and
+    // Page-indicator row: small page icons (PAGE_ICON_PX) replace the old dots. Centre and
     // gap scale with the font so the band clears the header above and content
     // below (identical to the old lh+4 / +6 dots layout at 1x).
-    const int pg_half   = (5 * miniIconScale(display) + 1) / 2;
-    const bool one_row  = stripOnHeader(display); // the icons on the header line
-    const int dots_y    = one_row ? lh / 2 : lh + pg_half + 1;   // icon-row centre
+    const int pg_half   = (PAGE_ICON_PX * miniIconScale(display) + 1) / 2;
+    const int dots_y    = lh + pg_half + 1;       // icon-row centre, below the header
     const int content_y = contentTop(display);    // first content row, below the icons
-    const int strip_l   = display.width() / 2 - stripHalfW(display);
-    const int strip_r   = display.width() / 2 + stripHalfW(display);
     const float slide   = slideProgress();        // -1, or how far a page turn has got
 
     // Title bar displaying node name (except on lock screen), status icons and battery.
@@ -1388,9 +1374,8 @@ public:
       display.setColor(DisplayDriver::LIGHT);
       // The lock page has nothing on the left of the bar (its clock sits
       // below it), so the status icons may use the whole row.
-      const int lock_reserve = _page == LOCK ? 0 : one_row ? strip_r + 2 : -1;
+      const int lock_reserve = _page == LOCK ? 0 : -1;
       int rightEdge = renderBatteryIndicator(display, _task->getBattMilliVolts(), lock_reserve);
-      if (one_row && _page != LOCK) rightEdge = strip_l;   // the time stops at the icons
       display.setColor(DisplayDriver::LIGHT);
 
       if (_page != LOCK) {
@@ -1435,7 +1420,7 @@ public:
       int curr_vis = 0;
       for (int i = 0; i < n; i++) if (order[i] == _page) { curr_vis = i; break; }
       const int s        = miniIconScale(display);
-      const int icon_w   = 5 * s;
+      const int icon_w   = PAGE_ICON_PX * s;
       int pitch = icon_w + 5 * s;                       // comfortable spacing
       if (n > 1) {                                      // shrink to fit if many pages
         int fit = (display.width() - icon_w) / (n - 1);

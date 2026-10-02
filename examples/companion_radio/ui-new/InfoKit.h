@@ -60,16 +60,23 @@ inline void section(DisplayDriver& d, int y, const char* label, int reserve = 0)
   rule(d, lx + lw + gap, ry, right - (lx + lw + gap));
 }
 
-// A battery glyph the size of a mini icon (7 x 5 at 1x), filled to frac.
-inline int batteryW(DisplayDriver& d) { return 7 * miniIconScale(d); }
+// A battery glyph the size of a mini icon (7 x 5 at 1x, 9 x 7 in the large
+// set), its corners softly rounded, filled to frac.
+static constexpr int BATT_BODY_W = MINI_ICONS_LARGE ? 8 : 6, BATT_BODY_H = MINI_ICONS_LARGE ? 7 : 5;
+inline int batteryW(DisplayDriver& d) { return (BATT_BODY_W + 1) * miniIconScale(d); }
+inline int batteryH(DisplayDriver& d) { return BATT_BODY_H * miniIconScale(d); }
 inline void battery(DisplayDriver& d, int x, int y, float frac) {
-  const int s = miniIconScale(d);
+  const int s = miniIconScale(d), w = BATT_BODY_W * s, h = BATT_BODY_H * s;
   if (frac < 0) frac = 0;
   if (frac > 1) frac = 1;
-  d.drawRect(x, y, 6 * s, 5 * s);
-  d.fillRect(x + 6 * s, y + s, s, 3 * s);
-  const int fw = (int)(4 * s * frac + 0.5f);
-  if (fw > 0) d.fillRect(x + s, y + s, fw, 3 * s);
+  d.fillRect(x + 1, y, w - 2, 1);           // the outline without its corner pixels
+  d.fillRect(x + 1, y + h - 1, w - 2, 1);
+  d.fillRect(x, y + 1, 1, h - 2);
+  d.fillRect(x + w - 1, y + 1, 1, h - 2);
+  d.fillRect(x + w, y + s, s, h - 2 * s);
+  const int in = MINI_ICONS_LARGE ? 2 * s : s;   // the large one keeps a gap inside its outline
+  const int fw = (int)((w - 2 * in) * frac + 0.5f);
+  if (fw > 0) d.fillRect(x + in, y + in, fw, h - 2 * in);
 }
 
 // A soft-cornered meter, filled to frac (0..1).

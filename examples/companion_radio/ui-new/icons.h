@@ -41,6 +41,15 @@ struct MiniIcon { uint8_t w, h; const uint8_t* rows; };
   static constexpr MiniIcon name = { (uint8_t)(width),                         \
                                      (uint8_t)sizeof(name##_rows), name##_rows }
 
+// The landscape e-ink build writes in the 8x13, whose digits stand 9 px:
+// there the status, page and check glyphs come in a 7 px set instead of 5.
+#if defined(EINK_LARGE_FONT) && EINK_LARGE_FONT
+  #define MINI_ICONS_LARGE 1
+#else
+  #define MINI_ICONS_LARGE 0
+#endif
+static constexpr int PAGE_ICON_PX = MINI_ICONS_LARGE ? 7 : 5;   // the page glyphs' box
+
 // Pixel scale from the font: 1× on an 8px OLED line, 2× on a 16px landscape
 // e-ink line, etc. Bitmaps are authored on the 1× grid.
 inline int miniIconScale(DisplayDriver& d) {
@@ -104,6 +113,20 @@ inline void miniIconDotRow(DisplayDriver& d, int x, int top_y, int count) {
 }
 
 // Mini-icon bitmaps (authored on the 1× grid as ASCII-art; see packRow above).
+#if MINI_ICONS_LARGE
+MINI_ICON(ICON_CHECK, 7,   // ✓
+  packRow("......#"),
+  packRow(".....#."),
+  packRow("#...#.."),
+  packRow(".#.#..."),
+  packRow("..#...."));
+MINI_ICON(ICON_CROSS, 5,   // ✗
+  packRow("#...#"),
+  packRow(".#.#."),
+  packRow("..#.."),
+  packRow(".#.#."),
+  packRow("#...#"));
+#else
 MINI_ICON(ICON_CHECK, 5,   // ✓
   packRow("....#"),
   packRow("...#."),
@@ -114,6 +137,7 @@ MINI_ICON(ICON_CROSS, 4,   // ✗
   packRow(".##."),
   packRow(".##."),
   packRow("#..#"));
+#endif
 
 // Tiny 3×5 digits — for a small count that needs to sit in an icon-sized slot
 // (e.g. next to ICON_CHECK) where the normal font is too tall to fit. See
@@ -206,6 +230,81 @@ inline void miniIconDrawNumber(DisplayDriver& d, int x, int top_y, int n) {
 }
 
 // Top-bar status glyphs (replace the single-letter M / B / A indicators).
+#if MINI_ICONS_LARGE
+MINI_ICON(ICON_MUTE, 8,   // speaker + cross (sound off)
+  packRow("...#...."),
+  packRow("..##...."),
+  packRow("####.#.#"),
+  packRow("####..#."),
+  packRow("####.#.#"),
+  packRow("..##...."),
+  packRow("...#...."));
+MINI_ICON(ICON_BLUETOOTH, 5,   // ᛒ bluetooth rune
+  packRow("..#.."),
+  packRow("..##."),
+  packRow("#.#.#"),
+  packRow(".###."),
+  packRow("#.#.#"),
+  packRow("..##."),
+  packRow("..#.."));
+MINI_ICON(ICON_ADVERT, 7,   // ((•)) advert
+  packRow(".#...#."),
+  packRow("#.....#"),
+  packRow("#.###.#"),
+  packRow("#.###.#"),
+  packRow("#.###.#"),
+  packRow("#.....#"),
+  packRow(".#...#."));
+MINI_ICON(ICON_ALARM, 7,   // bell — an alarm is armed
+  packRow("...#..."),
+  packRow("..###.."),
+  packRow(".#####."),
+  packRow(".#####."),
+  packRow(".#####."),
+  packRow("#######"),
+  packRow("...#..."));
+MINI_ICON(ICON_TRAIL, 7,   // map pin (GPS trail logging)
+  packRow("..###.."),
+  packRow(".#####."),
+  packRow("##...##"),
+  packRow("##...##"),
+  packRow(".#####."),
+  packRow("..###.."),
+  packRow("...#..."));
+MINI_ICON(ICON_REPEATER, 8,   // » relaying (repeater active)
+  packRow("#...#..."),
+  packRow(".#...#.."),
+  packRow("..#...#."),
+  packRow("...#...#"),
+  packRow("..#...#."),
+  packRow(".#...#.."),
+  packRow("#...#..."));
+MINI_ICON(ICON_GPS, 7,   // reticle with its dot: GPS has a fix
+  packRow("..###.."),
+  packRow(".#...#."),
+  packRow("#..#..#"),
+  packRow("#.###.#"),
+  packRow("#..#..#"),
+  packRow(".#...#."),
+  packRow("..###.."));
+MINI_ICON(ICON_GPS_SEARCH, 7,   // the reticle broken: still searching
+  packRow("..#.#.."),
+  packRow(".#...#."),
+  packRow("#.....#"),
+  packRow("......."),
+  packRow("#.....#"),
+  packRow(".#...#."),
+  packRow("..#.#.."));
+
+MINI_ICON(ICON_CHART, 7,   // ascending bars — Home › Status
+  packRow("......#"),
+  packRow("....#.#"),
+  packRow("....#.#"),
+  packRow("..#.#.#"),
+  packRow("..#.#.#"),
+  packRow("#.#.#.#"),
+  packRow("#######"));
+#else
 MINI_ICON(ICON_MUTE, 6,   // speaker + cross (sound off)
   packRow("..#..."),
   packRow(".##..."),
@@ -273,10 +372,93 @@ MINI_ICON(ICON_CHART, 5,   // ascending bars — Home › Status
   packRow("#.#.#"),
   packRow("#.#.#"),
   packRow("#####"));
+#endif
 
 // Home-carousel page glyphs — a uniform 5x5 set, deliberately smaller than the
 // menu/status icons above, used in place of the page-indicator dots. One per
 // HomePage; see UITask HomeScreen::pageIcon().
+#if MINI_ICONS_LARGE
+MINI_ICON(ICON_PG_CLOCK, 7,   // clock face + hands
+  packRow("..###.."),
+  packRow(".#.#.#."),
+  packRow("#..#..#"),
+  packRow("#..##.#"),
+  packRow("#.....#"),
+  packRow(".#...#."),
+  packRow("..###.."));
+MINI_ICON(ICON_PG_STAR, 7,   // favourites
+  packRow("...#..."),
+  packRow("...#..."),
+  packRow("#######"),
+  packRow(".#####."),
+  packRow("..###.."),
+  packRow(".##.##."),
+  packRow(".#...#."));
+MINI_ICON(ICON_PG_RADIO, 7,   // antenna with waves — radio
+  packRow(".#...#."),
+  packRow("#..#..#"),
+  packRow("#.###.#"),
+  packRow(".#.#.#."),
+  packRow("...#..."),
+  packRow("..#.#.."),
+  packRow(".#...#."));
+MINI_ICON(ICON_PG_BT, 5,   // bluetooth
+  packRow("..#.."),
+  packRow("..##."),
+  packRow("#.#.#"),
+  packRow(".###."),
+  packRow("#.#.#"),
+  packRow("..##."),
+  packRow("..#.."));
+MINI_ICON(ICON_PG_ADVERT, 7,   // advert page: the same waves
+  packRow(".#...#."),
+  packRow("#.....#"),
+  packRow("#.###.#"),
+  packRow("#.###.#"),
+  packRow("#.###.#"),
+  packRow("#.....#"),
+  packRow(".#...#."));
+MINI_ICON(ICON_PG_SETTINGS, 7,   // cog with a hub hole
+  packRow("..#.#.."),
+  packRow(".#####."),
+  packRow("##...##"),
+  packRow(".#...#."),
+  packRow("##...##"),
+  packRow(".#####."),
+  packRow("..#.#.."));
+MINI_ICON(ICON_PG_MAP, 7,   // folded map
+  packRow("#######"),
+  packRow("#..#..#"),
+  packRow("#..#..#"),
+  packRow("#..#..#"),
+  packRow("#..#..#"),
+  packRow("#..#..#"),
+  packRow("#######"));
+MINI_ICON(ICON_PG_TOOLS, 7,   // wrench, open jaw top right
+  packRow("....#.#"),
+  packRow("....#.#"),
+  packRow("....###"),
+  packRow("...##.."),
+  packRow("..##..."),
+  packRow(".##...."),
+  packRow("##....."));
+MINI_ICON(ICON_PG_MSG, 7,   // speech bubble with three dots
+  packRow("#######"),
+  packRow("#.....#"),
+  packRow("#.#.#.#"),
+  packRow("#.....#"),
+  packRow("#######"),
+  packRow("##....."),
+  packRow("#......"));
+MINI_ICON(ICON_PG_POWER, 7,   // power symbol
+  packRow("...#..."),
+  packRow(".#.#.#."),
+  packRow("#..#..#"),
+  packRow("#.....#"),
+  packRow("#.....#"),
+  packRow(".#...#."),
+  packRow("..###.."));
+#else
 MINI_ICON(ICON_PG_CLOCK, 5,      // clock face + hands
   packRow(".###."),
   packRow("#.#.#"),
@@ -336,6 +518,7 @@ MINI_ICON(ICON_PG_POWER, 5,      // power symbol — shutdown
   packRow("#...#"),
   packRow("#...#"),
   packRow(".###."));
+#endif
 
 // Trail-map markers — centred on a point (see miniIconDrawCentered) rather
 // than anchored to a text line.
@@ -347,12 +530,23 @@ MINI_ICON(ICON_MAP_RING, 3,       // ○ hollow ring — marks a new trail segme
   packRow("###"),
   packRow("#.#"),
   packRow("###"));
+#if MINI_ICONS_LARGE   // the markers that also head rows of text
+MINI_ICON(ICON_MAP_WAYPOINT, 7,   // ◇ hollow diamond — saved waypoint
+  packRow("...#..."),
+  packRow("..#.#.."),
+  packRow(".#...#."),
+  packRow("#.....#"),
+  packRow(".#...#."),
+  packRow("..#.#.."),
+  packRow("...#..."));
+#else
 MINI_ICON(ICON_MAP_WAYPOINT, 5,   // ◇ hollow diamond — saved waypoint
   packRow("..#.."),
   packRow(".#.#."),
   packRow("#...#"),
   packRow(".#.#."),
   packRow("..#.."));
+#endif
 MINI_ICON(ICON_MAP_START, 5,      // + trail start marker
   packRow("..#.."),
   packRow("..#.."),
@@ -365,12 +559,23 @@ MINI_ICON(ICON_MAP_CURRENT, 5,    // ✕ live position / last trail point
   packRow("..#.."),
   packRow(".#.#."),
   packRow("#...#"));
+#if MINI_ICONS_LARGE
+MINI_ICON(ICON_MAP_CONTACT, 7,   // ◆ filled diamond — a live-tracked contact
+  packRow("...#..."),
+  packRow("..###.."),
+  packRow(".#####."),
+  packRow("#######"),
+  packRow(".#####."),
+  packRow("..###.."),
+  packRow("...#..."));
+#else
 MINI_ICON(ICON_MAP_CONTACT, 5,    // ◆ filled diamond — a live-tracked contact ([LOC] share)
   packRow("..#.."),
   packRow(".###."),
   packRow("#####"),
   packRow(".###."),
   packRow("..#.."));
+#endif
 MINI_ICON(ICON_MAP_NORTH, 5,      // "N" with a peaked roof — compass north marker
   packRow("..#.."),
   packRow(".###."),
