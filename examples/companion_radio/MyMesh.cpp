@@ -1360,7 +1360,17 @@ bool MyMesh::onContactPathRecv(ContactInfo& contact, uint8_t* in_path, uint8_t i
     }
   }
   // let base class handle received path and data
-  return BaseChatMesh::onContactPathRecv(contact, in_path, in_path_len, out_path, out_path_len, extra_type, extra, extra_len);
+  bool r = BaseChatMesh::onContactPathRecv(contact, in_path, in_path_len, out_path, out_path_len, extra_type, extra, extra_len);
+  // A flood DM's ACK comes back folded into the return path, which the base
+  // class matches without going through onAckRecv() -- so the UI's delivery
+  // marker never heard of it and kept resending. Tell it here too; it only
+  // acts on a crc matching one of its own pending DMs.
+  if (extra_type == PAYLOAD_TYPE_ACK && extra_len >= 4 && _listener) {
+    uint32_t ack_crc;
+    memcpy(&ack_crc, extra, 4);
+    _listener->onACKRecv(ack_crc);
+  }
+  return r;
 }
 
 #define CTL_TYPE_NODE_DISCOVER_REQ  0x80
