@@ -40,9 +40,11 @@ struct TrailPoint {
   int32_t  lon_1e6;
   uint32_t ts;            // epoch seconds (RTC)
   uint8_t  flags;         // bit 0 = SEG_START (don't draw a line from the previous point)
+  int16_t  alt_m;         // GPS altitude, metres; TRAIL_ALT_NONE if unknown (in what was padding)
 };
 
 static const uint8_t TRAIL_FLAG_SEG_START = 0x01;
+static const int16_t TRAIL_ALT_NONE = -32768;
 
 class TrailStore {
 public:
@@ -195,7 +197,9 @@ public:
   // commits more vertices per route (more fidelity, less reduction).
   static constexpr float CORRIDOR_FACTOR = 0.5f;
 
-  bool addPoint(int32_t lat_1e6, int32_t lon_1e6, uint32_t ts, uint16_t min_delta_m) {
+  bool addPoint(int32_t lat_1e6, int32_t lon_1e6, uint32_t ts, uint16_t min_delta_m,
+                int16_t alt_m = TRAIL_ALT_NONE) {
+    const TrailPoint sample{ lat_1e6, lon_1e6, ts, 0, alt_m };
     const TrailPoint* ref = _has_pending ? &_pending : (_count > 0 ? &last() : nullptr);
     if (ref && !_pending_seg_break) {
       float d = haversineMeters(ref->lat_1e6, ref->lon_1e6, lat_1e6, lon_1e6);
@@ -204,16 +208,15 @@ public:
 
     if (_count == 0 || _pending_seg_break) {
       flushPending();   // shouldn't normally have one here, but never lose real distance
-      commitPoint(lat_1e6, lon_1e6, ts, TRAIL_FLAG_SEG_START);
+      commitPoint(sample, TRAIL_FLAG_SEG_START);
       _pending_seg_break = false;
       return true;
     }
 
 #if !TRAIL_SIMPLIFY
-    commitPoint(lat_1e6, lon_1e6, ts, 0);
+    commitPoint(sample, 0);
     return true;
 #endif
-    TrailPoint sample{ lat_1e6, lon_1e6, ts, 0 };
     if (!_has_pending) {
       _pending     = sample;   // last in-corridor sample (the commit candidate)
       _dir         = sample;   // fixes the corridor direction: last() → _dir
@@ -224,7 +227,7 @@ public:
     if (crossTrackMeters(last(), _dir, sample) <= (float)min_delta_m * CORRIDOR_FACTOR) {
       _pending = sample;                                            // within corridor — extend
     } else {
-      commitPoint(_pending.lat_1e6, _pending.lon_1e6, _pending.ts, 0);  // left corridor — keep last good
+      commitPoint(_pending, 0);  // left corridor — keep last good
       _pending = sample;   // the exiting sample opens the next run...
       _dir     = sample;   // ...and fixes its corridor direction from the just-committed vertex
     }
@@ -283,7 +286,7 @@ public:
   // uint32 accumulated_ms, then `count` raw TrailPoint records. count is
   // clamped to CAPACITY on load.
   static const uint32_t SAVE_MAGIC = 0x4C415254;  // "TRAL"
-  static const uint8_t  SAVE_VERSION = 1;
+  static const uint8_t  SAVE_VERSION = 2;   // 2: TrailPoint::alt_m; 1 (no altitude) still loads
 
   // Caller supplies an opened, writable File (the FS-open call is
   // platform-specific). Returns true if the header and every point wrote
@@ -304,7 +307,8 @@ public:
   bool readFrom(F& file) {
     uint16_t cnt = 0;
     uint32_t accum = 0;
-    if (!persist::readHeader(file, SAVE_MAGIC, SAVE_VERSION, cnt)) return false;
+    uint8_t ver = 0;
+    if (!persist::readHeader(file, SAVE_MAGIC, SAVE_VERSION, cnt, 1, &ver)) return false;
     if (file.read((uint8_t*)&accum, sizeof(accum)) != (int)sizeof(accum)) return false;
     if (cnt > CAPACITY) return false;
     if (_active) {
@@ -319,6 +323,7 @@ public:
       TrailPoint p;
       int n = file.read((uint8_t*)&p, sizeof(TrailPoint));
       if (n != (int)sizeof(TrailPoint)) break;
+      if (ver < 2) p.alt_m = TRAIL_ALT_NONE;   // v1 left that space as padding
       _buf[_count++] = p;
     }
     _accumulated_ms = accum;
@@ -413,13 +418,14 @@ public:
       n += out.print(F("<trkseg>\n"));
       in_segment = true;
     }
-    char buf[120];
+    char buf[140], ele[24] = "";
     time_t t = (time_t)p.ts;
     struct tm* gt = ::gmtime(&t);
     if (!gt) return n;  // defensive: skip malformed timestamps
+    if (p.alt_m != TRAIL_ALT_NONE) snprintf(ele, sizeof(ele), "<ele>%d</ele>", (int)p.alt_m);
     int len = snprintf(buf, sizeof(buf),
-      "<trkpt lat=\"%.6f\" lon=\"%.6f\"><time>%04d-%02d-%02dT%02d:%02d:%02dZ</time></trkpt>\n",
-      p.lat_1e6 / 1.0e6, p.lon_1e6 / 1.0e6,
+      "<trkpt lat=\"%.6f\" lon=\"%.6f\">%s<time>%04d-%02d-%02dT%02d:%02d:%02dZ</time></trkpt>\n",
+      p.lat_1e6 / 1.0e6, p.lon_1e6 / 1.0e6, ele,
       gt->tm_year + 1900, gt->tm_mon + 1, gt->tm_mday,
       gt->tm_hour, gt->tm_min, gt->tm_sec);
     if (len < 0) return n;
@@ -448,7 +454,8 @@ public:
   static size_t exportGpxFromFile(F& file, S& out, WP& wpts, const char* trk_name = "MeshCore Trail") {
     uint16_t cnt = 0;
     uint32_t accum = 0;
-    if (!persist::readHeader(file, SAVE_MAGIC, SAVE_VERSION, cnt)) return 0;
+    uint8_t ver = 0;
+    if (!persist::readHeader(file, SAVE_MAGIC, SAVE_VERSION, cnt, 1, &ver)) return 0;
     if (file.read((uint8_t*)&accum, sizeof(accum)) != (int)sizeof(accum)) return 0;
     if (cnt > CAPACITY) return 0;
 
@@ -460,6 +467,7 @@ public:
       TrailPoint p;
       int n = file.read((uint8_t*)&p, sizeof(TrailPoint));
       if (n != (int)sizeof(TrailPoint)) break;
+      if (ver < 2) p.alt_m = TRAIL_ALT_NONE;
       total += gpxPoint(out, p, i == 0, in_segment);
     }
     total += gpxFooter(out, in_segment);
@@ -499,7 +507,8 @@ private:
   TrailPoint _pending;
   TrailPoint _dir;
 
-  void commitPoint(int32_t lat_1e6, int32_t lon_1e6, uint32_t ts, uint8_t flags) {
+  void commitPoint(const TrailPoint& p, uint8_t flags) {
+    const int32_t lat_1e6 = p.lat_1e6, lon_1e6 = p.lon_1e6;
     if (_count > 0 && !(flags & TRAIL_FLAG_SEG_START))
       _dist_m += haversineMeters(last().lat_1e6, last().lon_1e6, lat_1e6, lon_1e6);
     int pos;
@@ -514,10 +523,8 @@ private:
       _head = (_head + 1) % CAPACITY;
     }
     _seq++;
-    _buf[pos].lat_1e6 = lat_1e6;
-    _buf[pos].lon_1e6 = lon_1e6;
-    _buf[pos].ts      = ts;
-    _buf[pos].flags   = flags;
+    _buf[pos] = p;
+    _buf[pos].flags = flags;
   }
 
   // Commit the pending candidate (if any) as a real vertex. Called before a
@@ -525,7 +532,7 @@ private:
   // never silently dropped just because no bend came along to force a commit.
   void flushPending() {
     if (!_has_pending) return;
-    commitPoint(_pending.lat_1e6, _pending.lon_1e6, _pending.ts, 0);
+    commitPoint(_pending, 0);
     _has_pending = false;
   }
 

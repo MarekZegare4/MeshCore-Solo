@@ -902,7 +902,7 @@ template <typename F>
 static bool trailSummary(F& io, int& points, float& meters, uint32_t& secs) {
   uint16_t cnt = 0;
   uint32_t accum = 0;
-  if (!persist::readHeader(io, TrailStore::SAVE_MAGIC, TrailStore::SAVE_VERSION, cnt)) return false;
+  if (!persist::readHeader(io, TrailStore::SAVE_MAGIC, TrailStore::SAVE_VERSION, cnt, 1)) return false;
   if (io.read((uint8_t*)&accum, sizeof(accum)) != (int)sizeof(accum)) return false;
   points = 0; meters = 0; secs = accum / 1000;
   TrailPoint prev, p;

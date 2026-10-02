@@ -23,7 +23,10 @@ inline bool writeHeader(F& file, uint32_t magic, uint8_t version, uint16_t count
 // reject against its own capacity) and reads any table-specific fields that
 // follow the count.
 template <typename F>
-inline bool readHeader(F& file, uint32_t expect_magic, uint8_t expect_version, uint16_t& count_out) {
+// `min_version` > 0 also takes the older versions from it up to expect_version,
+// the one read going to *version_out.
+inline bool readHeader(F& file, uint32_t expect_magic, uint8_t expect_version, uint16_t& count_out,
+                       uint8_t min_version = 0, uint8_t* version_out = nullptr) {
   uint32_t magic = 0;
   if (file.read((uint8_t*)&magic, sizeof(magic)) != (int)sizeof(magic)) return false;
   if (magic != expect_magic) return false;
@@ -32,7 +35,8 @@ inline bool readHeader(F& file, uint32_t expect_magic, uint8_t expect_version, u
   if (file.read(&ver, 1)                       != 1)                return false;
   if (file.read(&res, 1)                       != 1)                return false;
   if (file.read((uint8_t*)&cnt, sizeof(cnt))   != (int)sizeof(cnt)) return false;
-  if (ver != expect_version) return false;
+  if (ver > expect_version || ver < (min_version ? min_version : expect_version)) return false;
+  if (version_out) *version_out = ver;
   count_out = cnt;
   return true;
 }

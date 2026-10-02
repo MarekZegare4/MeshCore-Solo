@@ -47,8 +47,10 @@ public:
     } else if (_trail.isPaused()) {
       _trail.setPaused(false);   // feature turned off → resume
     }
+    int16_t alt = TRAIL_ALT_NONE;
+    _course->currentAltitude(alt);
     if (!_trail.isPaused())
-      _trail.addPoint(la, lo, (uint32_t)rtc_clock.getCurrentTime(), md);
+      _trail.addPoint(la, lo, (uint32_t)rtc_clock.getCurrentTime(), md, alt);
   }
 
   // True while a trail is recording and not auto-paused (needs live GPS).

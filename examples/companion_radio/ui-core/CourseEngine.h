@@ -31,6 +31,15 @@ public:
     return false;
   }
 
+  // Current GPS altitude in metres, false without a fix.
+  bool currentAltitude(int16_t& m) const {
+    LocationProvider* loc = _sensors ? _sensors->getLocationProvider() : nullptr;
+    if (!loc || !loc->isValid()) return false;
+    long a = loc->getAltitude() / 1000;   // the provider reports millimetres
+    m = (int16_t)(a < -32000 ? -32000 : a > 32000 ? 32000 : a);
+    return true;
+  }
+
   // Current course over ground in degrees (0..359), or false if not enough
   // recent movement to derive a stable heading. Holds the last good heading
   // while standing still.
