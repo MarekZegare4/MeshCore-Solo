@@ -9,6 +9,7 @@
 #include <string.h>
 #include <math.h>
 #include "icons.h"
+#include "../ui-core/StatusHistory.h"
 
 namespace info {
 
@@ -249,12 +250,7 @@ inline void switchRow(DisplayDriver& d, int y, const char* label, bool on, bool 
 
 // The last N samples of one reading, oldest first, for a history line.
 template <int N>
-struct History {
-  int16_t v[N];
-  uint8_t n = 0, head = 0;
-  void push(int16_t x) { v[head] = x; head = (head + 1) % N; if (n < N) n++; }
-  int16_t at(int i) const { return v[(head + N - n + i) % N]; }   // 0 = oldest
-};
+using History = uicore::History<N>;
 
 // A history line in a w x h box: a dotted baseline, the samples scaled
 // between their own min and max (at least `min_span` apart, so a flat

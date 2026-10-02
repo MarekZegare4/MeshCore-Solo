@@ -48,17 +48,13 @@ private:
   CayenneLPP _lpp;
   unsigned long _lpp_at = 0;
 
-  // History lines, one sample a minute (32 min). E-ink draws them as charts
-  // (chartBlock()) over a longer span: a sample every 5 minutes, 8 hours.
+  // History lines (ui-core/StatusHistory.h), one sample a minute (32 min).
+  // E-ink draws them as charts (chartBlock()) over a longer span: a sample
+  // every 5 minutes, 8 hours. Its Radio chart also has the SNR of the last
+  // 32 packets.
   static const int HIST_N = Features::IS_EINK ? 96 : 32;
-  static const unsigned long SAMPLE_MS = Features::IS_EINK ? 300000 : 60000;
   static constexpr const char* HIST_SPAN = Features::IS_EINK ? "8 h ago" : "32 min";
-  unsigned long _next_sample = 0;
-  uint32_t _last_rx = 0;
-  info::History<HIST_N> _noise, _batt, _traffic;
-  // The SNR of each packet heard, the last 32 (e-ink's Radio chart), x4 dB.
-  info::History<32> _snr;
-  uint32_t _snr_rx = 0;
+  uicore::StatusHistory<HIST_N, Features::IS_EINK ? 300000UL : 60000UL> _hist;
 
   // A chart as a block (e-ink): `title` with the value now on its line, the
   // chart under it.
@@ -124,12 +120,12 @@ private:
     const int nf = (int)radio_driver.getNoiseFloor();
     if (nf) snprintf(a, sizeof(a), "%d dBm", nf); else strcpy(a, "-");
     if (Features::IS_EINK) {
-      chartBlock(d, f, rsv, "Noise", a, _noise, 6, false, HIST_SPAN);
+      chartBlock(d, f, rsv, "Noise", a, _hist.noise, 6, false, HIST_SPAN);
     } else if (f.place(d.lineStep())) {   // label, the last half hour, the value now
       info::valueRow(d, f.at, "Noise", a, false, rsv, 1);
       const int x0 = 1 + d.getTextWidth("Noise") + 6;
       const int x1 = d.width() - rsv - 2 - d.getTextWidth(a) - 6;
-      if (x1 - x0 > 12) info::spark(d, x0, f.at, x1 - x0, lh - 1, _noise);
+      if (x1 - x0 > 12) info::spark(d, x0, f.at, x1 - x0, lh - 1, _hist.noise);
     }
     if (f.place(d.lineStep())) {
       const float snr = radio_driver.getLastSNR();
@@ -138,7 +134,7 @@ private:
       drawSignalBars(d, d.width() - rsv - 2 - d.getTextWidth(b) - 5, f.at, (int)(snr * 4));
     }
     snprintf(b, sizeof(b), "%.1f dB", radio_driver.getLastSNR());
-    if (Features::IS_EINK) chartBlock(d, f, rsv, "SNR", b, _snr, 20, false, "32 pkts");
+    if (Features::IS_EINK) chartBlock(d, f, rsv, "SNR", b, _hist.snr, 20, false, "32 pkts");
     else row(d, f, rsv, "Last SNR", b);
   }
 
@@ -214,12 +210,12 @@ private:
     row(d, f, rsv, "Battery", a);
     row(d, f, rsv, "Source", board.isExternalPowered() ? "USB" : "Battery");
     if (Features::IS_EINK) {
-      chartBlock(d, f, rsv, "Trend", nullptr, _batt, 20, false, HIST_SPAN);
+      chartBlock(d, f, rsv, "Trend", nullptr, _hist.batt, 20, false, HIST_SPAN);
     } else if (f.place(d.lineStep())) {
       d.setCursor(1, f.at);
       d.print("Trend");
       const int x0 = 1 + d.getTextWidth("Trend") + 6;
-      info::spark(d, x0, f.at, d.width() - rsv - 2 - x0, d.getLineHeight() - 1, _batt, 20);
+      info::spark(d, x0, f.at, d.width() - rsv - 2 - x0, d.getLineHeight() - 1, _hist.batt, 20);
     }
 
     // Sensors: every reading but the battery (above) and the position (GPS).
@@ -259,9 +255,9 @@ private:
     if (Features::IS_EINK) {   // packets per 5 minutes, as bars
       const int ch = 3 * lh;
       if (f.place(info::chartH(d, ch) + 2))
-        info::chart(d, 1, f.at, d.width() - rsv - 3, ch, _traffic, 4, true, HIST_SPAN, "now");
+        info::chart(d, 1, f.at, d.width() - rsv - 3, ch, _hist.traffic, 4, true, HIST_SPAN, "now");
     } else if (f.place(lh + 6)) {
-      info::spark(d, 1, f.at, d.width() - rsv - 3, lh + 3, _traffic, 4);
+      info::spark(d, 1, f.at, d.width() - rsv - 3, lh + 3, _hist.traffic, 4);
     }
 
     static const uint8_t MSG[]    = { PAYLOAD_TYPE_TXT_MSG, PAYLOAD_TYPE_GRP_TXT };
@@ -350,26 +346,12 @@ public:
   // GPS stays awake while its live tabs are on screen.
   bool wantsLiveGps() const { return tab() == TAB_GPS || tab() == TAB_SKY; }
 
-  // Called from the UI loop on every pass: one sample a minute for the lines.
+  // Called from the UI loop on every pass; the history keeps its own pace.
   void sample() {
-    if (Features::IS_EINK) samplePacket();
-    const unsigned long now = millis();
-    if (_next_sample && (long)(now - _next_sample) < 0) return;
-    _next_sample = now + SAMPLE_MS;
-    const int nf = (int)radio_driver.getNoiseFloor();
-    if (nf) _noise.push((int16_t)nf);
-    _batt.push((int16_t)battMv());
-    const uint32_t rx = totalRx();
-    if (_last_rx || rx) _traffic.push((int16_t)(rx - _last_rx > 30000 ? 30000 : rx - _last_rx));
-    _last_rx = rx;
-  }
-  // On every pass: the SNR of a packet just heard (e-ink's Radio chart).
-  void samplePacket() {
-    const uint32_t rx = totalRx();
-    if (rx != _snr_rx) { _snr.push((int16_t)(radio_driver.getLastSNR() * 4)); _snr_rx = rx; }
+    _hist.tick(millis(), (int)radio_driver.getNoiseFloor(), battMv(), totalRx(), radio_driver.getLastSNR());
   }
 
-  const info::History<HIST_N>& battHistory() const { return _batt; }
+  const info::History<HIST_N>& battHistory() const { return _hist.batt; }
 
   // Contacts heard from in the last hour (cached for 10 s: it walks them all).
   static int heardLastHour() {
@@ -422,7 +404,7 @@ public:
       auto res = _reset_menu.handleInput(c);
       if (res == PopupMenu::SELECTED && _reset_menu.selectedIndex() == 0) {
         diag::resetCounters();
-        _last_rx = 0;
+        _hist.countersReset();
       }
       return true;
     }

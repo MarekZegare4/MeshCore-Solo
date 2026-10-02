@@ -440,10 +440,19 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
     int step = display.lineStep();
     if (step * 5 > display.height() - hdr) step = (display.height() - hdr) / 5;
     char buf[32];
-    snprintf(buf, sizeof(buf), "Lat: %.5f", e.lat_e6 / 1e6);
-    display.setCursor(2, hdr); display.print(buf);
-    snprintf(buf, sizeof(buf), "Lon: %.5f", e.lon_e6 / 1e6);
-    display.setCursor(2, hdr + step); display.print(buf);
+    // Without a line to spare for the path (the OLED), the position takes one
+    // row, unlabelled: then there are five rows either way.
+    const bool one_pos = hdr + step * 5 + display.getLineHeight() > display.height();
+    if (one_pos) {
+      snprintf(buf, sizeof(buf), "%.5f,%.5f", e.lat_e6 / 1e6, e.lon_e6 / 1e6);
+      display.drawTextEllipsized(2, hdr, display.width() - 4, buf);
+    } else {
+      snprintf(buf, sizeof(buf), "Lat: %.5f", e.lat_e6 / 1e6);
+      display.setCursor(2, hdr); display.print(buf);
+      snprintf(buf, sizeof(buf), "Lon: %.5f", e.lon_e6 / 1e6);
+      display.setCursor(2, hdr + step); display.print(buf);
+    }
+    const int r0 = one_pos ? -1 : 0;   // the rows under the position move up one
 
     if (e.dist_km >= 0.0f) {
       char dist[12];
@@ -453,32 +462,35 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
     } else {
       snprintf(buf, sizeof(buf), "Dist: no GPS");
     }
-    display.setCursor(2, hdr + step * 2); display.print(buf);
+    display.setCursor(2, hdr + step * (2 + r0)); display.print(buf);
     snprintf(buf, sizeof(buf), "Type: %s", typeName(e.type));
-    display.setCursor(2, hdr + step * 3); display.print(buf);
+    display.setCursor(2, hdr + step * (3 + r0)); display.print(buf);
     char age[16];
     fmtAge(age, sizeof(age), e.lastmod);
     // For a live [LOC] row, label the timestamp as a position share and note
     // whether the sender's identity is verified (DM) or name-only (channel).
     if (e.is_live) snprintf(buf, sizeof(buf), "Sharing pos: %s %s", age, e.live_verified ? "(DM)" : "(chan)");
     else           snprintf(buf, sizeof(buf), "Seen: %s", age);
-    display.drawTextEllipsized(2, hdr + step * 4, display.width() - 4, buf);
+    display.drawTextEllipsized(2, hdr + step * (4 + r0), display.width() - 4, buf);
 
     const int W = display.width(), H = display.height(), lh = display.getLineHeight();
-    int rows = 5;
-    // How a message gets there, where there's a line for it (e-ink): a chain
-    // from you to it, a ring per repeater on the way.
+    int rows = 5 + r0;
+    // How a message gets there: a chain from you to it, a ring per repeater
+    // on the way.
     ContactInfo ci;
-    if (hdr + step * 5 + lh <= H && e.contact_idx >= 0 && the_mesh.getContactByIdx(e.contact_idx, ci)) {
-      const int y = hdr + step * 5;
+    if (hdr + step * rows + lh <= H && e.contact_idx >= 0 && the_mesh.getContactByIdx(e.contact_idx, ci)) {
+      const int y = hdr + step * rows;
       display.setCursor(2, y);
       display.print("Path:");
       int x = 2 + display.getTextWidth("Path: ");
       if (ci.out_path_len == 0xFF) {
         display.print(" flood");
       } else {
-        const int hops = ci.out_path_len & 63, shown = hops > 5 ? 5 : hops;
+        const int hops = ci.out_path_len & 63;
         const int r = lh / 4 > 2 ? lh / 4 : 2, cy = y + lh / 2 - 1, gap = r + 3;
+        // up to 5 rings, as many as leave room for the count after them
+        const int fit = (W - 2 - x - display.getTextWidth("5 hops")) / (2 * r + 1 + gap) - 2;
+        const int cap = fit < 5 ? (fit < 1 ? 1 : fit) : 5, shown = hops > cap ? cap : hops;
         for (int k = 0; k <= shown + 1; k++) {   // you and it filled, the hops as rings
           if (k) for (int dx = x - gap + 1; dx < x; dx += 2) display.fillRect(dx, cy, 1, 1);
           info::circle(display, x + r, cy, r);
@@ -490,12 +502,12 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
         display.setCursor(x, y);
         display.print(buf);
       }
-      rows = 6;
+      rows++;
     }
 
     // Where it is, on a compass rose (north up), where the screen has the room
     // (e-ink): beside the rows on a wide one, under them on a tall one.
-    if (e.dist_km < 0.0f) return;
+    if (!Features::IS_EINK || e.dist_km < 0.0f) return;
     const int below = hdr + step * rows + lh;
     int r, cx, cy;
     if (H - below > W / 2) { r = (W < H - below ? W : H - below) / 2 - lh; cx = W / 2; cy = below + lh / 2 + r; }
@@ -650,8 +662,8 @@ public:
     }
 
     int item_h   = display.lineStep();
-    // E-ink sets an arrow towards the node before its distance: one more cell.
-    const bool arrows = Features::IS_EINK && _source == SRC_STORED && _sort != SORT_TIME;
+    // An arrow towards the node before its distance: one more cell.
+    const bool arrows = _source == SRC_STORED && _sort != SORT_TIME;
     int dist_col = display.width() - display.getCharWidth() * (arrows ? 9 : 7);
 
     display.setColor(DisplayDriver::LIGHT);

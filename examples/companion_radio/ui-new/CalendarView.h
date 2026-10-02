@@ -6,21 +6,13 @@
 #include <time.h>
 #include <helpers/ui/DisplayDriver.h>
 #include "InfoKit.h"
+#include "../ui-core/CalendarMath.h"
 
 namespace calendar {
 
-inline int daysIn(int year, int mon) {   // mon 0..11, year as in tm (since 1900)
-  static const uint8_t D[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
-  const int y = year + 1900;
-  const bool leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
-  return D[mon] + (mon == 1 && leap ? 1 : 0);
-}
-// The column (0 = Monday) the 1st falls in.
-inline int firstCol(const struct tm& t) {
-  const int wday1 = ((t.tm_wday - (t.tm_mday - 1)) % 7 + 7) % 7;   // 0 = Sunday
-  return (wday1 + 6) % 7;
-}
-inline int weeks(const struct tm& t) { return (firstCol(t) + daysIn(t.tm_year, t.tm_mon) + 6) / 7; }
+using calmath::daysIn;
+using calmath::firstCol;
+using calmath::weeks;
 
 // Its height: the day names, a rule, then a row a week.
 inline int height(DisplayDriver& d, const struct tm& t) {

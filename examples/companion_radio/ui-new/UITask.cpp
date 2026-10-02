@@ -1072,20 +1072,9 @@ public:
   // The days left this month the alarm goes off on, as calendar::draw()'s
   // marks: the repeat days, or a one-shot's next (today or tomorrow).
   uint32_t alarmDays(const struct tm& t) const {
-    if (!_node_prefs || !_node_prefs->alarm_on) return 0;
-    const int n = calendar::daysIn(t.tm_year, t.tm_mon);
-    const uint8_t mask = _node_prefs->alarm_repeat_mask;
-    const bool passed = t.tm_hour * 60 + t.tm_min >= _node_prefs->alarm_hour * 60 + _node_prefs->alarm_min;
-    uint32_t days = 0;
-    for (int day = t.tm_mday; day <= n; day++) {
-      if (day == t.tm_mday && passed) continue;
-      const int wday = (t.tm_wday + day - t.tm_mday) % 7;
-      if (mask ? (mask & (1 << wday)) : true) {
-        days |= 1UL << (day - 1);
-        if (!mask) break;   // one-shot: only the next
-      }
-    }
-    return days;
+    if (!_node_prefs) return 0;
+    return calmath::alarmDays(t, _node_prefs->alarm_on, _node_prefs->alarm_repeat_mask,
+                              _node_prefs->alarm_hour, _node_prefs->alarm_min);
   }
 
   void drawClockPage(DisplayDriver& d, uint32_t unix_ts) {

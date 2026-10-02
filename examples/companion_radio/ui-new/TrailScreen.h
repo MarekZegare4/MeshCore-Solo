@@ -7,6 +7,7 @@
 
 #include "InfoKit.h"
 #include "../Trail.h"
+#include "../ui-core/TrailProfile.h"
 #include "../GeoUtils.h"
 #include "GfxUtils.h"
 #include "icons.h"     // scalable mini-icons (map markers, north arrow, grid dots)
@@ -51,7 +52,7 @@ class TrailScreen : public UIScreen {
   UITask*     _task;
   TrailStore* _store;
 
-  enum View { V_SUMMARY = 0, V_MAP = 1, V_LIST = 2, V_COUNT };
+  enum View { V_SUMMARY = 0, V_MAP = 1, V_PROFILE = 2, V_LIST = 3, V_COUNT };
   uint8_t _view           = V_SUMMARY;
   int     _summary_scroll = 0;
   int     _list_scroll    = 0;
@@ -126,14 +127,16 @@ public:
 
     // The title bar carries the view dots so the bottom hint row can be
     // reclaimed for content.
-    const char* title = (_view == V_MAP)  ? (_map_grid ? "Trail map+" : "Trail map")
-                      : (_view == V_LIST) ? "Trail list"
-                      :                      "Trail";
+    const char* title = (_view == V_MAP)     ? (_map_grid ? "Trail map+" : "Trail map")
+                      : (_view == V_PROFILE) ? "Trail height"
+                      : (_view == V_LIST)    ? "Trail list"
+                      :                         "Trail";
     drawScreenHeader(display, title, (int)_view, (int)V_COUNT);
 
-    if      (_view == V_MAP)  renderMap(display);
-    else if (_view == V_LIST) renderList(display);
-    else                       renderSummary(display);
+    if      (_view == V_MAP)     renderMap(display);
+    else if (_view == V_PROFILE) renderProfileView(display);
+    else if (_view == V_LIST)    renderList(display);
+    else                          renderSummary(display);
 
     if (_action_menu.active) _action_menu.render(display);
     return _store->isActive() ? 1000 : 5000;
@@ -558,9 +561,16 @@ private:
     }
   }
 
-  bool hasAltitude() const {
-    for (int i = 0; i < _store->count(); i++) if (_store->at(i).alt_m != TRAIL_ALT_NONE) return true;
-    return false;
+  bool hasAltitude() const { return trailprofile::stats(*_store).any; }
+
+  // The profile as its own view, the whole space under the header.
+  void renderProfileView(DisplayDriver& d) {
+    const int top = d.listStart();
+    if (!hasAltitude()) {
+      d.drawTextCentered(d.width() / 2, (top + d.height()) / 2 - d.getLineHeight() / 2, "No altitude yet");
+      return;
+    }
+    renderProfile(d, 1, top, d.width() - 2, d.height() - 1 - top);
   }
 
   // The height over the distance walked, in x, y, w, h: a framed area, a
@@ -568,30 +578,17 @@ private:
   // point under it.
   void renderProfile(DisplayDriver& d, int x, int y, int w, int h) {
     const int lh = d.getLineHeight(), fh = h - lh - 2;   // the frame; the caption under it
-    const int n = _store->count();
-    int lo = 32767, hi = -32768, gain = 0, last = TRAIL_ALT_NONE;
-    for (int i = 0; i < n; i++) {
-      const int a = _store->at(i).alt_m;
-      if (a == TRAIL_ALT_NONE) continue;
-      if (a < lo) lo = a;
-      if (a > hi) hi = a;
-      if (last == TRAIL_ALT_NONE || a < last) last = a;   // the climb, past 3 m of jitter
-      else if (a - last >= 3) { gain += a - last; last = a; }
-    }
+    const trailprofile::Stats st = trailprofile::stats(*_store);
+    int lo = st.lo, hi = st.hi;
     if (hi - lo < 20) { const int mid = (hi + lo) / 2; lo = mid - 10; hi = mid + 10; }
     const float total = _store->totalDistanceMeters() > 0 ? (float)_store->totalDistanceMeters() : 1.0f;
     d.drawSoftRect(x, y, w, fh);
     const int ix = x + 2, iy = y + 2, iw = w - 4, ih = fh - 4;
-    float cum = 0;
     int px = -1, py = 0;
-    for (int i = 0; i < n; i++) {
-      const TrailPoint& p = _store->at(i);
-      if (i > 0 && !(p.flags & TRAIL_FLAG_SEG_START))
-        cum += TrailStore::haversineMeters(_store->at(i - 1).lat_1e6, _store->at(i - 1).lon_1e6, p.lat_1e6, p.lon_1e6);
-      if (p.alt_m == TRAIL_ALT_NONE) continue;
+    trailprofile::walk(*_store, [&](float cum, int alt) {
       int cx = ix + (int)(cum / total * (iw - 1));
       if (cx > ix + iw - 1) cx = ix + iw - 1;
-      const int cy = iy + ih - 1 - (p.alt_m - lo) * (ih - 1) / (hi - lo);
+      const int cy = iy + ih - 1 - (alt - lo) * (ih - 1) / (hi - lo);
       if (px >= 0) {
         for (int c = px + 1; c <= cx; c++) {   // each column: the line, the fill under it
           const int ly = py + (cy - py) * (c - px) / (cx - px);
@@ -600,10 +597,11 @@ private:
         }
       }
       px = cx; py = cy;
-    }
+    });
+    const int gain = st.gain;
     char a[16], b[16];
     snprintf(a, sizeof(a), "+%d m", gain);
-    snprintf(b, sizeof(b), "max %d m", hi);
+    snprintf(b, sizeof(b), "max %d m", st.hi);
     const int cy = y + fh + 2;
     miniIconDraw(d, x, cy, ICON_ARROW_NE);
     d.setCursor(x + ICON_ARROW_NE.w * miniIconScale(d) + 2, cy);

@@ -554,6 +554,17 @@ extern "C" EMSCRIPTEN_KEEPALIVE int sim_test_set_node_name(const char* name) {
   return 1;
 }
 
+// Whether adverts carry this node's position (ADVERT_LOC_NONE / _SHARE /
+// _PREFS, src/helpers/CommonCLI.h) -- off by default, so peers in a test
+// mesh have no distance or direction to one another until it's on.
+extern "C" EMSCRIPTEN_KEEPALIVE int sim_test_set_advert_loc(int policy) {
+  if (!g_sim_ready) return 0;
+  NodePrefs* prefs = the_mesh.getNodePrefs();
+  if (!prefs) return 0;
+  prefs->advert_loc_policy = (uint8_t)policy;
+  return 1;
+}
+
 // auto_off_secs (NodePrefs.h) defaults to 15 -- a real device's screen
 // (and, if auto_lock is also set, the UI itself) turns off/locks 15s
 // after the last input, real power-saving behaviour a battery-powered
