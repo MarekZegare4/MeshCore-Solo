@@ -432,6 +432,8 @@ private:
   void buildDiag();
   void diagSection(int sec);
   void refreshDiag();
+  void sampleHistory();            // DiagScreen.h: History's readings, from loop()
+  void fillHistory();
   void buildCompass();
   void refreshCompass();
   void favPickPopup(int slot);

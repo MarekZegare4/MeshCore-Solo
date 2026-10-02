@@ -899,7 +899,7 @@ static void trailTitle(const char* name, char* out, size_t n) {
 
 // Points, distance and recorded time of a saved trail, from its file.
 template <typename F>
-static bool trailSummary(F& io, int& points, float& meters, uint32_t& secs) {
+static bool trailSummary(F& io, int& points, float& meters, uint32_t& secs, trailprofile::Sampler* prof = nullptr) {
   uint16_t cnt = 0;
   uint32_t accum = 0;
   if (!persist::readHeader(io, TrailStore::SAVE_MAGIC, TrailStore::SAVE_VERSION, cnt, 1)) return false;
@@ -910,6 +910,7 @@ static bool trailSummary(F& io, int& points, float& meters, uint32_t& secs) {
     if (io.read((uint8_t*)&p, sizeof(p)) != (int)sizeof(p)) break;
     if (points > 0 && !(p.flags & TRAIL_FLAG_SEG_START))
       meters += TrailStore::haversineMeters(prev.lat_1e6, prev.lon_1e6, p.lat_1e6, p.lon_1e6);
+    if (prof) prof->feed(p);
     prev = p;
     points++;
   }
@@ -963,6 +964,9 @@ void UITask::navToolsPopup() {
 
   sectionTitle(list, "TRAIL");
   _nav_trail_lbl = label(list, "", THEME_FONT_SMALL, theme::TEXT);
+  profileview::s_prof = trailprofile::Sampler();   // its height profile, as it is now
+  profileview::s_prof.feedAll(_core->trail.store());
+  profileChart(list, 72);
   lv_obj_t* r = buttonBar(list);
   _nav_trail_btn = toolButton(r, "", navmap::TL_TRAIL_TOGGLE, true);
   toolButton(r, LV_SYMBOL_SAVE " Save", navmap::TL_TRAIL_SAVE, false);
@@ -1220,13 +1224,15 @@ void UITask::savedTrailPopup(int idx) {
   lv_obj_t* panel = navPopupPanel(title, false);
 
   int pts = 0; float m = 0; uint32_t secs = 0; bool ok = false;
+  trailprofile::Sampler& prof = profileview::s_prof;
+  prof = trailprofile::Sampler();
   if (idx >= 0) {
     char path[64];
     snprintf(path, sizeof(path), "%s/%s", navmap::TRAILS_DIR, navmap::s_st_names[idx]);
-    if (FILE* f = fopen(path, "rb")) { navmap::FileRW io{ f }; ok = navmap::trailSummary(io, pts, m, secs); fclose(f); }
+    if (FILE* f = fopen(path, "rb")) { navmap::FileRW io{ f }; ok = navmap::trailSummary(io, pts, m, secs, &prof); fclose(f); }
   } else if (DataStore* ds = the_mesh.getDataStore()) {
     File f = ds->openRead(TrailEngine::TRAIL_FILE);
-    if (f) { ok = navmap::trailSummary(f, pts, m, secs); f.close(); }
+    if (f) { ok = navmap::trailSummary(f, pts, m, secs, &prof); f.close(); }
   }
   char dist[12], dur[12], info[64];
   geo::fmtDist(dist, sizeof(dist), m / 1000.0f, _prefs && _prefs->units_imperial);
@@ -1234,6 +1240,7 @@ void UITask::savedTrailPopup(int idx) {
   if (ok) snprintf(info, sizeof(info), "%s  -  %s  -  %d points", dist, dur, pts);
   else snprintf(info, sizeof(info), "Can't read this file");
   label(panel, info, THEME_FONT_BODY, theme::TEXT);
+  if (ok) profileChart(panel, 60);
   if (!_core->trail.store().empty())
     label(panel, "Loading replaces the trail on the map.", THEME_FONT_SMALL, theme::TEXT_MUTED);
   lv_obj_t* r = buttonBar(panel);

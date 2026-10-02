@@ -1,6 +1,7 @@
 #pragma once
-// Clock tools (Home > Clock): alarm, countdown timer and stopwatch -- ui-new's
-// Tools > Clock on a touch screen. The alarm (NodePrefs alarm_*) and the
+// Clock tools (Home > Clock): alarm, countdown timer, stopwatch and this
+// month's calendar -- ui-new's Tools > Clock on a touch screen (the calendar
+// as ui-new's e-ink has it under the clock). The alarm (NodePrefs alarm_*) and the
 // countdown run in the Core's ClockEngine, so they fire on any screen and while
 // the display sleeps; the stopwatch is view state here, as in ui-new. Whatever
 // fires brings up a full-screen card with Dismiss (silent: the L2 speaker has
@@ -10,7 +11,7 @@
 
 namespace clockview {
 
-enum : uint8_t { TAB_ALARM, TAB_TIMER, TAB_STOPWATCH, TAB_COUNT };
+enum : uint8_t { TAB_ALARM, TAB_TIMER, TAB_STOPWATCH, TAB_CALENDAR, TAB_COUNT };
 enum : uint8_t { ACT_START_STOP, ACT_RESET };
 
 static uint8_t   s_tab = TAB_ALARM;
@@ -23,6 +24,63 @@ static lv_obj_t* s_go_lbl = nullptr;        // Start / Stop
 static lv_obj_t* s_ring = nullptr;          // "Timer done" card on the top layer
 static lv_obj_t* s_ring_lbl = nullptr;
 static lv_obj_t* s_alarm_sw = nullptr;     // follows a time change (setting it arms the alarm)
+
+static struct tm s_cal_tm;    // the day the calendar was drawn for (local)
+static uint32_t s_cal_marks = 0;  // its alarm days, bit (day - 1)
+static lv_obj_t* s_cal = nullptr;
+
+// The month as a grid, weeks from Monday: the weekday names, today in an
+// accent box, the alarm's days with an accent bar under them, the weekend
+// dimmer.
+static void onCalendarDraw(lv_event_t* e) {
+  lv_obj_t* o = (lv_obj_t*)lv_event_get_target(e);
+  lv_layer_t* layer = lv_event_get_layer(e);
+  lv_area_t a;
+  lv_obj_get_coords(o, &a);
+  const struct tm& t = s_cal_tm;
+  static const char* const NAMES[] = { "Mo", "Tu", "We", "Th", "Fr", "Sa", "Su" };
+  const int W = a.x2 - a.x1 + 1, cw = W / 7, x0 = a.x1 + (W - 7 * cw) / 2;
+  const int head = 16, rows = calmath::weeks(t), ch = (a.y2 - a.y1 + 1 - head) / rows;
+  lv_draw_label_dsc_t td;
+  lv_draw_label_dsc_init(&td);
+  td.align = LV_TEXT_ALIGN_CENTER;
+  td.font = THEME_FONT_SMALL;
+  for (int c = 0; c < 7; c++) {
+    td.color = lv_color_hex(theme::TEXT_MUTED);
+    td.text = NAMES[c];
+    lv_area_t la = { x0 + c * cw, a.y1, x0 + (c + 1) * cw - 1, a.y1 + head - 1 };
+    lv_draw_label(layer, &td, &la);
+  }
+  td.font = THEME_FONT_BODY;
+  const int fh = lv_font_get_line_height(td.font), col0 = calmath::firstCol(t), n = calmath::daysIn(t.tm_year, t.tm_mon);
+  char buf[3];
+  for (int day = 1; day <= n; day++) {
+    const int k = col0 + day - 1, cx = x0 + (k % 7) * cw, cy = a.y1 + head + (k / 7) * ch;
+    const bool today = day == t.tm_mday;
+    if (today) {
+      lv_draw_rect_dsc_t rd;
+      lv_draw_rect_dsc_init(&rd);
+      rd.radius = theme::RADIUS_SM;
+      rd.bg_color = lv_color_hex(theme::ACCENT);
+      const int bh = ch - 2 < fh + 2 ? ch - 2 : fh + 2, by = cy + (ch - bh) / 2;
+      lv_area_t ra = { cx + 4, by, cx + cw - 5, by + bh - 1 };
+      lv_draw_rect(layer, &rd, &ra);
+    }
+    snprintf(buf, sizeof(buf), "%d", day);
+    td.text = buf;
+    td.color = lv_color_hex(today ? theme::BG : k % 7 >= 5 ? theme::TEXT_MUTED : theme::TEXT);
+    lv_area_t la = { cx, cy + (ch - fh) / 2, cx + cw - 1, cy + (ch + fh) / 2 };
+    lv_draw_label(layer, &td, &la);
+    if (s_cal_marks & (1UL << (day - 1))) {   // under the number
+      lv_draw_rect_dsc_t md;
+      lv_draw_rect_dsc_init(&md);
+      md.radius = 1;
+      md.bg_color = lv_color_hex(today ? theme::BG : theme::ACCENT);
+      lv_area_t ma = { cx + cw / 2 - 6, cy + ch - 2, cx + cw / 2 + 6, cy + ch - 1 };
+      lv_draw_rect(layer, &md, &ma);
+    }
+  }
+}
 
 static uint32_t swElapsed() { return s_sw_accum + (s_sw_running ? millis() - s_sw_start : 0); }
 
@@ -243,12 +301,11 @@ void UITask::buildClock() {
   lv_obj_t* body = newScreen("Clock", true);
   lv_obj_set_style_pad_row(body, 6, 0);
   lv_obj_remove_flag(body, LV_OBJ_FLAG_SCROLLABLE);
-  s_big = s_go_lbl = s_alarm_sw = nullptr;
+  s_big = s_go_lbl = s_alarm_sw = s_cal = nullptr;
 
   // Tabs
   lv_obj_t* tabs = row(body);
-  static const char* const NAMES[TAB_COUNT] = { LV_SYMBOL_BELL " Alarm", UI_SYMBOL_CLOCK " Timer",
-                                                UI_SYMBOL_STOPWATCH " Stopwatch" };
+  static const char* const NAMES[TAB_COUNT] = { "Alarm", "Timer", "Stopwatch", "Calendar" };
   for (int t = 0; t < TAB_COUNT; t++) {
     lv_obj_t* b = lv_button_create(tabs);
     lv_obj_set_height(b, 32);
@@ -293,6 +350,29 @@ void UITask::buildClock() {
     bool synced = rtc_clock.getCurrentTime() > 1000000000UL;
     label(body, synced ? "Rings at this local time (Settings time zone)." : "The clock isn't set yet: the alarm waits for a time sync.",
           THEME_FONT_SMALL, theme::TEXT_MUTED);
+    return;
+  }
+
+  if (s_tab == TAB_CALENDAR) {
+    struct tm t;
+    bool synced = localTime(_prefs, t);
+    if (!synced) {
+      label(body, "The clock isn't set yet: no date to show.", THEME_FONT_BODY, theme::TEXT_MUTED);
+      return;
+    }
+    static const char* const LONG_MONTHS[] = { "January", "February", "March", "April", "May", "June", "July",
+                                               "August", "September", "October", "November", "December" };
+    char title[24];   // the month on the header's right: the grid gets the height
+    snprintf(title, sizeof(title), "%s %d", LONG_MONTHS[t.tm_mon], t.tm_year + 1900);
+    if (_header) lv_obj_align(label(_header, title, THEME_FONT_TITLE, theme::TEXT_MUTED), LV_ALIGN_RIGHT_MID, -theme::PAD, 0);
+    s_cal_tm = t;
+    s_cal_marks = calmath::alarmDays(t, _prefs->alarm_on, _prefs->alarm_repeat_mask, _prefs->alarm_hour, _prefs->alarm_min);
+    s_cal = lv_obj_create(body);
+    lv_obj_remove_style_all(s_cal);
+    lv_obj_remove_flag(s_cal, LV_OBJ_FLAG_CLICKABLE);
+    fillWidth(s_cal);
+    lv_obj_set_flex_grow(s_cal, 1);
+    lv_obj_add_event_cb(s_cal, onCalendarDraw, LV_EVENT_DRAW_MAIN_END, NULL);
     return;
   }
 
@@ -343,6 +423,14 @@ void UITask::buildClock() {
 // From loop() while SCR_CLOCK is shown: the running readouts.
 void UITask::refreshClock() {
   using namespace clockview;
+  if (s_tab == TAB_CALENDAR) {   // past midnight, or the alarm changed: a new day to box or mark
+    struct tm t;
+    if (s_cal && localTime(_prefs, t)
+        && (t.tm_mday != s_cal_tm.tm_mday || t.tm_mon != s_cal_tm.tm_mon
+            || calmath::alarmDays(t, _prefs->alarm_on, _prefs->alarm_repeat_mask, _prefs->alarm_hour, _prefs->alarm_min) != s_cal_marks))
+      buildClock();
+    return;
+  }
   if (s_tab == TAB_TIMER) {
     bool running = _core->clock.isTimerRunning();
     if (running != s_shown_running) { buildClock(); return; }   // started elsewhere / just fired

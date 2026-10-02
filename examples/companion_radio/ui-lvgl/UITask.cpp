@@ -74,6 +74,9 @@ static bool s_chats_stale = false;   // Messages: a refresh waits for a held row
 #include "../ui-core/SettingsSchema.h"
 #include "../ui-core/GpsAverager.h"
 #include "../ui-core/TrackBack.h"
+#include "../ui-core/TrailProfile.h"
+#include "../ui-core/StatusHistory.h"
+#include "../ui-core/CalendarMath.h"
 #include "../ui-core/RadioControl.h"
 #include "../ui-core/RepeaterControl.h"
 #include "../ui-core/Diagnostics.h"
@@ -1620,6 +1623,7 @@ extern "C" lv_result_t __wrap_lv_obj_send_event(lv_obj_t* o, lv_event_code_t c, 
 void UITask::loop() {
   pollConnection();
   drainCoreEvents();
+  sampleHistory();
 
   // USER (BOOT, side) button: Home's clock page; held and let go, mutes / unmutes, also with the
   // screen off, which it doesn't wake. WAKE (top) button: screen off / on.
@@ -2607,6 +2611,8 @@ int UITask::fillPending() const {
   return n;
 }
 
+#include "NodeViz.h"   // the node detail's rose and path (newScreen() drops its card)
+
 lv_obj_t* UITask::newScreen(const char* title, bool with_back) {
   s_fill_n = 0;   // what was still to be built goes with the screen
   _home_clock = _home_date = _home_unread = nullptr;
@@ -2617,6 +2623,7 @@ lv_obj_t* UITask::newScreen(const char* title, bool with_back) {
   _header = _body = nullptr;
   _nearby_list = _nearby_status = _nearby_sort_lbl = _nearby_chips = nullptr;
   _node_info = _node_ping = _node_delete_lbl = nullptr;
+  nodeviz::s_card = nullptr;
   _scan_overlay = _scan_list = _scan_status = nullptr;   // the popup went with the old screen
   _map_area = _map_marks = _map_me = _map_zoom_lbl = _map_hint = _map_dl_pill = _map_center_btn = nullptr;
   _dl_overlay = _dl_info = _dl_sub = _dl_start_lbl = _dl_job_row = _dl_job_lbl = nullptr;
@@ -3602,6 +3609,27 @@ static void nearbyText(const NearbyModel::Entry& e, uint32_t now, bool imperial,
   t.right_col = e.is_live ? theme::OK : theme::TEXT_MUTED;
 }
 
+// A small arrow towards the node, drawn in the value label's left padding:
+// its user data is the bearing + 1 (0: none).
+static const int ROW_ARROW_W = 14;
+static void onRowArrowDraw(lv_event_t* e) {
+  lv_obj_t* o = (lv_obj_t*)lv_event_get_target(e);
+  const int b = (int)(intptr_t)lv_obj_get_user_data(o) - 1;
+  if (b < 0) return;
+  lv_area_t a;
+  lv_obj_get_coords(o, &a);
+  const float cx = a.x1 + ROW_ARROW_W / 2 - 1, cy = (a.y1 + a.y2) / 2.0f;
+  const float ang = b * (float)M_PI / 180.0f, sx = sinf(ang), sy = -cosf(ang);
+  lv_draw_triangle_dsc_t tri;
+  lv_draw_triangle_dsc_init(&tri);
+  tri.color = lv_obj_get_style_text_color(o, LV_PART_MAIN);
+  tri.opa = LV_OPA_COVER;
+  tri.p[0].x = cx + sx * 6;           tri.p[0].y = cy + sy * 6;                 // the tip
+  tri.p[1].x = cx - sx * 5 + sy * 4;  tri.p[1].y = cy - sy * 5 - sx * 4;
+  tri.p[2].x = cx - sx * 5 - sy * 4;  tri.p[2].y = cy - sy * 5 + sx * 4;
+  lv_draw_triangle(lv_event_get_layer(e), &tri);
+}
+
 void UITask::refreshNearbyList() {
   if (!_nearby_list) return;
   _nearby->refreshModel();
@@ -3621,13 +3649,27 @@ void UITask::refreshNearbyList() {
   // order); the list stays where it was scrolled.
   static const vlist::Kind ROW = {
     theme::ROW_H,
-    [](lv_obj_t* list) { return vRowValue(list, onNearbyRow); },
+    [](lv_obj_t* list) {
+      lv_obj_t* row = vRowValue(list, onNearbyRow);
+      lv_obj_add_event_cb(lv_obj_get_child(row, 2), onRowArrowDraw, LV_EVENT_DRAW_MAIN_END, NULL);
+      return row;
+    },
     [](lv_obj_t* row, intptr_t i) {
       const NearbyModel::Entry& e = s_ui->_nearby->at((int)i);
       NearbyText t;
       nearbyText(e, rtc_clock.getCurrentTime(), s_ui->_prefs && s_ui->_prefs->units_imperial, t);
       rowSet(row, t.title, t.sub, e.fav ? theme::ACCENT : theme::TEXT);
       rowValue(row, t.right, t.right_col);
+      // By the distance, an arrow towards it
+      int b = -1;
+      int32_t lat, lon;
+      if (e.dist_km >= 0.0f && s_ui->_nearby->ownPosition(lat, lon)) b = geo::bearingDeg(lat, lon, e.lat_e6, e.lon_e6);
+      lv_obj_t* v = lv_obj_get_child(row, 2);
+      if ((intptr_t)lv_obj_get_user_data(v) != b + 1) {
+        lv_obj_set_user_data(v, (void*)(intptr_t)(b + 1));
+        lv_obj_set_style_pad_left(v, b >= 0 ? ROW_ARROW_W : 0, 0);
+        lv_obj_invalidate(v);
+      }
     },
   };
   vlist::begin(_nearby_list);
@@ -3653,11 +3695,19 @@ void UITask::openNode(int row) {
   buildNode();
 }
 
+static lv_obj_t* s_nd_fav = nullptr;
+static void nodeFavText() {
+  if (s_nd_fav) lv_label_set_text(s_nd_fav, s_node.fav ? UI_SYMBOL_STAR "  Remove from favourites" : UI_SYMBOL_STAR "  Add to favourites");
+}
+
 void UITask::buildNode() {
   const NearbyModel::Entry& e = s_node;
   lv_obj_t* body = newScreen(e.name[0] ? e.name : "(unknown)", true);
 
   lv_obj_t* info = scrollList(body);   // the info, scrolling above the actions at the bottom
+  s_nd_fav = nullptr;
+  nodeVizBuild(info);
+  nodeviz::s_bearing = nodeviz::s_hops = -2;   // nothing drawn yet: the first set fills both
   _node_info = infoCard(info);
   s_nd_type = infoRow(_node_info, "Type", "");
   s_nd_status = infoRow(_node_info, "Status", "");
@@ -3668,26 +3718,26 @@ void UITask::buildNode() {
   s_nd_id = infoRow(_node_info, "ID", "");
   _node_ping = label(info, "", THEME_FONT_BODY, theme::ACCENT);
 
+  // The bar: what the node is for -- a message, its admin, adding it -- a
+  // ping and the way there. The rest, less often, in a group under the info.
   lv_obj_t* acts = buttonBar(body);
   bool contact = e.contact_idx >= 0;
   bool admin = contact && (e.type == ADV_TYPE_REPEATER || e.type == ADV_TYPE_ROOM);
   bool pos = e.lat_e6 != 0 || e.lon_e6 != 0;
-  struct Act { const char* icon; const char* text; uint8_t action; bool accent; } list[9];
-  int n = 0;
-  if (contact && e.type == ADV_TYPE_CHAT) list[n++] = { LV_SYMBOL_ENVELOPE, " Message", NODE_MSG, true };
-  if (e.has_key) list[n++] = { LV_SYMBOL_LOOP, " Ping", NODE_PING, false };
-  if (pos) list[n++] = { UI_SYMBOL_COMPASS, "", NODE_NAV, false };
-  if (pos) list[n++] = { UI_SYMBOL_FLAG, "", NODE_WAYPOINT, false };   // save where it was seen
-  if (contact) list[n++] = { UI_SYMBOL_STAR, admin ? "" : e.fav ? " Unfav" : " Fav", NODE_FAV, e.fav };   // lit while it is one
-  if (admin) list[n++] = { LV_SYMBOL_SETTINGS, " Admin", NODE_ADMIN, false };
-  if (!contact && e.has_key && !e.is_known) list[n++] = { LV_SYMBOL_PLUS, " Add", NODE_ADD, true };
-  if (contact && e.has_key) list[n++] = { UI_SYMBOL_TACK, "", NODE_PIN, favslots::findContact(_prefs, e.pub_key) >= 0 };
-  if (contact) list[n++] = { LV_SYMBOL_TRASH, "", NODE_DELETE, false };
-  for (int i = 0; i < n; i++) {   // five or more: icons only, so every button fits one row
-    char t[24];
-    snprintf(t, sizeof(t), "%s%s", list[i].icon, n >= 5 ? "" : list[i].text);
-    lv_obj_t* b = barButton(acts, t, onNodeAction, list[i].action, list[i].accent);
-    if (list[i].action == NODE_DELETE) _node_delete_lbl = lv_obj_get_child(b, 0);
+  if (contact && e.type == ADV_TYPE_CHAT) barButton(acts, LV_SYMBOL_ENVELOPE " Message", onNodeAction, NODE_MSG, true);
+  if (admin) barButton(acts, LV_SYMBOL_SETTINGS " Admin", onNodeAction, NODE_ADMIN, true);
+  if (!contact && e.has_key && !e.is_known) barButton(acts, LV_SYMBOL_PLUS " Add", onNodeAction, NODE_ADD, true);
+  if (e.has_key) barButton(acts, LV_SYMBOL_LOOP " Ping", onNodeAction, NODE_PING);
+  if (pos) barButton(acts, UI_SYMBOL_COMPASS " Navigate", onNodeAction, NODE_NAV);
+
+  if (pos || contact) {
+    lv_obj_t* g = group(info, "More");
+    if (pos) actionRow(g, UI_SYMBOL_FLAG "  Save as waypoint", onNodeAction, (void*)(uintptr_t)NODE_WAYPOINT);
+    if (contact) s_nd_fav = actionRow(g, "", onNodeAction, (void*)(uintptr_t)NODE_FAV);
+    nodeFavText();
+    if (contact && e.has_key) actionRow(g, UI_SYMBOL_TACK "  Pin to Home", onNodeAction, (void*)(uintptr_t)NODE_PIN);
+    if (contact) _node_delete_lbl = actionRow(g, LV_SYMBOL_TRASH "  Delete contact", onNodeAction,
+                                              (void*)(uintptr_t)NODE_DELETE, theme::FAIL);
   }
 
   refreshNode();
@@ -3717,11 +3767,13 @@ void UITask::refreshNode() {
   if (e.fav) tag("favourite");
   if (status[0] >= 'a' && status[0] <= 'z') status[0] -= 'a' - 'A';
   int32_t lat, lon;
+  int bearing = -1;
   if (e.lat_e6 != 0 || e.lon_e6 != 0) {
     if (_nearby->ownPosition(lat, lon) && e.dist_km >= 0.0f) {
       char d[16];
       geo::fmtDist(d, sizeof(d), e.dist_km, _prefs && _prefs->units_imperial);
       int az = geo::bearingDeg(lat, lon, e.lat_e6, e.lon_e6);
+      bearing = az;
       snprintf(dist, sizeof(dist), "%s  %d\xC2\xB0 %s", d, az, geo::bearingCardinal(az));
     }
     snprintf(pos, sizeof(pos), "%.5f, %.5f", e.lat_e6 / 1e6, e.lon_e6 / 1e6);
@@ -3741,6 +3793,11 @@ void UITask::refreshNode() {
   infoSet(s_nd_heard, heard);
   infoSet(s_nd_signal, sig);
   infoSet(s_nd_id, id);
+  ContactInfo ci;
+  int hops = -1;
+  if (!_node_from_scan && e.contact_idx >= 0 && the_mesh.getContactByIdx(e.contact_idx, ci))
+    hops = ci.out_path_len == 0xFF ? 0xFF : (ci.out_path_len & 63);
+  nodeVizSet(bearing, hops);
 
   // Ping result (PingEngine releases its slot on reply; the view owns the timeout)
   if (_pinging) {
@@ -3779,9 +3836,10 @@ void UITask::nodeAction(uint8_t action) {
       break;
     }
     case NODE_FAV:
-      if (contactctl::setFavourite(e.pub_key, !e.fav)) {
+      if (contactctl::setFavourite(e.pub_key, !e.fav)) {   // in place: the list stays where it was scrolled
         e.fav = !e.fav;
-        buildNode();
+        nodeFavText();
+        refreshNode();
       }
       break;
     case NODE_ADD:
@@ -3819,10 +3877,7 @@ void UITask::nodeAction(uint8_t action) {
       pinPopup(false, 0, e.pub_key);
       break;
     case NODE_DELETE:
-      if (!tapConfirmed(_node_delete_lbl, LV_SYMBOL_TRASH "?")) {   // "?" fits an icon-only button
-        showToast("Tap again to delete the contact", 2500);
-        break;
-      }
+      if (!tapConfirmed(_node_delete_lbl, LV_SYMBOL_TRASH "  Tap again to delete")) break;
       if (the_mesh.deleteContactByKey(e.pub_key)) {
         _screen = SCR_NEARBY;
         buildNearby();
@@ -3833,6 +3888,7 @@ void UITask::nodeAction(uint8_t action) {
 
 static lv_obj_t* switchRow(lv_obj_t* parent, const char* text, const char* sub, uint8_t* pref);   // below
 #include "MapScreen.h"
+#include "ProfileView.h"
 #include "NavMap.h"
 #include "MapAreas.h"
 #include "MapRegions.h"
@@ -4924,6 +4980,8 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_open(const char* name) {
   if (!strcmp(name, "regions")) { s_ui->mapRegionsPopup(); return; }
   if (!strcmp(name, "region0")) { s_ui->mapRegionPopup(0); return; }
   if (!strcmp(name, "advert")) { s_ui->advertPopup(); return; }
+  if (!strcmp(name, "trailsave")) { s_ui->navToolAction(navmap::TL_TRAIL_SAVE); return; }   // Map tools > Save
+  if (!strcmp(name, "savedtrail0")) { navmap::scanTrails(); s_ui->savedTrailPopup(0); return; }
   if (!strncmp(name, "trail@", 6)) {   // "trail@name.trl" from /sdcard/trails: Load, as the saved-trail popup does
     navmap::scanTrails();
     for (int i = 0; i < navmap::s_st_n; i++)
