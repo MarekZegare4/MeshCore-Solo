@@ -84,6 +84,8 @@ existing `solo/<board>/platformio.ini` for what's already claimed).
 | --- | --- |
 | `OLED_MISC_FIXED_FONT=1` | Pulls in a full Latin/Greek/Cyrillic 6×9 fixed font (~14 KB flash) so typed text in those alphabets renders as itself instead of block placeholders. Worth it on any board with a keyboard; skip it on space-constrained builds without one. |
 | `DISPLAY_ROTATION=<0-3>` | Rotates the panel in 90° steps, for a board mounted sideways or upside down. |
+| `EINK_LARGE_FONT=1` | E-ink: writes in the 8×13 font at the panel's own resolution, with the larger icon set. The landscape e-ink build sets it; the narrow portrait screen keeps the 6×9. |
+| `JOYSTICK_UPRIGHT_ROTATION=<0-3>` | The display rotation at which the joystick reads upright; the joystick then turns with the screen. Set by the e-ink builds. |
 | `ENABLE_SCREENSHOT` | Lets the site's [USB tools](https://solo.marekzegarek.com/#pc-tools) (or `tools/screenshot.py`) capture the screen over USB. A colour screen (the L2) renders a fresh frame and sends it as RGB565. |
 | `KEEP_DISPLAY_ON_USB` | Refreshes the auto-off deadline continuously while externally (USB) powered, so the auto-off timer only starts counting once power is actually removed. Off by default because OLED panels burn in quickly with a permanently-lit screen — only worth enabling for an LCD/e-ink target, or a display you don't mind replacing. |
 | `AUTO_OFF_MILLIS=<ms>` | How long the display stays on before auto-off. Default 15000 (15s); `0` disables auto-off entirely. |

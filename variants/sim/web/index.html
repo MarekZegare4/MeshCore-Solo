@@ -215,7 +215,7 @@
       }
     }
 
-    const SimFactory = window.MeshCoreSimEink || window.MeshCoreSim;
+    const SimFactory = window.MeshCoreSimEinkLandscape || window.MeshCoreSimEinkPortrait || window.MeshCoreSim;
     if (typeof SimFactory !== 'function') {
       statusEl.textContent = 'error: build/meshcore_sim.js missing or failed to load -- run variants/sim/build_wasm.sh first.';
     } else {

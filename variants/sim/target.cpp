@@ -174,15 +174,15 @@ SimEinkDisplay::SimEinkDisplay()
 }
 
 // Sizes the page's canvas to the panel as it's turned, at Module.simEinkScale
-// (default 3) CSS pixels a pixel.
+// (default 3) CSS pixels a pixel; 0 leaves the CSS size to the page.
 static void simEinkFitCanvas(int w, int h) {
   EM_ASM({
     var tag = (typeof Module !== 'undefined' && Module['simInstanceTag']) ? Module['simInstanceTag'] : '';
     var c = document.getElementById(tag ? ('sim-canvas-' + tag) : 'sim-canvas');
     if (!c) { console.error('[sim] e-ink canvas not found in the host page'); return; }
-    var k = Module.simEinkScale || 3;
+    var k = ('simEinkScale' in Module) ? Module.simEinkScale : 3;
     c.width = $0; c.height = $1;
-    c.style.width = ($0 * k) + 'px'; c.style.height = ($1 * k) + 'px';
+    if (k) { c.style.width = ($0 * k) + 'px'; c.style.height = ($1 * k) + 'px'; }
     Module.__simCtx = c.getContext('2d');
     Module.__simCtx.imageSmoothingEnabled = false;
     Module.__einkRefreshes = Module.__einkRefreshes || 0;

@@ -64,16 +64,35 @@ Fn shortcuts.
 
 ## E-ink
 
-The e-ink Wio Tracker L1 (250 × 122) has a few settings of its own in
-Settings › Display:
+The e-ink Wio Tracker L1 (250 × 122) comes in two builds, one per
+orientation, since every screen is laid out for one shape:
 
-- **Rotation**: landscape or portrait, applied at once; every screen reflows.
-- **Joystick rotation**, independent of the display's.
-- **Full refresh**: how many partial updates between full ones, against
+- **Landscape** writes in a larger 8 × 13 font, with larger icons.
+- **Portrait** keeps the 6 × 9 font and fits more lines.
+
+| Landscape | Portrait | |
+| :---: | :---: | :---: |
+| ![A channel in landscape](./img/eink-channel.png) | ![Clock and calendar in portrait](./img/eink-clock.png) | ![The sky view in portrait](./img/eink-sky.png) |
+
+The e-ink screens show more than the OLED, the portrait one most:
+
+- a month calendar (portrait) under the clock and on the lock screen, the
+  alarm's days marked;
+- whole message bubbles;
+- charts of the last 8 hours on the Status screen;
+- a compass rose and the path's hops on a contact's details, and direction
+  arrows in the node list;
+- under a saved trail (portrait), its map and elevation profile.
+
+Settings › Display has a few settings of its own:
+
+- **Rotation** turns the screen upside down; the joystick turns with it.
+- **Joystick** rotation, for a joystick mounted another way.
+- **Full rfsh**: how many partial updates between full ones, against
   ghosting.
 
-Clock seconds are hidden by default, and live timers refresh coarsely, to
-spare the panel.
+The panel refreshes only when what it shows changes. Times are shown to the
+minute (no seconds counting up), and clock seconds are hidden by default.
 
 ## Wio Tracker L2
 

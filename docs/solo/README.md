@@ -39,9 +39,9 @@ These docs mark the differences with notes like this:
 | **Keyboard** | M5Stack Cardputer ADV, T-Echo Lite + KeyShield, any board with a CardKB | Keys; arrows or their Fn combinations for the directions |
 | **Touch** | Wio Tracker L2 | Taps, swipes and holds; two side buttons |
 
-| OLED / e-ink | | Wio Tracker L2 |
+| OLED | E-ink | Wio Tracker L2 |
 | :---: | :---: | :---: |
-| ![Clock page](./img/oled-clock.png) | ![Status page](./img/oled-status.png) | ![Home screen](./img/l2-home.png) |
+| ![Clock page](./img/oled-clock.png) | ![A channel](./img/eink-channel.png) | ![Home screen](./img/l2-home.png) |
 
 The joystick and keyboard devices share one interface, sized for small OLED
 and e-ink screens. The Wio Tracker L2 has its own, built for a 320 × 240

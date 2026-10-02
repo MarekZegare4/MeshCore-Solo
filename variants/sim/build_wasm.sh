@@ -200,12 +200,13 @@ fi
 SIM_EINK="${SIM_EINK:-}"
 if [ -n "$SIM_EINK" ]; then
   case "$SIM_EINK" in
-    landscape) EINK_DEFS=(-DDISPLAY_ROTATION=1 -DEINK_LARGE_FONT=1) ;;
-    portrait)  EINK_DEFS=(-DDISPLAY_ROTATION=0) ;;
+    landscape) EINK_DEFS=(-DDISPLAY_ROTATION=1 -DEINK_LARGE_FONT=1); EXPORT_NAME=MeshCoreSimEinkLandscape ;;
+    portrait)  EINK_DEFS=(-DDISPLAY_ROTATION=0);                     EXPORT_NAME=MeshCoreSimEinkPortrait ;;
     *) echo "error: SIM_EINK must be landscape or portrait" >&2; exit 1 ;;
   esac
   OUT_NAME="meshcore_sim_eink_$SIM_EINK"
-  EXPORT_NAME=MeshCoreSimEink   # distinct factory: web/mesh.html?a=... loads it beside MeshCoreSim
+  # Distinct factories (set above): web/mesh.html?a=... loads one beside
+  # MeshCoreSim, and the site loads both orientations into one page.
   kept=()
   for d in "${DEFINES[@]}"; do
     case "$d" in -DDISPLAY_CLASS=*|-DMAX_GROUP_CHANNELS=*) ;; *) kept+=("$d") ;; esac

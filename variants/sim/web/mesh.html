@@ -238,7 +238,7 @@
   </script>
   <script>
     const logEl = document.getElementById('log');
-    const FactoryA = (opts) => (A_BUILD ? MeshCoreSimEink : MeshCoreSim)(opts);
+    const FactoryA = (opts) => (window.MeshCoreSimEinkLandscape || window.MeshCoreSimEinkPortrait || MeshCoreSim)(opts);
     function log(msg) {
       const line = document.createElement('div');
       line.textContent = '[' + new Date().toISOString().substr(11, 12) + '] ' + msg;
