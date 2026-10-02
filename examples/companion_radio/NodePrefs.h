@@ -563,6 +563,11 @@ struct NodePrefs {  // persisted to file
   static const uint8_t BATT_CURVE_PTS = 11;
   uint16_t batt_curve_mv[BATT_CURVE_PTS];
 
+  // ── Lock screen look (0xC0DE0033) ──────────────────────────────────────
+  // ui-new: 0 = big clock + date + unread pill, 1 = compact clock with the
+  // clock fields as rows below. The L2 has its own lock screen.
+  uint8_t  lock_compact;
+
   // Single source of truth for the live-share option tables (shared by the Map
   // UI labels and the auto-send engine in UITask).
   static const uint8_t LOC_SHARE_MOVE_COUNT = 4;
@@ -650,7 +655,7 @@ struct NodePrefs {  // persisted to file
   // repeat_* fields) instead of at the tail, which shifted every field after
   // them by 25 bytes when loading an older file. Never released, but a dev
   // build wrote it, so the number must not be reused for anything else.
-  static const uint32_t SCHEMA_SENTINEL = 0xC0DE0032;
+  static const uint32_t SCHEMA_SENTINEL = 0xC0DE0033;
 
   // Bit-index for each home page. Used by page_order (entries store bit+1) and
   // by home_pages_mask. Single source of truth — both HomeScreen::pageBit/bitToPage
@@ -837,7 +842,9 @@ static inline bool inQuietHours(const NodePrefs& p, uint32_t utc) {
 // lock_screen_password / _salt (0xC0DE0031) added 48 bytes -- sizeof 2880.
 // batt_curve_mv[11] (0xC0DE0032) added 16 bytes, not 22 (6 went into tail
 // padding) -- sizeof 2896, confirmed via real L1 (nRF52) and L2 (ESP32) builds.
-static_assert(sizeof(NodePrefs) == 2896,
+// lock_compact (0xC0DE0033) added 8 bytes, not 1 (the struct rounds up to its
+// alignment) -- sizeof 2904, confirmed via real L1 (nRF52) and L2 (ESP32) builds.
+static_assert(sizeof(NodePrefs) == 2904,
               "NodePrefs layout changed — sync DataStore save/load + clamp, bump "
               "SCHEMA_SENTINEL, then update this size (see steps above).");
 

@@ -131,6 +131,7 @@ static void optBattDisplay(uint8_t v, char* b, int n, const NodePrefs&) {
   static const char* L[] = { "Icon", "Percent", "Voltage" };
   snprintf(b, n, "%s", L[v < 3 ? v : 0]);
 }
+static void optLockLook(uint8_t v, char* b, int n, const NodePrefs&) { snprintf(b, n, "%s", v ? "Compact" : "Big"); }
 static void optExpiry(uint8_t v, char* b, int n, const NodePrefs&) {
   snprintf(b, n, "%s", NodePrefs::contactExpiryLabel(v));
 }
@@ -197,6 +198,7 @@ static const Setting ALL[] = {
   MAP("Wake on message", "Screen on for new messages", SEC_DISPLAY, msg_wake_screen_off, INVERTED,
       nullptr, nullptr),
   SW("Lock screen", "Slide to unlock after sleep", SEC_DISPLAY, auto_lock, nullptr),
+  IDX("Lock clock", "Big, or compact with the clock fields", SEC_DISPLAY, lock_compact, 2, optLockLook, nullptr),
   IDX("Battery display", "In the status bar", SEC_DISPLAY, batt_display_mode, 3, optBattDisplay, nullptr),
 
   MAP("Battery shutdown", "Power off below this voltage", SEC_POWER, low_batt_mv, LOW_BATT, optLowBatt, nullptr),

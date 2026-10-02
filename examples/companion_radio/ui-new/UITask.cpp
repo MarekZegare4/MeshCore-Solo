@@ -195,82 +195,100 @@ static void fmtAlt(char* buf, int n, float meters, bool imperial) {
 // Voltage -> battery %, from the Core (top bar and dashboard Batt% alike).
 static int battMvToPercent(int mv, int low_mv) { return battery::percent(mv, low_mv); }
 
-// Render the time starting at top_y; returns the y just below the time block
-// so the caller can flow the date / dashboard rows beneath it.
-//
-// On a tall portrait panel (e-ink in portrait — height > width) HH and MM are
-// stacked on two lines in the huge built-in font (size 4, ~56 px tall) so the
-// digits fill the narrow width. On wide panels (OLED, landscape e-ink) the
-// classic single-line "HH:MM" at size 2 is kept.
-static int drawClockTime(DisplayDriver& d, int top_y, const struct tm* ti,
-                         bool h12, bool show_sec, bool alignCenter = false) {
-  const bool tall = d.height() > d.width();   // true only on portrait e-ink
+// The time on a tall portrait panel (e-ink in portrait -- height > width): HH
+// and MM stacked on two lines in the huge built-in font (size 4, ~56 px tall)
+// so the digits fill the narrow width. Returns the y just below it.
+static int drawClockTall(DisplayDriver& d, int top_y, const struct tm* ti, bool h12) {
+  int hh = ti->tm_hour;
+  const char* ap = nullptr;
+  if (h12) { ap = (hh < 12) ? "AM" : "PM"; hh %= 12; if (hh == 0) hh = 12; }
+  const int cx = d.width() / 2;
+  char hbuf[4], mbuf[4];
+  snprintf(hbuf, sizeof(hbuf), "%02d", hh);
+  snprintf(mbuf, sizeof(mbuf), "%02d", ti->tm_min);
 
-  if (tall) {
-    int hh = ti->tm_hour;
-    const char* ap = nullptr;
-    if (h12) { ap = (hh < 12) ? "AM" : "PM"; hh %= 12; if (hh == 0) hh = 12; }
-    const int cx = d.width() / 2;
-    char hbuf[4], mbuf[4];
-    snprintf(hbuf, sizeof(hbuf), "%02d", hh);
-    snprintf(mbuf, sizeof(mbuf), "%02d", ti->tm_min);
-
-    int y = top_y;
-    d.setTextSize(4);
-    const int lhb = d.getLineHeight();
-    // The built-in GFX font advances 6 px per char but the glyph is only 5 px
-    // wide, so getTextWidth() over-reports by one trailing blank column and
-    // drawTextCentered() would bias the digits ~half a column to the left.
-    // Centre on the visible width (minus that trailing column) instead.
-    const int trail = d.getCharWidth() / 6;   // one built-in column at this size
-    auto drawBig = [&](const char* s, int yy) {
-      if (alignCenter) {
-        int w = (int)d.getTextWidth(s) - trail;
-        d.setCursor(cx - w / 2, yy);
-        d.print(s);
-      } else {
-        d.setCursor(0, yy);
-        d.print(s);
-      }
-    };
-    drawBig(hbuf, y);  y += lhb + 2;
-    drawBig(mbuf, y);  y += lhb + 2;
-    if (ap) {
-      d.setTextSize(2);
-      if (alignCenter) {
-        d.drawTextCentered(cx, y, ap);
-      } else {
-        d.setCursor(0, y);
-        d.print(ap);
-      }
-      y += d.getLineHeight() + 1;
-    }
-    d.setTextSize(1);
-    return y;
-  }
-
-  // Wide layout: single inline line at size 2.
-  char buf[16];
-  d.setTextSize(2);
-  const int lh2 = d.getLineHeight();
-  if (h12) {
-    int hh = ti->tm_hour % 12; if (hh == 0) hh = 12;
-    const char* ap = (ti->tm_hour < 12) ? "AM" : "PM";
-    if (show_sec) snprintf(buf, sizeof(buf), "%d:%02d:%02d%s", hh, ti->tm_min, ti->tm_sec, ap);
-    else          snprintf(buf, sizeof(buf), "%d:%02d %s", hh, ti->tm_min, ap);
-  } else {
-    if (show_sec) snprintf(buf, sizeof(buf), "%02d:%02d:%02d", ti->tm_hour, ti->tm_min, ti->tm_sec);
-    else          snprintf(buf, sizeof(buf), "%02d:%02d", ti->tm_hour, ti->tm_min);
-  }
-  if (alignCenter) {
-    d.drawTextCentered(d.width() / 2, top_y, buf);
-  } else {
-    d.setCursor(0, top_y);
-    d.print(buf);
+  int y = top_y;
+  d.setTextSize(4);
+  const int lhb = d.getLineHeight();
+  // The built-in GFX font advances 6 px per char but the glyph is only 5 px
+  // wide, so getTextWidth() over-reports by one trailing blank column and
+  // drawTextCentered() would bias the digits ~half a column to the left.
+  // Centre on the visible width (minus that trailing column) instead.
+  const int trail = d.getCharWidth() / 6;   // one built-in column at this size
+  auto drawBig = [&](const char* s, int yy) {
+    d.setCursor(cx - ((int)d.getTextWidth(s) - trail) / 2, yy);
+    d.print(s);
+  };
+  drawBig(hbuf, y);  y += lhb + 2;
+  drawBig(mbuf, y);  y += lhb + 2;
+  if (ap) {
+    d.setTextSize(2);
+    d.drawTextCentered(cx, y, ap);
+    y += d.getLineHeight() + 1;
   }
   d.setTextSize(1);
-  return top_y + lh2 + 2;
+  return y;
 }
+
+// The big clock on wide panels (Home clock page, lock screen): HH:MM in the
+// splash's slanted lettering (ui-core/Lettering.h) at `sc`, centred on cx. A
+// 12-hour clock drops the leading zero, closes the gaps up and sets AM / PM
+// beside the digits on their baseline -- "12:59 PM" still fits 128 px.
+struct BigClock { int sc, h; };
+static BigClock bigClockSize(const DisplayDriver& d) {
+  int sc = d.width() / 64;
+  if (sc > d.height() / 32) sc = d.height() / 32;
+  if (sc < 1) sc = 1;
+  return { sc, lettering::LOGO_H * sc };
+}
+static void drawLettering(DisplayDriver& d, int x, int y, const char* t, int sc, int gap) {
+  for (const char* p = t; *p; p++) {
+    const int cw = lettering::charW(*p);
+    if (cw < 0) continue;
+    for (int r = 0; r < lettering::LOGO_H; r++)
+      for (int col = 0; col < cw; col++) {
+        if (!lettering::inked(*p, col, r)) continue;
+        int e = col;
+        while (e + 1 < cw && lettering::inked(*p, e + 1, r)) e++;
+        d.fillRect(x + col * sc, y + r * sc, (e - col + 1) * sc, sc);
+        col = e;
+      }
+    x += cw * sc + gap;
+  }
+}
+// The big clock's text, gaps and AM / PM, measured: its full width (w), the
+// digits' (dw). draw() puts its left edge at x.
+struct BigClockText {
+  char t[8];
+  const char* ap = nullptr;
+  int sc, gap, dw, w;
+  BigClockText(DisplayDriver& d, const struct tm* ti, bool h12, int scale) : sc(scale), gap(scale + 1) {
+    if (h12) {
+      int hh = ti->tm_hour % 12; if (hh == 0) hh = 12;
+      snprintf(t, sizeof(t), "%d:%02d", hh, ti->tm_min);
+      ap = ti->tm_hour < 12 ? "AM" : "PM";
+      gap = sc / 2;
+    } else {
+      snprintf(t, sizeof(t), "%02d:%02d", ti->tm_hour, ti->tm_min);
+    }
+    dw = lettering::textW(t, 0) * sc + gap * ((int)strlen(t) - 1);
+    d.setTextSize(1);
+    w = dw + (ap ? (int)d.getTextWidth(ap) + 2 * sc : 0);
+  }
+  void draw(DisplayDriver& d, int x, int y) const {
+    drawLettering(d, x, y, t, sc, gap);
+    if (!ap) return;
+    d.setCursor(x + dw + 2 * sc, y + lettering::LOGO_H * sc - d.getLineHeight() + 1);
+    d.print(ap);
+  }
+};
+static void drawBigClock(DisplayDriver& d, int cx, int y, const struct tm* ti, bool h12, int sc) {
+  BigClockText bt(d, ti, h12, sc);
+  bt.draw(d, cx - bt.w / 2, y);
+}
+
+static const char* const WDAY[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
+static const char* const MON[]  = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
 
 // ── HomeScreen ────────────────────────────────────────────────────────────────
 // Forward declaration to be able to call formatDashVal from HomeScreen::render()
@@ -1029,6 +1047,169 @@ public:
     }
   }
 
+  // The clock fields set in Settings (dashboard_fields), in order; their count.
+  int clockFields(uint8_t* out) {
+    int n = 0;
+    if (_node_prefs)
+      for (int k = 0; k < 3; k++)
+        if (_node_prefs->dashboard_fields[k] != telemetry::NONE && _node_prefs->dashboard_fields[k] < telemetry::COUNT)
+          out[n++] = _node_prefs->dashboard_fields[k];
+    return n;
+  }
+  // One field's value without its noun (the label beside it names it); "-" when there is none.
+  void clockFieldValue(uint8_t f, char* val, int n) {
+    formatDashVal(f, val, n, _task->getBattMilliVolts(), _node_prefs->low_batt_mv,
+                  _task->getDMUnreadTotal() + _task->getChannelUnreadCount() + _task->getRoomUnreadCount(),
+                  _task->getAnyUnreadOverflow(), _node_prefs->units_imperial, &sensors_lpp, false);
+    if (!val[0]) snprintf(val, n, "-");
+  }
+
+  // ── Clock page: the big clock, a seconds bar under it, the date, and the
+  // clock fields (Settings) as columns along the bottom, name over value.
+  // Without fields the clock and date sit in the middle.
+  void drawClockPage(DisplayDriver& d, uint32_t unix_ts) {
+    struct tm ti;
+    localTm(unix_ts, _node_prefs ? _node_prefs->tz_offset_hours : 0, ti);
+    const bool h12 = _node_prefs && _node_prefs->clock_12h;
+    const bool show_sec = !Features::IS_EINK && (!_node_prefs || !_node_prefs->clock_hide_seconds);
+    const int W = d.width(), H = d.height();
+    d.setColor(DisplayDriver::LIGHT);
+    d.setTextSize(1);
+    const int lh = d.getLineHeight();
+
+    uint8_t fields[3];
+    const int nf = clockFields(fields);
+
+    int date_y;
+    if (d.height() > d.width()) {   // portrait e-ink: stacked digits
+      date_y = drawClockTall(d, 0, &ti, h12);
+    } else {
+      const BigClock bc = bigClockSize(d);
+      const int bar = 3 * bc.sc / 2;              // the seconds bar and its gaps
+      const int block = bc.h + bar + 1 + lh;
+      const int y = nf ? bc.sc : (H - block) / 2;
+      drawBigClock(d, W / 2, y, &ti, h12, bc.sc);
+      const int bar_y = y + bc.h + bar / 2 + 1;
+      if (show_sec) {   // fills over the minute: dotted track, solid part
+        const int x0 = W / 8, bw = W - 2 * x0, fill = bw * ti.tm_sec / 60;
+        d.fillRect(x0, bar_y, fill, 1);
+        for (int x = x0 + fill + (fill & 1); x < x0 + bw; x += 2) d.fillRect(x, bar_y, 1, 1);
+      }
+      // Alarm armed: the bell at the bar's left end (the status bar, which
+      // shows it everywhere else, is hidden on this page).
+      if (_node_prefs && _node_prefs->alarm_on) miniIconDrawTop(d, W / 32, bar_y - 2, ICON_ALARM);
+      date_y = y + bc.h + bar + 1;
+    }
+    char buf[24];
+    snprintf(buf, sizeof(buf), "%s %d %s %d", WDAY[ti.tm_wday], ti.tm_mday, MON[ti.tm_mon], 1900 + ti.tm_year);
+    d.drawTextCentered(W / 2, date_y, buf);
+
+    if (nf == 0) return;
+    refresh_sensors();
+    const int val_y = H - lh, lab_y = val_y - lh - 1, cw = W / nf;
+    for (int k = 0; k < nf; k++) {
+      char val[20];
+      clockFieldValue(fields[k], val, sizeof(val));
+      const int x0 = k * cw;
+      auto cell = [&](int yy, const char* t) {
+        if ((int)d.getTextWidth(t) <= cw - 2) d.drawTextCentered(x0 + cw / 2, yy, t);
+        else d.drawTextEllipsized(x0 + 1, yy, cw - 2, t);
+      };
+      cell(lab_y, telemetry::LABEL[fields[k]]);
+      cell(val_y, val);
+    }
+  }
+
+  // ── Lock screen: the status bar (drawn by render()), then one of two
+  // looks (Settings > Display > Lock clock):
+  //   big     -- the big clock, the date, unread messages in a pill;
+  //   compact -- a small clock with the date beside it, the clock fields as
+  //              rows below (plus unread messages when no field shows them).
+  // A key press on the lit screen (not the one that wakes it, so a glance
+  // shows the data) puts the unlock hint in a pill at the bottom for a few
+  // seconds (UITask::lockHintShown); e-ink keeps it up, it has no glance.
+  void drawLockPage(DisplayDriver& d) {
+    const int W = d.width(), H = d.height();
+    d.setColor(DisplayDriver::LIGHT);
+    d.setTextSize(1);
+    const int lh = d.getLineHeight(), top = lh + 3;
+    const bool hint = Features::IS_EINK || _task->lockHintShown();
+    const int pill_y = H - lh - 3;   // the bottom pill, clear of what's above
+    const int unread = _task->getDMUnreadTotal() + _task->getChannelUnreadCount() + _task->getRoomUnreadCount();
+    const uint32_t unix_ts = _rtc->getCurrentTime();
+    const bool synced = unix_ts >= 1000000000UL;
+    struct tm ti;
+    if (synced) localTm(unix_ts, _node_prefs ? _node_prefs->tz_offset_hours : 0, ti);
+    const bool h12 = _node_prefs && _node_prefs->clock_12h;
+    const bool compact = _node_prefs && _node_prefs->lock_compact && W > H;
+
+    char pill[24] = "";
+    if (compact) {
+      const int m = W / 16, x0 = W / 32;
+      int sc = bigClockSize(d).sc / 2;
+      if (sc < 1) sc = 1;
+      const int ch = lettering::LOGO_H * sc;
+      if (!synced) {
+        d.setCursor(x0, top + (ch - lh + 1) / 2);
+        d.print("No time sync");
+      } else {   // the date beside the clock, without the weekday if it won't fit
+        BigClockText bt(d, &ti, h12, sc);
+        bt.draw(d, x0, top);
+        char date[16];
+        snprintf(date, sizeof(date), "%s %d %s", WDAY[ti.tm_wday], ti.tm_mday, MON[ti.tm_mon]);
+        if (x0 + bt.w + lh / 2 + (int)d.getTextWidth(date) > W - x0)
+          snprintf(date, sizeof(date), "%d %s", ti.tm_mday, MON[ti.tm_mon]);
+        d.drawTextRightAlign(W - x0, top + (ch - lh + 1) / 2, date);
+      }
+      uint8_t rows[4];
+      int nr = clockFields(rows);
+      bool has_msgs = false;
+      for (int k = 0; k < nr; k++) if (rows[k] == telemetry::MSGS) has_msgs = true;
+      if (!has_msgs && unread > 0) rows[nr++] = telemetry::MSGS;
+      if (nr) refresh_sensors();
+      const int step = d.lineStep();
+      for (int k = 0, y = top + ch + 6; k < nr && y + lh <= H; k++, y += step) {
+        if (hint && y + lh >= pill_y) break;   // the hint pill takes the bottom
+        char val[20];
+        clockFieldValue(rows[k], val, sizeof(val));
+        info::valueRow(d, y, telemetry::LABEL[rows[k]], val, false, m - 2, m);
+      }
+    } else {
+      if (!synced) {
+        d.drawTextCentered(W / 2, H / 2 - lh, "No time sync");
+      } else {
+        int date_y;
+        if (H > W) {
+          date_y = drawClockTall(d, top, &ti, h12);
+        } else {
+          const BigClock bc = bigClockSize(d);
+          drawBigClock(d, W / 2, top, &ti, h12, bc.sc);
+          date_y = top + bc.h + 3;
+        }
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%s %d %s", WDAY[ti.tm_wday], ti.tm_mday, MON[ti.tm_mon]);
+        d.drawTextCentered(W / 2, date_y, buf);
+      }
+      if (!hint && unread > 0) snprintf(pill, sizeof(pill), "%d%s new", unread, _task->getAnyUnreadOverflow() ? "+" : "");
+    }
+
+    if (hint) {
+      const int n = _task->lockSeqCount();
+#if defined(CARDKB_I2C)
+      const char* first = _task->hasCardKB() ? "Back+3xEnter/Fn+Esc" : "Hold Back + 3xEnter";
+#else
+      const char* first = "Hold Back + 3xEnter";
+#endif
+      snprintf(pill, sizeof(pill), "%s", n == 0 ? first : n == 1 ? "Enter x2 more..." : "Enter x1 more...");
+    }
+    if (!pill[0]) return;
+    const int pw = d.getTextWidth(pill) + 6;
+    d.fillSoftRect((W - pw) / 2, pill_y, pw, lh + 3);
+    d.setColor(DisplayDriver::DARK);
+    d.drawTextCentered(W / 2, pill_y + 2, pill);
+    d.setColor(DisplayDriver::LIGHT);
+  }
+
   // The Status page: four tiles split by dotted rules, each one subject's
   // headline (icon + main value) over a detail line. Enter opens the Status
   // screen with all of it.
@@ -1130,18 +1311,9 @@ public:
     // Hidden on fullscreen pages (CLOCK).
     if (_page != CLOCK) {
       display.setColor(DisplayDriver::LIGHT);
-      int lock_reserve = -1;
-      if (_page == LOCK) {
-        // The lock screen's own clock shares row 0 with this title bar --
-        // reserve its real footprint instead of the usual name_min, so the
-        // (already priority-ordered) status icons shed low-priority ones as
-        // needed and never draw over it. Built-in font is fixed-width, so a
-        // worst-case digit string measures this without the actual time.
-        bool tall = display.height() > display.width();
-        display.setTextSize(tall ? 4 : 2);
-        lock_reserve = display.getTextWidth(tall ? "88" : "88:88");
-        display.setTextSize(1);
-      }
+      // The lock page has nothing on the left of the bar (its clock sits
+      // below it), so the status icons may use the whole row.
+      const int lock_reserve = _page == LOCK ? 0 : -1;
       int rightEdge = renderBatteryIndicator(display, _task->getBattMilliVolts(), lock_reserve);
       display.setColor(DisplayDriver::LIGHT);
 
@@ -1227,135 +1399,10 @@ public:
         display.drawTextCentered(display.width() / 2, mid_y + step, "Enable GPS or");
         display.drawTextCentered(display.width() / 2, mid_y + step * 2, "connect app");
       } else {
-        struct tm lt;
-        localTm(unix_ts, _node_prefs ? _node_prefs->tz_offset_hours : 0, lt);
-        struct tm* ti = &lt;
-
-        char buf[24];
-        display.setColor(DisplayDriver::LIGHT);
-        bool show_sec = !Features::IS_EINK && (!_node_prefs || !_node_prefs->clock_hide_seconds);
-        bool h12 = _node_prefs && _node_prefs->clock_12h;
-        int date_y = drawClockTime(display, 0, ti, h12, show_sec, true);
-
-        display.setTextSize(1);
-        static const char* wd[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
-        static const char* mo[] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
-        snprintf(buf, sizeof(buf),"%s %d %s %d", wd[ti->tm_wday], ti->tm_mday, mo[ti->tm_mon], 1900 + ti->tm_year);
-        display.setCursor(0, date_y);
-        display.print(buf);
-
-        // Alarm armed: a small bell in the top-left corner. The status bar (and
-        // its bell) is hidden on this page, so signal the armed alarm here. Just
-        // the glyph — no time text — so it stays clear of the centred clock
-        // digits (which can reach the corner when seconds are shown), matching
-        // the icon-only status-bar indicator. The exact time is in Clock Tools.
-        if (_node_prefs && _node_prefs->alarm_on) {
-          display.setColor(DisplayDriver::LIGHT);
-          miniIconDrawTop(display, 0, 0, ICON_ALARM);
-        }
-
-        int sep_y  = date_y + lh + 1;
-        int dash0  = sep_y + display.sepH() + 2;
-        display.fillRect(0, sep_y, display.width(), display.sepH());
-
-        // dashboard data fields
-        if (_node_prefs) {
-          refresh_sensors();
-          const int FIELD_Y[3] = { dash0, dash0 + step, dash0 + step * 2 };
-          for (int fi = 0; fi < 3; fi++) {
-            uint8_t field = _node_prefs->dashboard_fields[fi];
-            if (field == telemetry::NONE) continue;
-
-            const char* label = telemetry::LABEL[field < telemetry::COUNT ? field : telemetry::NONE];
-            char val[20];
-            formatDashVal(field, val, sizeof(val), _task->getBattMilliVolts(), _node_prefs->low_batt_mv,
-                          _task->getDMUnreadTotal() + _task->getChannelUnreadCount() + _task->getRoomUnreadCount(),
-                          _task->getAnyUnreadOverflow(), _node_prefs->units_imperial, &sensors_lpp, false);
-
-            if (val[0] && label[0]) {
-              display.setColor(DisplayDriver::LIGHT);
-              display.setCursor(0, FIELD_Y[fi]);
-              display.print(label);
-              int vw = display.getTextWidth(val);
-              display.setCursor(display.width() - vw - 1, FIELD_Y[fi]);
-              display.print(val);
-            }
-          }
-        }
+        drawClockPage(display, unix_ts);
       }
     } else if (_page == HomePage::LOCK) {
-      // Lock screen: clock + two dashboard spots + unlock-hint popup
-      uint32_t unix_ts = _rtc->getCurrentTime();
-      display.setColor(DisplayDriver::LIGHT);
-      display.setTextSize(1);
-      if (unix_ts < 1000000000UL) {
-        display.drawTextCentered(display.width() / 2, display.height() / 2 - step, "No time sync");
-      } else {
-        struct tm lt;
-        localTm(unix_ts, _node_prefs ? _node_prefs->tz_offset_hours : 0, lt);
-        struct tm* ti = &lt;
-        char buf[12];
-        bool h12 = _node_prefs && _node_prefs->clock_12h;
-        // Left-aligned on purpose: the rest of the top row is left for status icons.
-        int date_y = drawClockTime(display, 0, ti, h12, /*show_sec*/false);
-        display.setTextSize(1);
-        static const char* wd[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
-        static const char* mo[] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
-        snprintf(buf, sizeof(buf),"%s %d %s", wd[ti->tm_wday], ti->tm_mday, mo[ti->tm_mon]);
-        display.setCursor(0, date_y);
-        display.print(buf);
-
-        // Two sensor values side by side (dashboard_fields[0] and [1])
-        if (_node_prefs) {
-          char v0[20] = "", v1[20] = "";
-          CayenneLPP* lpp_ptr = nullptr;
-          uint8_t f0 = _node_prefs->dashboard_fields[0], f1 = _node_prefs->dashboard_fields[1];
-          auto isLPP = [](uint8_t f) {
-            return f==telemetry::TEMP||f==telemetry::HUM||f==telemetry::PRES||f==telemetry::ALT||f==telemetry::LUX||f==telemetry::CO2;
-          };
-          if (isLPP(f0) || isLPP(f1)) {
-            sensors_lpp.reset(); sensors.querySensors(0xFF, sensors_lpp); lpp_ptr = &sensors_lpp;
-          }
-          bool show_msgs = f0 == telemetry::MSGS || f1 == telemetry::MSGS;
-          int unread = show_msgs
-                     ? _task->getDMUnreadTotal() + _task->getChannelUnreadCount() + _task->getRoomUnreadCount() : 0;
-          bool unread_overflow = show_msgs && _task->getAnyUnreadOverflow();
-          uint16_t batt_mv = _task->getBattMilliVolts();
-          formatDashVal(f0, v0, sizeof(v0), batt_mv, _node_prefs->low_batt_mv, unread, unread_overflow, _node_prefs->units_imperial, lpp_ptr, true);
-          formatDashVal(f1, v1, sizeof(v1), batt_mv, _node_prefs->low_batt_mv, unread, unread_overflow, _node_prefs->units_imperial, lpp_ptr, true);
-          if (v0[0] || v1[0]) {
-            int sv_y = date_y + step;
-            display.setColor(DisplayDriver::LIGHT);
-            if (v0[0] && v1[0]) {
-              display.setCursor(0, sv_y);
-              display.print(v0);
-              int vw = display.getTextWidth(v1);
-              display.setCursor(display.width() - vw, sv_y);
-              display.print(v1);
-            } else {
-              const char* sv = v0[0] ? v0 : v1;
-              display.drawTextCentered(display.width() / 2, sv_y, sv);
-            }
-          }
-        }
-      }
-      // Unlock-hint popup at the bottom (like alert style)
-      display.setTextSize(1);
-      const int lk_lh = display.getLineHeight();
-#if defined(CARDKB_I2C)
-      const char* hint = _task->lockSeqCount() == 0 ? (_task->hasCardKB() ? "Back+3xEnter/Fn+Esc" : "Hold Back + 3xEnter") :
-                         _task->lockSeqCount() == 1 ? "Enter x2 more..."   : "Enter x1 more...";
-#else
-      const char* hint = _task->lockSeqCount() == 0 ? "Hold Back + 3xEnter" :
-                         _task->lockSeqCount() == 1 ? "Enter x2 more..."   : "Enter x1 more...";
-#endif
-      const int p = 3;
-      const int hy = display.height() - lk_lh - p * 2;
-      const int hw = display.getTextWidth(hint);
-      const int hx = (display.width() - hw) / 2;
-      display.drawPanel(hx - p, hy - p, hw + p*2, lk_lh + p*2);
-      display.setCursor(hx, hy);
-      display.print(hint);
+      drawLockPage(display);
     } else if (_page == HomePage::STATUS) {
       drawStatusTiles(display, content_y);
     } else if (isQuickPage(_page) && !(_page == HomePage::SHUTDOWN && _shutdown_init)) {
@@ -2998,7 +3045,7 @@ void UITask::loop() {
     } else {
       _kq_head = _kq_tail = 0;  // locked or no screen: eat all queued keys
       // Locked: wake window is set only when display first turns on
-      if (_locked) _next_refresh = 0;
+      if (_locked) { _lock_hint_ms = millis(); _next_refresh = 0; }   // the hint; not on the waking press, so a glance shows the data
     }
   }
 

@@ -646,6 +646,8 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
   // batt_curve_mv: any point out of range or not rising -> the built-in curve.
   rd(_prefs.batt_curve_mv, sizeof(_prefs.batt_curve_mv));
   if (!battery::validCurve(_prefs.batt_curve_mv)) memset(_prefs.batt_curve_mv, 0, sizeof(_prefs.batt_curve_mv));
+  rd(&_prefs.lock_compact, sizeof(_prefs.lock_compact));
+  if (_prefs.lock_compact > 1) _prefs.lock_compact = 0;
 
   // Schema sentinel: bumped on layout changes. Mismatch means an older file
   // (or a different schema); rd() and the clamps above already keep every
@@ -660,6 +662,8 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
     // file it holds its sentinel's bytes, which would read as a PIN nobody knows.
     // 0xC0DE0031 → 0xC0DE0032: the battery curve appended; an older file
     // leaves stray bytes in it, so the built-in curve.
+    // 0xC0DE0032 → 0xC0DE0033: the lock screen look appended; big by default.
+    if (sentinel < 0xC0DE0033) _prefs.lock_compact = 0;
     if (sentinel < 0xC0DE0032) memset(_prefs.batt_curve_mv, 0, sizeof(_prefs.batt_curve_mv));
     if (sentinel < 0xC0DE0031) {
       memset(_prefs.lock_screen_password, 0, sizeof(_prefs.lock_screen_password));
@@ -866,6 +870,7 @@ void DataStore::savePrefs(const NodePrefs& _prefs, double node_lat, double node_
     file.write((uint8_t *)_prefs.lock_screen_password, sizeof(_prefs.lock_screen_password));
     file.write((uint8_t *)_prefs.lock_screen_password_salt, sizeof(_prefs.lock_screen_password_salt));
     file.write((uint8_t *)_prefs.batt_curve_mv, sizeof(_prefs.batt_curve_mv));
+    file.write((uint8_t *)&_prefs.lock_compact, sizeof(_prefs.lock_compact));
 
     // Tail sentinel — must be last. See NodePrefs::SCHEMA_SENTINEL. Its write is
     // the one we check: once the flash fills, writes return 0, so a good

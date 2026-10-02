@@ -65,6 +65,7 @@ class UITask : public UITaskBase, public UiCoreHost {
   unsigned long _lock_wake_until;  // when to blank screen again after locked wake (5s)
   int  _lock_seq_count;            // Enter presses while Back held (lock/unlock sequence)
   unsigned long _lock_seq_ms;      // millis() of last lock-sequence press (for timeout)
+  unsigned long _lock_hint_ms;     // millis() of the last key press on the lock screen (0: none)
   bool _lock_seq_used;             // true = suppress next back_btn CLICK (post-sequence release)
   // True while the lock screen shows the on-screen keyboard and waits for submission
   bool _unlock_kb = false;
@@ -255,7 +256,7 @@ public:
     _batt_mv = 0;
     _locked = false;
     _lock_wake_until = 0;
-    _lock_seq_count = 0; _lock_seq_ms = 0; _lock_seq_used = false;
+    _lock_seq_count = 0; _lock_seq_ms = 0; _lock_seq_used = false; _lock_hint_ms = 0;
     _last_notif_ch_idx = -1;
     _last_notif_dm_valid = false;
     memset(_last_notif_dm_prefix, 0, sizeof(_last_notif_dm_prefix));
@@ -420,6 +421,9 @@ public:
   // Lock-screen support: the HomeScreen LOCK page draws the unlock hint from
   // these (the platform combo is either "Back+3xEnter" or the CardKB nybble).
   int  lockSeqCount() const { return _lock_seq_count; }
+  // The lock screen shows the unlock hint for a few seconds after a key press
+  // (and all through the Back + 3x Enter sequence).
+  bool lockHintShown() const { return _lock_seq_count > 0 || (_lock_hint_ms && millis() - _lock_hint_ms < 3000); }
   bool hasCardKB() const {
 #if defined(CARDKB_I2C)
     return _has_cardkb;
