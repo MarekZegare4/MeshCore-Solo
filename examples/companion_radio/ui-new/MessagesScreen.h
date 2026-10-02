@@ -565,16 +565,9 @@ class MessagesScreen : public UIScreen {
   // reset to LIGHT first so it stays visible regardless of the ink the
   // message loop left.
   static void drawComposeButton(DisplayDriver& d, int cby, int lh, bool sel) {
+    (void)lh;
     const char* ctxt = "+ Send";
-    int ctw = d.getTextWidth(ctxt);
-    int bw = ctw + 6;
-    int bx = d.width() - bw;
-    d.setColor(DisplayDriver::LIGHT);
-    if (sel) { d.fillSoftRect(bx, cby, bw, lh); d.setColor(DisplayDriver::DARK); }
-    else       d.drawSoftRect(bx, cby, bw, lh);
-    d.setCursor(bx + 3, cby);
-    d.print(ctxt);
-    d.setColor(DisplayDriver::LIGHT);
+    drawButton(d, d.width() - buttonWidth(d, ctxt), cby, ctxt, sel);
   }
 
   void afterSend(bool ok, const char* msg) {
@@ -1206,11 +1199,11 @@ public:
 
     if (_phase == MODE_SELECT) {
       // Say which dial slot is being filled -- entered from the Favourites page,
-      // a bare "MESSAGE" gives no sign that this browse is a pick.
+      // a bare "Messages" gives no sign that this browse is a pick.
       char hdr[16];
-      if (_pick_fav_slot >= 0) snprintf(hdr, sizeof(hdr), "PIN SLOT %d", _pick_fav_slot + 1);
-      else                     snprintf(hdr, sizeof(hdr), "MESSAGE");
-      display.drawCenteredHeader(hdr, true, _ctx_menu.active);
+      if (_pick_fav_slot >= 0) snprintf(hdr, sizeof(hdr), "Pin slot %d", _pick_fav_slot + 1);
+      else                     snprintf(hdr, sizeof(hdr), "Messages");
+      drawScreenHeader(display, hdr, -1, 0, true, _ctx_menu.active);
       const char* opts[] = { "Direct message", "Channels", "Room Servers" };
       int badges[3] = {
         getDMUnreadTotal(),
@@ -1236,7 +1229,7 @@ public:
       if (_ctx_menu.active) { int r = _ctx_menu.render(display); if (mq_delay <= 0 || r < mq_delay) mq_delay = r; }
 
     } else if (_phase == CONTACT_PICK) {
-      display.drawCenteredHeader(_room_mode ? "SELECT ROOM" : "SELECT CONTACT", true, _ctx_menu.active);
+      drawScreenHeader(display, _room_mode ? "Rooms" : "Contacts", -1, 0, true, _ctx_menu.active);
 
       if (_num_contacts == 0) {
         display.drawTextCentered(display.width()/2, display.height()/2, _room_mode ? "No room servers" : "No favourites");
@@ -1276,7 +1269,7 @@ public:
       if (_ctx_menu.active) { int r = _ctx_menu.render(display); if (mq_delay <= 0 || r < mq_delay) mq_delay = r; }
 
     } else if (_phase == CHANNEL_PICK) {
-      display.drawCenteredHeader("SELECT CHANNEL", true, _ctx_menu.active);
+      drawScreenHeader(display, "Channels", -1, 0, true, _ctx_menu.active);
 
       // "+ Add channel" is a synthetic trailing row — suppressed while picking
       // a channel for the bot, so that picker's list stays unchanged.
@@ -1360,7 +1353,7 @@ public:
 
       char title[24];
       snprintf(title, sizeof(title), "%.23s", filtered_name);
-      display.drawCenteredHeader(title, true, _ctx_menu.active);
+      drawScreenHeader(display, title, -1, 0, true, _ctx_menu.active);
 
       int dm_count = _history.dmHistCountForContact(_sel_contact.id.pub_key);
       uint32_t now_ts = rtc_clock.getCurrentTime();
@@ -1660,7 +1653,7 @@ public:
       } else {
         snprintf(title, sizeof(title), "%.23s", ch.name);
       }
-      display.drawCenteredHeader(title, true, _ctx_menu.active);
+      drawScreenHeader(display, title, -1, 0, true, _ctx_menu.active);
 
       int ch_hist_count = _history.histCountForChannel(_sel_channel_idx);
       uint32_t now_ts = rtc_clock.getCurrentTime();
@@ -1840,15 +1833,15 @@ public:
         char nick_raw[32], nick_trans[32];
         snprintf(nick_raw, sizeof(nick_raw), "%.*s", rlen, _reply_prefix + 2);
         display.translateUTF8ToBlocks(nick_trans, nick_raw, sizeof(nick_trans));
-        snprintf(title, sizeof(title), "RE:%s", nick_trans);
+        snprintf(title, sizeof(title), "Re: %s", nick_trans);
       } else if (_sending_to_channel) {
         ChannelDetails ch;
         the_mesh.getChannel(_sel_channel_idx, ch);
         snprintf(title, sizeof(title), "%.23s", ch.name);
       } else {
-        snprintf(title, sizeof(title), "TO:%.14s", _sel_contact.name);
+        snprintf(title, sizeof(title), "To: %.14s", _sel_contact.name);
       }
-      display.drawCenteredHeader(title);
+      drawScreenHeader(display, title);
 
       int total_msg_items = 1 + _active_msg_count;
       drawList(display, total_msg_items, _msg_sel, _msg_scroll, [&](int idx, int y, bool sel, int reserve) {

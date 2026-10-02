@@ -110,7 +110,7 @@ public:
     display.setTextSize(1);
     display.setColor(DisplayDriver::LIGHT);
     if (_picking) { int mq = renderPicker(display); return (mq > 0 && mq < 400) ? mq : 400; }
-    display.drawCenteredHeader("LOCATOR");
+    drawScreenHeader(display, "Locator");
 
     const int rc = visibleRows();
     if (_sel >= rc) _sel = rc - 1;   // beeper row may have just been hidden
@@ -261,7 +261,7 @@ public:
   // Returns 0, or the ms until the selected row should next redraw to keep a
   // marquee animation going (see DisplayDriver::drawTextEllipsized).
   int renderPicker(DisplayDriver& display) {
-    display.drawCenteredHeader("PICK TARGET");
+    drawScreenHeader(display, "Pick target");
     uint32_t now = rtc_clock.getCurrentTime();
     int mq_delay = 0;
     drawList(display, _target_n, _pick_sel, _pick_scroll, [&](int i, int y, bool sel, int reserve) {

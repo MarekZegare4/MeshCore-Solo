@@ -965,3 +965,68 @@ inline void drawCheckbox(DisplayDriver& d, int x, int y, bool on) {
   d.drawRect(x, y, box, box);
   if (on) d.fillRect(x + 2, y + 2, box - 4, box - 4);
 }
+
+// Page dots for a screen with views, right edge at x_right, centred on cy:
+// the current page a filled square, the others a point.
+inline int pageDotsWidth(DisplayDriver& d, int pages) {
+  const int s = miniIconScale(d);
+  return pages > 1 ? (pages - 1) * 5 * s + 3 * s : 0;
+}
+inline void drawPageDots(DisplayDriver& d, int x_right, int cy, int page, int pages) {
+  const int s = miniIconScale(d);
+  for (int i = 0; i < pages; i++) {
+    const int cx = x_right - 2 * s - (pages - 1 - i) * 5 * s;   // centre of dot i
+    if (i == page) d.fillRect(cx - s, cy - s, 3 * s, 3 * s);
+    else           d.fillRect(cx, cy, s, s);
+  }
+}
+
+// A screen's title bar: the title centred over the separator line, page
+// dots at the right when the screen has pages, and the ≡ hint when it has a
+// Hold-Enter menu (menu_open highlights it). A title too long to centre goes
+// left and ends in an ellipsis. No icon: the screen was just picked by one.
+// Leaves the ink LIGHT.
+inline void drawScreenHeader(DisplayDriver& d, const char* title, int page = -1, int pages = 0,
+                             bool menu_hint = false, bool menu_open = false) {
+  const int s = miniIconScale(d);
+  d.setColor(DisplayDriver::LIGHT);
+  const int hint = menu_hint ? d.menuHintWidth() : 0;
+  const int dots = pages > 1 ? pageDotsWidth(d, pages) + 3 * s : 0;
+  const int reserve = hint + dots;
+  char buf[96];
+  d.translateUTF8ToBlocks(buf, (title && title[0]) ? title : "", sizeof(buf));
+  const int tw = d.getTextWidth(buf), avail = d.width() - reserve - 4;
+  if (tw <= avail) {
+    int x = d.width() / 2 - tw / 2;                                  // centred on the screen
+    if (x + tw > d.width() - reserve - 2) x = (d.width() - reserve) / 2 - tw / 2;   // or clear of dots / ≡
+    d.setCursor(x, 0);
+    d.print(buf);
+  } else {
+    d.drawTextEllipsized(2, 0, avail > 0 ? avail : 0, buf);
+  }
+  d.fillRect(0, d.headerH() - d.sepH(), d.width(), d.sepH());
+  if (pages > 1) drawPageDots(d, d.width() - hint - s, (d.headerH() - d.sepH()) / 2, page, pages);
+  if (menu_hint) d.drawContextMenuHint(DisplayDriver::LIGHT, menu_open);
+}
+
+// An accordion section's disclosure mark, one character wide: a triangle
+// pointing right while the section is folded, down while it's open.
+inline void drawDisclosure(DisplayDriver& d, int x, int y, bool open) {
+  const int s = miniIconScale(d), cy = y + d.getLineHeight() / 2;
+  if (open) for (int i = 0; i < 3; i++) d.fillRect(x + i * s, cy - s + i * s, (5 - 2 * i) * s, s);
+  else      for (int i = 0; i < 3; i++) d.fillRect(x + s + i * s, cy - 2 * s + i * s, s, (5 - 2 * i) * s);
+}
+
+// A push button: its label in a soft pill, filled while selected. One line
+// tall (the labels have no descenders worth padding for). Returns its width.
+inline int buttonWidth(DisplayDriver& d, const char* label) { return d.getTextWidth(label) + 6; }
+inline int drawButton(DisplayDriver& d, int x, int y, const char* label, bool sel) {
+  const int w = buttonWidth(d, label), h = d.getLineHeight();
+  d.setColor(DisplayDriver::LIGHT);
+  if (sel) { d.fillSoftRect(x, y, w, h); d.setColor(DisplayDriver::DARK); }
+  else       d.drawSoftRect(x, y, w, h);
+  d.setCursor(x + 3, y);
+  d.print(label);
+  d.setColor(DisplayDriver::LIGHT);
+  return w;
+}

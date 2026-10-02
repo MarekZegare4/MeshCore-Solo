@@ -616,14 +616,14 @@ public:
     const char* flt = (_filter != F_ALL) ? filterLabel(_filter) : nullptr;
     if (_source == SRC_SCAN) {
       char title[28];
-      const char* base = _scanning ? "SCANNING" : "SCAN";
+      const char* base = _scanning ? "Scanning" : "Scan";
       if (flt) {
-        if (!_scanning && _count == 0) snprintf(title, sizeof(title), "SCAN %s: none", flt);
+        if (!_scanning && _count == 0) snprintf(title, sizeof(title), "Scan %s: none", flt);
         else                           snprintf(title, sizeof(title), "%s %s (%d)", base, flt, _count);
-      } else if (_scanning)            snprintf(title, sizeof(title), "SCANNING (%d)", _count);
-      else if (_count == 0)            snprintf(title, sizeof(title), "SCAN: none");
-      else                             snprintf(title, sizeof(title), "SCAN (%d)", _count);
-      display.drawCenteredHeader(title, true, ctxMenuOpen());
+      } else if (_scanning)            snprintf(title, sizeof(title), "Scanning (%d)", _count);
+      else if (_count == 0)            snprintf(title, sizeof(title), "Scan: none");
+      else                             snprintf(title, sizeof(title), "Scan (%d)", _count);
+      drawScreenHeader(display, title, -1, 0, true, ctxMenuOpen());
     } else {
       // Stored list: the filter is a visible tab strip (LEFT/RIGHT switches tabs).
       drawFilterTabs(display);
@@ -633,7 +633,7 @@ public:
       char empty[24];
       if (_source == SRC_SCAN) {
         const char* msg;
-        if (_scanning) {   // the header already says SCANNING: just show it's listening
+        if (_scanning) {   // the header already says Scanning: just show it's listening
           display.drawTextCentered(display.width() / 2, display.height() / 2 - display.lineStep() / 2, "No replies yet");
           int r = drawLoadingDots(display, display.width() / 2, display.height() / 2 + display.lineStep() + 2);
           if (mq_delay <= 0 || r < mq_delay) mq_delay = r;
@@ -645,8 +645,8 @@ public:
       } else {
         const char* hint;
         if (_pick_admin_target && !flt) { snprintf(empty, sizeof(empty), "Nothing to admin"); hint = "Repeaters & rooms"; }
-        else if (flt) { snprintf(empty, sizeof(empty), "No %s contacts", flt); hint = "[<>] change filter"; }
-        else          { snprintf(empty, sizeof(empty), "No contacts found");   hint = "[Enter]=Discover";   }
+        else if (flt) { snprintf(empty, sizeof(empty), "No %s contacts", flt); hint = "Left/Right: filter"; }
+        else          { snprintf(empty, sizeof(empty), "No contacts found");   hint = "Enter: discover";}
         display.drawTextCentered(display.width() / 2, display.height() / 2 - display.lineStep() / 2, empty);
         display.drawTextCentered(display.width() / 2, display.height() / 2 + display.lineStep() / 2, hint);
       }

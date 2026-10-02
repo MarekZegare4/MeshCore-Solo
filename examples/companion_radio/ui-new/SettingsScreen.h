@@ -591,7 +591,7 @@ class SettingsScreen : public UIScreen {
 
   int renderScopeMgmt(DisplayDriver& display) {
     display.setColor(DisplayDriver::LIGHT);
-    display.drawCenteredHeader("SCOPE", true, _scope_action_menu.active);
+    drawScreenHeader(display, "Scope", -1, 0, true, _scope_action_menu.active);
     const ScopeList& sl = the_mesh.scopeList();
     int total = sl.totalCount() + 1;   // +1 synthetic "+ Add scope" row
     drawList(display, total, _scope_mgmt_sel, _scope_mgmt_scroll, [&](int idx, int y, bool sel, int reserve) {
@@ -651,18 +651,17 @@ public:
 
     if (_scope_mgmt_active) return renderScopeMgmt(display);
 
-    display.drawCenteredHeader("SETTINGS");
+    drawScreenHeader(display, "Settings");
 
     int mq_delay = 0;
     _acc.render(display,
-      // Section header: "[+/-] Name"
+      // Section header: disclosure mark + name
       [&](int sec, int y, bool sel, int reserve, bool collapsed) {
         _reserve = reserve;
         display.setColor(DisplayDriver::LIGHT);
         drawRowSelection(display, y, sel, reserve);
-        display.setCursor(2, y);
-        display.print(collapsed ? "+" : "-");
-        display.print(" ");
+        drawDisclosure(display, 2, y, !collapsed);
+        display.setCursor(2 + 2 * display.getCharWidth(), y);
         display.print(sectionName(_sec_header[sec]));
       },
       // Item row

@@ -684,7 +684,7 @@ struct KeyboardWidget {
       display.setColor(DisplayDriver::LIGHT);
       display.fillRect(0, chars_y, display.width(), hh);
       display.setColor(DisplayDriver::DARK);
-      display.drawTextCentered(display.width() / 2, chars_y + 1, "CURSOR MODE");
+      display.drawTextCentered(display.width() / 2, chars_y + 1, "Cursor mode");
       display.setColor(DisplayDriver::LIGHT);
       display.drawTextCentered(display.width() / 2, chars_y + hh + 2, "L/R move");
       display.drawTextCentered(display.width() / 2, chars_y + hh + 2 + lh, "U/D start/end");

@@ -111,7 +111,7 @@ public:
     buildItems();
     display.setTextSize(1);
     display.setColor(DisplayDriver::LIGHT);
-    display.drawCenteredHeader("GPIO");
+    drawScreenHeader(display, "GPIO");
 
     bool any_live = false;
     drawList(display, _item_count, _sel, _scroll, [&](int row, int y, bool sel, int reserve) {

@@ -21,7 +21,7 @@ class ToolsScreen : public UIScreen {
 #endif
   };
   struct Tool { const char* label; const MiniIcon* icon; Action action; };
-  struct Section { const char* name; const MiniIcon* icon; const Tool* tools; uint8_t count; };
+  struct Section { const char* name; const Tool* tools; uint8_t count; };
 
   static const Tool LOCATION_TOOLS[];
   static const Tool COMMS_TOOLS[];
@@ -79,20 +79,17 @@ public:
   int render(DisplayDriver& display) override {
     display.setTextSize(1);
     display.setColor(DisplayDriver::LIGHT);
-    display.drawCenteredHeader("TOOLS");
+    drawScreenHeader(display, "Tools");
 
     const int cw = display.getCharWidth();
     const int g  = gutter(display);
 
     _acc.render(display,
-      // Section header: "[+/-] <icon> Name"
+      // Section header: disclosure mark + name
       [&](int sec, int y, bool sel, int reserve, bool collapsed) {
         drawRowSelection(display, y, sel, reserve);
-        display.setCursor(2, y);
-        display.print(collapsed ? "+" : "-");
-        const int icon_x = 2 + cw + 2;
-        drawIcon(display, icon_x, y, SECTIONS[sec].icon);
-        display.setCursor(icon_x + g, y);
+        drawDisclosure(display, 2, y, !collapsed);
+        display.setCursor(2 + 2 * cw, y);   // the mark stands in for an icon, as in Settings
         display.print(SECTIONS[sec].name);
       },
       // Item: indented "<icon> Label"
@@ -142,7 +139,7 @@ const ToolsScreen::Tool ToolsScreen::SYSTEM_TOOLS[] = {
 #endif
 };
 const ToolsScreen::Section ToolsScreen::SECTIONS[] = {
-  { "Location", &ICON_MAP_CONTACT, LOCATION_TOOLS, (uint8_t)(sizeof(LOCATION_TOOLS)/sizeof(LOCATION_TOOLS[0])) },
-  { "Comms",    &ICON_ADVERT,      COMMS_TOOLS,    4 },
-  { "System",   &ICON_GEAR,        SYSTEM_TOOLS,   (uint8_t)(sizeof(SYSTEM_TOOLS)/sizeof(SYSTEM_TOOLS[0])) },
+  { "Location", LOCATION_TOOLS, (uint8_t)(sizeof(LOCATION_TOOLS)/sizeof(LOCATION_TOOLS[0])) },
+  { "Comms",    COMMS_TOOLS,    4 },
+  { "System",   SYSTEM_TOOLS,   (uint8_t)(sizeof(SYSTEM_TOOLS)/sizeof(SYSTEM_TOOLS[0])) },
 };

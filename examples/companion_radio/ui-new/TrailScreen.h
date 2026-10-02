@@ -124,14 +124,12 @@ public:
     // Waypoint management UI owns the screen while active.
     if (_wp.active()) return _wp.render(display);
 
-    // Title carries the view counter so the bottom hint row can be reclaimed
-    // for content.
-    const char* base = (_view == V_MAP)  ? (_map_grid ? "TRAIL MAP+" : "TRAIL MAP")
-                     : (_view == V_LIST) ? "TRAIL LIST"
-                     :                      "TRAIL";
-    char title[20];
-    snprintf(title, sizeof(title), "%s %d/%d", base, (int)_view + 1, (int)V_COUNT);
-    display.drawCenteredHeader(title);
+    // The title bar carries the view dots so the bottom hint row can be
+    // reclaimed for content.
+    const char* title = (_view == V_MAP)  ? (_map_grid ? "Trail map+" : "Trail map")
+                      : (_view == V_LIST) ? "Trail list"
+                      :                      "Trail";
+    drawScreenHeader(display, title, (int)_view, (int)V_COUNT);
 
     if      (_view == V_MAP)  renderMap(display);
     else if (_view == V_LIST) renderList(display);

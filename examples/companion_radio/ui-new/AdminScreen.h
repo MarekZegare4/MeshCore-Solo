@@ -178,7 +178,7 @@ public:
     if (_login_kb) return kb().render(display);
     AdminSession::State st = S().state();
     if (st == AdminSession::LOGGING_IN || st == AdminSession::IDLE || st == AdminSession::NEED_PASSWORD) {
-      display.drawCenteredHeader("ADMIN LOGIN");
+      drawScreenHeader(display, "Admin login");
       if (st != AdminSession::LOGGING_IN) return 500;
       return waiting(display, "Logging in");
     }
@@ -187,7 +187,7 @@ public:
     if (st == AdminSession::WAITING) {
       char title[24];
       snprintf(title, sizeof(title), "%.23s", S().target().name);
-      display.drawCenteredHeader(title);
+      drawScreenHeader(display, title);
       return waiting(display, S().fetching() ? "Fetching" : "Waiting for reply");
     }
 

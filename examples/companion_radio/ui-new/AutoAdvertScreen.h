@@ -28,7 +28,7 @@ public:
   int render(DisplayDriver& display) override {
     display.setTextSize(1);
     display.setColor(DisplayDriver::LIGHT);
-    display.drawCenteredHeader("AUTO-ADVERT");
+    drawScreenHeader(display, "Auto-advert");
     int sel = 0, scroll = 0;
     drawList(display, 1, sel, scroll, [&](int, int y, bool is_sel, int reserve) {
       drawRowSelection(display, y, is_sel, reserve);

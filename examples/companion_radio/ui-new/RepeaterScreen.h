@@ -150,7 +150,7 @@ public:
     buildItems(p);
     display.setTextSize(1);
     display.setColor(DisplayDriver::LIGHT);
-    display.drawCenteredHeader("REPEATER");
+    drawScreenHeader(display, "Repeater");
 
     // Config only — live forwarding stats live on Status › Mesh.
     drawList(display, _item_count, _sel, _scroll, [&](int row, int y, bool sel, int reserve) {

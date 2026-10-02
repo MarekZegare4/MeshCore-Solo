@@ -14,6 +14,7 @@
 #include "PopupMenu.h"
 #include "NavView.h"
 #include "DigitEditor.h"
+#include "InfoKit.h"
 #include "../ui-core/GpsAverager.h"
 #include "../ui-core/TrackBack.h"
 
@@ -140,28 +141,33 @@ class WaypointsView {
 
   void renderAddForm(DisplayDriver& display) {
     display.setColor(DisplayDriver::LIGHT);
-    display.drawCenteredHeader("ADD WAYPOINT");
+    drawScreenHeader(display, "Add waypoint");
     const int top  = display.listStart();
     const int step = display.lineStep();
     for (int i = 0; i < 4; i++) {
       int y = top + i * step;
       bool sel = (i == _add_sel);
+      if (i == 3) {   // the form's button
+        drawButton(display, (display.width() - buttonWidth(display, "Save")) / 2, y, "Save", sel);
+        continue;
+      }
       display.drawSelectionRow(0, y - 1, display.width(), step - 1, sel);
-      // While editing a magnitude, draw the row prefix + the digit editor so the
-      // place under the cursor is highlighted; otherwise draw the plain value.
+      const char* label = i == 0 ? "Lat" : i == 1 ? "Lon" : "Label";
+      const char hemi = i == 0 ? (_add_lat_neg ? 'S' : 'N') : (_add_lon_neg ? 'W' : 'E');
+      // While editing a magnitude, draw the hemisphere + the digit editor so
+      // the place under the cursor is highlighted; otherwise the plain value.
       if ((i == 0 || i == 1) && sel && _add_editor.active) {
-        char prefix[10];
-        if (i == 0) snprintf(prefix, sizeof(prefix), "Lat: %c ", _add_lat_neg ? 'S' : 'N');
-        else        snprintf(prefix, sizeof(prefix), "Lon: %c ", _add_lon_neg ? 'W' : 'E');
-        display.setCursor(2, y); display.print(prefix);
-        _add_editor.render(display, 2 + (int)strlen(prefix) * display.getCharWidth(), y);
+        const int right = display.width() - 2;
+        const int ex = right - display.getTextWidth(i == 0 ? "00.00000" : "000.00000");
+        display.setCursor(2, y); display.print(label);
+        char h[3] = { hemi, ' ', 0 };
+        display.setCursor(ex - display.getTextWidth(h), y); display.print(h);
+        _add_editor.render(display, ex, y);
       } else {
-        char row[28];
-        if      (i == 0) snprintf(row, sizeof(row), "Lat: %c %.5f", _add_lat_neg ? 'S' : 'N', _add_lat_mag);
-        else if (i == 1) snprintf(row, sizeof(row), "Lon: %c %.5f", _add_lon_neg ? 'W' : 'E', _add_lon_mag);
-        else if (i == 2) snprintf(row, sizeof(row), "Label: %s",  _add_label[0] ? _add_label : "(auto)");
-        else             snprintf(row, sizeof(row), "[Save]");
-        display.setCursor(2, y); display.print(row);
+        char val[24];
+        if (i < 2) snprintf(val, sizeof(val), "%c %.5f", hemi, i == 0 ? _add_lat_mag : _add_lon_mag);
+        else       snprintf(val, sizeof(val), "%s", _add_label[0] ? _add_label : "(auto)");
+        info::valueRow(display, y, label, val, sel, 0);
       }
       display.setColor(DisplayDriver::LIGHT);
     }
@@ -171,7 +177,7 @@ class WaypointsView {
   // reports remaining time and the running sample count.
   void renderAvg(DisplayDriver& display) {
     display.setColor(DisplayDriver::LIGHT);
-    display.drawCenteredHeader("AVERAGING GPS");
+    drawScreenHeader(display, "Averaging GPS");
     const int top  = display.listStart();
     const int step = display.lineStep();
     char line[28];
@@ -188,9 +194,9 @@ class WaypointsView {
     int mq_delay = 0;
     display.setColor(DisplayDriver::LIGHT);
     char title[24];
-    snprintf(title, sizeof(title), "WAYPOINTS %d/%d",
+    snprintf(title, sizeof(title), "Waypoints %d/%d",
              _task->waypoints().count(), WaypointStore::CAPACITY);
-    display.drawCenteredHeader(title);
+    drawScreenHeader(display, title);
 
     int n     = wpListCount();
     int total = n + 1;                    // final row = "+ Add by coords"

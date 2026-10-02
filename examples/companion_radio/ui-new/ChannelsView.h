@@ -30,6 +30,7 @@
 // existing CMD_GET_CHANNEL comment ("NOTE: only 128-bit supported").
 
 #include "../ui-core/ChannelControl.h"
+#include "InfoKit.h"
 
 class ChannelsView {
   UITask* _task;
@@ -45,7 +46,7 @@ class ChannelsView {
   char _secret_text[33] = "";     // passphrase or hex string typed so far
   char _topic[31] = "";           // ADD_HASHTAG: topic without the leading '#'
 
-  int  _sel = 0;                  // 0=Name 1=Secret 2=[Save] (ADD_HASHTAG: 0=Topic 1=[Save])
+  int  _sel = 0;                  // 0=Name 1=Secret 2=Save (ADD_HASHTAG: 0=Topic 1=Save)
   bool _kb_active = false;
   int  _kb_field = -1;            // 0=Name, 1=Secret, 2=Topic
 
@@ -117,7 +118,7 @@ public:
     const int step = display.lineStep();
 
     if (_mode == TYPE_PICK) {
-      display.drawCenteredHeader("ADD CHANNEL");
+      drawScreenHeader(display, "Add channel");
       static const char* TYPE_LABELS[3] = { "Public", "Hashtag", "Private" };
       for (int i = 0; i < 3; i++) {
         int y = top + i * step;
@@ -129,37 +130,33 @@ public:
     }
 
     if (_mode == ADD_HASHTAG) {
-      display.drawCenteredHeader("ADD CHANNEL");
+      drawScreenHeader(display, "Add channel");
       int mq_delay = 0;
       for (int i = 0; i < 2; i++) {
         int y = top + i * step;
         bool sel = (i == _sel);
+        if (i == 1) { drawButton(display, (display.width() - buttonWidth(display, "Save")) / 2, y, "Save", sel); continue; }
         display.drawSelectionRow(0, y - 1, display.width(), step - 1, sel);
-        char row[40];
-        if (i == 0) snprintf(row, sizeof(row), "Topic: %s", _topic[0] ? _topic : "(none)");
-        else        snprintf(row, sizeof(row), "[Save]");
-        int r = display.drawTextEllipsized(2, y, display.width() - 4, row, sel);
-        if (sel && r > 0) mq_delay = r;
+        int r = info::valueRow(display, y, "Topic", _topic[0] ? _topic : "(none)", sel, 0);
+        if (r > 0) mq_delay = r;
         display.setColor(DisplayDriver::LIGHT);
       }
       return (mq_delay > 0 && mq_delay < 1000) ? mq_delay : 1000;
     }
 
-    display.drawCenteredHeader(_mode == ADD ? "ADD CHANNEL" : "EDIT CHANNEL");
+    drawScreenHeader(display, _mode == ADD ? "Add channel" : "Edit channel");
     int mq_delay = 0;
     for (int i = 0; i < 3; i++) {
       int y = top + i * step;
       bool sel = (i == _sel);
+      if (i == 2) { drawButton(display, (display.width() - buttonWidth(display, "Save")) / 2, y, "Save", sel); continue; }
       display.drawSelectionRow(0, y - 1, display.width(), step - 1, sel);
-      char row[40];
-      if (i == 0)      snprintf(row, sizeof(row), "Name: %s", _name[0] ? _name : "(none)");
-      else if (i == 1) snprintf(row, sizeof(row), "Secret (%s): %s",
-                                _hex_mode ? "hex" : "phrase", _secret_text[0] ? _secret_text : "(none)");
-      else             snprintf(row, sizeof(row), "[Save]");
-      // Ellipsize rather than print() directly -- a long name/secret must not
-      // wrap onto the next row's line (print() wraps by default).
-      int r = display.drawTextEllipsized(2, y, display.width() - 4, row, sel);
-      if (sel && r > 0) mq_delay = r;
+      // valueRow cuts a long name/secret (scrolling it while selected) rather
+      // than letting print() wrap it onto the next row's line.
+      int r = i == 0 ? info::valueRow(display, y, "Name", _name[0] ? _name : "(none)", sel, 0)
+                     : info::valueRow(display, y, _hex_mode ? "Secret (hex)" : "Secret (phrase)",
+                                      _secret_text[0] ? _secret_text : "(none)", sel, 0);
+      if (r > 0) mq_delay = r;
       display.setColor(DisplayDriver::LIGHT);
     }
     return (mq_delay > 0 && mq_delay < 1000) ? mq_delay : 1000;

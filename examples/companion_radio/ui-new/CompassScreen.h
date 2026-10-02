@@ -32,7 +32,7 @@ public:
   int render(DisplayDriver& display) override {
     display.setTextSize(1);
     display.setColor(DisplayDriver::LIGHT);
-    display.drawCenteredHeader("COMPASS");
+    drawScreenHeader(display, "Compass");
 
     const int cx  = display.width() / 2;
     const int ch  = display.getLineHeight();

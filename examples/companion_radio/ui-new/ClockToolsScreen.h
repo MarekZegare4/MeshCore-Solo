@@ -146,7 +146,7 @@ class ClockToolsScreen : public UIScreen {
 
   // ── Sub-renders ───────────────────────────────────────────────────────────
   int renderMenu(DisplayDriver& d) {
-    d.drawCenteredHeader("CLOCK TOOLS");
+    drawScreenHeader(d, "Clock tools");
     static const char* items[3] = { "Alarm", "Timer", "Stopwatch" };
     if (_sel > 2) _sel = 2;
     drawList(d, 3, _sel, _scroll, [&](int i, int y, bool sel, int reserve) {
@@ -163,7 +163,7 @@ class ClockToolsScreen : public UIScreen {
   }
 
   int renderAlarm(DisplayDriver& d) {
-    d.drawCenteredHeader("ALARM");
+    drawScreenHeader(d, "Alarm");
     if (!_prefs) return 60000;
     const char* rows[3] = { "Time", "Repeat", "Armed" };
     if (_sel > 2) _sel = 2;
@@ -186,7 +186,7 @@ class ClockToolsScreen : public UIScreen {
   }
 
   int renderTimer(DisplayDriver& d) {
-    d.drawCenteredHeader("TIMER");
+    drawScreenHeader(d, "Timer");
     const int cx = d.width() / 2;
     if (_task->isTimerRunning()) {
       char buf[16];
@@ -215,7 +215,7 @@ class ClockToolsScreen : public UIScreen {
   }
 
   int renderStopwatch(DisplayDriver& d) {
-    d.drawCenteredHeader("STOPWATCH");
+    drawScreenHeader(d, "Stopwatch");
     const int cx = d.width() / 2;
     char buf[16];
     bool tenths = !d.isEink() && _sw_running;   // tenths only on a fast panel

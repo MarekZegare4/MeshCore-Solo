@@ -101,7 +101,7 @@ public:
   int render(DisplayDriver& display) override {
     display.setTextSize(1);
     display.setColor(DisplayDriver::LIGHT);
-    display.drawCenteredHeader("LIVE SHARE");
+    drawScreenHeader(display, "Live share");
 
     int mq_delay = 0;
     drawList(display, ROW_COUNT, _sel, _scroll, [&](int i, int y, bool sel, int reserve) {

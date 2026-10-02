@@ -31,7 +31,7 @@ public:
     int start_y = display.listStart();
     int val_x   = display.valCol();
 
-    display.drawCenteredHeader("CLOCK FIELDS");
+    drawScreenHeader(display, "Clock fields");
 
     static const char* labels[] = { "Field 1", "Field 2", "Field 3" };
     for (int i = 0; i < FIELD_SLOTS; i++) {
