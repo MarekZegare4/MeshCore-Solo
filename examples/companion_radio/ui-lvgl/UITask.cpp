@@ -4681,7 +4681,10 @@ void UITask::schemaSection(int i) {
   uint8_t sec = settings::ALL[i].section;
   lv_obj_t* card = s_sec_card[sec] = group(s_schema_body, s_schema_one ? nullptr : settings::sectionTitle(sec));
   if (sec == settings::SEC_SOUND) buildSoundRows(card, true);   // On / Off / Auto
-  for (int k = i; k < settings::COUNT && settings::ALL[k].section == sec; k++) schemaRow(card, k);
+  for (int k = i; k < settings::COUNT && settings::ALL[k].section == sec; k++) {
+    if (settings::ALL[k].offset == offsetof(NodePrefs, lock_compact)) continue;   // ui-new's lock look; the slide card has one
+    schemaRow(card, k);
+  }
 }
 
 // One schema setting as a row of `card`: a switch, a choice, or (brightness,
