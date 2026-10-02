@@ -547,6 +547,68 @@ private:
     summaryBlocks(display, f, rsv);
     _summary_max_scroll = f.more ? _summary_scroll + 1 : _summary_scroll;
     if (rsv) drawScrollIndicatorPx(display, top, view, f.total_px, view, f.skipped_px);
+    // A tall screen (portrait e-ink) has room left under the numbers: the map
+    // goes there, below a dotted rule, and the height profile under it when
+    // the points carry altitude.
+    else if (bottom - f.y >= 6 * display.lineStep()) {
+      info::rule(display, 1, f.y + 2, display.width() - 2);
+      const int ph = hasAltitude() ? 4 * display.getLineHeight() : 0;
+      renderMap(display, f.y + 4, bottom - 2 - ph);
+      if (ph) renderProfile(display, 1, bottom - ph, display.width() - 2, ph);
+    }
+  }
+
+  bool hasAltitude() const {
+    for (int i = 0; i < _store->count(); i++) if (_store->at(i).alt_m != TRAIL_ALT_NONE) return true;
+    return false;
+  }
+
+  // The height over the distance walked, in x, y, w, h: a framed area, a
+  // solid line over a dithered glow, then the climb so far and the highest
+  // point under it.
+  void renderProfile(DisplayDriver& d, int x, int y, int w, int h) {
+    const int lh = d.getLineHeight(), fh = h - lh - 2;   // the frame; the caption under it
+    const int n = _store->count();
+    int lo = 32767, hi = -32768, gain = 0, last = TRAIL_ALT_NONE;
+    for (int i = 0; i < n; i++) {
+      const int a = _store->at(i).alt_m;
+      if (a == TRAIL_ALT_NONE) continue;
+      if (a < lo) lo = a;
+      if (a > hi) hi = a;
+      if (last == TRAIL_ALT_NONE || a < last) last = a;   // the climb, past 3 m of jitter
+      else if (a - last >= 3) { gain += a - last; last = a; }
+    }
+    if (hi - lo < 20) { const int mid = (hi + lo) / 2; lo = mid - 10; hi = mid + 10; }
+    const float total = _store->totalDistanceMeters() > 0 ? (float)_store->totalDistanceMeters() : 1.0f;
+    d.drawSoftRect(x, y, w, fh);
+    const int ix = x + 2, iy = y + 2, iw = w - 4, ih = fh - 4;
+    float cum = 0;
+    int px = -1, py = 0;
+    for (int i = 0; i < n; i++) {
+      const TrailPoint& p = _store->at(i);
+      if (i > 0 && !(p.flags & TRAIL_FLAG_SEG_START))
+        cum += TrailStore::haversineMeters(_store->at(i - 1).lat_1e6, _store->at(i - 1).lon_1e6, p.lat_1e6, p.lon_1e6);
+      if (p.alt_m == TRAIL_ALT_NONE) continue;
+      int cx = ix + (int)(cum / total * (iw - 1));
+      if (cx > ix + iw - 1) cx = ix + iw - 1;
+      const int cy = iy + ih - 1 - (p.alt_m - lo) * (ih - 1) / (hi - lo);
+      if (px >= 0) {
+        for (int c = px + 1; c <= cx; c++) {   // each column: the line, the fill under it
+          const int ly = py + (cy - py) * (c - px) / (cx - px);
+          d.fillRect(c, ly, 1, 1);
+          info::fadeColumn(d, c, ly + 2, iy + ih);
+        }
+      }
+      px = cx; py = cy;
+    }
+    char a[16], b[16];
+    snprintf(a, sizeof(a), "+%d m", gain);
+    snprintf(b, sizeof(b), "max %d m", hi);
+    const int cy = y + fh + 2;
+    miniIconDraw(d, x, cy, ICON_ARROW_NE);
+    d.setCursor(x + ICON_ARROW_NE.w * miniIconScale(d) + 2, cy);
+    d.print(a);
+    d.drawTextRightAlign(x + w, cy, b);
   }
 
   void renderList(DisplayDriver& display) {
@@ -707,9 +769,10 @@ private:
     }
   }
 
-  void renderMap(DisplayDriver& display) {
-    const int top    = display.listStart();
-    const int bottom = display.height() - 2;
+  // The map between top and bottom (default: the whole view under the header).
+  void renderMap(DisplayDriver& display, int top = -1, int bottom = -1) {
+    if (top < 0)    top = display.listStart();
+    if (bottom < 0) bottom = display.height() - 2;
 
     WaypointStore& wp = _task->waypoints();
     const int nwp     = wp.count();

@@ -1,4 +1,6 @@
 #pragma once
+#include "InfoKit.h"
+#include "../Features.h"
 #include "../GeoUtils.h"
 #include "NavView.h"
 #include "TabBar.h"
@@ -461,6 +463,46 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
     if (e.is_live) snprintf(buf, sizeof(buf), "Sharing pos: %s %s", age, e.live_verified ? "(DM)" : "(chan)");
     else           snprintf(buf, sizeof(buf), "Seen: %s", age);
     display.drawTextEllipsized(2, hdr + step * 4, display.width() - 4, buf);
+
+    const int W = display.width(), H = display.height(), lh = display.getLineHeight();
+    int rows = 5;
+    // How a message gets there, where there's a line for it (e-ink): a chain
+    // from you to it, a ring per repeater on the way.
+    ContactInfo ci;
+    if (hdr + step * 5 + lh <= H && e.contact_idx >= 0 && the_mesh.getContactByIdx(e.contact_idx, ci)) {
+      const int y = hdr + step * 5;
+      display.setCursor(2, y);
+      display.print("Path:");
+      int x = 2 + display.getTextWidth("Path: ");
+      if (ci.out_path_len == 0xFF) {
+        display.print(" flood");
+      } else {
+        const int hops = ci.out_path_len & 63, shown = hops > 5 ? 5 : hops;
+        const int r = lh / 4 > 2 ? lh / 4 : 2, cy = y + lh / 2 - 1, gap = r + 3;
+        for (int k = 0; k <= shown + 1; k++) {   // you and it filled, the hops as rings
+          if (k) for (int dx = x - gap + 1; dx < x; dx += 2) display.fillRect(dx, cy, 1, 1);
+          info::circle(display, x + r, cy, r);
+          if (k == 0 || k == shown + 1) display.fillRect(x + 1, cy - r + 1, 2 * r - 1, 2 * r - 1);
+          x += 2 * r + 1 + gap;
+        }
+        if (hops == 0) snprintf(buf, sizeof(buf), "direct");
+        else snprintf(buf, sizeof(buf), "%d hop%s", hops, hops == 1 ? "" : "s");
+        display.setCursor(x, y);
+        display.print(buf);
+      }
+      rows = 6;
+    }
+
+    // Where it is, on a compass rose (north up), where the screen has the room
+    // (e-ink): beside the rows on a wide one, under them on a tall one.
+    if (e.dist_km < 0.0f) return;
+    const int below = hdr + step * rows + lh;
+    int r, cx, cy;
+    if (H - below > W / 2) { r = (W < H - below ? W : H - below) / 2 - lh; cx = W / 2; cy = below + lh / 2 + r; }
+    else { r = (H - hdr) / 2 - lh / 2 - 1; cx = W - r - 3; cy = hdr + lh / 2 + r; }
+    const int text_r = 2 + display.getTextWidth("Lon: -000.00000");
+    if (r < 2 * lh || (cy - r < below - lh && cx - r < text_r)) return;
+    info::rose(display, cx, cy, r, geo::bearingDeg(_own_lat, _own_lon, e.lat_e6, e.lon_e6));
   }
 
   void renderScanDetail(DisplayDriver& display) {
@@ -608,7 +650,9 @@ public:
     }
 
     int item_h   = display.lineStep();
-    int dist_col = display.width() - display.getCharWidth() * 7;
+    // E-ink sets an arrow towards the node before its distance: one more cell.
+    const bool arrows = Features::IS_EINK && _source == SRC_STORED && _sort != SORT_TIME;
+    int dist_col = display.width() - display.getCharWidth() * (arrows ? 9 : 7);
 
     display.setColor(DisplayDriver::LIGHT);
     const char* flt = (_filter != F_ALL) ? filterLabel(_filter) : nullptr;
@@ -691,6 +735,12 @@ public:
           else                   strcpy(right, "-");   // no fix of ours or theirs
         }
         if (right[0]) display.drawTextRightAlign(display.width() - reserve - 2, y, right);
+        if (arrows && e.dist_km >= 0.0f) {
+          const int deg = geo::bearingDeg(_own_lat, _own_lon, e.lat_e6, e.lon_e6);
+          const MiniIcon& ic = *ICON_ARROWS[((deg + 22) % 360) / 45];
+          miniIconDraw(display, display.width() - reserve - 2 - display.getTextWidth(right) - 3
+                                - ic.w * miniIconScale(display), y, ic);
+        }
       });
     }
 

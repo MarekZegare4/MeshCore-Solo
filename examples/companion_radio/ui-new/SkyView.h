@@ -22,6 +22,7 @@
   #include <helpers/sensors/MicroNMEALocationProvider.h>
 #endif
 #include "icons.h"   // miniIconScale()
+#include "InfoKit.h" // info::circle()
 
 namespace skyview {
 
@@ -38,20 +39,6 @@ namespace skyview {
 
   inline void dot(DisplayDriver& d, int x, int y) { d.fillRect(x, y, 1, 1); }
 
-  // Midpoint circle; `step` > 1 dots it (every step-th point of each octant).
-  inline void circle(DisplayDriver& d, int cx, int cy, int r, int step = 1) {
-    int x = r, y = 0, err = 1 - r, i = 0;
-    while (x >= y) {
-      if (i++ % step == 0) {
-        dot(d, cx + x, cy + y); dot(d, cx - x, cy + y); dot(d, cx + x, cy - y); dot(d, cx - x, cy - y);
-        dot(d, cx + y, cy + x); dot(d, cx - y, cy + x); dot(d, cx + y, cy - x); dot(d, cx - y, cy - x);
-      }
-      y++;
-      if (err < 0) err += 2 * y + 1;
-      else { x--; err += 2 * (y - x) + 1; }
-    }
-  }
-
   inline int usedCount(const GpsSky& g) {
     int n = 0;
     for (int i = 0; i < g.count; i++) if (g.used(g.sats[i])) n++;
@@ -62,11 +49,15 @@ namespace skyview {
     const int lh = d.getLineHeight();
     const int cw = d.getCharWidth();
     const int s = miniIconScale(d);
-    const int r = (d.height() - 1 - top) / 2 - 1;
-    const int cx = r + 1, cy = top + r + 1;
+    // A wide screen sets the numbers beside the plot, a tall one (portrait
+    // e-ink) under it, the plot then as wide as the screen.
+    const bool stacked = d.height() - top > d.width();
+    const int r = stacked ? (d.width() - 1) / 2 - 1 : (d.height() - 1 - top) / 2 - 1;
+    const int cx = stacked ? d.width() / 2 : r + 1;
+    const int cy = top + (stacked ? lh / 2 : 0) + r + 1;
 
-    circle(d, cx, cy, r);            // the horizon
-    circle(d, cx, cy, r / 2, 2);     // 45 degrees up, dotted
+    info::circle(d, cx, cy, r);         // the horizon
+    info::circle(d, cx, cy, r / 2, 2);  // 45 degrees up, dotted
     dot(d, cx, cy);                  // straight up
     d.setColor(DisplayDriver::DARK);   // north, on a gap in the rim
     d.fillRect(cx - cw / 2 - 1, cy - r - lh / 2, cw + 2, lh);
@@ -95,9 +86,9 @@ namespace skyview {
       }
     }
 
-    // The numbers, right of the plot.
-    const int x0 = 2 * r + 6, step = lh + 1;
-    int y = top;
+    // The numbers, right of the plot (or under it).
+    const int x0 = stacked ? 1 : 2 * r + 6, step = lh + 1;
+    int y = stacked ? cy + r + lh / 2 + 2 : top;
     char buf[24];
     d.setCursor(x0, y);
     d.print(g.fix_mode == 3 ? "3D fix" : g.hasFix() ? "2D fix" : "No fix");

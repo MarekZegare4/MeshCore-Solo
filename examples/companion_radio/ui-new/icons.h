@@ -386,6 +386,75 @@ MINI_ICON(ICON_MAP_TARGET, 5,     // ⚑ flag on a pole — the active Locator/N
   packRow("#...."),
   packRow("#...."));
 
+// Arrows towards the eight compass points (north up), for a bearing beside
+// a distance: ICON_ARROWS[((deg + 22) % 360) / 45].
+MINI_ICON(ICON_ARROW_N, 7,
+  packRow("...#..."),
+  packRow("..###.."),
+  packRow(".#.#.#."),
+  packRow("...#..."),
+  packRow("...#..."),
+  packRow("...#..."),
+  packRow("...#..."));
+MINI_ICON(ICON_ARROW_NE, 7,
+  packRow("...####"),
+  packRow(".....##"),
+  packRow("....#.#"),
+  packRow("...#..#"),
+  packRow("..#...."),
+  packRow(".#....."),
+  packRow("#......"));
+MINI_ICON(ICON_ARROW_E, 7,
+  packRow("......."),
+  packRow("....#.."),
+  packRow(".....#."),
+  packRow("#######"),
+  packRow(".....#."),
+  packRow("....#.."),
+  packRow("......."));
+MINI_ICON(ICON_ARROW_SE, 7,
+  packRow("#......"),
+  packRow(".#....."),
+  packRow("..#...."),
+  packRow("...#..#"),
+  packRow("....#.#"),
+  packRow(".....##"),
+  packRow("...####"));
+MINI_ICON(ICON_ARROW_S, 7,
+  packRow("...#..."),
+  packRow("...#..."),
+  packRow("...#..."),
+  packRow("...#..."),
+  packRow(".#.#.#."),
+  packRow("..###.."),
+  packRow("...#..."));
+MINI_ICON(ICON_ARROW_SW, 7,
+  packRow("......#"),
+  packRow(".....#."),
+  packRow("....#.."),
+  packRow("#..#..."),
+  packRow("#.#...."),
+  packRow("##....."),
+  packRow("####..."));
+MINI_ICON(ICON_ARROW_W, 7,
+  packRow("......."),
+  packRow("..#...."),
+  packRow(".#....."),
+  packRow("#######"),
+  packRow(".#....."),
+  packRow("..#...."),
+  packRow("......."));
+MINI_ICON(ICON_ARROW_NW, 7,
+  packRow("####..."),
+  packRow("##....."),
+  packRow("#.#...."),
+  packRow("#..#..."),
+  packRow("....#.."),
+  packRow(".....#."),
+  packRow("......#"));
+static constexpr const MiniIcon* ICON_ARROWS[8] = { &ICON_ARROW_N, &ICON_ARROW_NE, &ICON_ARROW_E, &ICON_ARROW_SE,
+                                                 &ICON_ARROW_S, &ICON_ARROW_SW, &ICON_ARROW_W, &ICON_ARROW_NW };
+
 // Keyboard special-key glyphs.
 MINI_ICON(ICON_KEYBOARD, 7,   // PIN keyboard to ABC keyboard switch icon
   packRow("#.#.#.#"),

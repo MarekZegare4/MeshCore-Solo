@@ -7,6 +7,7 @@
 
 #include <helpers/ui/DisplayDriver.h>
 #include <string.h>
+#include <math.h>
 #include "icons.h"
 
 namespace info {
@@ -78,6 +79,77 @@ inline void meter(DisplayDriver& d, int x, int y, int w, int h, float frac) {
   d.drawSoftRect(x, y, w, h);
   const int in = d.sepH() + 1, fw = (int)((w - 2 * in) * frac + 0.5f);
   if (fw > 0) d.fillRect(x + in, y + in, fw, h - 2 * in);
+}
+
+// Midpoint circle; `step` > 1 dots it (every step-th point of each octant).
+inline void circle(DisplayDriver& d, int cx, int cy, int r, int step = 1) {
+  int x = r, y = 0, err = 1 - r, i = 0;
+  while (x >= y) {
+    if (i++ % step == 0) {
+      d.fillRect(cx + x, cy + y, 1, 1); d.fillRect(cx - x, cy + y, 1, 1);
+      d.fillRect(cx + x, cy - y, 1, 1); d.fillRect(cx - x, cy - y, 1, 1);
+      d.fillRect(cx + y, cy + x, 1, 1); d.fillRect(cx - y, cy + x, 1, 1);
+      d.fillRect(cx + y, cy - x, 1, 1); d.fillRect(cx - y, cy - x, 1, 1);
+    }
+    y++;
+    if (err < 0) err += 2 * y + 1;
+    else { x--; err += 2 * (y - x) + 1; }
+  }
+}
+
+// A 1 px line (Bresenham).
+inline void line(DisplayDriver& d, int x0, int y0, int x1, int y1) {
+  const int dx = x1 > x0 ? x1 - x0 : x0 - x1, dy = y1 > y0 ? y0 - y1 : y1 - y0;
+  const int sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+  int err = dx + dy;
+  for (;;) {
+    d.fillRect(x0, y0, 1, 1);
+    if (x0 == x1 && y0 == y1) break;
+    const int e2 = 2 * err;
+    if (e2 >= dy) { err += dy; x0 += sx; }
+    if (e2 <= dx) { err += dx; y0 += sy; }
+  }
+}
+
+// An arrow of length 2r centred on (cx, cy), pointing to `deg` (0 = up /
+// north, clockwise): a shaft and a two-stroke head at the tip.
+inline void arrow(DisplayDriver& d, int cx, int cy, int r, int deg) {
+  const float a = deg * (float)M_PI / 180.0f, sx = sinf(a), sy = -cosf(a);
+  const int tx = cx + (int)lroundf(r * sx), ty = cy + (int)lroundf(r * sy);
+  line(d, cx - (int)lroundf(r * sx), cy - (int)lroundf(r * sy), tx, ty);
+  const float h = r * 0.6f;
+  for (int k = -1; k <= 1; k += 2) {   // the head's strokes, 30 degrees off the shaft
+    const float b = a + (float)M_PI + k * 0.52f;
+    line(d, tx, ty, tx + (int)lroundf(h * sinf(b)), ty - (int)lroundf(h * cosf(b)));
+  }
+}
+
+// A compass rose of radius r round (cx, cy), north up: the ring, a tick in at
+// each cardinal point, N in a gap at the top, and -- for deg >= 0 -- a needle
+// from the centre to the ring, towards deg.
+inline void rose(DisplayDriver& d, int cx, int cy, int r, int deg) {
+  const int s = miniIconScale(d), t = 3 * s, lh = d.getLineHeight(), cw = d.getCharWidth();
+  circle(d, cx, cy, r);
+  circle(d, cx, cy, r / 2, 3);
+  d.fillRect(cx - s / 2, cy + r - t, s, t);   // S
+  d.fillRect(cx + r - t, cy - s / 2, t, s);   // E
+  d.fillRect(cx - r, cy - s / 2, t, s);       // W
+  d.setColor(DisplayDriver::DARK);            // N, on a gap in the ring
+  d.fillRect(cx - cw / 2 - 1, cy - r - lh / 2, cw + 2, lh);
+  d.setColor(DisplayDriver::LIGHT);
+  d.setCursor(cx - cw / 2, cy - r - lh / 2);
+  d.print("N");
+  if (deg >= 0) {
+    const float a = deg * (float)M_PI / 180.0f;
+    const int tx = cx + (int)lroundf((r - t - s) * sinf(a)), ty = cy - (int)lroundf((r - t - s) * cosf(a));
+    for (int o = -(s / 2); o <= s / 2; o++) line(d, cx + o, cy, tx + o, ty);
+    const float h = r * 0.3f;
+    for (int k = -1; k <= 1; k += 2) {
+      const float b = a + (float)M_PI + k * 0.45f;
+      line(d, tx, ty, tx + (int)lroundf(h * sinf(b)), ty - (int)lroundf(h * cosf(b)));
+    }
+  }
+  d.fillRect(cx - s, cy - s, 2 * s + 1, 2 * s + 1);   // the centre: you
 }
 
 // A chip: a state as a filled pill (FIX, REC), a parameter as an outline
@@ -198,6 +270,70 @@ inline void spark(DisplayDriver& d, int x, int y, int w, int h, const History<N>
     }
     px = cx; py = cy;
   }
+}
+
+// Ordered (Bayer 4x4) dithering: whether pixel (x, y) is ink at a density of
+// level/16. For graded fills on large elements only -- it breaks up small
+// ones.
+inline bool bayer(int x, int y, int level) {
+  static const uint8_t M[4][4] = { { 0, 8, 2, 10 }, { 12, 4, 14, 6 }, { 3, 11, 1, 9 }, { 15, 7, 13, 5 } };
+  return M[y & 3][x & 3] < level;
+}
+// A column from y0 down to (not including) y1, dithered from dense at the top
+// to sparse at the bottom: the glow under a chart's line.
+inline void fadeColumn(DisplayDriver& d, int x, int y0, int y1) {
+  const int h = y1 - y0;
+  for (int y = y0; y < y1; y++) {
+    const int level = 9 - 8 * (y - y0) / (h > 1 ? h : 1);   // 9/16 under the line -> 1/16 at the floor
+    if (bayer(x, y, level)) d.fillRect(x, y, 1, 1);
+  }
+}
+
+// A history as a chart, for a screen with the room (e-ink): a soft frame with
+// a dotted middle line, the samples as a step line over a dithered glow --
+// or, with `bars`, one bar each from the bottom, for counts -- the newest at
+// the right edge, then a caption line under the frame: `left` at its left
+// (how far back it goes), `right` at its right. chartH() is the whole
+// block's height.
+inline int chartH(DisplayDriver& d, int frame_h) { return frame_h + d.getLineHeight() + 3; }
+template <int N>
+inline void chart(DisplayDriver& d, int x, int y, int w, int h, const History<N>& hs, int min_span,
+                  bool bars, const char* left, const char* right) {
+  d.drawSoftRect(x, y, w, h);
+  const int s = miniIconScale(d);
+  for (int i = x + 3; i < x + w - 3; i += 3 * s) d.fillRect(i, y + h / 2, s, s);
+  const int ix = x + 2, iy = y + 2, iw = w - 4, ih = h - 4;
+  if (hs.n < (bars ? 1 : 2)) {   // nothing to draw yet: say so over the line
+    const int tw = d.getTextWidth("no data"), tx = x + (w - tw) / 2, ty = y + (h - d.getLineHeight()) / 2;
+    d.setColor(DisplayDriver::DARK);
+    d.fillRect(tx - 2, ty, tw + 4, d.getLineHeight());
+    d.setColor(DisplayDriver::LIGHT);
+    d.setCursor(tx, ty);
+    d.print("no data");
+  } else {
+    int lo = bars ? 0 : hs.at(0), hi = lo;
+    for (int i = 0; i < hs.n; i++) { int v = hs.at(i); if (v < lo) lo = v; if (v > hi) hi = v; }
+    if (hi - lo < min_span) { if (bars) hi = lo + min_span; else { int mid = (hi + lo) / 2; lo = mid - min_span / 2; hi = lo + min_span; } }
+    const int bw = iw / N > 1 ? iw / N : 1;
+    int px = -1, py = 0;
+    for (int i = 0; i < hs.n; i++) {
+      const int cx = ix + iw - 1 - (hs.n - 1 - i) * (iw - 1) / (N - 1);
+      const int cy = iy + ih - 1 - (hs.at(i) - lo) * (ih - 1) / (hi - lo);
+      if (bars) {
+        if (hs.at(i) > lo) d.fillRect(cx - bw + 1, cy, bw, iy + ih - cy);
+      } else {
+        if (px >= 0) {
+          d.fillRect(px, py, cx - px + 1, 1);
+          d.fillRect(cx, py < cy ? py : cy, 1, (py < cy ? cy - py : py - cy) + 1);
+          for (int c = px + 1; c <= cx; c++) fadeColumn(d, c, (c < cx ? py : cy) + 2, iy + ih);
+        }
+        px = cx; py = cy;
+      }
+    }
+  }
+  const int ty = y + h + 2;
+  if (left && *left)   { d.setCursor(x, ty); d.print(left); }
+  if (right && *right) d.drawTextRightAlign(x + w, ty, right);
 }
 
 // Blocks stacked down from `top`, with the first `skip` left out: the way a

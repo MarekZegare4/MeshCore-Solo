@@ -182,6 +182,7 @@ static const telemetry::Style L1_INFO      = { "\xc2\xb0", true,  false, 5 };
 #endif
 #include "ToolsScreen.h"
 #include "ClockToolsScreen.h"   // Alarm / Timer / Stopwatch (Clock page › Enter)
+#include "CalendarView.h"       // the month under a tall clock
 
 #include "../ui-core/Battery.h"
 
@@ -334,10 +335,25 @@ class HomeScreen : public UIScreen {
   uint8_t       _slide_from = 0;
   unsigned long _slide_t0 = 0;
 
+  // A wide screen (landscape e-ink) sets the page icons on the header line,
+  // between the time and the status icons, instead of on a row of their own.
+  // Measured for every page at full spacing, so it doesn't flip as pages are
+  // shown or hidden.
+  static int stripHalfW(DisplayDriver& d) {
+    const int s = miniIconScale(d);
+    return (10 * s * ((int)Count - 1) + 5 * s + 8) / 2;
+  }
+  static bool stripOnHeader(DisplayDriver& d) {
+    const int mid = d.width() / 2, half = stripHalfW(d);
+    // Left: the time and a gap. Right: the battery icon and two status icons.
+    const int right_need = 2 * d.getLineHeight() + 6 + 2 * (d.getCharWidth() + 3);
+    return mid - half >= 6 * d.getCharWidth() && mid + half <= d.width() - right_need;
+  }
   // First row under the header and the page-icon row (see render()).
   static int contentTop(DisplayDriver& d) {
-    const int pg_half = (5 * miniIconScale(d) + 1) / 2;
-    return d.getLineHeight() + 2 * pg_half + 4;
+    const int pg_half = (5 * miniIconScale(d) + 1) / 2, lh = d.getLineHeight();
+    if (stripOnHeader(d)) return (lh > 2 * pg_half + 2 ? lh : 2 * pg_half + 2) + 3;
+    return lh + 2 * pg_half + 4;
   }
   // 0..1 eased progress of the running slide, or -1 when none.
   float slideProgress() {
@@ -362,7 +378,7 @@ class HomeScreen : public UIScreen {
 
   unsigned long _advert_sent_ms = 0;   // last advert sent from this page (0: none yet)
 
-  // ── Quick panels: an icon page as two or three rows with margins round
+  // ── Quick panels: an icon page as a few rows with margins round
   // them, the last one opening the full screen. Up/Down picks a row, Enter
   // acts on it. The rows are the Settings list's own (value, switch, bar).
   enum QKind : uint8_t { Q_VALUE, Q_SWITCH, Q_BAR, Q_BADGE, Q_MORE };
@@ -380,6 +396,15 @@ class HomeScreen : public UIScreen {
     uint8_t prefix[4];
     char    name[24];   // QA_CHAT: the label's storage
   };
+  static const int QUICK_MAX = 8;
+  // How many rows a quick panel has room for (at least the 3 a 128x64 OLED
+  // fits): a taller screen lists more recent chats.
+  int quickFit() const {
+    DisplayDriver* d = _task->getDisplay();
+    if (!d) return 3;
+    const int n = (d->height() - contentTop(*d) - 5) / (d->lineStep() + 1);
+    return n < 3 ? 3 : n > QUICK_MAX ? QUICK_MAX : n;
+  }
   uint8_t _quick_sel = 0;
   bool    _quick_edit = false;   // the selected row is being changed with Left/Right
   bool    _quick_dirty = false;  // ...and has moved: saved once when it ends
@@ -419,12 +444,13 @@ class HomeScreen : public UIScreen {
     buf[n - 1] = 0;
   }
 
-  // The two newest conversations, DM / room or channel, newest first.
+  // The `max` newest conversations, DM / room or channel, newest first.
   int recentChats(QRow* out, int max) {
     MessageHistory& h = _task->core().history;
-    struct Cand { bool is_ch; uint8_t ch; uint8_t prefix[4]; uint32_t ts; } c[4];
+    struct Cand { bool is_ch; uint8_t ch; uint8_t prefix[4]; uint32_t ts; } c[2 * QUICK_MAX];
+    if (max > QUICK_MAX) max = QUICK_MAX;
     int nc = 0;
-    for (int j = 0; j < h.dmHistCount() && nc < 2; j++) {
+    for (int j = 0; j < h.dmHistCount() && nc < max; j++) {
       const DmHistEntry& e = h.dmAtPos(h.dmHistPosNewest(j));
       bool seen = false;
       for (int k = 0; k < nc; k++) if (memcmp(c[k].prefix, e.prefix, 4) == 0) seen = true;
@@ -432,7 +458,7 @@ class HomeScreen : public UIScreen {
       c[nc].is_ch = false; c[nc].ch = 0; memcpy(c[nc].prefix, e.prefix, 4); c[nc].ts = e.timestamp; nc++;
     }
     const int nd = nc;
-    for (int j = 0; j < h.chHistCount() && nc < nd + 2; j++) {
+    for (int j = 0; j < h.chHistCount() && nc < nd + max; j++) {
       const ChHistEntry& e = h.chAtPos(h.chHistPosNewest(j));
       bool seen = false;
       for (int k = nd; k < nc; k++) if (c[k].ch == e.ch_idx) seen = true;
@@ -487,7 +513,7 @@ class HomeScreen : public UIScreen {
 #endif
       add("All settings", Q_MORE, QA_MORE, 0);
     } else if (page == QUICK_MSG) {
-      n = recentChats(rows, 2);
+      n = recentChats(rows, quickFit() - 1);
       add("All messages", Q_MORE, QA_MORE, 0);
     } else if (page == BLUETOOTH) {
       const bool on = _task->isSerialEnabled();
@@ -713,7 +739,7 @@ class HomeScreen : public UIScreen {
     const int cw      = display.getCharWidth();
     const int ind     = cw + 2;    // single-char indicator width
     const int ind_h   = display.isSingleFont() ? lh - 2 : lh;
-    const int ind_gap = display.isLandscape() ? 3 : 1;  // gap between indicator boxes
+    const int ind_gap = display.pixelScale() > 1 ? 3 : 1;  // gap between indicator boxes
 
     int battLeftX;
     if (mode == battery::PERCENT) {
@@ -731,7 +757,7 @@ class HomeScreen : public UIScreen {
     } else {  // icon — scales with lh, same box height as the status icons beside it (ind_h)
       const int iconH = ind_h;
       const int iconW = lh * 2;
-      const int bm = display.isLandscape() ? 3 : 2;  // inner margin: 3px on landscape e-ink, 2px on OLED/portrait
+      const int bm = display.pixelScale() > 1 ? 3 : 2;  // inner margin: 3px on a doubled panel, else 2px
       battLeftX = display.width() - iconW - 3;
       display.drawRect(battLeftX, 0, iconW, iconH);
       // Nub height/2, vertically centred by remaining-space/2 rather than a flat
@@ -969,10 +995,13 @@ public:
   // The Map page: the mini-map in a soft frame on the left, what it shows
   // spelled out in a column on the right (GPS, the trail, live contacts or
   // the target). Without a position the column still says what's missing.
+  // A tall screen (portrait e-ink) stacks them: the map, the four rows under it.
   void drawMapPage(DisplayDriver& d, int top) {
     const int W = d.width(), H = d.height(), lh = d.getLineHeight();
     const int s = miniIconScale(d);
-    const int pw = W / 2, ph = H - top;                 // map panel
+    const bool tall = H - top > W;
+    const int rows_h = tall ? 4 * (lh + lh / 2) : 0;
+    const int pw = tall ? W : W / 2, ph = H - top - rows_h;   // map panel
     d.setColor(DisplayDriver::LIGHT);
     d.drawSoftRect(0, top, pw, ph);
     if (!drawMapPreview(d, 2, top + 2, pw - 4, ph - 4)) {
@@ -989,9 +1018,9 @@ public:
     }
 
     // The column: four rows, always, like the Status tiles.
-    const int cx = pw + 3, cw = W - cx;
-    const int row_h = ph / 4;
-    int y = top + (row_h - lh) / 2 + 1;
+    const int cx = tall ? 2 : pw + 3, cw = W - cx;
+    const int row_h = tall ? rows_h / 4 : ph / 4;
+    int y = (tall ? top + ph : top) + (row_h - lh) / 2 + 1;
     auto line = [&](const MiniIcon& ic, const char* text) {
       miniIconDraw(d, cx, y, ic);
       const int tx = cx + ic.w * s + 2 * s;
@@ -1051,6 +1080,25 @@ public:
   // ── Clock page: the big clock, a seconds bar under it, the date, and the
   // clock fields (Settings) as columns along the bottom, name over value.
   // Without fields the clock and date sit in the middle.
+  // The days left this month the alarm goes off on, as calendar::draw()'s
+  // marks: the repeat days, or a one-shot's next (today or tomorrow).
+  uint32_t alarmDays(const struct tm& t) const {
+    if (!_node_prefs || !_node_prefs->alarm_on) return 0;
+    const int n = calendar::daysIn(t.tm_year, t.tm_mon);
+    const uint8_t mask = _node_prefs->alarm_repeat_mask;
+    const bool passed = t.tm_hour * 60 + t.tm_min >= _node_prefs->alarm_hour * 60 + _node_prefs->alarm_min;
+    uint32_t days = 0;
+    for (int day = t.tm_mday; day <= n; day++) {
+      if (day == t.tm_mday && passed) continue;
+      const int wday = (t.tm_wday + day - t.tm_mday) % 7;
+      if (mask ? (mask & (1 << wday)) : true) {
+        days |= 1UL << (day - 1);
+        if (!mask) break;   // one-shot: only the next
+      }
+    }
+    return days;
+  }
+
   void drawClockPage(DisplayDriver& d, uint32_t unix_ts) {
     struct tm ti;
     localTm(unix_ts, _node_prefs ? _node_prefs->tz_offset_hours : 0, ti);
@@ -1066,7 +1114,7 @@ public:
 
     int date_y;
     if (d.height() > d.width()) {   // portrait e-ink: stacked digits
-      date_y = drawClockTall(d, 0, &ti, h12);
+      date_y = drawClockTall(d, lh / 2, &ti, h12);
     } else {
       const BigClock bc = bigClockSize(d);
       const int bar = 3 * bc.sc / 2;              // the seconds bar and its gaps
@@ -1087,6 +1135,12 @@ public:
     char buf[24];
     snprintf(buf, sizeof(buf), "%s %d %s %d", WDAY[ti.tm_wday], ti.tm_mday, MON[ti.tm_mon], 1900 + ti.tm_year);
     d.drawTextCentered(W / 2, date_y, buf);
+
+    // A tall screen (portrait e-ink): the month under the date, in the room
+    // above the clock fields.
+    const int cal_top = date_y + lh + lh / 2 + 2;
+    const int cal_bottom = nf ? H - 2 * lh - 1 - lh / 2 : H;
+    if (H > W && calendar::height(d, ti) <= cal_bottom - cal_top) calendar::draw(d, 0, cal_top, W, ti, alarmDays(ti));
 
     if (nf == 0) return;
     refresh_sensors();
@@ -1173,8 +1227,9 @@ public:
         char buf[16];
         snprintf(buf, sizeof(buf), "%s %d %s", WDAY[ti.tm_wday], ti.tm_mday, MON[ti.tm_mon]);
         d.drawTextCentered(W / 2, date_y, buf);
+        if (H > W) drawLockTallExtras(d, date_y + lh + lh / 2 + 2, hint ? pill_y - 3 : H, ti, unread);
       }
-      if (!hint && unread > 0) snprintf(pill, sizeof(pill), "%d%s new", unread, _task->getAnyUnreadOverflow() ? "+" : "");
+      if (!hint && unread > 0 && !(synced && H > W)) snprintf(pill, sizeof(pill), "%d%s new", unread, _task->getAnyUnreadOverflow() ? "+" : "");
     }
 
     if (hint) {
@@ -1192,6 +1247,40 @@ public:
     d.setColor(DisplayDriver::DARK);
     d.drawTextCentered(W / 2, pill_y + 2, pill);
     d.setColor(DisplayDriver::LIGHT);
+  }
+
+  // Under a tall lock clock (portrait e-ink), between y and bottom: the month,
+  // then a row each for unread messages, the armed alarm and the clock fields
+  // -- the rows first, the calendar only if there's room for it as well.
+  void drawLockTallExtras(DisplayDriver& d, int y, int bottom, const struct tm& ti, int unread) {
+    const int W = d.width(), m = W / 16, step = d.lineStep(), s = miniIconScale(d);
+    struct Row { const MiniIcon* ic; const char* label; char value[20]; } rows[6];
+    int n = 0;
+    auto add = [&](const MiniIcon* ic, const char* label) -> char* {
+      rows[n].ic = ic; rows[n].label = label; rows[n].value[0] = 0;
+      return rows[n++].value;
+    };
+    if (unread > 0)
+      snprintf(add(&ICON_PG_MSG, "Messages"), sizeof(rows[0].value), "%d%s new", unread, _task->getAnyUnreadOverflow() ? "+" : "");
+    if (_node_prefs && _node_prefs->alarm_on)
+      snprintf(add(&ICON_ALARM, "Alarm"), sizeof(rows[0].value), "%02d:%02d", _node_prefs->alarm_hour, _node_prefs->alarm_min);
+    uint8_t fields[3];
+    const int nf = clockFields(fields);
+    if (nf) refresh_sensors();
+    for (int k = 0; k < nf && n < 6; k++) {
+      if (fields[k] == telemetry::MSGS && unread > 0) continue;   // already a row
+      clockFieldValue(fields[k], add(nullptr, telemetry::LABEL[fields[k]]), sizeof(rows[0].value));
+    }
+    const int rows_h = n * step;
+    if (calendar::height(d, ti) + d.getLineHeight() / 2 + rows_h <= bottom - y) {
+      calendar::draw(d, 0, y, W, ti, alarmDays(ti));
+      y += calendar::height(d, ti) + d.getLineHeight() / 2;
+    }
+    for (int k = 0; k < n && y + d.getLineHeight() <= bottom; k++, y += step) {
+      int x = m;
+      if (rows[k].ic) { miniIconDraw(d, x, y, *rows[k].ic); x += rows[k].ic->w * s + 2 * s; }
+      info::valueRow(d, y, rows[k].label, rows[k].value, false, m - 2, x);
+    }
   }
 
   // The Status page: four tiles split by dotted rules, each one subject's
@@ -1286,8 +1375,11 @@ public:
     // gap scale with the font so the band clears the header above and content
     // below (identical to the old lh+4 / +6 dots layout at 1x).
     const int pg_half   = (5 * miniIconScale(display) + 1) / 2;
-    const int dots_y    = lh + pg_half + 1;       // icon-row centre, below the header
-    const int content_y = dots_y + pg_half + 3;   // first content row, below the icons (= contentTop())
+    const bool one_row  = stripOnHeader(display); // the icons on the header line
+    const int dots_y    = one_row ? lh / 2 : lh + pg_half + 1;   // icon-row centre
+    const int content_y = contentTop(display);    // first content row, below the icons
+    const int strip_l   = display.width() / 2 - stripHalfW(display);
+    const int strip_r   = display.width() / 2 + stripHalfW(display);
     const float slide   = slideProgress();        // -1, or how far a page turn has got
 
     // Title bar displaying node name (except on lock screen), status icons and battery.
@@ -1296,8 +1388,9 @@ public:
       display.setColor(DisplayDriver::LIGHT);
       // The lock page has nothing on the left of the bar (its clock sits
       // below it), so the status icons may use the whole row.
-      const int lock_reserve = _page == LOCK ? 0 : -1;
+      const int lock_reserve = _page == LOCK ? 0 : one_row ? strip_r + 2 : -1;
       int rightEdge = renderBatteryIndicator(display, _task->getBattMilliVolts(), lock_reserve);
+      if (one_row && _page != LOCK) rightEdge = strip_l;   // the time stops at the icons
       display.setColor(DisplayDriver::LIGHT);
 
       if (_page != LOCK) {
@@ -1391,7 +1484,7 @@ public:
     } else if (isQuickPage(_page) && !(_page == HomePage::SHUTDOWN && _shutdown_init)) {
       display.setColor(DisplayDriver::LIGHT);
       display.setTextSize(1);
-      QRow rows[3];
+      QRow rows[QUICK_MAX];
       const int n = buildQuick(_page, rows);
       int q = drawQuickPanel(display, content_y, rows, n);
       if (_page == HomePage::TOOLS && _task->isTimerRunning()) q = 1000;   // the timer's countdown
@@ -1439,6 +1532,8 @@ public:
         uint8_t unread   = 0;
         bool    overflow = false;
         bool    resolved = false;
+        uint32_t last_ts = 0;                 // heard from / last post, for a tall card
+        int32_t  plat = 0, plon = 0;          // a contact's advertised position
 
         if (prefix && _task->favouriteSlotKind(i) == NodePrefs::FAV_KIND_CHANNEL) {
           uint8_t ch_idx = prefix[0];
@@ -1451,6 +1546,11 @@ public:
             unread   = _task->getChannelUnread(ch_idx);
             overflow = unread > 0 && _task->getChannelUnreadOverflow(ch_idx);
             resolved = true;
+            MessageHistory& h = _task->core().history;
+            for (int j = 0; j < h.chHistCount(); j++) {
+              const ChHistEntry& e = h.chAtPos(h.chHistPosNewest(j));
+              if (e.ch_idx == ch_idx) { last_ts = e.timestamp; break; }
+            }
           }
         } else if (prefix) {
           for (int idx = 0; ; idx++) {
@@ -1461,6 +1561,8 @@ public:
               unread   = _task->getDMUnread(c.id.pub_key);
               overflow = unread > 0 && _task->getDMUnreadOverflow(c.id.pub_key);
               resolved = true;
+              last_ts  = c.lastmod;
+              plat = c.gps_lat; plon = c.gps_lon;
               break;
             }
           }
@@ -1479,13 +1581,41 @@ public:
           // Reserve space for the unread badge so the name's ellipsis lands
           // before it instead of underneath. Badge and name share one baseline.
           int  bw = unread > 0 ? display.unreadBadgeWidth(unread, overflow) + 3 : 0;  // badge + 3 px gap
-          int name_y     = ty + (th - line_h) / 2;
+          // A tall card (e-ink) has the name at the top and lines of detail
+          // under it: when it was last heard (a channel: its last post) and,
+          // for a contact with a position, how far away it is.
+          const bool tall = th >= 3 * line_h + 6;
+          int name_y     = tall ? ty + 3 : ty + (th - line_h) / 2;
           int name_max_w = tw - 6 - bw;
           if (name_max_w < 6) name_max_w = 6;
           int r = display.drawTextEllipsized(tx + 3, name_y, name_max_w, name, sel);
           if (sel && r > 0) mq_delay = r;
           if (unread > 0)
             display.drawUnreadBadge(tx + tw - 3, name_y, unread, sel, overflow);
+          if (tall) {
+            display.setColor(sel ? DisplayDriver::DARK : DisplayDriver::LIGHT);   // the badge leaves its own
+            const int s = miniIconScale(display), gap = line_h / 3;
+            int y = name_y + line_h + gap;
+            auto detail = [&](const MiniIcon& ic, const char* text) {
+              if (y + line_h > ty + th - 2) return;
+              miniIconDraw(display, tx + 3, y, ic);
+              const int x = tx + 3 + ic.w * s + 2 * s;
+              display.drawTextEllipsized(x, y, tx + tw - 3 - x, text);
+              y += line_h + gap;
+            };
+            char buf[16];
+            const uint32_t now = rtc_clock.getCurrentTime();
+            if (last_ts) {
+              geo::fmtAgeShort(buf, sizeof(buf), now, last_ts);
+              detail(prefix && _task->favouriteSlotKind(i) == NodePrefs::FAV_KIND_CHANNEL ? ICON_PG_MSG : ICON_PG_CLOCK, buf);
+            }
+            int32_t mla, mlo;
+            if ((plat || plon) && _task->currentLocation(mla, mlo)) {
+              // The distance after an arrow towards it (north up).
+              geo::fmtDist(buf, sizeof(buf), geo::haversineKm(mla, mlo, plat, plon), _task->useImperial(), true);
+              detail(*ICON_ARROWS[((geo::bearingDeg(mla, mlo, plat, plon) + 22) % 360) / 45], buf);
+            }
+          }
         } else {
           display.drawTextCentered(tx + tw / 2, ty + (th - line_h) / 2, "+");
         }
@@ -1588,7 +1718,7 @@ public:
     if (isQuickPage(_page) && _quick_edit) {
       // Changing a bar: shown live, saved once on the way out.
       if ((c == KEY_LEFT || c == KEY_RIGHT) && _node_prefs) {
-        QRow rows[3];
+        QRow rows[QUICK_MAX];
         const int n = buildQuick(_page, rows);
         const QAct act = n > 0 ? rows[_quick_sel < n ? _quick_sel : n - 1].act : QA_NONE;
         const int d = c == KEY_RIGHT ? 1 : -1;
@@ -1615,7 +1745,7 @@ public:
       return true;   // nothing else while editing
     }
     if (isQuickPage(_page)) {
-      QRow rows[3];
+      QRow rows[QUICK_MAX];
       const int n = buildQuick(_page, rows);
       if (c == KEY_UP)   { if (_quick_sel > 0) _quick_sel--; return true; }
       if (c == KEY_DOWN) { if (_quick_sel + 1 < n) _quick_sel++; return true; }
