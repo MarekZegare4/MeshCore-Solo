@@ -79,7 +79,13 @@ struct FullscreenMsgView {
         // for it (it's below the font's first codepoint), so it also ate width.
         if (cp == '\n' || cp == '\r') { brk = cp_start; break; }
         uint16_t cw = display.getCodepointWidth(cp);
-        if (width + cw > max_px && cp_start > seg) { p = cp_start; break; }
+        if (width + cw > max_px && cp_start > seg) {
+          // A space that doesn't fit is where this line ends: the word before
+          // it fits whole, so it stays here instead of moving down.
+          if (cp == ' ') last_sp = cp_start;
+          p = cp_start;
+          break;
+        }
         if (cp == ' ') last_sp = cp_start;
         width   += cw;
         last_fit = p;
