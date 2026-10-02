@@ -105,7 +105,12 @@ namespace skyview {
     d.setCursor(x0, y); d.print(buf);
     y += step;
     if (g.ttff_ms) snprintf(buf, sizeof(buf), "TTFF %lus", (unsigned long)(g.ttff_ms / 1000));
-    else if (g.start_ms) snprintf(buf, sizeof(buf), "Wait %lus", (unsigned long)((millis() - g.start_ms) / 1000));
+    else if (g.start_ms) {
+      const unsigned long s = (millis() - g.start_ms) / 1000;
+      if (!d.isEink()) snprintf(buf, sizeof(buf), "Wait %lus", s);
+      else if (s < 60) snprintf(buf, sizeof(buf), "Wait <1m");   // in minutes, as the panel refreshes
+      else             snprintf(buf, sizeof(buf), "Wait %lum", s / 60);
+    }
     else buf[0] = 0;
     d.setCursor(x0, y); d.print(buf);
   }
@@ -178,7 +183,7 @@ namespace skyview {
     }
     if (signal) renderSignal(d, *g, top);
     else renderSky(d, *g, top);
-    return 1000;
+    return d.isEink() ? 15000 : 1000;   // the sky shifts slowly; each e-ink redraw is a refresh
   }
 
 }  // namespace skyview

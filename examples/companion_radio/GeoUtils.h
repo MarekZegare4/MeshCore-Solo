@@ -72,11 +72,16 @@ static inline void fmtDist(char* buf, int n, float km, bool imperial, bool space
 // sender's clock runs a little fast, or ours hasn't synced yet) clamps to
 // "0s" instead of going blank, since it did just arrive. Takes `now` rather
 // than reading the RTC itself, so this stays a pure function like the rest
-// of this file.
+// of this file. An e-ink build says "<1m" for the first minute: a count of
+// seconds would refresh the panel every second.
 static inline void fmtAgeShort(char* buf, int n, uint32_t now, uint32_t lastmod) {
   if (lastmod == 0) { buf[0] = '\0'; return; }
   uint32_t age = (now > lastmod) ? (now - lastmod) : 0;
+#if defined(EINK_DISPLAY_MODEL)
+  if      (age < 60)    snprintf(buf, n, "<1m");
+#else
   if      (age < 60)    snprintf(buf, n, "%us", (unsigned)age);
+#endif
   else if (age < 3600)  snprintf(buf, n, "%um", (unsigned)(age / 60));
   else if (age < 86400) snprintf(buf, n, "%uh", (unsigned)(age / 3600));
   else                  snprintf(buf, n, "%ud", (unsigned)(age / 86400));
