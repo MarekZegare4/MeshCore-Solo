@@ -1,3 +1,54 @@
+## MeshCore Solo Companion Firmware v2.0-rc1
+
+A release candidate for 2.0: please report anything that looks wrong before the final release.
+
+> [!WARNING]
+> **Your settings start again from the defaults.** 2.0 stores its settings in a new format, so it cannot read the old file. It does keep the node's name and position, its radio settings (frequency, bandwidth, spreading factor, coding rate, TX power), the Bluetooth PIN and the default scope. Your identity, contacts, channels, scope list, waypoints and saved trails stay as they are. You do not need to erase the flash.
+>
+> **Wio Tracker L2: install this release by hand.** Settings › Firmware update only offers final releases, never a release candidate.
+
+### What's new
+
+- **Wio Tracker L2 is supported**, with a new colour touch interface built for its 320×240 screen:
+  - Home: a phone-style home screen with the clock, telemetry, a small map and the apps; you can arrange the apps.
+  - Map: an offline map from the microSD card, downloaded on the device over WiFi, with hiking trails, a grid, a scale bar and saved trails.
+  - Messages: message history kept on the SD card.
+  - GPS: a sky plot of the satellites.
+  - Diagnostics: an RF noise tab and history charts.
+  - Clock: alarm, timer, stopwatch and a calendar.
+  - Also: a screen PIN, screenshots, the SD card as a USB drive, and firmware updates from GitHub over WiFi.
+- **Two Wio Tracker L1 E-ink builds:**
+  - Landscape, with a larger 8×13 font.
+  - Portrait, which uses the tall screen for whole message bubbles, a trail map with a height profile, and the clock, calendar and charts.
+- **A refreshed L1 interface:**
+  - Home pages slide sideways and gain quick panels and a map page.
+  - A single Status page and screen replace the Radio, GPS and Sensors pages and Diagnostics.
+  - Settings use one list style throughout, with switches for on/off values.
+  - Popups, alerts and bubbles share one soft-cornered frame.
+  - The screen only redraws the parts that changed.
+- **Pointers to other nodes on every screen size.** Nodes shows an arrow towards each node beside its distance. Node detail shows how many repeaters a message takes to reach that node; the L2 and the E-ink also draw a compass pointing at it.
+- **Trails record altitude**, and a trail's height profile shows the climb and the highest and lowest points (Trail › Trail height on the L1; Map tools on the L2). GPX exports carry the altitude.
+- **A screen-lock PIN.** You can set a PIN that locks the screen, including at boot; the radio and the app link keep working while it is locked. Contributed by @3urobeat.
+- **Quiet hours** mute the device on a schedule and keep the screen dark for new messages. The alarm still rings.
+- **Battery curve editor:** set your cell's voltage at each 10 % step, so the battery percentage matches your battery.
+- **Tools › Satellites on the L1 OLED:** a sky plot and a signal bar for each satellite.
+- **Live location sharing has its own scope and ends by itself.** Each sharing session runs for a set time (1–12 h) and then stops.
+- **Unread counts show a "+"** when a full history has dropped older messages, so the count can be higher than shown.
+
+### Fixes
+
+- **Pwr save (RX duty-cycle) is disabled.** With it on, the radio silently missed every packet from a sender whose preamble length differed from ours, for example a repeater still on pre-v1.16 firmware. Reception could fall from several messages a minute to a few a day.
+- **Signing from the app failed on the L1.** The device promised the app an 8 KB buffer it could not allocate, so every signing request was refused. It now allocates what memory allows and reports that size.
+- **A flood DM's acknowledgement folded into the return path now reaches the screen**, so such a message gets its tick.
+- **The radio stays serviced while the e-ink screen refreshes.** Before, a long refresh could make the device miss packets.
+- **ESP32 boards stay findable over Bluetooth** after the Bluetooth stack restarts, or after a connection that never paired.
+- **On the L1, UI timers survive the millisecond counter wrapping around.** A failed send now keeps the text you typed, and lists stop at their ends.
+- **On-screen keyboard letters could be blank** on some screens.
+- **The hop/ack marker no longer overlaps the age** on long sender names.
+- **The nRF52 builds queue up to 128 messages** for the app while it is disconnected.
+
+---
+
 ## MeshCore Solo Companion Firmware v1.28
 
 ### What's new
