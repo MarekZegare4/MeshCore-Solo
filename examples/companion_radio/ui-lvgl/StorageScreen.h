@@ -355,7 +355,6 @@ void UITask::storageClearHistory() {
   s_archive.clearAll();
   _core->history.clearAll();
   _core->markAllRead();
-  showToast("Message history deleted");
   startWalk();
 }
 

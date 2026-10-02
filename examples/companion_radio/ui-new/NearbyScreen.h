@@ -194,7 +194,6 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
     uint8_t key[PUB_KEY_SIZE];
     memcpy(key, e->pub_key, PUB_KEY_SIZE);
     if (the_mesh.deleteContactByKey(key)) {
-      _task->showAlert("Contact deleted", 1200);
       _detail = false;   // the node this detail/nav view showed is gone
       _nav    = false;
       refresh();
@@ -404,7 +403,6 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
         const Entry* e = selected();
         if (e && e->has_key) {
           if (the_mesh.addDiscoveredContact(e->pub_key, e->name, e->type)) {
-            _task->showAlert("Contact added", 1200);
             refresh();   // now a known contact — re-sort / re-mark this pass
           } else {
             _task->showAlert("Contacts full", 1200);

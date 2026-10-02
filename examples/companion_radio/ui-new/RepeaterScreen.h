@@ -182,7 +182,6 @@ public:
       if (res == KeyboardWidget::DONE) {
         if (_picker.save(p, _task->keyboard().buf, rptTarget(p))) {
           _dirty = true;
-          _task->showAlert("Preset saved", 800);
         }
         _picker.saving = false;
       } else if (res == KeyboardWidget::CANCELLED) {
@@ -224,7 +223,6 @@ public:
             break;
           case RadioPresetPicker::DELETED:
             _dirty = true;
-            _task->showAlert("Preset deleted", 800);
             break;
           case RadioPresetPicker::NONE:
             break;

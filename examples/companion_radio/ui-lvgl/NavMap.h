@@ -540,7 +540,6 @@ void UITask::navPick(int code) {
       if (navmap::s_tb.active()) { navmap::s_tb.stop(); showToast("Track back stopped"); break; }
       _core->locator.clearTarget();
       prefsSave();
-      showToast("Target cleared");
       break;
     case navmap::T_WAYPOINT: {
       if (idx >= _core->waypoints.count()) return;
@@ -734,7 +733,6 @@ void UITask::navWaypointAction(uint8_t act) {
       if (!tapConfirmed(_nav_del_lbl, "Delete?")) break;
       _core->waypoints.remove(i);
       navClosePopup();
-      showToast("Waypoint deleted");
       rebuildMapMarkers();
       layoutMap();
       refreshNavBar();
@@ -1332,7 +1330,6 @@ void UITask::navToolAction(uint8_t act) {
     case navmap::TL_TRAIL_RESET:
       if (!tapConfirmed(_nav_reset_lbl, "Reset?")) return;
       tr.reset();
-      showToast("Trail cleared");
       rebuildMapMarkers();
       layoutMap();
       break;

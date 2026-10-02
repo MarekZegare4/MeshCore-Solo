@@ -140,7 +140,6 @@ public:
       case AdminSession::LOGGED_IN:
         _tab = admin::TAB_SYSTEM;
         _row_sel = _row_scroll = 0;
-        _task->showAlert("Logged in (admin)", 1000);
         break;
       case AdminSession::NOT_ADMIN:     _task->showAlert("Not admin on this node", 1600); returnToOrigin(); break;
       case AdminSession::LOGIN_FAILED:  _task->showAlert("Login failed", 1400); returnToOrigin(); break;

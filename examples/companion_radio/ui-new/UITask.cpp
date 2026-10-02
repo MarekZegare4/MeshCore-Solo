@@ -1553,9 +1553,6 @@ public:
           }
           _task->clearFavouriteSlot(_pin_target_slot);
           the_mesh.savePrefs();
-          char alert[24];
-          snprintf(alert, sizeof(alert), "Unpinned (slot %d)", _pin_target_slot + 1);
-          _task->showAlert(alert, 800);
         }
         if (res != PopupMenu::NONE) _pin_target_slot = -1;
         return true;

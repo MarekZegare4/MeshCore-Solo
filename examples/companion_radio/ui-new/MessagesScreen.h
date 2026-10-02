@@ -1043,7 +1043,6 @@ public:
       the_mesh.savePrefs();
     }
     _pick_target = false;
-    _task->showAlert("Share target set", 1200);
     _task->gotoLiveShareScreen();
   }
 
@@ -1086,7 +1085,6 @@ public:
       the_mesh.savePrefs();
     }
     _pick_bot_channel = false;
-    _task->showAlert("Bot channel set", 1200);
     _task->gotoBotScreen();
   }
 
@@ -1112,7 +1110,6 @@ public:
     }
     _pick_bot_room = false;
     _room_mode = false;
-    _task->showAlert("Bot room set", 1200);
     _task->gotoBotScreen();
   }
 
@@ -1130,7 +1127,6 @@ public:
       the_mesh.savePrefs();
     }
     _pick_target = false;
-    _task->showAlert("Share target set", 1200);
     _task->gotoLiveShareScreen();
   }
 
@@ -1961,7 +1957,6 @@ public:
               } else if (sel != _ctx_fav_idx) {
                 // Logout: only reachable when isRoomLoggedIn() added this item.
                 _task->core().rooms.logout(_sel_contact.id.pub_key);
-                _task->showAlert("Logged out", 1000);
               }
               // Fav is a value row -- Enter never selects it (see cycleRoomCtxValue).
             }
@@ -2132,7 +2127,6 @@ public:
           // Delete/Cancel sub-menu, defaults to Cancel (see where it's opened).
           if (res == PopupMenu::SELECTED && _ctx_menu.selectedIndex() == 0) {   // "Delete"
             chanctl::remove(_ctx_ch_idx);
-            _task->showAlert("Channel deleted", 1000);
           }
           if (res != PopupMenu::NONE) {
             _ch_delete_confirm_active = false;

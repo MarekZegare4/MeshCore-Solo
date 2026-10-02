@@ -383,5 +383,4 @@ void UITask::diagReset() {
   diag::resetCounters();
   navClosePopup();
   refreshDiag();
-  showToast("Counters reset");
 }

@@ -271,7 +271,6 @@ private:
   }
   void handleReset() {
     _task->core().trail.reset();
-    _task->showAlert("Trail reset", 800);
   }
   void handleSave() {
     TrailEngine::FileResult r = _task->core().trail.save();

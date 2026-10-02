@@ -746,7 +746,6 @@ public:
           }
           _edit_lock_pass = false;
           _lock_pass_first[0] = '\0';
-          _task->showAlert("PIN set", 900);
         }
       } else if (res == KeyboardWidget::CANCELLED) {
         _edit_lock_pass = false;
@@ -837,7 +836,6 @@ public:
       if (res == KeyboardWidget::DONE) {
         if (p && _picker.save(p, _kb->buf, radioTarget(p))) {
           _dirty = true;
-          _task->showAlert("Preset saved", 800);
         }
         _picker.saving = false;
       } else if (res == KeyboardWidget::CANCELLED) {
@@ -862,7 +860,6 @@ public:
             break;
           case RadioPresetPicker::DELETED:
             _dirty = true;
-            _task->showAlert("Preset deleted", 800);
             break;
           case RadioPresetPicker::NONE:
             break;
@@ -981,7 +978,6 @@ public:
       if (_task->passwordLockEnabled()) {
         _task->setNodeLockPassword("");
         the_mesh.savePrefs();
-        _task->showAlert("PIN cleared", 900);
       } else {
         _edit_lock_pass = true;
         _lock_pass_first[0] = '\0';

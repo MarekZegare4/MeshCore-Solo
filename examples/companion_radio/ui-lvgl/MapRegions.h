@@ -91,7 +91,6 @@ void UITask::mapRegionAction(uint8_t act) {
       mapview::labels::flush();
       mapview::s_cache.invalidate();
       mapRegionsPopup();
-      showToast("Region deleted");
       return;
     }
   }

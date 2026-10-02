@@ -145,7 +145,6 @@ void UITask::channelAction(uint8_t act) {
       if (!tapConfirmed(s_del_lbl, "Delete?")) break;
       chanctl::remove(idx);
       navClosePopup();
-      showToast("Channel deleted");
       showChats();
       break;
   }

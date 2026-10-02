@@ -3787,7 +3787,6 @@ void UITask::nodeAction(uint8_t action) {
       break;
     case NODE_ADD:
       if (the_mesh.addDiscoveredContact(e.pub_key, e.name, e.type)) {
-        showToast("Contact added");
         _screen = SCR_NEARBY;
         buildNearby();
       } else {
@@ -3826,7 +3825,6 @@ void UITask::nodeAction(uint8_t action) {
         break;
       }
       if (the_mesh.deleteContactByKey(e.pub_key)) {
-        showToast("Contact deleted");
         _screen = SCR_NEARBY;
         buildNearby();
       }

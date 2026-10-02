@@ -384,7 +384,6 @@ public:
       if (res == PopupMenu::SELECTED && _reset_menu.selectedIndex() == 0) {
         diag::resetCounters();
         _last_rx = 0;
-        _task->showAlert("Counters reset", 800);
       }
       return true;
     }

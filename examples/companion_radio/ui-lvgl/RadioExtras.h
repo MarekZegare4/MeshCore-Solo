@@ -99,7 +99,6 @@ void UITask::presetAction(uint8_t act) {
       prefsSave();
       navClosePopup();
       rebuildRadio();
-      showToast("Preset deleted");
       break;
   }
 }
@@ -217,7 +216,6 @@ void UITask::scopeAction(uint8_t act) {
       if (s_scope > 0) the_mesh.removeScope((uint8_t)s_scope);
       navClosePopup();
       buildScopes();
-      showToast("Scope deleted");
       break;
   }
 }
