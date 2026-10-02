@@ -38,12 +38,18 @@ static uint32_t s_since = 0;         // WiFi connect start / restart countdown
 static bool s_newer = false;         // the release is newer than this build
 static uint8_t s_job = 0;            // what the task does once the WiFi is up: 1 check, 2 install
 
-// "v1.28" / "1.28.3" -> comparable number; 0 when it isn't a version (a dev build).
+// "v1.28" / "1.28.3" / "v2.0-rc1" -> comparable number; 0 when it isn't a
+// version (a dev build). A release candidate comes before its release
+// (v2.0-rc1 < v2.0-rc2 < v2.0).
 static uint32_t versionNum(const char* v) {
   if (*v == 'v' || *v == 'V') v++;
-  unsigned a = 0, b = 0, c = 0;
+  unsigned a = 0, b = 0, c = 0, rc = 0;
   int n = sscanf(v, "%u.%u.%u", &a, &b, &c);
-  return n >= 2 ? (a << 20) | (b << 10) | c : 0;
+  if (n < 2) return 0;
+  const char* r = strstr(v, "-rc");
+  if (r) rc = (unsigned)atoi(r + 3);
+  if (rc > 62) rc = 62;
+  return (a << 22) | ((b & 1023) << 12) | ((c & 63) << 6) | (r ? rc : 63);
 }
 
 #if OTA_SUPPORTED
