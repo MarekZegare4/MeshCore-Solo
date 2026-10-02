@@ -173,7 +173,7 @@ class MessagesScreen : public UIScreen {
   }
 
   // Scrollbar metrics for boxes of varying height (h(idx, reserve) px each,
-  // `gap` px apart): the same fit test as the portrait path below.
+  // `gap` px apart): the same fit test as the expanded path below.
   template <class GetH>
   HistScroll computeHistScrollH(DisplayDriver& display, int count, int scroll, int hist_start_y, int cby,
                                 int gap, GetH h) {
@@ -200,7 +200,7 @@ class MessagesScreen : public UIScreen {
   // this function doesn't reprocess it, so a mismatch here just means this sizing
   // pass and the real render disagree on line count.
   template <class GetBody>
-  HistScroll computeHistScroll(DisplayDriver& display, bool portrait, int count, int scroll,
+  HistScroll computeHistScroll(DisplayDriver& display, bool expand, int count, int scroll,
                                int hist_start_y, int cby, int lh, GetBody getBody) {
     HistScroll r{};
     const int fixed_bh = 2 * lh + 1;
@@ -209,7 +209,7 @@ class MessagesScreen : public UIScreen {
     if (r.view_px < 1) r.view_px = 1;
     const int col = scrollIndicatorColWidth(display);
 
-    if (!portrait) {                          // uniform boxes → exact pixel math
+    if (!expand) {                            // uniform boxes → exact pixel math
       const int box = fixed_bh + 1;
       r.total_px  = (long)count * box;
       r.scroll_px = (long)scroll * box;
@@ -219,13 +219,10 @@ class MessagesScreen : public UIScreen {
       return r;
     }
 
-    const int sp = 2;                         // portrait inter-box spacing
+    const int sp = 2;                         // expanded inter-box spacing
     auto boxH = [&](int idx, int rsv) -> int {
       const char* body = getBody(idx);
-      if (!body) return fixed_bh;
-      display.translateUTF8ToBlocks(s_wrap_trans, body, sizeof(s_wrap_trans));
-      int nl = FullscreenMsgView::wrapLines(display, s_wrap_trans, display.width() - 6 - rsv, s_wrap_lines, 8);
-      return (1 + (nl > 0 ? nl : 1)) * lh + 1;
+      return body ? expandedBoxH(display, body, display.width() - rsv) : fixed_bh;
     };
     // Scrollbar-needed test at the WIDEST layout (reserve 0 → fewest wrap lines →
     // shortest total). If even this overflows the list area the gutter is truly
@@ -546,6 +543,17 @@ class MessagesScreen : public UIScreen {
     if (gutter < 8) gutter = 8;
     int w = full_avail - gutter;
     return w < 1 ? 1 : w;
+  }
+  // Whether the history shows each message whole (wrapped, a box as tall as
+  // it needs) rather than as compact fixed boxes: on a screen of nine lines
+  // or more (the e-ink panels either way up), not on a 7-line OLED.
+  static bool expandHistory(DisplayDriver& d) { return d.height() / d.getLineHeight() >= 9; }
+  // An expanded box's height: its header line, then `body` wrapped at the
+  // width it's drawn in -- the bubble's own, inside `full_avail`.
+  static int expandedBoxH(DisplayDriver& d, const char* body, int full_avail) {
+    d.translateUTF8ToBlocks(s_wrap_trans, body, sizeof(s_wrap_trans));
+    int nl = FullscreenMsgView::wrapLines(d, s_wrap_trans, bubbleMaxW(d, full_avail) - 6, s_wrap_lines, 8);
+    return (1 + (nl > 0 ? nl : 1)) * d.getLineHeight() + 1;
   }
   static BubbleBox computeBubbleBox(int full_avail, int max_w, bool outgoing, int header_w, int body_w) {
     int w = header_w > body_w ? header_w : body_w;
@@ -1358,14 +1366,14 @@ public:
       uint32_t now_ts = rtc_clock.getCurrentTime();
       bool is_room = (_sel_contact.type == ADV_TYPE_ROOM);
 
-      // Portrait e-ink (height > width): variable-height boxes that show the full
-      // wrapped message text. All other displays/orientations: compact 2-line boxes.
-      bool portrait_expand = (display.height() > display.width());
+      // On a tall enough screen (expandHistory): boxes as tall as their whole
+      // wrapped text. Otherwise compact 2-line boxes.
+      const bool expand = expandHistory(display);
       // A DM bubble on a compact screen carries no sender line: one line of
       // text with the delivery / hop marker and the age at its end, growing to
       // two lines (marker and age ending the second) when the text is longer.
       // Rooms keep the author line above the text.
-      const bool compact_dm = !is_room && !portrait_expand;
+      const bool compact_dm = !is_room && !expand;
       const int MAX_VIS_BOXES = 8;
       int box_ys[MAX_VIS_BOXES], box_hs[MAX_VIS_BOXES], n_vis = 0;
 
@@ -1402,7 +1410,7 @@ public:
       // don't reflow their width as messages arrive.
       HistScroll hs = compact_dm
           ? computeHistScrollH(display, dm_count, _dm_hist_scroll, hist_start_y, cby, 1, compactH)
-          : computeHistScroll(display, portrait_expand, dm_count, _dm_hist_scroll,
+          : computeHistScroll(display, expand, dm_count, _dm_hist_scroll,
           hist_start_y, cby, lh,
           [&](int idx) -> const char* {
             // Must match the per-item body extraction below (dmDisplayParts +
@@ -1419,18 +1427,16 @@ public:
         // messenger, instead of newest-at-top. box_ys[i] still corresponds
         // to item (_dm_hist_scroll + i), same as before; only its y flips.
         const int fixed_bh = 2 * lh + 1;
-        const int box_gap = portrait_expand ? 2 : 1;
+        const int box_gap = expand ? 2 : 1;
         int cur_y = cby - box_gap;   // reserve the same gap against compose as between boxes
         for (int ii = 0; ii < MAX_VIS_BOXES && (_dm_hist_scroll + ii) < dm_count; ii++) {
           int bh = compact_dm ? compactH(_dm_hist_scroll + ii, reserve) : fixed_bh;
-          if (portrait_expand) {
+          if (expand) {
             int rp = _history.dmHistEntryForContact(_sel_contact.id.pub_key, _dm_hist_scroll + ii);
             if (rp >= 0) {
               char hsb[33];
               const char* hbody = skipReplyPrefix(dmDisplayParts(_history.dmAtPos(rp), is_room, filtered_name, hsb, sizeof(hsb)));
-              display.translateUTF8ToBlocks(s_wrap_trans, hbody, sizeof(s_wrap_trans));
-              int nl = FullscreenMsgView::wrapLines(display, s_wrap_trans, display.width() - 6 - reserve, s_wrap_lines, 8);
-              bh = (1 + (nl > 0 ? nl : 1)) * lh + 1;
+              bh = expandedBoxH(display, hbody, display.width() - reserve);
             }
           }
           int box_top = cur_y - bh;
@@ -1523,7 +1529,7 @@ public:
         int mk_gap = (ack_w > 0 && age_w > 0) ? 2 : 0;
         int header_w = 3 + (sender[0] ? display.getTextWidth(sender) : -3) + ack_w + mk_gap + age_w + 3;
         int body_w, nl = 0;
-        if (portrait_expand) {
+        if (expand) {
           display.translateUTF8ToBlocks(s_wrap_trans, body, sizeof(s_wrap_trans));
           nl = FullscreenMsgView::wrapLines(display, s_wrap_trans, max_w - 6, s_wrap_lines, 8);
           body_w = 0;
@@ -1558,7 +1564,7 @@ public:
         if (age[0]) { display.setCursor(box.x + box.w - age_w, y + 1); display.print(age); }
         // Ink is already LIGHT (unselected) or DARK (selected) from
         // drawHistRowFrame above, and nothing since has changed it.
-        if (portrait_expand) {
+        if (expand) {
           for (int li = 0; li < nl; li++) { display.setCursor(box.x + 3, y + (li + 1) * lh + 1); display.print(s_wrap_lines[li]); }
         } else {
           // Suppress this row's own marquee while _ctx_menu (Path/Relayed by,
@@ -1657,13 +1663,13 @@ public:
       int ch_hist_count = _history.histCountForChannel(_sel_channel_idx);
       uint32_t now_ts = rtc_clock.getCurrentTime();
 
-      // Portrait e-ink (height > width): variable-height boxes that show the full
-      // wrapped message text. All other displays/orientations: compact 2-line boxes.
-      bool portrait_expand = (display.height() > display.width());
+      // On a tall enough screen (expandHistory): boxes as tall as their whole
+      // wrapped text. Otherwise compact 2-line boxes.
+      const bool expand = expandHistory(display);
       const int MAX_VIS_BOXES = 8;
       int box_ys[MAX_VIS_BOXES], box_hs[MAX_VIS_BOXES], n_vis = 0;
       // Fixed-track scrollbar metrics + stable gutter reserve (see DM history above).
-      HistScroll hs = computeHistScroll(display, portrait_expand, ch_hist_count, _hist_scroll,
+      HistScroll hs = computeHistScroll(display, expand, ch_hist_count, _hist_scroll,
           hist_start_y, cby, lh,
           [&](int idx) -> const char* {
             int rp = _history.histEntryForChannel(_sel_channel_idx, idx);
@@ -1678,19 +1684,17 @@ public:
         // history block above for why (newest at the bottom, like a typical
         // messenger). box_ys[i] still corresponds to item (_hist_scroll + i).
         const int fixed_bh = 2 * lh + 1;
-        const int box_gap = portrait_expand ? 2 : 1;
+        const int box_gap = expand ? 2 : 1;
         int cur_y = cby - box_gap;   // reserve the same gap against compose as between boxes
         for (int ii = 0; ii < MAX_VIS_BOXES && (_hist_scroll + ii) < ch_hist_count; ii++) {
           int bh = fixed_bh;
-          if (portrait_expand) {
+          if (expand) {
             int rp = _history.histEntryForChannel(_sel_channel_idx, _hist_scroll + ii);
             if (rp >= 0) {
               const char* rtext = _history.chAtPos(rp).text;
               const char* rsep = strstr(rtext, ": ");
               const char* rbody = rsep ? rsep + 2 : rtext;
-              display.translateUTF8ToBlocks(s_wrap_trans, skipReplyPrefix(rbody), sizeof(s_wrap_trans));
-              int nl = FullscreenMsgView::wrapLines(display, s_wrap_trans, display.width() - 6 - reserve, s_wrap_lines, 8);
-              bh = (1 + (nl > 0 ? nl : 1)) * lh + 1;
+              bh = expandedBoxH(display, skipReplyPrefix(rbody), display.width() - reserve);
             }
           }
           int box_top = cur_y - bh;
@@ -1752,7 +1756,7 @@ public:
         int mk_gap = (ack_w > 0 && age_w > 0) ? 2 : 0;
         int header_w = 3 + (sender[0] ? display.getTextWidth(sender) : -3) + ack_w + mk_gap + age_w + 3;
         int body_w, nl = 0;
-        if (portrait_expand) {
+        if (expand) {
           display.translateUTF8ToBlocks(s_wrap_trans, body, sizeof(s_wrap_trans));
           nl = FullscreenMsgView::wrapLines(display, s_wrap_trans, max_w - 6, s_wrap_lines, 8);
           body_w = 0;
@@ -1782,7 +1786,7 @@ public:
         if (age[0]) { display.setCursor(box.x + box.w - age_w, y + 1); display.print(age); }
         // Ink is already LIGHT (unselected) or DARK (selected) from
         // drawHistRowFrame above, and nothing since has changed it.
-        if (portrait_expand) {
+        if (expand) {
           for (int li = 0; li < nl; li++) { display.setCursor(box.x + 3, y + (li + 1) * lh + 1); display.print(s_wrap_lines[li]); }
         } else {
           // Suppress this row's own marquee while _ctx_menu (Path/Relayed by,
