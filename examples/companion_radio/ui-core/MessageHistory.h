@@ -184,6 +184,10 @@ public:
     return pos;
   }
 
+  // All channels' entries, newest first (j = 0): ring position for chAtPos().
+  int chHistCount() const { return _hist_count; }
+  int chHistPosNewest(int j) const { return (_hist_head + _hist_count - 1 - j) % CH_HIST_MAX; }
+
   // count history entries for a specific channel
   int histCountForChannel(int ch_idx) const {
     int n = 0;

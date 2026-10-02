@@ -690,7 +690,7 @@ public:
           if (!right[0]) snprintf(right, sizeof(right), "?");   // unknown / RTC not synced
         } else {
           if (e.dist_km >= 0.0f) geo::fmtDist(right, sizeof(right), e.dist_km, useImperial());
-          else                   strncpy(right, "?GPS", sizeof(right));
+          else                   strcpy(right, "-");   // no fix of ours or theirs
         }
         if (right[0]) display.drawTextRightAlign(display.width() - reserve - 2, y, right);
       });

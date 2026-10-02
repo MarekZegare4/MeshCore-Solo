@@ -8,15 +8,19 @@ class AutoAdvertScreen : public UIScreen {
   NodePrefs* _prefs;
   bool       _dirty;
 
+public:
+  // The intervals on offer, shared with the Home Advert panel.
   static const int OPT_COUNT = 8;
   static const uint32_t OPTS[OPT_COUNT];
   static const char*    OPT_LABELS[OPT_COUNT];
-
-  int currentIdx() const {
+  static int indexOf(uint32_t sec) {
     for (int i = 0; i < OPT_COUNT; i++)
-      if (OPTS[i] == _prefs->advert_auto_interval_sec) return i;
+      if (OPTS[i] == sec) return i;
     return 0;
   }
+
+private:
+  int currentIdx() const { return indexOf(_prefs->advert_auto_interval_sec); }
 
 public:
   AutoAdvertScreen(UITask* task, NodePrefs* prefs) : _task(task), _prefs(prefs) {}

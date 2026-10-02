@@ -57,12 +57,6 @@
 #include "../ui-core/Lettering.h"   // boot splash wordmark + lettering (shared with the L2)
 #include "GfxUtils.h"   // gfx::drawLine — connects trail points on the Home map preview
 
-// Blinking status indicators: on for the first half of a 4 s cycle, but e-ink
-// can't repaint fast enough to blink, so it shows them steadily.
-static inline bool blinkOn() {
-  return Features::BLINK_INDICATORS ? ((millis() % 4000) < 2000) : true;
-}
-
 // Boot splash, as on the L2 (ui-lvgl/Splash.h, same lettering from
 // ui-core/Lettering.h): the MeshCore wordmark rising into place, "solo" in its
 // lettering once it has landed, the Solo version, upstream version + build date, and three dots
@@ -349,11 +343,275 @@ class HomeScreen : public UIScreen {
     const uint8_t from = _page;
     _page = navPage(_page, dir);
     if (_page == from) return;
+    _quick_sel = 0;   // a quick panel starts on its first row
     DisplayDriver* d = _task->getDisplay();
     // Pages with the header slide below it; the full-screen clock slides whole.
     const bool whole = from == CLOCK || _page == CLOCK;
     if (d && d->slideBegin(whole ? 0 : contentTop(*d))) {
       _slide_dir = (int8_t)dir; _slide_from = from; _slide_t0 = millis();
+    }
+  }
+
+  unsigned long _advert_sent_ms = 0;   // last advert sent from this page (0: none yet)
+
+  // ── Quick panels: an icon page as two or three rows with margins round
+  // them, the last one opening the full screen. Up/Down picks a row, Enter
+  // acts on it. The rows are the Settings list's own (value, switch, bar).
+  enum QKind : uint8_t { Q_VALUE, Q_SWITCH, Q_BAR, Q_BADGE, Q_MORE };
+  enum QAct  : uint8_t { QA_NONE, QA_MORE, QA_BRIGHTNESS, QA_GPS, QA_CHAT, QA_BT,
+                         QA_ADVERT, QA_AUTO_ADVERT, QA_TOOL, QA_LOCK, QA_HIBERNATE };
+  struct QRow {
+    const char* label;
+    char    value[16];
+    QKind   kind;
+    QAct    act;
+    uint8_t n;          // switch on, bar level, unread count, QA_TOOL's action
+    bool    overflow;   // unread past what the badge can count
+    bool    is_ch;      // QA_CHAT: a channel (ch) or a DM / room (prefix)
+    uint8_t ch;
+    uint8_t prefix[4];
+    char    name[24];   // QA_CHAT: the label's storage
+  };
+  uint8_t _quick_sel = 0;
+  bool    _quick_edit = false;   // the selected row is being changed with Left/Right
+  static bool isQuickPage(int p) {
+    return p == SETTINGS || p == QUICK_MSG || p == BLUETOOTH || p == ADVERT || p == TOOLS || p == SHUTDOWN;
+  }
+
+  // What a tool is doing now, for its row on the Tools panel ("" when it has
+  // nothing running worth telling).
+  void toolState(ToolsScreen::Action a, char* buf, int n) {
+    buf[0] = 0;
+    switch (a) {
+      case ToolsScreen::ACT_TRAIL: {
+        TrailStore& tr = _task->trail();
+        if (tr.isActive()) geo::fmtDist(buf, n, tr.totalDistanceMeters() / 1000.0f, _task->useImperial(), true);
+        else strncpy(buf, "Off", n);
+        break;
+      }
+      case ToolsScreen::ACT_LIVESHARE:
+        strncpy(buf, _node_prefs && _node_prefs->loc_share_enabled ? "On" : "Off", n); break;
+      case ToolsScreen::ACT_LOCATOR:
+        strncpy(buf, _node_prefs && _node_prefs->locator_enabled ? "On" : "Off", n); break;
+      case ToolsScreen::ACT_REPEATER:
+        strncpy(buf, _node_prefs && _node_prefs->client_repeat ? "On" : "Off", n); break;
+      case ToolsScreen::ACT_AUTOADVERT:
+        strncpy(buf, AutoAdvertScreen::OPT_LABELS[AutoAdvertScreen::indexOf(
+                       _node_prefs ? _node_prefs->advert_auto_interval_sec : 0)], n); break;
+      case ToolsScreen::ACT_CLOCK:
+        if (_task->isTimerRunning()) {
+          const uint32_t s = (_task->timerRemainingMs() + 999) / 1000;
+          if (s >= 3600) snprintf(buf, n, "%lu:%02lu:%02lu", (unsigned long)(s / 3600), (unsigned long)(s / 60 % 60), (unsigned long)(s % 60));
+          else           snprintf(buf, n, "%lu:%02lu", (unsigned long)(s / 60), (unsigned long)(s % 60));
+        }
+        break;
+      default: break;
+    }
+    buf[n - 1] = 0;
+  }
+
+  // The two newest conversations, DM / room or channel, newest first.
+  int recentChats(QRow* out, int max) {
+    MessageHistory& h = _task->core().history;
+    struct Cand { bool is_ch; uint8_t ch; uint8_t prefix[4]; uint32_t ts; } c[4];
+    int nc = 0;
+    for (int j = 0; j < h.dmHistCount() && nc < 2; j++) {
+      const DmHistEntry& e = h.dmAtPos(h.dmHistPosNewest(j));
+      bool seen = false;
+      for (int k = 0; k < nc; k++) if (memcmp(c[k].prefix, e.prefix, 4) == 0) seen = true;
+      if (seen) continue;
+      c[nc].is_ch = false; c[nc].ch = 0; memcpy(c[nc].prefix, e.prefix, 4); c[nc].ts = e.timestamp; nc++;
+    }
+    const int nd = nc;
+    for (int j = 0; j < h.chHistCount() && nc < nd + 2; j++) {
+      const ChHistEntry& e = h.chAtPos(h.chHistPosNewest(j));
+      bool seen = false;
+      for (int k = nd; k < nc; k++) if (c[k].ch == e.ch_idx) seen = true;
+      if (seen) continue;
+      c[nc].is_ch = true; c[nc].ch = e.ch_idx; c[nc].ts = e.timestamp; nc++;
+    }
+    for (int a = 0; a < nc; a++)            // newest first
+      for (int b = a + 1; b < nc; b++)
+        if (c[b].ts > c[a].ts) { Cand t = c[a]; c[a] = c[b]; c[b] = t; }
+    const uint32_t now = rtc_clock.getCurrentTime();
+    int n = 0;
+    for (int k = 0; k < nc && n < max; k++) {
+      QRow& r = out[n];
+      memset(&r, 0, sizeof(r));
+      r.act = QA_CHAT; r.is_ch = c[k].is_ch;
+      if (r.is_ch) {
+        ChannelDetails cd;
+        if (!the_mesh.getChannel(c[k].ch, cd) || !cd.name[0]) continue;
+        r.ch = c[k].ch;
+        snprintf(r.name, sizeof(r.name), "#%s", cd.name[0] == '#' ? cd.name + 1 : cd.name);
+        r.n = _task->getChannelUnread(r.ch);
+        r.overflow = r.n > 0 && _task->getChannelUnreadOverflow(r.ch);
+      } else {
+        ContactInfo ci;
+        if (!MessageHistory::contactByPrefix(c[k].prefix, ci)) continue;
+        memcpy(r.prefix, c[k].prefix, 4);
+        snprintf(r.name, sizeof(r.name), "%s", ci.name);
+        r.n = _task->getDMUnread(ci.id.pub_key);
+        r.overflow = r.n > 0 && _task->getDMUnreadOverflow(ci.id.pub_key);
+      }
+      r.label = r.name;
+      if (r.n > 0) r.kind = Q_BADGE;
+      else { r.kind = Q_VALUE; geo::fmtAgeShort(r.value, sizeof(r.value), now, c[k].ts); }
+      n++;
+    }
+    return n;
+  }
+
+  int buildQuick(int page, QRow* rows) {
+    int n = 0;
+    auto add = [&](const char* label, QKind k, QAct a, uint8_t v) {
+      QRow& r = rows[n++];
+      memset(&r, 0, sizeof(r));
+      r.label = label; r.kind = k; r.act = a; r.n = v;
+    };
+    if (page == SETTINGS) {
+#if FEAT_BRIGHTNESS_SETTING
+      add("Brightness", Q_BAR, QA_BRIGHTNESS, _node_prefs ? _node_prefs->display_brightness + 1 : 0);
+#endif
+#if ENV_INCLUDE_GPS == 1
+      if (sensors.getLocationProvider()) add("GPS", Q_SWITCH, QA_GPS, _task->getGPSState() ? 1 : 0);
+#endif
+      add("All settings", Q_MORE, QA_MORE, 0);
+    } else if (page == QUICK_MSG) {
+      n = recentChats(rows, 2);
+      add("All messages", Q_MORE, QA_MORE, 0);
+    } else if (page == BLUETOOTH) {
+      const bool on = _task->isSerialEnabled();
+      add("Bluetooth", Q_SWITCH, QA_BT, on ? 1 : 0);
+      add("Phone", Q_VALUE, QA_NONE, 0);
+      char* v = rows[n - 1].value;
+      if (!on)                            strcpy(v, "-");
+      else if (_task->isBLEConnected())   strcpy(v, "Connected");
+      // The pairing PIN is BLE-specific: show it while BLE is on but not yet
+      // bonded. (Gating on a plain isConnected() broke this on dual builds,
+      // where it's hardcoded true.)
+      else if (the_mesh.getBLEPin() != 0) snprintf(v, sizeof(rows[0].value), "PIN %d", (int)the_mesh.getBLEPin());
+      else                                strcpy(v, "Waiting");
+    } else if (page == ADVERT) {
+      add("Send now", Q_VALUE, QA_ADVERT, 0);
+      if (_advert_sent_ms) {   // when this page last sent one
+        const unsigned long ago = (millis() - _advert_sent_ms) / 60000UL;
+        char* v = rows[n - 1].value;
+        if (ago == 0)      strcpy(v, "sent");
+        else if (ago < 60) snprintf(v, sizeof(rows[0].value), "%lum ago", ago);
+        else               snprintf(v, sizeof(rows[0].value), "%luh ago", ago / 60);
+      }
+      add("Auto", Q_VALUE, QA_AUTO_ADVERT, 0);
+      strcpy(rows[n - 1].value, AutoAdvertScreen::OPT_LABELS[AutoAdvertScreen::indexOf(
+                                  _node_prefs ? _node_prefs->advert_auto_interval_sec : 0)]);
+    } else if (page == TOOLS) {
+      for (int i = 0; i < ToolsScreen::RECENT_MAX; i++) {
+        const ToolsScreen::Action a = ToolsScreen::s_recent[i];
+        add(ToolsScreen::labelOf(a), Q_VALUE, QA_TOOL, (uint8_t)a);
+        toolState(a, rows[n - 1].value, sizeof(rows[0].value));
+      }
+      add("All tools", Q_MORE, QA_MORE, 0);
+    } else if (page == SHUTDOWN) {
+      add("Lock screen", Q_VALUE, QA_LOCK, 0);
+      add("Hibernate", Q_VALUE, QA_HIBERNATE, 0);
+      // The charge left, which is what you weigh before switching off.
+      const int mv = _task->getBattMilliVolts();
+      snprintf(rows[n - 1].value, sizeof(rows[0].value), "%d%%%s",
+               battMvToPercent(mv, _node_prefs ? (int)_node_prefs->low_batt_mv : 0),
+               board.isExternalPowered() ? " USB" : "");
+    }
+    return n;
+  }
+
+  // Small arrows either side of x0..x0+w while Left/Right change a row.
+  static void drawEditArrows(DisplayDriver& d, int x0, int w, int cy, int s) {
+    for (int i = 0; i < 3; i++) {
+      d.fillRect(x0 - 6 * s + i * s, cy - i * s, s, (2 * i + 1) * s);       // ◂
+      d.fillRect(x0 + w + 5 * s - i * s, cy - i * s, s, (2 * i + 1) * s);   // ▸
+    }
+  }
+
+  // The rows, from a gap below the page icons and inset from both sides.
+  int drawQuickPanel(DisplayDriver& d, int top, QRow* rows, int n) {
+    const int W = d.width(), m = W / 16, lh = d.getLineHeight(), step = d.lineStep() + 1;
+    const int reserve = m - 2;                       // so a row's right edge is W - m
+    if (_quick_sel >= n) _quick_sel = n - 1;
+    int y = top + 5, mq = 0;
+    for (int i = 0; i < n; i++, y += step) {
+      const QRow& r = rows[i];
+      const bool sel = i == _quick_sel;
+      d.setColor(DisplayDriver::LIGHT);
+      if (sel) { d.fillSoftRect(m - 3, y - 1, W - 2 * m + 6, lh + 1); d.setColor(DisplayDriver::DARK); }
+      switch (r.kind) {
+        case Q_SWITCH: info::switchRow(d, y, r.label, r.n != 0, sel, reserve, m); break;
+        case Q_BAR: {
+          d.setCursor(m, y); d.print(r.label);
+          const int box = lh - 3, gap = 2, s = miniIconScale(d), bars = 5 * box + 4 * gap;
+          const bool editing = sel && _quick_edit;
+          const int x0 = W - m - bars - (editing ? 6 * s : 0);
+          if (editing) drawEditArrows(d, x0, bars, y + 1 + box / 2, s);
+          for (int k = 0; k < 5; k++) {
+            const int bx = x0 + k * (box + gap);
+            if (k < r.n) d.fillRect(bx, y + 1, box, box); else d.drawRect(bx, y + 1, box, box);
+          }
+          break;
+        }
+        case Q_BADGE: {
+          const int bw = d.unreadBadgeWidth(r.n, r.overflow);
+          d.drawTextEllipsized(m, y, W - 2 * m - bw - 4, r.label);
+          d.drawUnreadBadge(W - m, y, r.n, sel, r.overflow);
+          break;
+        }
+        case Q_MORE:
+          d.setCursor(m, y); d.print(r.label);
+          d.drawTextRightAlign(W - m, y, ">");
+          break;
+        default:
+          if (sel && _quick_edit) {   // a value being changed: arrows round it
+            const int s = miniIconScale(d), vw = d.getTextWidth(r.value), x0 = W - m - vw - 6 * s;
+            d.setCursor(m, y); d.print(r.label);
+            d.setCursor(x0, y); d.print(r.value);
+            drawEditArrows(d, x0, vw, y + 1 + (lh - 3) / 2, s);
+          } else {
+            int q = info::valueRow(d, y, r.label, r.value, sel, reserve, m);
+            if (q > 0) mq = q;
+          }
+      }
+      d.setColor(DisplayDriver::LIGHT);
+    }
+    return mq;
+  }
+
+  void quickAct(int page, const QRow& r) {
+    switch (r.act) {
+      case QA_NONE: break;
+      case QA_MORE:
+        if (page == SETTINGS)    _task->gotoSettingsScreen();
+        else if (page == TOOLS)  _task->gotoToolsScreen();
+        else                     _task->gotoMessagesScreen();
+        break;
+      case QA_BRIGHTNESS:
+      case QA_AUTO_ADVERT: _quick_edit = true; break;   // Left/Right change it, Enter / Back keep it
+      case QA_BT:
+        if (_task->isSerialEnabled()) _task->disableSerial(); else _task->enableSerial();
+        break;
+      case QA_ADVERT:
+        _task->notify(UIEventType::ack);
+        if (the_mesh.advert()) _advert_sent_ms = millis();   // the row says so
+        else _task->showAlert("Advert failed", 1000);
+        break;
+      case QA_TOOL: ToolsScreen::run(_task, (ToolsScreen::Action)r.n); break;
+      case QA_LOCK: _task->lockScreen(); break;
+      case QA_HIBERNATE: _shutdown_init = true; break;   // waits for the button to be released
+      case QA_GPS: _task->toggleGPS(false); break;
+      case QA_CHAT:
+        if (r.is_ch) { _task->openChannelHistory(r.ch); break; }
+        {
+          ContactInfo ci;
+          if (!MessageHistory::contactByPrefix(r.prefix, ci)) break;
+          if (ci.type == ADV_TYPE_ROOM) _task->openRoomServer(ci); else _task->openContactDM(ci);
+        }
+        break;
     }
   }
 
@@ -494,24 +752,24 @@ class HomeScreen : public UIScreen {
     // keep running with Bluetooth off, so their cue must not vanish with it.
     LocationProvider* loc = _sensors ? _sensors->getLocationProvider() : nullptr;
     bool gps_on  = loc && _node_prefs && _node_prefs->gps_enabled;
-    // Blinks while GPS is napping between duty-cycle wakes -- same convention
-    // the background-mode icons below already use for "running, but not busy
-    // right this instant".
-    bool gps_napping = _sensors && _sensors->isGpsDutySleeping();
     bool mute_on = false;
 #ifdef PIN_BUZZER
     mute_on = _task->isBuzzerQuiet();
 #endif
-    struct Sicon { bool active; const MiniIcon* icon; bool boxed; bool blink; };
+    // Plain glyphs, no blinking: each one shows a state by its shape.
+    // Bluetooth only once a phone is connected (it's on nearly always; the
+    // Bluetooth page tells the rest), GPS as a broken reticle until a fix.
+    const bool gps_fix = gps_on && loc->isValid();
+    struct Sicon { bool active; const MiniIcon* icon; };
     const Sicon icons[] = {
-      { _task->isSerialEnabled(), &ICON_BLUETOOTH, _task->isSerialEnabled() && _task->isBLEConnected(), false },
-      { gps_on,                   &ICON_GPS,        gps_on && loc->isValid(),                            gps_napping },
-      { _node_prefs && _node_prefs->alarm_on,                      &ICON_ALARM,       true, false },
-      { mute_on,                                                   &ICON_MUTE,        true, false },
-      { _node_prefs && _node_prefs->advert_auto_interval_sec > 0,  &ICON_ADVERT,      true, true  },
-      { _task->trail().isActive(),                                 &ICON_TRAIL,       true, true  },
-      { _node_prefs && _node_prefs->loc_share_enabled,             &ICON_MAP_CONTACT, true, true  },
-      { _node_prefs && _node_prefs->client_repeat,                 &ICON_REPEATER,    true, true  },
+      { _task->isSerialEnabled() && _task->isBLEConnected(),       &ICON_BLUETOOTH },
+      { gps_on,                                                    gps_fix ? &ICON_GPS : &ICON_GPS_SEARCH },
+      { _node_prefs && _node_prefs->alarm_on,                      &ICON_ALARM },
+      { mute_on,                                                   &ICON_MUTE },
+      { _node_prefs && _node_prefs->advert_auto_interval_sec > 0,  &ICON_ADVERT },
+      { _task->trail().isActive(),                                 &ICON_TRAIL },
+      { _node_prefs && _node_prefs->loc_share_enabled,             &ICON_MAP_CONTACT },
+      { _node_prefs && _node_prefs->client_repeat,                 &ICON_REPEATER },
     };
 
     int x = battLeftX;
@@ -520,10 +778,7 @@ class HomeScreen : public UIScreen {
       if (!s.active) continue;
       int ix = x - ind - ind_gap;
       if (ix < name_min) break;                        // out of room — drop this + all lower priority
-      if (!s.blink || blinkOn()) {
-        if (s.boxed) drawBoxedIcon(display, ix, ind, ind_h, *s.icon);
-        else         drawSlotIcon(display, ix, ind, ind_h, *s.icon);
-      }
+      drawSlotIcon(display, ix, ind, ind_h, *s.icon);
       x = ix;
     }
     return x;
@@ -708,6 +963,71 @@ public:
     return nearest_km;
   }
 
+  // The Map page: the mini-map in a soft frame on the left, what it shows
+  // spelled out in a column on the right (GPS, the trail, live contacts or
+  // the target). Without a position the column still says what's missing.
+  void drawMapPage(DisplayDriver& d, int top) {
+    const int W = d.width(), H = d.height(), lh = d.getLineHeight();
+    const int s = miniIconScale(d);
+    const int pw = W / 2, ph = H - top;                 // map panel
+    d.setColor(DisplayDriver::LIGHT);
+    d.drawSoftRect(0, top, pw, ph);
+    if (!drawMapPreview(d, 2, top + 2, pw - 4, ph - 4)) {
+      // An empty sheet: a sparse dot grid with the reason over it.
+      for (int gy = top + 4; gy < top + ph - 2; gy += 6 * s)
+        for (int gx = 4; gx < pw - 2; gx += 6 * s) d.fillRect(gx, gy, s, s);
+      const char* why = "No fix";
+      const int tw = d.getTextWidth(why), tx = (pw - tw) / 2, ty = top + (ph - lh) / 2;
+      d.setColor(DisplayDriver::DARK);
+      d.fillRect(tx - 2, ty - 1, tw + 4, lh + 2);
+      d.setColor(DisplayDriver::LIGHT);
+      d.setCursor(tx, ty);
+      d.print(why);
+    }
+
+    // The column: four rows, always, like the Status tiles.
+    const int cx = pw + 3, cw = W - cx;
+    const int row_h = ph / 4;
+    int y = top + (row_h - lh) / 2 + 1;
+    auto line = [&](const MiniIcon& ic, const char* text) {
+      miniIconDraw(d, cx, y, ic);
+      const int tx = cx + ic.w * s + 2 * s;
+      d.drawTextEllipsized(tx, y, cx + cw - tx, text);
+      y += row_h;
+    };
+    char buf[20];
+#if ENV_INCLUDE_GPS == 1
+    LocationProvider* loc = sensors.getLocationProvider();
+    const bool on = _task->getGPSState();
+    if (!loc)                 strcpy(buf, "No GPS");
+    else if (!on)             strcpy(buf, "Off");
+    else if (!loc->isValid()) strcpy(buf, "No fix");
+    else                      snprintf(buf, sizeof(buf), "%ld sats", loc->satellitesCount());
+#else
+    strcpy(buf, "No GPS");
+#endif
+    line(ICON_GPS, buf);
+    TrailStore& tr = _task->trail();
+    if (tr.empty() && !tr.isActive()) strcpy(buf, "No trail");
+    else geo::fmtDist(buf, sizeof(buf), tr.totalDistanceMeters() / 1000.0f, _task->useImperial(), true);
+    line(ICON_TRAIL, buf);
+    const float km = statusDistanceKm();
+    int32_t tla, tlo;
+    const bool target = _task->activeTargetPos(tla, tlo);
+    const int live = _task->liveTrack().active(rtc_clock.getCurrentTime());
+    if (live > 0 && km >= 0 && !target) geo::fmtDist(buf, sizeof(buf), km, _task->useImperial(), true);
+    else                                snprintf(buf, sizeof(buf), "%d live", live);
+    line(ICON_MAP_CONTACT, buf);
+    if (target) {
+      if (km >= 0) geo::fmtDist(buf, sizeof(buf), km, _task->useImperial(), true);
+      else         strcpy(buf, "-");
+      line(ICON_MAP_TARGET, buf);
+    } else {
+      snprintf(buf, sizeof(buf), "%d wpts", _task->waypoints().count());
+      line(ICON_MAP_WAYPOINT, buf);
+    }
+  }
+
   // The Status page: four tiles split by dotted rules, each one subject's
   // headline (icon + main value) over a detail line. Enter opens the Status
   // screen with all of it.
@@ -751,10 +1071,10 @@ public:
 #endif
       }
       if (loc && on) snprintf(t, sizeof(t), "%ld sats", loc->satellitesCount());
-      tile(1, 0, &ICON_PG_GPS, -1, h, t);
+      tile(1, 0, &ICON_GPS, -1, h, t);
     }
 #else
-    tile(1, 0, &ICON_PG_GPS, -1, "No GPS", "");
+    tile(1, 0, &ICON_GPS, -1, "No GPS", "");
 #endif
 
     const int mv = _task->getBattMilliVolts();
@@ -762,6 +1082,10 @@ public:
     snprintf(h, sizeof(h), "%d%%", pct);
     snprintf(t, sizeof(t), "%d.%02d V%s", mv / 1000, (mv % 1000) / 10, board.isExternalPowered() ? " USB" : "");
     tile(0, 1, nullptr, pct / 100.0f, h, t);
+    if (StatusScreen* st = (StatusScreen*)_task->statusScreen()) {   // the battery's trend beside its %
+      const int x0 = 1 + info::batteryW(d) + 2 * s + d.getTextWidth(h) + 3 * s, x1 = mid_x - 3;
+      if (x1 - x0 >= 12) info::spark(d, x0, mid_y + 2, x1 - x0, lh - 1, st->battHistory(), 20);
+    }
 
     snprintf(h, sizeof(h), "%d nodes", the_mesh.getNumContacts());
     snprintf(t, sizeof(t), "%d in 1 h", StatusScreen::heardLastHour());
@@ -789,7 +1113,7 @@ public:
   int render(DisplayDriver& display) override {
     char tmp[80];
     int mq_delay = 0;   // >0 while a selected row's name is marquee-scrolling
-    int anim_ms = 0;    // >0 while something animates: a hovering page icon, a page turn
+    int anim_ms = 0;    // >0 while something animates: a page turn
     display.setTextSize(1);
     const int lh      = display.getLineHeight();  // line height at sz1
     const int step    = display.lineStep();        // lh + 2
@@ -1033,97 +1357,19 @@ public:
       display.print(hint);
     } else if (_page == HomePage::STATUS) {
       drawStatusTiles(display, content_y);
-    } else if (_page == HomePage::BLUETOOTH) {
+    } else if (isQuickPage(_page) && !(_page == HomePage::SHUTDOWN && _shutdown_init)) {
       display.setColor(DisplayDriver::LIGHT);
       display.setTextSize(1);
-      anim_ms = drawHoverIcon(display, display.width() / 2, content_y, BIG_BLUETOOTH, !_task->isSerialEnabled());
-      const int text_y = content_y + BIG_BLUETOOTH.h + HOVER_GAP;
-      // The pairing PIN is BLE-specific: show it while BLE is on but not yet
-      // bonded. (Gating on a plain isConnected() broke this on dual builds,
-      // where it's hardcoded true.)
-      const bool waiting_for_pair = _task->isSerialEnabled() && !_task->isBLEConnected() && the_mesh.getBLEPin() != 0;
-      if (waiting_for_pair && !display.isLandscape()) {
-        char pin_buf[16];
-        snprintf(pin_buf, sizeof(pin_buf), "PIN: %d", the_mesh.getBLEPin());
-        display.drawTextCentered(display.width() / 2, text_y, pin_buf);
-      } else if (waiting_for_pair) {   // the pairing PIN takes the title's place
-        char pin_buf[16];
-        snprintf(pin_buf, sizeof(pin_buf), "PIN: %d", the_mesh.getBLEPin());
-        display.drawTextCentered(display.width() / 2, text_y, pin_buf);
-      } else {
-        // Each icon page carries just its title; Enter acting on it is the same everywhere.
-        display.drawTextCentered(display.width() / 2, text_y, "Bluetooth");
-      }
-    } else if (_page == HomePage::ADVERT) {
-      display.setColor(DisplayDriver::LIGHT);
-      anim_ms = drawHoverIcon(display, display.width() / 2, content_y, BIG_ADVERT);
-      display.drawTextCentered(display.width() / 2, content_y + BIG_ADVERT.h + HOVER_GAP, "Advert");
-    } else if (_page == HomePage::SETTINGS) {
-      display.setColor(DisplayDriver::LIGHT);
-      display.setTextSize(1);
-      anim_ms = drawHoverIcon(display, display.width() / 2, content_y, BIG_SETTINGS);
-      display.drawTextCentered(display.width() / 2, content_y + BIG_SETTINGS.h + HOVER_GAP, "Settings");
+      QRow rows[3];
+      const int n = buildQuick(_page, rows);
+      int q = drawQuickPanel(display, content_y, rows, n);
+      if (_page == HomePage::TOOLS && _task->isTimerRunning()) q = 1000;   // the timer's countdown
+      if (q > 0 && (mq_delay <= 0 || q < mq_delay)) mq_delay = q;
     } else if (_page == HomePage::MAP) {
-      display.setColor(DisplayDriver::LIGHT);
-      display.setTextSize(1);
-      // Mini-map preview filling the page, with one status line at the bottom.
-      int info_y = display.height() - step;
-      int area_h = info_y - content_y - 2;
-      bool drew = drawMapPreview(display, 2, content_y, display.width() - 4, area_h);
-      char left[20], right[16] = {0};
-      uint32_t now_m = rtc_clock.getCurrentTime();
-      LiveTrackStore& lt = _task->liveTrack();
-      int trk = lt.active(now_m);
-      // Fix state lives in the top-bar GPS icon. Track count plus an arrow +
-      // distance (to the active target, else the nearest live-tracked
-      // contact) share this one status line.
-      snprintf(left, sizeof(left), "Track:%d", trk);
-      float nearest_km = statusDistanceKm();
-      if (nearest_km >= 0.0f) geo::fmtDist(right, sizeof(right), nearest_km, _task->useImperial());
-      display.setColor(DisplayDriver::LIGHT);
-      if (!drew)
-        display.drawTextCentered(display.width() / 2, content_y + area_h / 2, "No GPS / no trail");
-      if (right[0]) {
-        // Manual layout (not drawTextCentered) so the arrow mini-icon sits
-        // inline between the two text runs.
-        const int s = miniIconScale(display);
-        const int gap = 3;
-        int lw = display.getTextWidth(left);
-        int iw = ICON_MAP_ARROW.w * s;
-        int rw = display.getTextWidth(right);
-        int x = display.width() / 2 - (lw + gap + iw + gap + rw) / 2;
-        display.setCursor(x, info_y);
-        display.print(left);
-        miniIconDrawTop(display, x + lw + gap, info_y + (lh - ICON_MAP_ARROW.h * s) / 2, ICON_MAP_ARROW);
-        display.setCursor(x + lw + gap + iw + gap, info_y);
-        display.print(right);
-      } else {
-        display.drawTextCentered(display.width() / 2, info_y, left);
-      }
-    } else if (_page == HomePage::TOOLS) {
-      display.setColor(DisplayDriver::LIGHT);
-      display.setTextSize(1);
-      anim_ms = drawHoverIcon(display, display.width() / 2, content_y, BIG_TOOLS);
-      display.drawTextCentered(display.width() / 2, content_y + BIG_TOOLS.h + HOVER_GAP, "Tools");
-    } else if (_page == HomePage::QUICK_MSG) {
-      display.setColor(DisplayDriver::LIGHT);
-      display.setTextSize(1);
-      const int ix = (display.width() - BIG_MESSAGES.w) / 2;
-      anim_ms = drawHoverIcon(display, display.width() / 2, content_y, BIG_MESSAGES);
-      // Unread count as the usual pill on the bubble's top-right corner.
-      int total_unread = _task->getDMUnreadTotal() + _task->getChannelUnreadCount() + _task->getRoomUnreadCount();
-      if (total_unread > 0) {
-        int bw = display.unreadBadgeWidth(total_unread, _task->getAnyUnreadOverflow());
-        int bx = ix + BIG_MESSAGES.w + bw / 2;
-        display.setColor(DisplayDriver::DARK);   // a dark ring so it reads over the bubble's border
-        const int by = content_y - hoverLift(display);   // rides on the hovering bubble
-        display.fillRect(bx - bw - 1, by + 1, bw + 2, lh + 2);
-        display.drawUnreadBadge(bx, by + 2, total_unread, false, _task->getAnyUnreadOverflow());
-      }
-      display.drawTextCentered(display.width() / 2, content_y + BIG_MESSAGES.h + HOVER_GAP, "Messages");
+      drawMapPage(display, content_y + 4);   // the gap under the page icons
     } else if (_page == HomePage::FAVOURITES) {
       // Grid of pinned contacts. Layout transposes to current orientation:
-      // landscape → 3×2, portrait → 2×3. Selected tile inverts via drawSelectionRow.
+      // landscape → 3×2, portrait → 2×3. The selected card is filled.
       // No title — node name + battery (top bar) and the page-dots indicator above
       // serve as the page identity.
       display.setColor(DisplayDriver::LIGHT);
@@ -1131,9 +1377,8 @@ public:
 
       const int cols    = display.isLandscape() ? 3 : 2;
       const int rows    = NodePrefs::FAVOURITES_COUNT / cols;
-      const int margin  = 2;
-      const int grid_y  = content_y + margin;
-      const int grid_h  = display.height() - grid_y - margin;
+      const int grid_y  = content_y + 4;            // the gap under the page icons, as on every page
+      const int grid_h  = display.height() - grid_y;
       const int cell_w  = display.width() / cols;
       const int cell_h  = grid_h / rows;
       const int line_h  = display.getLineHeight();
@@ -1147,9 +1392,18 @@ public:
         int cx  = col * cell_w;
         int cy  = grid_y + row * cell_h;
         bool sel = (i == _fav_sel);
-        display.drawSelectionRow(cx, cy, cell_w - 1, cell_h - 1, sel);
-
         const uint8_t* prefix = favSlotPrefix(i);
+        // Each slot a card: a soft frame round a pinned one, a dotted outline
+        // round a free one, filled while selected.
+        const int tx = cx + 1, ty = cy, tw = cell_w - 2, th = cell_h - 2;
+        display.setColor(DisplayDriver::LIGHT);
+        if (sel)         { display.fillSoftRect(tx, ty, tw, th); display.setColor(DisplayDriver::DARK); }
+        else if (prefix)   display.drawSoftRect(tx, ty, tw, th);
+        else {
+          for (int x = tx + 2; x < tx + tw - 1; x += 2) { display.fillRect(x, ty, 1, 1); display.fillRect(x, ty + th - 1, 1, 1); }
+          for (int y = ty + 2; y < ty + th - 1; y += 2) { display.fillRect(tx, y, 1, 1); display.fillRect(tx + tw - 1, y, 1, 1); }
+        }
+
         char    name[26];
         uint8_t unread   = 0;
         bool    overflow = false;
@@ -1194,16 +1448,15 @@ public:
           // Reserve space for the unread badge so the name's ellipsis lands
           // before it instead of underneath. Badge and name share one baseline.
           int  bw = unread > 0 ? display.unreadBadgeWidth(unread, overflow) + 3 : 0;  // badge + 3 px gap
-          int name_y     = cy + (cell_h - line_h) / 2;
-          int name_max_w = cell_w - 4 - bw;
+          int name_y     = ty + (th - line_h) / 2;
+          int name_max_w = tw - 6 - bw;
           if (name_max_w < 6) name_max_w = 6;
-          int r = display.drawTextEllipsized(cx + 2, name_y, name_max_w, name, sel);
+          int r = display.drawTextEllipsized(tx + 3, name_y, name_max_w, name, sel);
           if (sel && r > 0) mq_delay = r;
           if (unread > 0)
-            display.drawUnreadBadge(cx + cell_w - 2, name_y, unread, sel, overflow);
+            display.drawUnreadBadge(tx + tw - 3, name_y, unread, sel, overflow);
         } else {
-          int plus_y = cy + (cell_h - line_h) / 2;
-          display.drawTextCentered(cx + cell_w / 2, plus_y, "+");
+          display.drawTextCentered(tx + tw / 2, ty + (th - line_h) / 2, "+");
         }
         if (sel) display.setColor(DisplayDriver::LIGHT);
       }
@@ -1215,39 +1468,23 @@ public:
     } else if (_page == HomePage::SHUTDOWN) {
       display.setColor(DisplayDriver::LIGHT);
       display.setTextSize(1);
-      if (_shutdown_init) {
-        display.drawTextCentered(display.width() / 2, content_y + step, "hibernating...");
-      } else {
-        anim_ms = drawHoverIcon(display, display.width() / 2, content_y, BIG_POWER);
-        const int text_y = content_y + BIG_POWER.h + HOVER_GAP;
-        const int lh1 = display.getLineHeight();
-        if (text_y + lh1 <= display.height())
-          display.drawTextCentered(display.width() / 2, text_y, "Hibernate");
-      }
+      display.drawTextCentered(display.width() / 2, content_y + step, "hibernating...");   // the panel's Hibernate row
     }
     if (slide >= 0) {   // page turn: the page left behind slides out, this one in
       display.slideCompose(_slide_dir * (int)(display.width() * slide + 0.5f));
       anim_ms = 15;
     }
-    bool auto_adv = _node_prefs && _node_prefs->advert_auto_interval_sec > 0;
-    // Any blinking status-bar indicator needs a 1 s refresh to animate evenly —
-    // but the status bar (and its icons) is hidden on the CLOCK page, so don't
-    // pay the 1 s cadence there for icons that aren't drawn.
-    bool repeating  = _node_prefs && _node_prefs->client_repeat;
-    bool loc_sharing = _node_prefs && _node_prefs->loc_share_enabled;
-    bool need_blink = (_page != HomePage::CLOCK) &&
-                       (auto_adv || _task->trail().isActive() || repeating || loc_sharing);
     if (Features::IS_EINK) {
       // slow display: poll every 30 s; inbound msgs force immediate refresh via notify()
       return (mq_delay > 0 && mq_delay < Features::HOME_REFRESH_MS) ? mq_delay : Features::HOME_REFRESH_MS;
     }
     if (_page == HomePage::CLOCK) {
       bool show_sec = !_node_prefs || !_node_prefs->clock_hide_seconds;
-      int ret = need_blink ? 1000 : (show_sec ? 1000 : 60000);
+      int ret = show_sec ? 1000 : 60000;
       if (anim_ms > 0 && anim_ms < ret) ret = anim_ms;
       return (mq_delay > 0 && mq_delay < ret) ? mq_delay : ret;
     }
-    int ret = need_blink ? 1000 : 5000;
+    int ret = 5000;
     if (anim_ms > 0 && anim_ms < ret) ret = anim_ms;
     return (mq_delay > 0 && mq_delay < ret) ? mq_delay : ret;
   }
@@ -1320,6 +1557,34 @@ public:
       // Edge LEFT/RIGHT and unhandled keys fall through to page nav below.
     }
 
+    if (isQuickPage(_page) && _quick_edit) {
+      // Changing a bar: shown live, saved once on the way out.
+      if ((c == KEY_LEFT || c == KEY_RIGHT) && _node_prefs) {
+        QRow rows[3];
+        const int n = buildQuick(_page, rows);
+        const QAct act = n > 0 ? rows[_quick_sel < n ? _quick_sel : n - 1].act : QA_NONE;
+        const int d = c == KEY_RIGHT ? 1 : -1;
+        if (act == QA_BRIGHTNESS) {
+          uint8_t& b = _node_prefs->display_brightness;
+          b = (uint8_t)constrain((int)b + d, 0, 4);
+          _task->applyDisplayPrefs();
+        } else if (act == QA_AUTO_ADVERT) {
+          const int i = constrain(AutoAdvertScreen::indexOf(_node_prefs->advert_auto_interval_sec) + d,
+                                  0, AutoAdvertScreen::OPT_COUNT - 1);
+          _node_prefs->advert_auto_interval_sec = AutoAdvertScreen::OPTS[i];
+        }
+        return true;
+      }
+      if (c == KEY_ENTER || c == KEY_CANCEL) { _quick_edit = false; the_mesh.savePrefs(); return true; }
+      return true;   // nothing else while editing
+    }
+    if (isQuickPage(_page)) {
+      QRow rows[3];
+      const int n = buildQuick(_page, rows);
+      if (c == KEY_UP)   { if (_quick_sel > 0) _quick_sel--; return true; }
+      if (c == KEY_DOWN) { if (_quick_sel + 1 < n) _quick_sel++; return true; }
+      if (c == KEY_ENTER && n > 0) { quickAct(_page, rows[_quick_sel < n ? _quick_sel : n - 1]); return true; }
+    }
     if (c == KEY_LEFT || c == KEY_PREV) {
       turnPage(-1);
       return true;
@@ -1328,45 +1593,12 @@ public:
       turnPage(+1);
       return true;
     }
-    if (c == KEY_ENTER && _page == HomePage::BLUETOOTH) {
-      if (_task->isSerialEnabled()) {  // toggle Bluetooth on/off
-        _task->disableSerial();
-      } else {
-        _task->enableSerial();
-      }
-      return true;
-    }
-    if (c == KEY_ENTER && _page == HomePage::ADVERT) {
-      _task->notify(UIEventType::ack);
-      if (the_mesh.advert()) {
-        _task->showAlert("Advert sent", 1000);
-      } else {
-        _task->showAlert("Advert failed", 1000);
-      }
-      return true;
-    }
     if (c == KEY_ENTER && _page == HomePage::STATUS) {
       _task->gotoStatusScreen(StatusScreen::TAB_RADIO);
       return true;
     }
-    if (c == KEY_ENTER && _page == HomePage::SETTINGS) {
-      _task->gotoSettingsScreen();
-      return true;
-    }
     if (c == KEY_ENTER && _page == HomePage::MAP) {
       _task->gotoMapScreen();
-      return true;
-    }
-    if (c == KEY_ENTER && _page == HomePage::TOOLS) {
-      _task->gotoToolsScreen();
-      return true;
-    }
-    if (c == KEY_ENTER && _page == HomePage::QUICK_MSG) {
-      _task->gotoMessagesScreen();
-      return true;
-    }
-    if (c == KEY_ENTER && _page == HomePage::SHUTDOWN) {
-      _shutdown_init = true;  // need to wait for button to be released
       return true;
     }
     if (c == KEY_ENTER && _page == HomePage::CLOCK) {
@@ -3094,17 +3326,17 @@ bool UITask::hasGPS() {
   return false;
 }
 
-void UITask::toggleGPS() {
-  if (_node_prefs) applyGpsState(_node_prefs->gps_enabled == 0);
+void UITask::toggleGPS(bool announce) {
+  if (_node_prefs) applyGpsState(_node_prefs->gps_enabled == 0, announce);
 }
 
 // Sets GPS to an absolute state (vs. toggleGPS()'s flip) -- shared by the
 // Home-page manual toggle and the bot's !gps on/off command, which needs to
 // set a specific state rather than flip whatever it currently is.
-void UITask::applyGpsState(bool on) {
+void UITask::applyGpsState(bool on, bool announce) {
   if (!_core->setGpsEnabled(on)) return;   // no GPS on this board
   notify(UIEventType::ack);
-  showAlert(on ? "GPS: Enabled" : "GPS: Disabled", 800);
+  if (announce) showAlert(on ? "GPS: Enabled" : "GPS: Disabled", 800);
   _next_refresh = 0;
 }
 

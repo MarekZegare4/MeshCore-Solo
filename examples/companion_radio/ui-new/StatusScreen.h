@@ -330,6 +330,8 @@ public:
     _last_rx = rx;
   }
 
+  const info::History<32>& battHistory() const { return _batt; }
+
   // Contacts heard from in the last hour (cached for 10 s: it walks them all).
   static int heardLastHour() {
     static unsigned long at = 0;

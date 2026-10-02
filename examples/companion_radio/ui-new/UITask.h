@@ -242,6 +242,8 @@ private:
   void renderAlertOverlay();
 
 public:
+  // Lock now, from the Home Power panel (unlocking stays the gesture / PIN prompt).
+  void lockScreen() { if (!_locked) toggleLock(); }
   // A new screen PIN (see ui-core/ScreenLock.h); "" clears it. The caller saves the prefs.
   void setNodeLockPassword(const char* plain);
   bool passwordLockEnabled() const;
@@ -331,6 +333,7 @@ public:
   void gotoMapScreen();   // opens the Trail screen directly in its Map view
   void gotoCompassScreen();
   void gotoStatusScreen(uint8_t tab);   // StatusScreen::Tab
+  UIScreen* statusScreen() const { return status_screen; }   // its sample histories feed the Home tiles
   void gotoRepeaterScreen();
   void gotoGpioScreen();   // no-op on boards without user GPIO pins (see PIN_GPIO1)
   void gotoClockTools();   // Alarm / Timer / Stopwatch (from the home Clock page)
@@ -436,8 +439,8 @@ public:
   int  getBuzzerMode(); // 0=ON, 1=OFF, 2=Auto
   bool getGPSState();
   bool hasGPS();   // true if this board exposes a toggleable GPS (distinct from GPS being off)
-  void toggleGPS();
-  void applyGpsState(bool on);   // shared by toggleGPS() and botSetGPS()
+  void toggleGPS(bool announce = true);   // announce: the "GPS: Enabled" toast (off where a switch shows it)
+  void applyGpsState(bool on, bool announce = true);   // shared by toggleGPS() and botSetGPS()
   void botSetGPS(bool on) override;
   void botBuzz(int seconds) override;
   // User GPIO (!gpio1..!gpio4 + Tools > GPIO screen). idx is 1-4. Bodies are

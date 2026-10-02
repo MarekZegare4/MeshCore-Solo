@@ -7,8 +7,7 @@
 // ── Scalable mini-icons ──────────────────────────────────────────────────────
 // Small procedural glyphs (delivery markers, etc.) authored on a 1× pixel grid
 // and scaled to the current font, so they stay legible on large-font layouts
-// (e.g. landscape e-ink renders text at 2×). Distinct from the big page icons
-// further down, which are fixed-size 32 px glyphs drawn via bigIconDraw().
+// (e.g. landscape e-ink renders text at 2×).
 //
 // To add a mini-icon:
 //   1. Draw it as ASCII-art rows, one string per row (width ≤ 8): any char
@@ -233,13 +232,12 @@ MINI_ICON(ICON_BLUETOOTH, 5,   // ᛒ bluetooth rune
   packRow("#.#.#"),
   packRow("..##."),
   packRow("..#.."));
-MINI_ICON(ICON_ADVERT, 6,   // broadcast mast + radiating waves (auto-advert)
-  packRow("#....#"),
-  packRow(".#..#."),
-  packRow("..##.."),
-  packRow("..##.."),
-  packRow(".####."),
-  packRow(".####."));
+MINI_ICON(ICON_ADVERT, 7,   // ((•)) a dot sending waves both ways: advert
+  packRow(".#...#."),
+  packRow("#.###.#"),
+  packRow("#.###.#"),
+  packRow("#.###.#"),
+  packRow(".#...#."));
 
 MINI_ICON(ICON_ALARM, 5,   // bell — an alarm is armed
   packRow("..#.."),
@@ -264,12 +262,18 @@ MINI_ICON(ICON_REPEATER, 6,   // » double chevron — relaying/forwarding (repe
   packRow(".#..#."),
   packRow("#..#.."));
 
-MINI_ICON(ICON_GPS, 5,   // reticle — GPS fix status (boxed = fix, plain = searching)
+MINI_ICON(ICON_GPS, 5,   // reticle with its dot: GPS has a fix
   packRow(".###."),
   packRow("#...#"),
   packRow("#.#.#"),
   packRow("#...#"),
   packRow(".###."));
+MINI_ICON(ICON_GPS_SEARCH, 5,   // the reticle broken, no dot: GPS on, still searching
+  packRow(".#.#."),
+  packRow("#...#"),
+  packRow("....."),
+  packRow("#...#"),
+  packRow(".#.#."));
 
 // Tools-menu glyphs (auto-reply bot, ringtone editor, diagnostics, system).
 MINI_ICON(ICON_BOT, 5,   // robot head: antenna + eyes + grille (auto-reply bot)
@@ -294,14 +298,6 @@ MINI_ICON(ICON_CHART, 5,   // ascending bars — diagnostics / stats
   packRow("#.#.#"),
   packRow("#.#.#"),
   packRow("#####"));
-MINI_ICON(ICON_GEAR, 7,   // ⚙ cog with hub hole — system
-  packRow("..#.#.."),
-  packRow(".#####."),
-  packRow("#######"),
-  packRow(".##.##."),
-  packRow("#######"),
-  packRow(".#####."),
-  packRow("..#.#.."));
 MINI_ICON(ICON_KEY, 5,   // padlock — remote admin (privileged/password-gated access)
   packRow(".###."),
   packRow("#...#"),
@@ -347,28 +343,16 @@ MINI_ICON(ICON_PG_BT, 5,         // bluetooth (compact)
   packRow(".###."),
   packRow("#.##."),
   packRow("..#.."));
-MINI_ICON(ICON_PG_ADVERT, 5,     // mast + radiating waves — advert
-  packRow("#...#"),
-  packRow(".#.#."),
-  packRow("..#.."),
-  packRow("..#.."),
-  packRow("..#.."));
-MINI_ICON(ICON_PG_GPS, 5,        // location pin — GPS
-  packRow(".###."),
-  packRow("#.#.#"),
-  packRow("#.#.#"),
-  packRow(".#.#."),
-  packRow("..#.."));
-MINI_ICON(ICON_PG_SENSORS, 5,    // thermometer/gauge — sensors
-  packRow("..#.."),
-  packRow(".#.#."),
-  packRow(".#.#."),
-  packRow(".###."),
-  packRow(".###."));
-MINI_ICON(ICON_PG_SETTINGS, 5,   // small cog — settings
+MINI_ICON(ICON_PG_ADVERT, 7,   // advert page: the same waves
+  packRow(".#...#."),
+  packRow("#.###.#"),
+  packRow("#.###.#"),
+  packRow("#.###.#"),
+  packRow(".#...#."));
+MINI_ICON(ICON_PG_SETTINGS, 5,   // cog with a hub hole: settings
   packRow(".#.#."),
   packRow("#####"),
-  packRow(".#.#."),
+  packRow("##.##"),
   packRow("#####"),
   packRow(".#.#."));
 MINI_ICON(ICON_PG_MAP, 5,        // folded map — map page
@@ -377,18 +361,17 @@ MINI_ICON(ICON_PG_MAP, 5,        // folded map — map page
   packRow("#.#.#"),
   packRow("#.#.#"),
   packRow("#####"));
-MINI_ICON(ICON_PG_TOOLS, 5,      // wrench (open jaw + handle) — tools
-  packRow(".#.#."),
-  packRow(".###."),
-  packRow("..#.."),
-  packRow("..#.."),
-  packRow("..#.."));
-MINI_ICON(ICON_PG_MSG, 5,        // speech bubble — quick messages
-  packRow("#####"),
-  packRow("#...#"),
-  packRow("#...#"),
-  packRow("#####"),
-  packRow(".#..."));
+MINI_ICON(ICON_PG_TOOLS, 6,   // wrench on the diagonal, open jaw top right: tools
+  packRow("...#.#"),
+  packRow("...###"),
+  packRow("..##.."),
+  packRow(".##..."),
+  packRow("##...."));
+MINI_ICON(ICON_PG_MSG, 7,   // speech bubble with three dots: messages
+  packRow("#######"),
+  packRow("#.#.#.#"),
+  packRow("#######"),
+  packRow("#......"));
 MINI_ICON(ICON_PG_POWER, 5,      // power symbol — shutdown
   packRow("..#.."),
   packRow("#.#.#"),
@@ -654,292 +637,6 @@ inline int drawLoadingDots(DisplayDriver& d, int cx, int y_bottom) {
 // still call display.drawSelectionRow() directly.
 inline void drawRowSelection(DisplayDriver& d, int y, bool sel, int reserve) {
   d.drawSelectionRow(0, y - 1, d.width() - reserve, d.lineStep() - 1, sel);
-}
-
-// ── Big ASCII-art icons ─────────────────────────────
-// Same authoring idea as the mini-icons but for full page glyphs up to 32 px
-// wide: one uint32_t per row, readable in source. Drawn at 1× (page icons
-// aren't font-scaled).
-//
-// To add one:
-//   BIG_ICON(MY_ICON, 16,
-//     packRow32("......####......"),
-//     packRow32(".....######....."),
-//     ...);
-//   bigIconDraw(display, x, y, MY_ICON);
-constexpr uint32_t packBit32(const char* s, int x) {
-  return (s[x] && s[x] != ' ' && s[x] != '.') ? (1u << x) : 0u;
-}
-constexpr uint32_t packRow32(const char* s, int x = 0) {
-  return (!s[x] || x >= 32) ? 0u : (packBit32(s, x) | packRow32(s, x + 1));
-}
-
-struct BigIcon { uint8_t w, h; const uint32_t* rows; };
-
-#define BIG_ICON(name, width, ...)                                             \
-  static constexpr uint32_t name##_rows[] = { __VA_ARGS__ };                   \
-  static constexpr BigIcon name = {                                            \
-      (uint8_t)(width),                                                        \
-      (uint8_t)(sizeof(name##_rows) / sizeof(uint32_t)), name##_rows }
-
-// Draw a packed big icon at 1× with the current ink colour, top-left at (x, y).
-// `dim` draws only every other pixel (50% checker): the icon's "off" state.
-inline void bigIconDraw(DisplayDriver& d, int x, int y, const BigIcon& ic, bool dim = false) {
-  for (int r = 0; r < ic.h; r++) {
-    if (dim) {
-      for (int c = (r + x + y) & 1; c < ic.w; c += 2)
-        if (ic.rows[r] & (1u << c)) d.fillRect(x + c, y + r, 1, 1);
-      continue;
-    }
-    for (int c = 0; c < ic.w; ) {          // runs of set bits as one rect
-      if (!(ic.rows[r] & (1u << c))) { c++; continue; }
-      int e = c;
-      while (e + 1 < ic.w && (ic.rows[r] & (1u << (e + 1)))) e++;
-      d.fillRect(x + c, y + r, e - c + 1, 1);
-      c = e + 1;
-    }
-  }
-}
-
-// Home page icons, 32x32, one family: 3 px strokes, rounded ends. Drawn
-// through drawHoverIcon() below. Rasterised from vector shapes, so keep any
-// redraw to the same stroke width rather than touching single pixels.
-// Bluetooth rune
-BIG_ICON(BIG_BLUETOOTH, 32,
-  packRow32("................................"),
-  packRow32("................................"),
-  packRow32("..............##................"),
-  packRow32(".............####..............."),
-  packRow32(".............#####.............."),
-  packRow32(".............######............."),
-  packRow32(".............#######............"),
-  packRow32(".............#########.........."),
-  packRow32(".............####.#####........."),
-  packRow32("........##...####..####........."),
-  packRow32(".......####..####..####........."),
-  packRow32("........####.####.#####........."),
-  packRow32(".........############..........."),
-  packRow32("..........##########............"),
-  packRow32("...........########............."),
-  packRow32("............######.............."),
-  packRow32("............######.............."),
-  packRow32("...........########............."),
-  packRow32("..........##########............"),
-  packRow32(".........############..........."),
-  packRow32("........####.####.#####........."),
-  packRow32(".......####..####..####........."),
-  packRow32("........##...####..####........."),
-  packRow32(".............####.#####........."),
-  packRow32(".............#########.........."),
-  packRow32(".............#######............"),
-  packRow32(".............######............."),
-  packRow32(".............#####.............."),
-  packRow32(".............####..............."),
-  packRow32("..............##................"),
-  packRow32("................................"),
-  packRow32("................................"));
-// advert: a dot between two pairs of arcs
-BIG_ICON(BIG_ADVERT, 32,
-  packRow32("................................"),
-  packRow32("................................"),
-  packRow32("................................"),
-  packRow32("................................"),
-  packRow32("................................"),
-  packRow32("................................"),
-  packRow32("....#......................#...."),
-  packRow32("...####..................####..."),
-  packRow32("...###....................###..."),
-  packRow32("..###......................###.."),
-  packRow32("..###...##............##...###.."),
-  packRow32(".###...####..........####...###."),
-  packRow32(".###...###.....##.....###...###."),
-  packRow32(".###..###....######....###..###."),
-  packRow32(".##...###....######....###...##."),
-  packRow32(".##...###...########...###...##."),
-  packRow32(".##...###...########...###...##."),
-  packRow32(".##...###....######....###...##."),
-  packRow32(".###..###....######....###..###."),
-  packRow32(".###...###.....##.....###...###."),
-  packRow32(".###...####..........####...###."),
-  packRow32("..###...##............##...###.."),
-  packRow32("..###......................###.."),
-  packRow32("...###....................###..."),
-  packRow32("...####..................####..."),
-  packRow32("....#......................#...."),
-  packRow32("................................"),
-  packRow32("................................"),
-  packRow32("................................"),
-  packRow32("................................"),
-  packRow32("................................"),
-  packRow32("................................"));
-// power (Hibernate)
-BIG_ICON(BIG_POWER, 32,
-  packRow32("................................"),
-  packRow32("................................"),
-  packRow32("...............##..............."),
-  packRow32("..............####.............."),
-  packRow32("..............####.............."),
-  packRow32("..............####.............."),
-  packRow32("..............####.............."),
-  packRow32("..............####.............."),
-  packRow32(".......##.....####.....##......."),
-  packRow32("......####....####....####......"),
-  packRow32(".....####.....####.....####....."),
-  packRow32("....####......####......####...."),
-  packRow32("....###.......####.......###...."),
-  packRow32("....###.......####.......###...."),
-  packRow32("...###........####........###..."),
-  packRow32("...###.........##.........###..."),
-  packRow32("...###....................###..."),
-  packRow32("...###....................###..."),
-  packRow32("...###....................###..."),
-  packRow32("...###....................###..."),
-  packRow32("...###....................###..."),
-  packRow32("....###..................###...."),
-  packRow32("....###..................###...."),
-  packRow32("....####................####...."),
-  packRow32(".....####..............####....."),
-  packRow32("......####............####......"),
-  packRow32(".......#####........#####......."),
-  packRow32("........################........"),
-  packRow32(".........##############........."),
-  packRow32("...........##########..........."),
-  packRow32("................................"),
-  packRow32("................................"));
-// gear
-BIG_ICON(BIG_SETTINGS, 32,
-  packRow32("................................"),
-  packRow32(".............######............."),
-  packRow32(".............######............."),
-  packRow32(".............######............."),
-  packRow32(".......##....######....##......."),
-  packRow32("......####...######...####......"),
-  packRow32(".....######################....."),
-  packRow32("....########################...."),
-  packRow32("....########################...."),
-  packRow32(".....######################....."),
-  packRow32("......####################......"),
-  packRow32("......#######......#######......"),
-  packRow32("......######........######......"),
-  packRow32(".##########..........##########."),
-  packRow32(".##########..........##########."),
-  packRow32(".##########..........##########."),
-  packRow32(".##########..........##########."),
-  packRow32(".##########..........##########."),
-  packRow32(".##########..........##########."),
-  packRow32("......######........######......"),
-  packRow32("......#######......#######......"),
-  packRow32("......####################......"),
-  packRow32(".....######################....."),
-  packRow32("....########################...."),
-  packRow32("....########################...."),
-  packRow32(".....######################....."),
-  packRow32("......####...######...####......"),
-  packRow32(".......##....######....##......."),
-  packRow32(".............######............."),
-  packRow32(".............######............."),
-  packRow32(".............######............."),
-  packRow32("................................"));
-// wrench
-BIG_ICON(BIG_TOOLS, 32,
-  packRow32("................................"),
-  packRow32("................................"),
-  packRow32(".....................##........."),
-  packRow32("..................#######......."),
-  packRow32(".................#######........"),
-  packRow32("................#######........."),
-  packRow32("...............#######.........."),
-  packRow32("...............######.......#..."),
-  packRow32("...............#####.......##..."),
-  packRow32("..............#######.....####.."),
-  packRow32("..............########...#####.."),
-  packRow32("...............########.#####..."),
-  packRow32("...............##############..."),
-  packRow32("...............##############..."),
-  packRow32("..............##############...."),
-  packRow32(".............##############....."),
-  packRow32("............##############......"),
-  packRow32("...........#######...##........."),
-  packRow32("..........#######..............."),
-  packRow32(".........#######................"),
-  packRow32("........#######................."),
-  packRow32(".......#######.................."),
-  packRow32("......#######..................."),
-  packRow32(".....#######...................."),
-  packRow32("....#######....................."),
-  packRow32("....######......................"),
-  packRow32("....#####......................."),
-  packRow32(".....###........................"),
-  packRow32("................................"),
-  packRow32("................................"),
-  packRow32("................................"),
-  packRow32("................................"));
-// chat bubble with the loading-dot trio in it
-BIG_ICON(BIG_MESSAGES, 32,
-  packRow32("................................"),
-  packRow32("................................"),
-  packRow32("................................"),
-  packRow32("................................"),
-  packRow32("................................"),
-  packRow32("......####################......"),
-  packRow32("....########################...."),
-  packRow32("....########################...."),
-  packRow32("...####..................####..."),
-  packRow32("...###....................###..."),
-  packRow32("...###....................###..."),
-  packRow32("...###....................###..."),
-  packRow32("...###..####..####..####..###..."),
-  packRow32("...###..####..####..####..###..."),
-  packRow32("...###..####..####..####..###..."),
-  packRow32("...###....................###..."),
-  packRow32("...###....................###..."),
-  packRow32("...###....................###..."),
-  packRow32("...####..................####..."),
-  packRow32("....########################...."),
-  packRow32("....########################...."),
-  packRow32("......####################......"),
-  packRow32("........#####..................."),
-  packRow32("........####...................."),
-  packRow32("........###....................."),
-  packRow32("........##......................"),
-  packRow32("........#......................."),
-  packRow32("................................"),
-  packRow32("................................"),
-  packRow32("................................"),
-  packRow32("................................"),
-  packRow32("................................"));
-
-// A Home page icon hovering over its spot: it bobs up to 2 px on a slow
-// cosine while a dithered blob below it, its shadow, shrinks as it rises and
-// spreads as it sinks. Centred on cx in the 32 px box at y: the glyphs leave
-// a row or two blank at the top, so the icon rests 1 px high and the shadow
-// fits in the rows the old static icon left above its title. Put the title at
-// y + h + HOVER_GAP. E-ink gets the resting frame. Returns ms until the next
-// frame is due.
-constexpr int HOVER_GAP = 3;
-// Where the bob is now: 0 = resting, 1 = top. Anything riding on the icon (a
-// badge) lifts by hoverLift() so it moves with it.
-inline float hoverPhase(DisplayDriver& d) {
-  if (d.isEink()) return 0;
-  const unsigned long period = 2400;
-  return (1.0f - cosf(6.2831853f * (float)(millis() % period) / period)) * 0.5f;
-}
-inline int hoverLift(DisplayDriver& d) { return 1 + (int)(2 * hoverPhase(d) + 0.5f); }
-inline int drawHoverIcon(DisplayDriver& d, int cx, int y, const BigIcon& ic, bool dim = false) {
-  const bool anim = !d.isEink();
-  const float up = hoverPhase(d);
-  d.setColor(DisplayDriver::LIGHT);
-  bigIconDraw(d, cx - ic.w / 2, y - 1 - (int)(2 * up + 0.5f), ic, dim);
-  // Shadow: three rows, a checker oval with a solid core that fades as it rises.
-  const int w = (int)(28 - 10 * up + 0.5f), core = (int)(w * 0.5f * (1 - up) + 0.5f);
-  const int sy = y + ic.h - 1;
-  for (int r = 0; r < 3; r++) {
-    const int rw = r == 1 ? w : w - 8, x0 = cx - rw / 2;
-    for (int x = x0; x < x0 + rw; x++)
-      if (((x + sy + r) & 1) == 0 || (r == 1 && 2 * (x - cx) + 1 < core && 2 * (cx - x) - 1 < core))
-        d.fillRect(x, sy + r, 1, 1);
-  }
-  return anim ? 60 : 1000;
 }
 
 // Favourite marker for a list row, on every screen that lists something
