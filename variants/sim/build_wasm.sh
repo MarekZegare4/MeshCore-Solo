@@ -24,6 +24,8 @@
 # Usage:
 #   variants/sim/build_wasm.sh            # release-ish build (-O2)
 #   variants/sim/build_wasm.sh debug       # -O0 -g, easier to debug in devtools
+#   SIM_UI=lvgl variants/sim/build_wasm.sh            # the L2 (web/lvgl.html)
+#   SIM_EINK=landscape variants/sim/build_wasm.sh     # the L1 E-ink, also portrait
 #
 # Requires emsdk 6.0.9 (pinned; see variants/sim/tools/emsdk/ -- installed by
 # this same task, see the Phase 2 report for the exact activation command).
@@ -190,6 +192,28 @@ if [ "$SIM_UI" = "lvgl" ]; then
            -DTRAIL_CAPACITY=32768 -DTRAIL_SIMPLIFY=0 -DTRAIL_FIXED_MIN_DELTA_M=5 -DWAYPOINT_CAPACITY=64 -DHIST_CH_MAX=256 -DHIST_DM_MAX=128 -DNEARBY_MAX=64 -DHIST_ARCHIVE)
   INCLUDES+=("-I$LVGL_DIR")
   LINK_EXTRA=(-sFETCH=1)   # map downloads (LvglPort.h) go through emscripten_fetch
+fi
+
+# SIM_EINK=landscape|portrait: ui-new on the Wio Tracker L1 E-ink's 2.13" panel
+# (122x250, solo/wio-tracker-l1-eink's two builds) instead of the OLED ->
+# web/index.html?build=meshcore_sim_eink_landscape (or _portrait).
+SIM_EINK="${SIM_EINK:-}"
+if [ -n "$SIM_EINK" ]; then
+  case "$SIM_EINK" in
+    landscape) EINK_DEFS=(-DDISPLAY_ROTATION=1 -DEINK_LARGE_FONT=1) ;;
+    portrait)  EINK_DEFS=(-DDISPLAY_ROTATION=0) ;;
+    *) echo "error: SIM_EINK must be landscape or portrait" >&2; exit 1 ;;
+  esac
+  OUT_NAME="meshcore_sim_eink_$SIM_EINK"
+  EXPORT_NAME=MeshCoreSimEink   # distinct factory: web/mesh.html?a=... loads it beside MeshCoreSim
+  kept=()
+  for d in "${DEFINES[@]}"; do
+    case "$d" in -DDISPLAY_CLASS=*|-DMAX_GROUP_CHANNELS=*) ;; *) kept+=("$d") ;; esac
+  done
+  # EINK_DISPLAY_MODEL is only tested for presence outside GxEPDDisplay
+  # (Features.h: the e-ink settings and timings), which the sim doesn't build.
+  DEFINES=("${kept[@]}" -DDISPLAY_CLASS=SimEinkDisplay -DSIM_EINK_PANEL_W=122 -DSIM_EINK_PANEL_H=250
+           -DEINK_DISPLAY_MODEL=SimEinkPanel -DMAX_GROUP_CHANNELS=40 "${EINK_DEFS[@]}")
 fi
 
 # -funsigned-char: carried over from Phase 1 verbatim -- real ARM cores

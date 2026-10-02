@@ -462,6 +462,32 @@ public:
   void endFrame() override { }
 };
 
+#ifdef SIM_EINK_PANEL_W
+// An e-ink panel (the Wio Tracker L1 E-ink's 2.13", 122x250 before rotation):
+// EinkGfxDisplay draws, exactly as GxEPDDisplay does on the board, into a 1-bit
+// canvas, and a frame that changed is put on the page in paper and ink. The
+// host page counts refreshes from Module.__einkRefreshes. Bodies in target.cpp,
+// the one TU that pulls in the font tables.
+#include <helpers/ui/EinkGfxDisplay.h>
+#ifndef DISPLAY_ROTATION
+  #define DISPLAY_ROTATION 0
+#endif
+class SimEinkDisplay : public EinkGfxDisplay {
+  bool _on = false;
+  static Adafruit_GFX& canvas();
+public:
+  static const int PANEL_W = SIM_EINK_PANEL_W, PANEL_H = SIM_EINK_PANEL_H;
+  SimEinkDisplay();
+  bool begin();
+  bool isOn() override { return _on; }
+  void turnOn() override { _on = true; }
+  void turnOff() override { _on = false; }
+  void clear() override;
+  void setDisplayRotation(uint8_t rot) override;
+  void endFrame() override;
+};
+#endif
+
 extern "C" EMSCRIPTEN_KEEPALIVE inline void sim_lcd_touch(int x, int y, int down) {
   SimLcdDisplay::Touch& t = SimLcdDisplay::touchState();
   t.x = x; t.y = y; t.down = down != 0;

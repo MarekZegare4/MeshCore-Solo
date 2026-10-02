@@ -158,7 +158,13 @@
 
   <div id="log"></div>
 
-  <script src="build/meshcore_sim.js"></script>
+  <!-- ?build=meshcore_sim_eink_landscape (or _portrait) loads another build of
+       the same UI; the e-ink driver sizes the canvas itself. -->
+  <script>
+    document.write('<script src="build/' +
+      (new URLSearchParams(location.search).get('build') || 'meshcore_sim').replace(/[^\w]/g, '') +
+      '.js"><\/script>');
+  </script>
   <script>
     const statusEl = document.getElementById('status');
     const logEl = document.getElementById('log');
@@ -209,11 +215,12 @@
       }
     }
 
-    if (typeof MeshCoreSim !== 'function') {
+    const SimFactory = window.MeshCoreSimEink || window.MeshCoreSim;
+    if (typeof SimFactory !== 'function') {
       statusEl.textContent = 'error: build/meshcore_sim.js missing or failed to load -- run variants/sim/build_wasm.sh first.';
     } else {
       statusEl.textContent = 'booting wasm module...';
-      MeshCoreSim().then((Module) => {
+      SimFactory().then((Module) => {
         window.Module = Module;   // exposed for console poking while testing
         statusEl.textContent = 'running -- IDBFS-backed identity/prefs persist across a real reload.';
         log('module ready; sim_enqueue_key = ' + (typeof Module._sim_enqueue_key));

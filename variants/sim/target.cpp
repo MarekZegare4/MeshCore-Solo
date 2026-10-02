@@ -157,4 +157,82 @@ void SimDisplayDriverCanvas::print(const char* str) {
   // real y position across embedded '\n's internally.
   _cursor_x += getTextWidth(str);
 }
+
+#ifdef SIM_EINK_PANEL_W
+#include <helpers/ui/EinkGfxDisplayImpl.h>
+
+// The panel's RAM: 1 bit a pixel, ink = 1. GFXcanvas1 rotates like GxEPD2 does.
+Adafruit_GFX& SimEinkDisplay::canvas() {
+  static GFXcanvas1 c(PANEL_W, PANEL_H);
+  return c;
+}
+
+SimEinkDisplay::SimEinkDisplay()
+    : EinkGfxDisplay((DISPLAY_ROTATION & 1) ? PANEL_H : PANEL_W,
+                     (DISPLAY_ROTATION & 1) ? PANEL_W : PANEL_H, canvas(), 1, 0) {
+  canvas().setRotation(DISPLAY_ROTATION);
+}
+
+// Sizes the page's canvas to the panel as it's turned, at Module.simEinkScale
+// (default 3) CSS pixels a pixel.
+static void simEinkFitCanvas(int w, int h) {
+  EM_ASM({
+    var tag = (typeof Module !== 'undefined' && Module['simInstanceTag']) ? Module['simInstanceTag'] : '';
+    var c = document.getElementById(tag ? ('sim-canvas-' + tag) : 'sim-canvas');
+    if (!c) { console.error('[sim] e-ink canvas not found in the host page'); return; }
+    var k = Module.simEinkScale || 3;
+    c.width = $0; c.height = $1;
+    c.style.width = ($0 * k) + 'px'; c.style.height = ($1 * k) + 'px';
+    Module.__simCtx = c.getContext('2d');
+    Module.__simCtx.imageSmoothingEnabled = false;
+    Module.__einkRefreshes = Module.__einkRefreshes || 0;
+  }, w, h);
+}
+
+bool SimEinkDisplay::begin() {
+  _on = true;
+  simEinkFitCanvas(width(), height());
+  return true;
+}
+
+void SimEinkDisplay::clear() {
+  canvas().fillScreen(0);
+  forceRedraw();
+}
+
+void SimEinkDisplay::setDisplayRotation(uint8_t rot) {
+  canvas().setRotation(rot & 3);
+  setDimensions(canvas().width(), canvas().height());
+  updateLayout();
+  simEinkFitCanvas(width(), height());
+}
+
+// Only a frame that differs reaches the page, as only that one costs the
+// board a refresh. Read back through getPixel(), which applies the rotation.
+void SimEinkDisplay::endFrame() {
+  if (!frameChanged()) return;
+  const int w = width(), h = height();
+  static uint8_t px[SIM_EINK_PANEL_W * SIM_EINK_PANEL_H];
+  const GFXcanvas1& c = (const GFXcanvas1&)canvas();
+  for (int y = 0; y < h; y++)
+    for (int x = 0; x < w; x++) px[y * w + x] = c.getPixel(x, y);
+  EM_ASM({
+    if (!Module.__simCtx) return;
+    var w = $1;
+    var h = $2;
+    var img = Module.__simCtx.createImageData(w, h);
+    var d = img.data;
+    for (var i = 0; i < w * h; i++) {
+      var ink = HEAPU8[$0 + i];
+      var o = i * 4;
+      d[o] = ink ? 0x1a : 0xdc;
+      d[o + 1] = ink ? 0x1a : 0xdc;
+      d[o + 2] = ink ? 0x1a : 0xd2;
+      d[o + 3] = 255;
+    }
+    Module.__simCtx.putImageData(img, 0, 0);
+    Module.__einkRefreshes++;
+  }, px, w, h);
+}
+#endif // SIM_EINK_PANEL_W
 #endif // __EMSCRIPTEN__

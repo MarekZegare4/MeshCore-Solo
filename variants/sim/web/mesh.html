@@ -231,8 +231,14 @@
 
   <script src="build/meshcore_sim.js"></script>
   <script src="build/repeater/meshcore_sim_repeater.js"></script>
+  <!-- ?a=meshcore_sim_eink_landscape (or _portrait): A is that e-ink build. -->
+  <script>
+    const A_BUILD = (new URLSearchParams(location.search).get('a') || '').replace(/[^\w]/g, '');
+    if (A_BUILD) document.write('<script src="build/' + A_BUILD + '.js"><\/script>');
+  </script>
   <script>
     const logEl = document.getElementById('log');
+    const FactoryA = (opts) => (A_BUILD ? MeshCoreSimEink : MeshCoreSim)(opts);
     function log(msg) {
       const line = document.createElement('div');
       line.textContent = '[' + new Date().toISOString().substr(11, 12) + '] ' + msg;
@@ -384,7 +390,7 @@
     async function resetInstance(key) {
       log(`resetting instance ${key}...`);
       document.getElementById('status-' + key).textContent = 'resetting...';
-      if (key === 'A') A = wrapInstance(await MeshCoreSim({ simInstanceTag: 'A' }), 'A');
+      if (key === 'A') A = wrapInstance(await FactoryA({ simInstanceTag: 'A' }), 'A');
       else if (key === 'B') B = wrapInstance(await MeshCoreSim({ simInstanceTag: 'B' }), 'B');
       else if (key === 'R') R = wrapInstance(await MeshCoreSimRepeater({ simInstanceTag: 'R' }), 'R');
       await waitReady(key === 'A' ? A : key === 'B' ? B : R, 'status-' + key);
@@ -394,7 +400,7 @@
 
     async function main() {
       log('booting instance A (companion_radio)...');
-      const modA = await MeshCoreSim({ simInstanceTag: 'A' });
+      const modA = await FactoryA({ simInstanceTag: 'A' });
       log('booting instance B (companion_radio)...');
       const modB = await MeshCoreSim({ simInstanceTag: 'B' });
       log('booting instance R (simple_repeater)...');

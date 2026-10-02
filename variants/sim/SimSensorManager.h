@@ -1,4 +1,5 @@
 #pragma once
+#include <string.h>
 
 #include <helpers/SensorManager.h>
 
@@ -35,10 +36,20 @@
 // type turns out to matter for a demo.
 class SimSensorManager : public SensorManager {
   static float& envTemperatureRef() { static float t = 21.0f; return t; }
+  bool _gps = false;   // the "gps" setting, as a real board's GPS switch: the UI's toggle needs it
 
 public:
   LocationProvider* getLocationProvider() override;
   bool querySensors(uint8_t requester_permissions, CayenneLPP& telemetry) override;
+
+  int getNumSettings() const override { return 1; }
+  const char* getSettingName(int i) const override { return i == 0 ? "gps" : NULL; }
+  const char* getSettingValue(int i) const override { return i == 0 ? (_gps ? "1" : "0") : NULL; }
+  bool setSettingValue(const char* name, const char* value) override {
+    if (strcmp(name, "gps") != 0) return false;
+    _gps = strcmp(value, "0") != 0;
+    return true;
+  }
 
   static void setEnvTemperature(float celsius) { envTemperatureRef() = celsius; }
 };
