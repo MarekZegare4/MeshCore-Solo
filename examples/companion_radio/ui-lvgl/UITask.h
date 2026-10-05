@@ -341,6 +341,7 @@ private:
   bool homeMapFit();
 #ifdef UI_PERF_TEST
   void perfMap(bool reset = false);
+  void perfWalk();   // PerfTest.h: loop()'s self-driving walk through the screens
   void perfNearbyAgain() { _nearby_sig = 0; refreshNearbyList(); }
 #endif
   void homeMapLayout();
