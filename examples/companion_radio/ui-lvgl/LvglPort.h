@@ -277,6 +277,9 @@ static void setBacklightPct(uint8_t pct) {
   if (pct > 100) pct = 100;
   s_gfx->setBrightness((uint8_t)(8 + (uint16_t)pct * 247 / 100));   // never fully dark
 }
+// After the screen comes on (display.turnOn(), the light still off) and a
+// frame is drawn: the backlight fades up to its level.
+static void backlightFadeIn() { display.fadeIn(); }
 
 // microSD over SDMMC, 1-bit (CLK 2, CMD 3, D0 1); its power rail (expander
 // P14) is switched on in WioTrackerL2Board::begin(). Retried until it works --
@@ -836,6 +839,7 @@ static void powerSave(bool, bool) {}   // the browser's page loop runs the sim
 static void cpuSlow(bool) {}
 static void idle(uint32_t) {}
 static void setBacklightPct(uint8_t pct) { (void)pct; }   // the browser canvas has no backlight
+static void backlightFadeIn() {}
 
 // The host page preloads map tiles into the in-memory FS under /sdcard/maps.
 static bool mountStorage() { return true; }

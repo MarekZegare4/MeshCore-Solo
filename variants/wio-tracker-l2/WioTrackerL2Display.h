@@ -188,6 +188,20 @@ public:
 
 class WioTrackerL2Display : public LGFXDisplay {
   LGFX_WioTrackerL2 disp;
+
+  // The backlight from one PWM level to another over ~180 ms, on a square
+  // curve (the eye sees the low end's steps). Blocks; 0 ends in standby.
+  void fade(uint8_t from, uint8_t to) {
+    const int STEPS = 12;
+    for (int i = 1; i <= STEPS; i++) {
+      const int t = i * 256 / STEPS;   // 0..256
+      const int k = from < to ? t * t / 256 : 256 - (256 - t) * (256 - t) / 256;
+      const int v = from + ((int)to - from) * k / 256;
+      display->panel()->setBrightness((uint8_t)(i == STEPS ? to : (v < 1 ? 1 : v)));
+      delay(15);
+    }
+  }
+
 public:
   WioTrackerL2Display() : LGFXDisplay(320, 240, disp) {}
 
@@ -196,6 +210,26 @@ public:
     static const uint8_t PWM[5] = { 20, 60, 120, 190, 255 };
     display->setBrightness(PWM[level > 4 ? 4 : level]);
   }
+
+  // Screen off: the backlight fades out, then the panel sleeps. Screen on: the
+  // panel wakes with the light still off -- the caller draws a fresh frame
+  // first (the panel shows what's left in its memory for a moment, a white
+  // flash) -- and fadeIn() brings the light up.
+  void turnOff() override {
+    if (_isOn) {
+      fade(display->getBrightness(), 0);
+      display->sleep();
+    }
+    _isOn = false;
+  }
+  void turnOn() override {
+    if (!_isOn) {
+      display->panel()->setSleep(false);
+      delay(10);   // the panel takes no pixels just out of sleep
+    }
+    _isOn = true;
+  }
+  void fadeIn() { fade(0, display->getBrightness()); }
 
   // direct access to the LGFX device (LVGL flush/touch glue)
   lgfx::LGFX_Device* lgfxDevice() { return &disp; }

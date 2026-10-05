@@ -54,6 +54,12 @@ Settings and Messages are always shown.
 > **Wio Tracker L2:** pages you swipe between: favourite chats, the clock
 > (where it starts), a minimap, then the apps, six to a page. Hold an app to
 > arrange or hide them.
+>
+> Pull down from the status bar (or tap it) for the quick panel: Bluetooth,
+> WiFi, GPS, sound, trail and live share switch at a tap, Advert sends an
+> advert or sets the automatic one, Lock locks the screen, and the slider
+> sets the brightness. Hold a tile for its settings. Swipe it up, or tap
+> below it, to put it away.
 
 ## Connecting the phone app
 

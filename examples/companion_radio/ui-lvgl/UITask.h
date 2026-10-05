@@ -53,6 +53,13 @@ public:
   void homeAppDrop(int from, int to);
   void homeAppToggle(int pos);
   void goHome();                   // the side button: Home's clock page
+  // The quick panel, pulled down from the status bar (QuickPanel.h)
+  void quickPanelBuild();
+  bool quickPanelBegin();
+  void quickPanelClose(bool animate);
+  bool quickPanelOpen() const;
+  void quickPanelRefresh();
+  void quickPanelTile(int t, bool hold);
   void homeFieldSet(int slot, int field);
   void showChats();
   void showContacts();
@@ -240,6 +247,7 @@ public:
   void conversationAction(uint8_t act);
   void conversationNotif(int v);
   void messageMenu(int idx);
+  void messagePopupTick();
   void messageAction(uint8_t act);
   void chatFold(int which);
   void toggleChatFilter(uint8_t which);
@@ -396,6 +404,7 @@ private:
   void refreshNode();
   void buildThread();
   void refreshThread();
+  void refreshThreadAges();
   uint32_t threadSignature() const;
   void buildClock();
   void buildRadio();
@@ -484,6 +493,7 @@ private:
   bool     _asleep = false;
   uint32_t _next_status_ms = 0;
   uint32_t _next_thread_check_ms = 0;
+  uint32_t _next_thread_ages_ms = 0;
   uint32_t _next_trackback_ms = 0;
   uint32_t _next_clock_ms = 0;
   uint8_t  _settings_page = 0;   // settings::Page shown in SCR_SETTINGS_NAV

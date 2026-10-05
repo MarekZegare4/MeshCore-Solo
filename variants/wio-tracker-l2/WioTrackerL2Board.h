@@ -82,6 +82,9 @@ public:
   // VBUS presence via the AW35615 USB-C controller (I2C 0x22)
   bool isExternalPowered() override;
 
+  // Off (Power off, or the battery ran down): see the .cpp
+  void powerOff() override;
+
 private:
   uint8_t out_shadow[2] = { 0xFF, 0xFF };  // TCA9535 output regs default high
   uint8_t cfg_shadow[2] = { 0xFF, 0xFF };  // 1 = input (power-on default)

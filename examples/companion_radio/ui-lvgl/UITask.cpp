@@ -1671,7 +1671,10 @@ void UITask::loop() {
   }
   else if (btn_hold) mute_armed = true;
   else if (mute) toggleMute();
-  else if (btn_click) { if (!_asleep && !locked()) goHome(); }   // the side button doesn't wake: pockets
+  else if (btn_click) {   // the side button doesn't wake: pockets
+    if (quickPanelOpen()) quickPanelClose(true);
+    else if (!_asleep && !locked()) goHome();
+  }
 
   if (_asleep) {
     // Tap to wake (off: the top button only). An I2C read on the touch panel.
@@ -1966,6 +1969,7 @@ void UITask::loop() {
       refreshCompass();
       refreshGps();
       refreshBattCurve();
+      if (quickPanelOpen()) quickPanelRefresh();
     }
     if (locked()) lockPoll();
     else if (_screen == SCR_HOME) { homeSwipePoll(); homeMapLoop(); }
@@ -1998,6 +2002,8 @@ void UITask::loop() {
       _next_thread_check_ms = millis() + 500;
       uint32_t sig = threadSignature();
       if (_thread_dirty || sig != _thread_sig) refreshThread();
+      else if ((int32_t)(millis() - _next_thread_ages_ms) >= 0) refreshThreadAges();
+      messagePopupTick();
     }
     lvport::cpuSlow(!cpuNeeded());
     lv_next = lv_timer_handler();
@@ -2068,6 +2074,7 @@ uint32_t UITask::autoOffMillis() const {
 void UITask::sleep() {
   if (_asleep) return;
   _asleep = true;
+  quickPanelClose(false);
   if (_display) _display->turnOff();
   prefsSaveSoon(0);   // nothing to stall now
   lvport::powerSave(true, _tap_wake);
@@ -2079,11 +2086,13 @@ void UITask::wake() {
   if (!_asleep) return;
   _asleep = false;
   lvport::powerSave(false, _tap_wake);
-  if (_display) _display->turnOn();
+  if (_display) _display->turnOn();   // dark until the frame below is on the panel
   refreshStatusBar();
   if (_screen == SCR_HOME) refreshHome();
   if (_screen == SCR_THREAD) refreshThread();
   lv_obj_invalidate(lv_screen_active());
+  lv_refr_now(NULL);
+  lvport::backlightFadeIn();
 }
 
 // ── Core events ───────────────────────────────────────────────────────────────
@@ -2268,6 +2277,8 @@ bool UITask::isViewingDM(const uint8_t* pub_key) {
 
 // ── Status bar + toast (top layer, over every screen) ─────────────────────────
 
+static void onStatusBarTouch(lv_event_t* e);   // QuickPanel.h
+
 void UITask::buildStatusBar() {
   // The banner and the toast first: the status bar, made after them, covers
   // them as they slide in and out from under it.
@@ -2292,7 +2303,9 @@ void UITask::buildStatusBar() {
   s_status_bar = bar;
   styleOpaque(bar, theme::BG);
   lv_obj_remove_flag(bar, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_remove_flag(bar, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_flag(bar, LV_OBJ_FLAG_PRESS_LOCK);   // pulled down past it: still its touch (the quick panel)
+  lv_obj_remove_flag(bar, LV_OBJ_FLAG_GESTURE_BUBBLE);
+  lv_obj_add_event_cb(bar, onStatusBarTouch, LV_EVENT_ALL, NULL);
   lv_obj_set_size(bar, LV_PCT(100), theme::STATUS_H);
   lv_obj_align(bar, LV_ALIGN_TOP_MID, 0, 0);
   lv_obj_set_style_pad_hor(bar, theme::PAD, 0);
@@ -2369,8 +2382,10 @@ void UITask::refreshStatusBar() {
   if (lvport::wifiAllowed())   // WiFi switched on: accent while connected (map tiles, update)
     icons[n++] = { LV_SYMBOL_WIFI, lvport::netRadio() == lvport::NET_UP ? theme::ACCENT : theme::TEXT_MUTED };
   int32_t lat, lon;
-  bool fix = _core->course.currentLocation(lat, lon);
-  if (_core->gpsEnabled() || fix) icons[n++] = { LV_SYMBOL_GPS, fix ? theme::OK : theme::TEXT_MUTED };
+  if (_core->gpsEnabled()) {   // switched off, the module still reports its last fix as valid
+    bool fix = _core->course.currentLocation(lat, lon);
+    icons[n++] = { LV_SYMBOL_GPS, fix ? theme::OK : theme::TEXT_MUTED };
+  }
   if (_prefs && _prefs->alarm_on) icons[n++] = { LV_SYMBOL_BELL, theme::TEXT_MUTED };
 #ifdef PIN_BUZZER
   if (_buzzer.isQuiet()) icons[n++] = { UI_SYMBOL_MUTE, theme::TEXT_MUTED };
@@ -2403,9 +2418,9 @@ void UITask::botSetGPS(bool on) { if (_core->setGpsEnabled(on)) refreshStatusBar
 
 bool UITask::ensureGps() {
   int32_t lat, lon;
+  if (_core->gpsAvailable() && !_core->gpsEnabled()) { setGps(true); return false; }   // off, its last fix still reads valid
   if (_core->course.currentLocation(lat, lon)) return true;
-  if (_core->gpsAvailable() && !_core->gpsEnabled()) setGps(true);
-  else showToast("Waiting for a GPS fix");
+  showToast("Waiting for a GPS fix");
   return false;
 }
 
@@ -2614,6 +2629,7 @@ int UITask::fillPending() const {
 #include "NodeViz.h"   // the node detail's rose and path (newScreen() drops its card)
 
 lv_obj_t* UITask::newScreen(const char* title, bool with_back) {
+  quickPanelClose(false);
   s_fill_n = 0;   // what was still to be built goes with the screen
   _home_clock = _home_date = _home_unread = nullptr;
   _thread_list = _compose_ta = _keyboard = nullptr;
@@ -2711,6 +2727,7 @@ int UITask::screenDepth(Screen s) {
 }
 
 void UITask::back() {
+  if (quickPanelOpen()) { quickPanelClose(true); return; }
   _nav_back = true;   // the screen shown from here slides back
   switch (_screen) {
     case SCR_THREAD:   if (_nav_overlay) navClosePopup(); else showChats(); break;
@@ -3410,7 +3427,6 @@ enum : uint8_t { NODE_MSG, NODE_PING, NODE_FAV, NODE_ADD, NODE_DELETE, NODE_NAV,
 static void onNearbyChip(lv_event_t* e) { s_ui->setNearbyFilter((uint8_t)(uintptr_t)lv_event_get_user_data(e)); }
 static void onNearbySort(lv_event_t* e) { (void)e; s_ui->toggleNearbySort(); }
 static void onNearbyScan(lv_event_t* e) { (void)e; s_ui->startNearbyScan(); }
-static void onAdvertRow(lv_event_t* e);   // QuickScreen.h
 static void onNearbyRow(lv_event_t* e)  { s_ui->openNode((int)vlist::arg(e)); }
 static void onScanRow(lv_event_t* e)    { s_ui->openScanNode((int)vlist::arg(e)); }
 static void onScanClose(lv_event_t* e)  { (void)e; s_ui->closeScanPopup(); }
@@ -3444,8 +3460,7 @@ void UITask::buildNearby() {
   if (_header) {
     headerButton(_header, LV_SYMBOL_REFRESH, onNearbyScan, 4, NULL);   // scan
     lv_obj_set_width(headerButton(_header, "", onNearbySort, 46, &_nearby_sort_lbl), 62);   // fits "Recent" / "Dist"
-    headerButton(_header, UI_SYMBOL_MAP, onOpenNodesMap, 114, NULL);   // the Nodes map
-    headerButton(_header, UI_SYMBOL_RADIO, onAdvertRow, 156, NULL);    // send advert, auto-advert
+    headerButton(_header, UI_SYMBOL_MAP, onOpenNodesMap, 114, NULL);   // the Nodes map (the advert: the quick panel)
   }
 
   // Type filter chips
@@ -4335,10 +4350,23 @@ void UITask::threadPage(int dir) {
   refreshThread();
 }
 
+// Every 2 s on a conversation, as ui-new: the bubbles' ages ("12s", "14s").
+void UITask::refreshThreadAges() {
+  _next_thread_ages_ms = millis() + 2000;
+  uint32_t now = rtc_clock.getCurrentTime();
+  for (int r = 0; r < s_th_rows_n; r++) {
+    if (!s_th_rows[r].age) continue;
+    char meta[32];
+    fmtMsgAge(meta, sizeof(meta), now, _thread_is_channel ? s_th_ch[r].timestamp : s_th_dm[r].timestamp, _prefs);
+    setText(s_th_rows[r].age, meta);
+  }
+}
+
 void UITask::refreshThread() {
   if (!_thread_list) return;
   _thread_dirty = false;
   _thread_sig = threadSignature();
+  _next_thread_ages_ms = millis() + 2000;   // the ages are written below
   const MessageHistory& h = _core->history;
   int total = 0;
   int n = loadThreadPage(total);
@@ -4933,6 +4961,7 @@ void UITask::setKeyboardAlphabets(int main_idx, int alt_sel) {
 #include "RepeaterScreen.h"
 #include "SoundScreen.h"
 #include "QuickScreen.h"
+#include "QuickPanel.h"
 #include "OtaScreen.h"
 #include "StorageScreen.h"
 #include "Splash.h"

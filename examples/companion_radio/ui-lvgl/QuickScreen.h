@@ -1,5 +1,5 @@
 // Quick messages and placeholders (the compose bar's "+", Settings > Messages
-// & contacts > Quick messages), the advert button in Nodes' header, Settings > Bluetooth, and
+// & contacts > Quick messages), the advert popup (the quick panel's Advert), Settings > Bluetooth, and
 // Messages' "Read all". The text side is ui-core/MessageText.h.
 // Included by UITask.cpp (single translation unit).
 
@@ -62,7 +62,6 @@ static void onBtSwitch(lv_event_t* e) {
 
 }  // namespace qview
 
-static void onAdvertRow(lv_event_t* e)     { (void)e; s_ui->advertPopup(); }
 static void onOpenQuickMsgs(lv_event_t* e) { (void)e; s_ui->showQuickMsgs(); }
 
 // ── The compose bar's "+" ─────────────────────────────────────────────────────
@@ -189,7 +188,7 @@ void UITask::quickEditDone(bool ok) {
   }
 }
 
-// ── Nearby > advert ───────────────────────────────────────────────────────────
+// ── Advert (the quick panel) ─────────────────────────────────────────────────
 // Shows you (and your position, if shared) to other nodes: now, or on a timer
 // (the schema's PG_ADVERT page, ui-new's Tools > Auto-Advert).
 

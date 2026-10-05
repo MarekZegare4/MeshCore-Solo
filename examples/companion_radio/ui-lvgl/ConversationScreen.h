@@ -24,6 +24,37 @@ static uint8_t s_login_key[PUB_KEY_SIZE];
 static bool s_login_wait = false;       // open the room once this login answers
 static lv_obj_t* s_fav_btn = nullptr;
 static int s_msg = -1;                  // s_msg_meta index the message popup is about
+// The message popup kept up to date (messagePopupTick): its overlay while
+// open, the message (by time), its "when" line and what else it shows.
+static lv_obj_t* s_msg_overlay = nullptr;
+static lv_obj_t* s_msg_when = nullptr;
+static uint32_t s_msg_ts = 0;
+static uint32_t s_msg_state = 0;
+
+// "14:05  -  12s ago  -  2 hops": when it came and, incoming, how far.
+static void whenText(char* when, size_t n, uint32_t ts, uint8_t packed, bool own, const NodePrefs* prefs) {
+  char age[16];
+  uint32_t now = rtc_clock.getCurrentTime();
+  geo::fmtAgeShort(age, sizeof(age), now, ts ? ts : now);
+  struct tm ti;
+  if (localTime(prefs, ti, ts)) {
+    char clk[12];
+    fmtClock(clk, sizeof(clk), ti, prefs, true);
+    if (clockBehind(now, ts)) {   // the clock isn't set yet: the date instead of an age
+      char date[32];
+      fmtDate(date, sizeof(date), ti);
+      snprintf(when, n, "%s  %s", date, clk);
+    } else snprintf(when, n, "%s  -  %s ago", clk, age);
+  } else {
+    snprintf(when, n, "%s ago", age);
+  }
+  if (!own) {   // incoming: how far it came, on the same line
+    uint8_t hops = contactctl::hopCount(packed);
+    size_t o = strlen(when);
+    if (hops > 0) snprintf(when + o, n - o, "  -  %u hop%s", hops, hops == 1 ? "" : "s");
+    else snprintf(when + o, n - o, "  -  direct");
+  }
+}
 
 
 }  // namespace convview
@@ -296,28 +327,13 @@ void UITask::messageMenu(int idx) {
   lv_obj_set_style_border_width(q, 2, 0);
   lv_obj_set_style_border_color(q, lv_color_hex(m.own ? theme::ACCENT : theme::SURFACE_2), 0);
   lv_obj_set_style_pad_left(q, 8, 0);
-  char when[64], age[16];
-  uint32_t now = rtc_clock.getCurrentTime();
-  geo::fmtAgeShort(age, sizeof(age), now, ts ? ts : now);
-  struct tm ti;
-  if (localTime(_prefs, ti, ts)) {
-    char clk[12];
-    fmtClock(clk, sizeof(clk), ti, _prefs, true);
-    if (clockBehind(now, ts)) {   // the clock isn't set yet: the date instead of an age
-      char date[32];
-      fmtDate(date, sizeof(date), ti);
-      snprintf(when, sizeof(when), "%s  %s", date, clk);
-    } else snprintf(when, sizeof(when), "%s  -  %s ago", clk, age);
-  } else {
-    snprintf(when, sizeof(when), "%s ago", age);
-  }
+  char when[64];
+  whenText(when, sizeof(when), ts, packed, m.own, _prefs);
   uint8_t hops = contactctl::hopCount(packed);
-  if (!m.own) {   // incoming: how far it came, on the same line
-    size_t o = strlen(when);
-    if (hops > 0) snprintf(when + o, sizeof(when) - o, "  -  %u hop%s", hops, hops == 1 ? "" : "s");
-    else snprintf(when + o, sizeof(when) - o, "  -  direct");
-  }
-  label(panel, when, THEME_FONT_SMALL, theme::TEXT_MUTED);
+  s_msg_when = label(panel, when, THEME_FONT_SMALL, theme::TEXT_MUTED);
+  s_msg_overlay = _nav_overlay;
+  s_msg_ts = ts;
+  s_msg_state = packed | (uint32_t)dm_st << 8;
 
   if (m.own && !m.channel) {   // a DM we sent: its end-to-end delivery, in words
     const char* st = "Sent"; uint32_t col = theme::TEXT_MUTED;
@@ -359,6 +375,35 @@ void UITask::messageMenu(int idx) {
   lv_obj_t* acts = buttonBar(panel);
   if (can_reply) barButton(acts, LV_SYMBOL_EDIT " Reply", onMsgAction, M_REPLY, false);
   if (m.loc >= 0) barButton(acts, UI_SYMBOL_COMPASS " Set target", onMsgAction, M_TARGET, false);
+}
+
+// The open message popup, every half second on a conversation: the age in
+// its "when" line, and opened anew when the repeaters heard passing it on or
+// its delivery change. Found again by its time (the page may have moved).
+void UITask::messagePopupTick() {
+  using namespace convview;
+  if (!_nav_overlay || _nav_overlay != s_msg_overlay) return;
+  const MessageHistory& h = _core->history;
+  for (int i = 0; i < s_msg_meta_n; i++) {
+    const MsgMeta& m = s_msg_meta[i];
+    if (m.pos < 0) continue;
+    uint32_t ts, state;
+    uint8_t packed;
+    if (m.channel) {
+      const ChHistEntry& e = s_th_ch[m.pos];
+      ts = e.timestamp; packed = e.path_len; state = packed | (uint32_t)ACK_NONE << 8;
+    } else {
+      const DmHistEntry& e = s_th_dm[m.pos];
+      ts = e.timestamp; packed = e.path_len;
+      state = packed | (uint32_t)(e.outgoing ? h.dmEffectiveStatus(e) : ACK_NONE) << 8;
+    }
+    if (ts != s_msg_ts) continue;
+    if (state != s_msg_state) { messageMenu(i); return; }
+    char when[64];
+    whenText(when, sizeof(when), ts, packed, m.own, _prefs);
+    setText(s_msg_when, when);
+    return;
+  }
 }
 
 void UITask::messageAction(uint8_t act) {

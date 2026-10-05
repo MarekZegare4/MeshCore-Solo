@@ -108,7 +108,43 @@ bool WioTrackerL2Board::initExpander() {
   return true;
 }
 
+// Off -- Power off, or the battery ran down -- the chip sleeps, waking every
+// OFF_POLL_SECS to look for USB power plugged in, and starts when it is: as
+// an nRF board starts on its own once charged (a deep sleep with no wake
+// source left it off until the reset button). Plugged in when switched off,
+// it stays off until the cable is pulled and plugged in again. A look costs
+// a boot as far as begin(), a fraction of a second.
+static const uint32_t OFF_MAGIC = 0x4F464621;   // "OFF!"
+static const uint32_t OFF_POLL_SECS = 30;
+RTC_NOINIT_ATTR static uint32_t s_off_magic;
+RTC_NOINIT_ATTR static uint32_t s_off_vbus;     // USB power at the last look
+
+void WioTrackerL2Board::powerOff() {
+  s_off_vbus = isExternalPowered();
+  s_off_magic = OFF_MAGIC;
+  enterDeepSleep(OFF_POLL_SECS);
+}
+
+// Off and woken by the timer (or a brown-out of the flat battery): back to
+// sleep unless USB power has come since the last look.
+static void stayOffUnlessPlugged(WioTrackerL2Board& b) {
+  const esp_reset_reason_t r = esp_reset_reason();
+  if (s_off_magic != OFF_MAGIC || (r != ESP_RST_DEEPSLEEP && r != ESP_RST_BROWNOUT)) {
+    s_off_magic = 0;
+    return;
+  }
+  Wire.begin(PIN_BOARD_SDA, PIN_BOARD_SCL);
+  const bool vbus = b.isExternalPowered();
+  if (vbus && !s_off_vbus) { s_off_magic = 0; return; }   // plugged in: start
+  s_off_vbus = vbus;
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+  esp_sleep_enable_timer_wakeup(OFF_POLL_SECS * 1000000ULL);
+  esp_deep_sleep_start();
+}
+
 void WioTrackerL2Board::begin() {
+  stayOffUnlessPlugged(*this);   // first: before the 3 s wait for a serial monitor below
+
   // GNSS UART: NMEA arrives at ~500 B/s and the main loop can stall for
   // hundreds of ms on SD tile decodes; the 256-byte default overflowed
   Serial1.setRxBufferSize(1024);
