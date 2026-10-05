@@ -105,7 +105,7 @@ public :
 
     void stop() override {
 #ifdef GPS_SKYVIEW
-        _sky.reset();   // a receiver that is off is not searching: stop the TTFF clock
+        _sky.halt();   // a receiver that is off is not searching: stop the search clock
 #endif
         if (_pin_en != -1) {
             digitalWrite(_pin_en, !GPS_EN_ACTIVE);

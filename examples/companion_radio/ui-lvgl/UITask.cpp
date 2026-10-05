@@ -1056,6 +1056,15 @@ static void fieldFocus(lv_obj_t* ta, bool on) {
   lv_textarea_set_cursor_pos(ta, lv_textarea_get_cursor_pos(ta));
 }
 
+// A field limited in UTF-8 bytes (user data: the cap) -- names and other text
+// that is stored in a fixed buffer. LVGL's own limit counts characters.
+static void onByteCapInsert(lv_event_t* e) {
+  lv_obj_t* ta = (lv_obj_t*)lv_event_get_target(e);
+  const char* ins = (const char*)lv_event_get_param(e);
+  size_t cap = (size_t)(uintptr_t)lv_event_get_user_data(e);
+  if (ins && strlen(lv_textarea_get_text(ta)) + strlen(ins) > cap) lv_textarea_set_insert_replace(ta, "");
+}
+
 // The primary action of a screen or popup: full amber, dark text (Theme.h);
 // call after its label is made.
 static void stylePrimary(lv_obj_t* b) {

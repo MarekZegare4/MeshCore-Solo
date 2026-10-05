@@ -350,21 +350,12 @@ void UITask::adminValuePopup() {
 void UITask::adminTextPopup(const char* text, bool digits) {
   AdminSession& S = _core->admin;
   const admin::Field* f = S.currentField();
-  lv_obj_t* panel = navPopupPanel(f ? f->label : "Command", false);
-  lv_obj_align(panel, LV_ALIGN_TOP_MID, 0, theme::STATUS_H + 4);   // above the keyboard
-  _nav_ta = textField(panel);
-  lv_textarea_set_max_length(_nav_ta, 150);
-  if (digits) lv_textarea_set_accepted_chars(_nav_ta, "0123456789.");
-  if (f && f->isCustom()) lv_textarea_set_placeholder_text(_nav_ta, "e.g. get advert.interval");
-  lv_textarea_set_text(_nav_ta, text);
-  lv_obj_add_state(_nav_ta, LV_STATE_FOCUSED);
-  _nav_kb = kb::create(_nav_overlay, _prefs);
-  lv_obj_set_size(_nav_kb, LV_PCT(100), 124);
-  lv_obj_align(_nav_kb, LV_ALIGN_BOTTOM_MID, 0, 0);
-  lv_keyboard_set_textarea(_nav_kb, _nav_ta);
-  if (digits) kb::apply(_nav_kb, kb::L_SYM);
-  lv_obj_add_event_cb(_nav_kb, onAdminTextKb, LV_EVENT_READY, NULL);
-  lv_obj_add_event_cb(_nav_kb, onAdminTextKb, LV_EVENT_CANCEL, NULL);
+  TextEntry t = { f ? f->label : "Command", onAdminTextKb };
+  t.text = text;
+  t.max_bytes = 150;
+  if (digits) { t.accepted = "0123456789."; t.symbols = true; }
+  if (f && f->isCustom()) t.hint = "e.g. get advert.interval";
+  navTextEntry(t);
 }
 
 void UITask::adminTextDone(bool ok) {

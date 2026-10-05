@@ -151,7 +151,7 @@ void UITask::quickEdit(int slot) {
   lv_obj_set_width(_nav_ta, w);
   lv_obj_set_pos(_nav_ta, 8, theme::STATUS_H + 4);
   lv_textarea_set_text(_nav_ta, msgtext::quick(_prefs, slot));
-  lv_obj_add_event_cb(_nav_ta, devview::onByteCapInsert, LV_EVENT_INSERT, (void*)(uintptr_t)(msgtext::QUICK_LEN - 1));
+  lv_obj_add_event_cb(_nav_ta, onByteCapInsert, LV_EVENT_INSERT, (void*)(uintptr_t)(msgtext::QUICK_LEN - 1));
   lv_obj_add_state(_nav_ta, LV_STATE_FOCUSED);   // draws the cursor
 
   lv_obj_t* row = chips(_nav_overlay, onQuickEditPh, false);

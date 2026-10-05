@@ -122,18 +122,11 @@ void UITask::roomLoginPopup(const uint8_t* pub_key) {
   ContactInfo ci;
   if (!MessageHistory::contactByPrefix(pub_key, ci)) return;
   memcpy(s_login_key, ci.id.pub_key, PUB_KEY_SIZE);
-  lv_obj_t* panel = navPopupPanel(ci.name, false);
-  lv_obj_align(panel, LV_ALIGN_TOP_MID, 0, theme::STATUS_H + 4);   // above the keyboard
-  _nav_ta = wifiField(panel, "Room password (may be empty)", true);
-  lv_obj_remove_event_cb(_nav_ta, onWifiField);
-  lv_textarea_set_max_length(_nav_ta, 15);
-  lv_obj_add_state(_nav_ta, LV_STATE_FOCUSED);   // draws the cursor
-  _nav_kb = kb::create(_nav_overlay, _prefs);
-  lv_obj_set_size(_nav_kb, LV_PCT(100), 124);
-  lv_obj_align(_nav_kb, LV_ALIGN_BOTTOM_MID, 0, 0);
-  lv_keyboard_set_textarea(_nav_kb, _nav_ta);
-  lv_obj_add_event_cb(_nav_kb, onRoomLoginKb, LV_EVENT_READY, NULL);
-  lv_obj_add_event_cb(_nav_kb, onRoomLoginKb, LV_EVENT_CANCEL, NULL);
+  TextEntry t = { ci.name, onRoomLoginKb };
+  t.hint = "Room password (may be empty)";
+  t.password = true;
+  t.max_bytes = 15;
+  navTextEntry(t);
 }
 
 void UITask::roomLoginDone(bool ok) {

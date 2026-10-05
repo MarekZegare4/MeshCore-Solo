@@ -562,6 +562,83 @@ class MessagesScreen : public UIScreen {
     return { outgoing ? (full_avail - w) : 0, w };
   }
 
+  // The marker in a bubble's header, after the sender: a delivery glyph (an
+  // outgoing DM, or a channel post a repeater echoed), or the hop count an
+  // incoming message took; none if neither applies.
+  struct BubbleMark {
+    enum Kind : uint8_t { NONE, ACK, HOPS } kind = NONE;
+    AckState status = ACK_OK;
+    int sends = 1, relay = 0, hops = 0;
+    static BubbleMark ack(AckState s, int sends, int relay) { BubbleMark m; m.kind = ACK; m.status = s; m.sends = sends; m.relay = relay; return m; }
+    static BubbleMark hop(int n) { BubbleMark m; if (n > 0) { m.kind = HOPS; m.hops = n; } return m; }
+    int width(DisplayDriver& d) const {
+      return kind == ACK ? 3 + ackGlyphWidth(d, status, sends, relay)
+           : kind == HOPS ? 3 + miniIconNumberWidth(d, hops) : 0;
+    }
+  };
+
+  // One history row as a bubble with a header (sender, marker, age) over its
+  // body, sized to its own content -- shared by the DM/room and channel lists.
+  // `expand` wraps the body over several lines; otherwise one line that the
+  // selected row marquees. `mq_delay` takes the marquee's redraw request.
+  void drawHeadedBubble(DisplayDriver& display, int y, int bh, int lh, bool sel, int reserve, bool outgoing,
+                        const char* sender, const char* body, const char* age, const BubbleMark& mark,
+                        bool expand, int& mq_delay) {
+    const int age_w = age[0] ? display.getTextWidth(age) + 3 : 0;
+    // Size the bubble to its own content before drawing anything (see
+    // computeBubbleBox): the header (sender+marker+age) vs the body, measured
+    // once here and reused below instead of re-wrapping.
+    const int full_avail = display.width() - reserve;
+    const int max_w = bubbleMaxW(display, full_avail);
+    const int ack_w = mark.width(display);
+    // A little air between a marker and the age, so "12" + "1s" doesn't read as "121s".
+    const int mk_gap = (ack_w > 0 && age_w > 0) ? 2 : 0;
+    const int header_w = 3 + (sender[0] ? display.getTextWidth(sender) : -3) + ack_w + mk_gap + age_w + 3;
+    int body_w, nl = 0;
+    if (expand) {
+      display.translateUTF8ToBlocks(s_wrap_trans, body, sizeof(s_wrap_trans));
+      nl = FullscreenMsgView::wrapLines(display, s_wrap_trans, max_w - 6, s_wrap_lines, 8);
+      body_w = 0;
+      for (int li = 0; li < nl; li++) { int w = display.getTextWidth(s_wrap_lines[li]); if (w > body_w) body_w = w; }
+      body_w += 6;
+    } else {
+      int raw_w = display.getTextWidth(body);
+      body_w = (raw_w > max_w - 6 ? max_w - 6 : raw_w) + 6;
+    }
+    const BubbleBox box = computeBubbleBox(full_avail, max_w, outgoing, header_w, body_w);
+
+    drawHistRowFrame(display, box.x, box.w, y, bh, lh, sel);
+    // Only the body marquees, not the sender too: both share the single
+    // marquee slot on DisplayDriver, and if two texts in the same row both
+    // qualified they'd keep resetting each other's animation every frame.
+    // The name gives way to the marker and the age (a long name is
+    // ellipsized), and the marker sits right after whatever width the name
+    // actually got -- not after its full width, which would run it into the age.
+    int name_avail = box.w - 6 - age_w - ack_w - mk_gap;
+    if (name_avail < display.getCharWidth()) name_avail = display.getCharWidth();
+    int name_w = sender[0] ? display.getTextWidth(sender) : 0;
+    if (name_w > name_avail) name_w = name_avail;
+    if (sender[0]) display.drawTextEllipsized(box.x + 3, y + 1, name_avail, sender);
+    int gx = box.x + 3 + (name_w ? name_w + 3 : 0);
+    if (mark.kind == BubbleMark::ACK)       drawAckGlyph(display, gx, y + 1, mark.status, mark.sends, mark.relay);
+    else if (mark.kind == BubbleMark::HOPS) miniIconDrawNumber(display, gx, y + 1, mark.hops);
+    if (age[0]) { display.setCursor(box.x + box.w - age_w, y + 1); display.print(age); }
+    // Ink is already LIGHT (unselected) or DARK (selected) from
+    // drawHistRowFrame above, and nothing since has changed it.
+    if (expand) {
+      for (int li = 0; li < nl; li++) { display.setCursor(box.x + 3, y + (li + 1) * lh + 1); display.print(s_wrap_lines[li]); }
+    } else {
+      // Suppress this row's own marquee while _ctx_menu (Path/Relayed by,
+      // etc.) sits on top of it -- both would otherwise fight over
+      // DisplayDriver's single shared marquee slot every frame (this row
+      // redraws every frame regardless of the popup), each is_new-resetting
+      // the other's animation and producing a stuck-then-jumpy scroll.
+      const bool body_marquee = sel && !_ctx_menu.active;
+      const int r_body = display.drawTextEllipsized(box.x + 3, y + lh + 1, box.w - 6, body, body_marquee);
+      if (body_marquee && r_body > 0) mq_delay = r_body;
+    }
+  }
+
   // Bottom-right "+ Send" compose button, shared by both history lists:
   // bordered when idle, inverted (filled) when selected. Right-aligned to
   // match the outgoing ("Me") bubbles anchored on that side, so composing
@@ -1511,71 +1588,12 @@ public:
         // time at write time), but if it ever does, show the receipt time
         // (now_ts) rather than leave the row with no age at all.
         char age[6]; geo::fmtAgeShort(age, sizeof(age), now_ts, e.timestamp ? e.timestamp : now_ts);
-        int age_w = age[0] ? display.getTextWidth(age) + 3 : 0;
-
-        // Size the bubble to its own content before drawing anything (see
-        // computeBubbleBox): the header (sender+ack+age) vs the body, measured
-        // once here and reused below instead of re-wrapping.
-        int full_avail = display.width() - reserve;
-        int max_w = bubbleMaxW(display, full_avail);
-        // Incoming: the hop count the DM actually took to reach us, shown as
-        // the same tiny digit icon an outgoing send uses for its relay/echo
-        // count -- no ack glyph exists for incoming (there's nothing to
-        // deliver), so this slot is otherwise empty.
-        int in_hop_count = !e.outgoing ? (e.path_len & 63) : 0;
-        int ack_w = e.outgoing ? (3 + ackGlyphWidth(display, _history.dmEffectiveStatus(e), e.attempt + 1))
-                  : (in_hop_count > 0 ? (3 + miniIconNumberWidth(display, in_hop_count)) : 0);
-        // A little air between a marker and the age, so "12" + "1s" doesn't read as "121s".
-        int mk_gap = (ack_w > 0 && age_w > 0) ? 2 : 0;
-        int header_w = 3 + (sender[0] ? display.getTextWidth(sender) : -3) + ack_w + mk_gap + age_w + 3;
-        int body_w, nl = 0;
-        if (expand) {
-          display.translateUTF8ToBlocks(s_wrap_trans, body, sizeof(s_wrap_trans));
-          nl = FullscreenMsgView::wrapLines(display, s_wrap_trans, max_w - 6, s_wrap_lines, 8);
-          body_w = 0;
-          for (int li = 0; li < nl; li++) { int w = display.getTextWidth(s_wrap_lines[li]); if (w > body_w) body_w = w; }
-          body_w += 6;
-        } else {
-          int raw_w = display.getTextWidth(body);
-          body_w = (raw_w > max_w - 6 ? max_w - 6 : raw_w) + 6;
-        }
-        BubbleBox box = computeBubbleBox(full_avail, max_w, e.outgoing, header_w, body_w);
-
-        drawHistRowFrame(display, box.x, box.w, y, bh, lh, sel);
-        // Only the body marquees, not the sender too: both share the single
-        // marquee slot on DisplayDriver, and if two texts in the same row both
-        // qualified they'd keep resetting each other's animation every frame.
-        // The name gives way to the ack/hop marker and the age (a long name is
-        // ellipsized), and the marker sits right after whatever width the name
-        // actually got -- not after its full width, which would run it into the age.
-        int name_avail = box.w - 6 - age_w - ack_w - mk_gap;
-        if (name_avail < display.getCharWidth()) name_avail = display.getCharWidth();
-        int name_w = sender[0] ? display.getTextWidth(sender) : 0;
-        if (name_w > name_avail) name_w = name_avail;
-        if (sender[0]) display.drawTextEllipsized(box.x + 3, y + 1, name_avail, sender);
-        const int mark_x = box.x + 3 + (name_w ? name_w + 3 : 0);
-        if (e.outgoing) {                       // delivery marker after "Me"
-          int gx = mark_x;
-          drawAckGlyph(display, gx, y + 1, _history.dmEffectiveStatus(e), e.attempt + 1);
-        } else if (in_hop_count > 0) {          // hop count after the sender name
-          int gx = mark_x;
-          miniIconDrawNumber(display, gx, y + 1, in_hop_count);
-        }
-        if (age[0]) { display.setCursor(box.x + box.w - age_w, y + 1); display.print(age); }
-        // Ink is already LIGHT (unselected) or DARK (selected) from
-        // drawHistRowFrame above, and nothing since has changed it.
-        if (expand) {
-          for (int li = 0; li < nl; li++) { display.setCursor(box.x + 3, y + (li + 1) * lh + 1); display.print(s_wrap_lines[li]); }
-        } else {
-          // Suppress this row's own marquee while _ctx_menu (Path/Relayed by,
-          // etc.) sits on top of it -- both would otherwise fight over
-          // DisplayDriver's single shared marquee slot every frame (this row
-          // redraws every frame regardless of the popup), each is_new-resetting
-          // the other's animation and producing a stuck-then-jumpy scroll.
-          bool body_marquee = sel && !_ctx_menu.active;
-          int r_body = display.drawTextEllipsized(box.x + 3, y + lh + 1, box.w - 6, body, body_marquee);
-          if (body_marquee && r_body > 0) mq_delay = r_body;
-        }
+        // Outgoing: the delivery marker. Incoming: the hop count the DM
+        // actually took to reach us, as the same tiny digit icon (no ack
+        // glyph exists for incoming -- there's nothing to deliver).
+        const BubbleMark mark = e.outgoing ? BubbleMark::ack(_history.dmEffectiveStatus(e), e.attempt + 1, 0)
+                                           : BubbleMark::hop(e.path_len & 63);
+        drawHeadedBubble(display, y, bh, lh, sel, reserve, e.outgoing, sender, body, age, mark, expand, mq_delay);
       }
 
       if (dm_count == 0) {
@@ -1734,70 +1752,18 @@ public:
         // now_ts here too rather than leave the row with no age at all.
         uint32_t ch_ts = _history.chAtPos(ring_pos).timestamp;
         char age[6]; geo::fmtAgeShort(age, sizeof(age), now_ts, ch_ts ? ch_ts : now_ts);
-        int age_w = age[0] ? display.getTextWidth(age) + 3 : 0;
         const char* body = skipReplyPrefix(msg_part);
 
-        // Size the bubble to its own content before drawing anything (see
-        // computeBubbleBox): the header (sender+ack+age) vs the body, measured
-        // once here and reused below instead of re-wrapping. Channels have no
-        // recipient ACK — only show ✓ once a repeater echo confirms the send
-        // was relayed into the mesh; otherwise no marker (absence is normal).
-        bool outgoing = strcmp(sender, "Me") == 0;
-        bool show_ack = outgoing && _history.chAtPos(ring_pos).relay_status == ACK_OK;
-        int relay_count = show_ack ? (_history.chAtPos(ring_pos).path_len & 63) : 0;
-        // Incoming: the hop count this post actually took to reach us, shown
-        // the same way an outgoing post's repeater-echo count is.
-        int in_hop_count = !outgoing ? (_history.chAtPos(ring_pos).path_len & 63) : 0;
-        int full_avail = display.width() - reserve;
-        int max_w = bubbleMaxW(display, full_avail);
-        int ack_w = show_ack ? (3 + ackGlyphWidth(display, ACK_OK, 1, relay_count))
-                  : (in_hop_count > 0 ? (3 + miniIconNumberWidth(display, in_hop_count)) : 0);
-        // A little air between a marker and the age, so "12" + "1s" doesn't read as "121s".
-        int mk_gap = (ack_w > 0 && age_w > 0) ? 2 : 0;
-        int header_w = 3 + (sender[0] ? display.getTextWidth(sender) : -3) + ack_w + mk_gap + age_w + 3;
-        int body_w, nl = 0;
-        if (expand) {
-          display.translateUTF8ToBlocks(s_wrap_trans, body, sizeof(s_wrap_trans));
-          nl = FullscreenMsgView::wrapLines(display, s_wrap_trans, max_w - 6, s_wrap_lines, 8);
-          body_w = 0;
-          for (int li = 0; li < nl; li++) { int w = display.getTextWidth(s_wrap_lines[li]); if (w > body_w) body_w = w; }
-          body_w += 6;
-        } else {
-          int raw_w = display.getTextWidth(body);
-          body_w = (raw_w > max_w - 6 ? max_w - 6 : raw_w) + 6;
-        }
-        BubbleBox box = computeBubbleBox(full_avail, max_w, outgoing, header_w, body_w);
-
-        drawHistRowFrame(display, box.x, box.w, y, bh, lh, sel);
-        // Only the body marquees, not the sender — see the DM history block above.
-        // Name yields to the marker and age -- see the DM history block above.
-        int name_avail = box.w - 6 - age_w - ack_w - mk_gap;
-        if (name_avail < display.getCharWidth()) name_avail = display.getCharWidth();
-        int name_w = display.getTextWidth(sender);
-        if (name_w > name_avail) name_w = name_avail;
-        display.drawTextEllipsized(box.x + 3, y + 1, name_avail, sender);
-        if (show_ack) {
-          int gx = box.x + 3 + name_w + 3;
-          drawAckGlyph(display, gx, y + 1, ACK_OK, 1, relay_count);
-        } else if (in_hop_count > 0) {
-          int gx = box.x + 3 + name_w + 3;
-          miniIconDrawNumber(display, gx, y + 1, in_hop_count);
-        }
-        if (age[0]) { display.setCursor(box.x + box.w - age_w, y + 1); display.print(age); }
-        // Ink is already LIGHT (unselected) or DARK (selected) from
-        // drawHistRowFrame above, and nothing since has changed it.
-        if (expand) {
-          for (int li = 0; li < nl; li++) { display.setCursor(box.x + 3, y + (li + 1) * lh + 1); display.print(s_wrap_lines[li]); }
-        } else {
-          // Suppress this row's own marquee while _ctx_menu (Path/Relayed by,
-          // etc.) sits on top of it -- both would otherwise fight over
-          // DisplayDriver's single shared marquee slot every frame (this row
-          // redraws every frame regardless of the popup), each is_new-resetting
-          // the other's animation and producing a stuck-then-jumpy scroll.
-          bool body_marquee = sel && !_ctx_menu.active;
-          int r_body = display.drawTextEllipsized(box.x + 3, y + lh + 1, box.w - 6, body, body_marquee);
-          if (body_marquee && r_body > 0) mq_delay = r_body;
-        }
+        // Channels have no recipient ACK -- only show the glyph once a
+        // repeater echo confirms the send was relayed into the mesh; otherwise
+        // no marker (absence is normal). Incoming: the hop count this post
+        // actually took to reach us.
+        const bool outgoing = strcmp(sender, "Me") == 0;
+        const ChHistEntry& cm = _history.chAtPos(ring_pos);
+        const BubbleMark mark = !outgoing ? BubbleMark::hop(cm.path_len & 63)
+                              : cm.relay_status == ACK_OK ? BubbleMark::ack(ACK_OK, 1, cm.path_len & 63)
+                              : BubbleMark();
+        drawHeadedBubble(display, y, bh, lh, sel, reserve, outgoing, sender, body, age, mark, expand, mq_delay);
       }
 
       if (ch_hist_count == 0) {

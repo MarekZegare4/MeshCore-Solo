@@ -153,13 +153,11 @@ void UITask::botRow(int row) {
   int cap;
   if (char* t = botcfg::text(p, r.kind, cap)) {
     bool reply = !botcfg::isTrigger(r.kind);
-    lv_obj_t* panel = navPopupPanel(r.label, false);
-    lv_obj_align(panel, LV_ALIGN_TOP_MID, 0, theme::STATUS_H + 4);   // above the keyboard
-    _nav_ta = textField(panel);
-    lv_textarea_set_max_length(_nav_ta, cap - 1);
-    lv_textarea_set_text(_nav_ta, t);
-    lv_textarea_set_placeholder_text(_nav_ta, botcfg::isTrigger(r.kind) ? "e.g. !hi, or * for any message" : "Reply text");
-    lv_obj_add_state(_nav_ta, LV_STATE_FOCUSED);
+    TextEntry te = { r.label, onBotTextKb };
+    te.text = t;
+    te.max_bytes = cap - 1;
+    te.hint = botcfg::isTrigger(r.kind) ? "e.g. !hi, or * for any message" : "Reply text";
+    lv_obj_t* panel = navTextEntry(te);
     if (reply) {
       // Placeholders the bot fills in, as buttons in place of the title (no
       // room for another row above the keyboard; the field says "Reply").
@@ -180,12 +178,6 @@ void UITask::botRow(int row) {
         if (strcmp(ph, "{batt}") != 0) botChip(ph, c);   // already there
       }, chips);
     }
-    _nav_kb = kb::create(_nav_overlay, _prefs);
-    lv_obj_set_size(_nav_kb, LV_PCT(100), 124);
-    lv_obj_align(_nav_kb, LV_ALIGN_BOTTOM_MID, 0, 0);
-    lv_keyboard_set_textarea(_nav_kb, _nav_ta);
-    lv_obj_add_event_cb(_nav_kb, onBotTextKb, LV_EVENT_READY, NULL);
-    lv_obj_add_event_cb(_nav_kb, onBotTextKb, LV_EVENT_CANCEL, NULL);
     return;
   }
 

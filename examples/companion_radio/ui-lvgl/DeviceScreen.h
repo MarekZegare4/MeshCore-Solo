@@ -39,14 +39,6 @@ static uint8_t s_pin_key[PUB_KEY_SIZE];
 
 enum : uint8_t { F_CHANGE, F_REMOVE };
 
-// Text field whose limit is in UTF-8 bytes (user data: the byte cap).
-static void onByteCapInsert(lv_event_t* e) {
-  lv_obj_t* ta = (lv_obj_t*)lv_event_get_target(e);
-  const char* ins = (const char*)lv_event_get_param(e);
-  size_t cap = (size_t)(uintptr_t)lv_event_get_user_data(e);
-  if (ins && strlen(lv_textarea_get_text(ta)) + strlen(ins) > cap) lv_textarea_set_insert_replace(ta, "");
-}
-
 }  // namespace devview
 
 static void onNodeName(lv_event_t* e)    { (void)e; s_ui->nodeNamePopup(); }
@@ -116,20 +108,11 @@ static bool pinEdit(char* entry, const char* key) {
 
 void UITask::nodeNamePopup() {
   if (!_prefs) return;
-  lv_obj_t* panel = navPopupPanel("Node name", false);
-  lv_obj_align(panel, LV_ALIGN_TOP_MID, 0, theme::STATUS_H + 4);   // above the keyboard
-  _nav_ta = wifiField(panel, "Shown to others in adverts", false);
-  lv_obj_remove_event_cb(_nav_ta, onWifiField);
-  lv_textarea_set_text(_nav_ta, the_mesh.getNodeName());
-  lv_obj_add_event_cb(_nav_ta, devview::onByteCapInsert, LV_EVENT_INSERT,
-                      (void*)(uintptr_t)(sizeof(_prefs->node_name) - 1));
-  lv_obj_add_state(_nav_ta, LV_STATE_FOCUSED);   // draws the cursor
-  _nav_kb = kb::create(_nav_overlay, _prefs);
-  lv_obj_set_size(_nav_kb, LV_PCT(100), 124);
-  lv_obj_align(_nav_kb, LV_ALIGN_BOTTOM_MID, 0, 0);
-  lv_keyboard_set_textarea(_nav_kb, _nav_ta);
-  lv_obj_add_event_cb(_nav_kb, onNodeNameKb, LV_EVENT_READY, NULL);
-  lv_obj_add_event_cb(_nav_kb, onNodeNameKb, LV_EVENT_CANCEL, NULL);
+  TextEntry t = { "Node name", onNodeNameKb };
+  t.hint = "Shown to others in adverts";
+  t.text = the_mesh.getNodeName();
+  t.max_bytes = sizeof(_prefs->node_name) - 1;
+  navTextEntry(t);
 }
 
 void UITask::nodeNameDone(bool ok) {

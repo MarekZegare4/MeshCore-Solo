@@ -452,18 +452,10 @@ void UITask::mapAreaAction(uint8_t act) {
   bool trails = m.flags & mapview::AreaStore::F_TRAILS;
   switch (act) {
     case A_RENAME: {
-      lv_obj_t* panel = navPopupPanel("Area name", false);
-      lv_obj_align(panel, LV_ALIGN_TOP_MID, 0, theme::STATUS_H + 4);   // above the keyboard
-      _nav_ta = textField(panel);
-      lv_textarea_set_max_length(_nav_ta, sizeof(m.name) - 1);
-      lv_textarea_set_text(_nav_ta, m.name);
-      lv_obj_add_state(_nav_ta, LV_STATE_FOCUSED);
-      _nav_kb = kb::create(_nav_overlay, _prefs);
-      lv_obj_set_size(_nav_kb, LV_PCT(100), 124);
-      lv_obj_align(_nav_kb, LV_ALIGN_BOTTOM_MID, 0, 0);
-      lv_keyboard_set_textarea(_nav_kb, _nav_ta);
-      lv_obj_add_event_cb(_nav_kb, onRenameKb, LV_EVENT_READY, NULL);
-      lv_obj_add_event_cb(_nav_kb, onRenameKb, LV_EVENT_CANCEL, NULL);
+      TextEntry t = { "Area name", onRenameKb };
+      t.text = m.name;
+      t.max_bytes = sizeof(m.name) - 1;
+      navTextEntry(t);
       return;
     }
     case A_FILL:

@@ -155,6 +155,7 @@ static const char* s_var_map[13];
 // on another object) can take that state away: put it back after a pick.
 static void keepCursor(lv_obj_t* ta) {
   lv_obj_add_state(ta, LV_STATE_FOCUSED);
+  lv_textarea_set_cursor_pos(ta, lv_textarea_get_cursor_pos(ta));   // restarts the blink (see fieldFocus)
   lv_obj_invalidate(ta);
 }
 

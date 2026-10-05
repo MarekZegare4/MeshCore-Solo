@@ -112,19 +112,11 @@ void UITask::radioNamePopup(uint8_t what) {
   const char* title = what == N_PRESET ? "Preset name" : what == N_SCOPE_ADD ? "New scope" : "Scope name";
   const char* hint = what == N_PRESET ? "e.g. Hiking" : "Region name, e.g. pl-maz";
   size_t cap = what == N_PRESET ? sizeof(_prefs->user_radio_presets[0].name) - 1 : sizeof(ScopeEntry::name) - 1;
-  lv_obj_t* panel = navPopupPanel(title, false);
-  lv_obj_align(panel, LV_ALIGN_TOP_MID, 0, theme::STATUS_H + 4);   // above the keyboard
-  _nav_ta = wifiField(panel, hint, false);
-  lv_obj_remove_event_cb(_nav_ta, onWifiField);
-  if (what == N_SCOPE_RENAME) lv_textarea_set_text(_nav_ta, the_mesh.scopeList().name((uint8_t)s_scope));
-  lv_obj_add_event_cb(_nav_ta, devview::onByteCapInsert, LV_EVENT_INSERT, (void*)(uintptr_t)cap);
-  lv_obj_add_state(_nav_ta, LV_STATE_FOCUSED);   // draws the cursor
-  _nav_kb = kb::create(_nav_overlay, _prefs);
-  lv_obj_set_size(_nav_kb, LV_PCT(100), 124);
-  lv_obj_align(_nav_kb, LV_ALIGN_BOTTOM_MID, 0, 0);
-  lv_keyboard_set_textarea(_nav_kb, _nav_ta);
-  lv_obj_add_event_cb(_nav_kb, onRadioNameKb, LV_EVENT_READY, NULL);
-  lv_obj_add_event_cb(_nav_kb, onRadioNameKb, LV_EVENT_CANCEL, NULL);
+  TextEntry t = { title, onRadioNameKb };
+  t.hint = hint;
+  t.max_bytes = cap;
+  if (what == N_SCOPE_RENAME) t.text = the_mesh.scopeList().name((uint8_t)s_scope);
+  navTextEntry(t);
 }
 
 void UITask::radioNameDone(bool ok) {

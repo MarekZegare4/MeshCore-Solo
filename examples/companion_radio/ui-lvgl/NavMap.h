@@ -92,15 +92,6 @@ static void onTrailDraw(lv_event_t* e) {
   lv_draw_line(d.base.layer, &d);
 }
 
-// Waypoint labels are 11 bytes of UTF-8 (Waypoint.h): reject input past that,
-// so a two-byte letter is never cut in half.
-static void onLabelInsert(lv_event_t* e) {
-  lv_obj_t* ta = (lv_obj_t*)lv_event_get_target(e);
-  const char* ins = (const char*)lv_event_get_param(e);
-  if (ins && strlen(lv_textarea_get_text(ta)) + strlen(ins) > WAYPOINT_LABEL_LEN - 1)
-    lv_textarea_set_insert_replace(ta, "");
-}
-
 }  // namespace navmap
 
 static void onNavList(lv_event_t* e)    { (void)e; s_ui->navTargetsPopup(); }
@@ -603,6 +594,24 @@ void UITask::navClosePopup() {
   _nav_trail_lbl = _nav_trail_btn = _nav_reset_lbl = _nav_share_lbl = _nav_share_btn = _nav_tb_btn = nullptr;
 }
 
+lv_obj_t* UITask::navTextEntry(const TextEntry& t) {
+  lv_obj_t* panel = navPopupPanel(t.title, false);
+  lv_obj_align(panel, LV_ALIGN_TOP_MID, 0, theme::STATUS_H + 4);   // above the keyboard
+  _nav_ta = textField(panel, t.hint);
+  if (t.password) lv_textarea_set_password_mode(_nav_ta, true);
+  if (t.accepted) lv_textarea_set_accepted_chars(_nav_ta, t.accepted);
+  if (t.text) lv_textarea_set_text(_nav_ta, t.text);   // before the cap: a longer stored text is shown, not wiped
+  if (t.max_bytes) lv_obj_add_event_cb(_nav_ta, onByteCapInsert, LV_EVENT_INSERT, (void*)(uintptr_t)t.max_bytes);
+  _nav_kb = kb::create(_nav_overlay, _prefs);
+  lv_obj_set_size(_nav_kb, LV_PCT(100), 124);
+  lv_obj_align(_nav_kb, LV_ALIGN_BOTTOM_MID, 0, 0);
+  lv_keyboard_set_textarea(_nav_kb, _nav_ta);   // focuses the field: the cursor
+  if (t.symbols) kb::apply(_nav_kb, kb::L_SYM);
+  lv_obj_add_event_cb(_nav_kb, t.done, LV_EVENT_READY, NULL);
+  lv_obj_add_event_cb(_nav_kb, t.done, LV_EVENT_CANCEL, NULL);
+  return panel;
+}
+
 static void navRowRight(lv_obj_t* row, const char* text, uint32_t col, int right) {
   lv_obj_align(label(row, text, THEME_FONT_SMALL, col), LV_ALIGN_RIGHT_MID, -right, 0);
 }
@@ -742,19 +751,10 @@ void UITask::navWaypointAction(uint8_t act) {
 
 void UITask::navRenamePopup(int idx) {
   _nav_wp = idx;
-  lv_obj_t* panel = navPopupPanel("Waypoint name", false);
-  lv_obj_align(panel, LV_ALIGN_TOP_MID, 0, theme::STATUS_H + 4);   // above the keyboard
-  _nav_ta = textField(panel);
-  lv_textarea_set_text(_nav_ta, _core->waypoints.at(idx).label);
-  lv_obj_add_state(_nav_ta, LV_STATE_FOCUSED);   // draws the cursor
-  lv_obj_add_event_cb(_nav_ta, navmap::onLabelInsert, LV_EVENT_INSERT, NULL);
-
-  _nav_kb = kb::create(_nav_overlay, _prefs);
-  lv_obj_set_size(_nav_kb, LV_PCT(100), 124);
-  lv_obj_align(_nav_kb, LV_ALIGN_BOTTOM_MID, 0, 0);
-  lv_keyboard_set_textarea(_nav_kb, _nav_ta);
-  lv_obj_add_event_cb(_nav_kb, onNavRenameKb, LV_EVENT_READY, NULL);
-  lv_obj_add_event_cb(_nav_kb, onNavRenameKb, LV_EVENT_CANCEL, NULL);
+  TextEntry t = { "Waypoint name", onNavRenameKb };
+  t.text = _core->waypoints.at(idx).label;
+  t.max_bytes = WAYPOINT_LABEL_LEN - 1;
+  navTextEntry(t);
 }
 
 void UITask::navRenameDone(bool ok) {
@@ -1460,19 +1460,10 @@ void UITask::navWaypointsPopup() {
 // name is optional) -> a new waypoint.
 void UITask::navCoordsPopup() {
   if (_core->waypoints.full()) { showToast(waypointsFull()); return; }
-  lv_obj_t* panel = navPopupPanel("Add by coordinates", false);
-  lv_obj_align(panel, LV_ALIGN_TOP_MID, 0, theme::STATUS_H + 4);   // above the keyboard
-  _nav_ta = textField(panel);
-  lv_textarea_set_placeholder_text(_nav_ta, "50.06142, 19.93721 Name");
-  lv_obj_add_state(_nav_ta, LV_STATE_FOCUSED);   // draws the cursor
-
-  _nav_kb = kb::create(_nav_overlay, _prefs);
-  lv_obj_set_size(_nav_kb, LV_PCT(100), 124);
-  lv_obj_align(_nav_kb, LV_ALIGN_BOTTOM_MID, 0, 0);
-  lv_keyboard_set_textarea(_nav_kb, _nav_ta);
-  kb::apply(_nav_kb, kb::L_SYM);   // digits first; "abc" gives letters for the name
-  lv_obj_add_event_cb(_nav_kb, onNavCoordsKb, LV_EVENT_READY, NULL);
-  lv_obj_add_event_cb(_nav_kb, onNavCoordsKb, LV_EVENT_CANCEL, NULL);
+  TextEntry t = { "Add by coordinates", onNavCoordsKb };
+  t.hint = "50.06142, 19.93721 Name";
+  t.symbols = true;   // digits first; "abc" gives letters for the name
+  navTextEntry(t);
 }
 
 void UITask::navCoordsDone(bool ok) {

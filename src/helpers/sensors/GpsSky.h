@@ -56,6 +56,10 @@ public:
     _len = 0;
   }
 
+  // The receiver was switched off: a search that never ended stops counting
+  // (a fix already found keeps its time-to-first-fix to look at).
+  void halt() { if (!ttff_ms) start_ms = 0; }
+
   void feed(char c) {
     if (c == '$') { _len = 0; _buf[_len++] = c; return; }
     if (_len == 0) return;

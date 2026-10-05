@@ -24,6 +24,20 @@ struct UiEvent;
 
 namespace mapview { struct TileArea; }
 
+// A popup that asks for one line of text: the field over the keyboard. `done`
+// gets the keyboard's READY (OK) and CANCEL; the field is _nav_ta, the keyboard
+// _nav_kb, until navClosePopup().
+struct TextEntry {
+  const char* title;
+  lv_event_cb_t done;
+  const char* text = nullptr;       // what the field starts with
+  const char* hint = nullptr;       // placeholder
+  size_t max_bytes = 0;             // UTF-8 bytes the field takes; 0 = no limit
+  bool password = false;
+  const char* accepted = nullptr;   // only these characters (lv_textarea_set_accepted_chars)
+  bool symbols = false;             // open on the digits / symbols page
+};
+
 class UITask : public UITaskBase, public UiCoreHost {
 public:
   UITask(mesh::MainBoard* board, BaseSerialInterface* serial) : UITaskBase(board, serial) {}
@@ -385,6 +399,7 @@ private:
   void navFrameTarget();
   void navSetTarget(uint8_t kind, const uint8_t* key, int32_t lat, int32_t lon, const char* name);
   lv_obj_t* navPopupPanel(const char* title, bool full, bool bottom = false);
+  lv_obj_t* navTextEntry(const TextEntry& t);   // popup + one-line field + keyboard (NavMap.h)
   void navRenamePopup(int idx);
   void navAddWaypoint(int32_t lat, int32_t lon);
   void navDropAt(int x, int y);
