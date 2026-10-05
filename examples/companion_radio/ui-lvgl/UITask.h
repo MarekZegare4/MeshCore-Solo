@@ -36,6 +36,7 @@ struct TextEntry {
   bool password = false;
   const char* accepted = nullptr;   // only these characters (lv_textarea_set_accepted_chars)
   bool symbols = false;             // open on the digits / symbols page
+  bool bare = false;                // no titled panel: the field straight on the dim, for the caller to add rows under it (returns the overlay)
 };
 
 class UITask : public UITaskBase, public UiCoreHost {

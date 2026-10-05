@@ -134,37 +134,17 @@ void UITask::quickEdit(int slot) {
   if (!_prefs || slot < 0 || slot >= msgtext::QUICK_COUNT) return;
   collect();
   s_edit = slot;
-  navClosePopup();
-  _nav_overlay = lv_obj_create(screen());
-  lv_obj_remove_style_all(_nav_overlay);
-  lv_obj_set_size(_nav_overlay, LV_PCT(100), LV_PCT(100));
-  lv_obj_set_style_bg_color(_nav_overlay, lv_color_hex(0x000000), 0);
-  lv_obj_set_style_bg_opa(_nav_overlay, LV_OPA_80, 0);
-  lv_obj_add_flag(_nav_overlay, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_remove_flag(_nav_overlay, LV_OBJ_FLAG_SCROLLABLE);
-  int w = lv_display_get_horizontal_resolution(NULL) - 16;
-
   char ph[40];
   snprintf(ph, sizeof(ph), "Quick message %d (empty clears it)", slot + 1);
-  _nav_ta = wifiField(_nav_overlay, ph, false);
-  lv_obj_remove_event_cb(_nav_ta, onWifiField);
-  lv_obj_set_width(_nav_ta, w);
-  lv_obj_set_pos(_nav_ta, 8, theme::STATUS_H + 4);
-  lv_textarea_set_text(_nav_ta, msgtext::quick(_prefs, slot));
-  lv_obj_add_event_cb(_nav_ta, onByteCapInsert, LV_EVENT_INSERT, (void*)(uintptr_t)(msgtext::QUICK_LEN - 1));
-  lv_obj_add_state(_nav_ta, LV_STATE_FOCUSED);   // draws the cursor
-
-  lv_obj_t* row = chips(_nav_overlay, onQuickEditPh, false);
-  lv_obj_set_width(row, w);
+  TextEntry t = { "", onQuickEditKb };
+  t.hint = ph;
+  t.text = msgtext::quick(_prefs, slot);
+  t.max_bytes = msgtext::QUICK_LEN - 1;
+  t.bare = true;
+  lv_obj_t* overlay = navTextEntry(t);
+  lv_obj_t* row = chips(overlay, onQuickEditPh, false);
+  lv_obj_set_width(row, lv_display_get_horizontal_resolution(NULL) - 16);
   lv_obj_set_pos(row, 8, theme::STATUS_H + 4 + 34 + 6);
-
-  _nav_kb = kb::create(_nav_overlay, _prefs);
-  lv_obj_set_size(_nav_kb, LV_PCT(100), 124);
-  lv_obj_align(_nav_kb, LV_ALIGN_BOTTOM_MID, 0, 0);
-  lv_keyboard_set_textarea(_nav_kb, _nav_ta);
-  lv_obj_add_event_cb(_nav_kb, onQuickEditKb, LV_EVENT_READY, NULL);
-  lv_obj_add_event_cb(_nav_kb, onQuickEditKb, LV_EVENT_CANCEL, NULL);
-  freeze::now(_nav_overlay);   // typing redraws keys, not the list under the dim
 }
 
 void UITask::quickEditInsert(int ph) {

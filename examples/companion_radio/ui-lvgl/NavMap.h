@@ -595,9 +595,19 @@ void UITask::navClosePopup() {
 }
 
 lv_obj_t* UITask::navTextEntry(const TextEntry& t) {
-  lv_obj_t* panel = navPopupPanel(t.title, false);
-  lv_obj_align(panel, LV_ALIGN_TOP_MID, 0, theme::STATUS_H + 4);   // above the keyboard
-  _nav_ta = textField(panel, t.hint);
+  lv_obj_t* panel;
+  if (t.bare) {   // a titled popup doesn't fit above 124 px of keys when a row sits under the field
+    navClosePopup();
+    panel = _nav_overlay = dimOverlay(screen());
+    lv_obj_set_style_bg_opa(panel, LV_OPA_80, 0);
+    _nav_ta = textField(panel, t.hint);
+    lv_obj_set_width(_nav_ta, lv_display_get_horizontal_resolution(NULL) - 16);
+    lv_obj_set_pos(_nav_ta, 8, theme::STATUS_H + 4);
+  } else {
+    panel = navPopupPanel(t.title, false);
+    lv_obj_align(panel, LV_ALIGN_TOP_MID, 0, theme::STATUS_H + 4);   // above the keyboard
+    _nav_ta = textField(panel, t.hint);
+  }
   if (t.password) lv_textarea_set_password_mode(_nav_ta, true);
   if (t.accepted) lv_textarea_set_accepted_chars(_nav_ta, t.accepted);
   if (t.text) lv_textarea_set_text(_nav_ta, t.text);   // before the cap: a longer stored text is shown, not wiped
@@ -609,6 +619,7 @@ lv_obj_t* UITask::navTextEntry(const TextEntry& t) {
   if (t.symbols) kb::apply(_nav_kb, kb::L_SYM);
   lv_obj_add_event_cb(_nav_kb, t.done, LV_EVENT_READY, NULL);
   lv_obj_add_event_cb(_nav_kb, t.done, LV_EVENT_CANCEL, NULL);
+  if (t.bare) freeze::now(_nav_overlay);   // typing redraws keys, not the list under the dim
   return panel;
 }
 
