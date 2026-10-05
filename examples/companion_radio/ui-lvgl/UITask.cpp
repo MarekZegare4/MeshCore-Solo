@@ -1390,50 +1390,6 @@ static constexpr uint32_t LOCK_OFF_MS = 30000;   // the lock screen's own auto-o
 
 #include "PerfTest.h"   // -D UI_PERF_TEST only: draw profiles and control timing
 
-#ifdef PERF_WRAP_TEXT
-#include <src/misc/lv_text_private.h>
-// (-Wl,--wrap=lv_text_get_size_attributes) How often text is measured,
-// and how often with the same text, font and width as a recent call.
-static uint32_t s_tm_n, s_tm_us, s_tm_chars, s_tm_same;
-extern "C" void __real_lv_text_get_size_attributes(lv_point_t*, const char*, const lv_font_t*, lv_text_attributes_t*);
-extern "C" void __wrap_lv_text_get_size_attributes(lv_point_t* s, const char* t, const lv_font_t* f, lv_text_attributes_t* a) {
-  struct K { const char* t; const lv_font_t* f; int32_t w; };
-  static K ring[64]; static int ri = 0;
-  for (const K& k : ring) if (k.t == t && k.f == f && k.w == a->max_width) { s_tm_same++; break; }
-  ring[ri++ & 63] = { t, f, a->max_width };
-  uint32_t u = micros();
-  __real_lv_text_get_size_attributes(s, t, f, a);
-  s_tm_us += micros() - u; s_tm_n++; s_tm_chars += strlen(t);
-}
-// ... and flex runs (-Wl,--wrap=lv_layout_apply), style reads and events.
-static uint32_t s_la_n, s_la_us, s_sp_n, s_ev_n;
-extern "C" void __real_lv_layout_apply(lv_obj_t*);
-extern "C" void __wrap_lv_layout_apply(lv_obj_t* o) {
-  static int depth = 0;
-  uint32_t u = micros(); depth++;
-  __real_lv_layout_apply(o);
-  if (--depth == 0) s_la_us += micros() - u;
-  s_la_n++;
-}
-extern "C" lv_style_value_t __real_lv_obj_get_style_prop_internal(const lv_obj_t*, lv_part_t, lv_style_prop_t);
-extern "C" lv_style_value_t __wrap_lv_obj_get_style_prop_internal(const lv_obj_t* o, lv_part_t p, lv_style_prop_t s) {
-  s_sp_n++;
-  return __real_lv_obj_get_style_prop_internal(o, p, s);
-}
-extern "C" lv_result_t __real_lv_obj_send_event(lv_obj_t*, lv_event_code_t, void*);
-extern "C" lv_result_t __wrap_lv_obj_send_event(lv_obj_t* o, lv_event_code_t c, void* p) {
-  s_ev_n++;
-  return __real_lv_obj_send_event(o, c, p);
-}
-#define TM_RESET() (s_tm_n = s_tm_us = s_tm_chars = s_tm_same = s_la_n = s_la_us = s_sp_n = s_ev_n = 0)
-#define TM_PRINT(tag) Serial.printf("PERF   text %-8s %4lu measured (%4lu same as recent), %6lu chars, %5.1f ms;" \
-    " flex runs %4lu (%5.1f ms), style reads %6lu, events %5lu\n", tag, \
-    (unsigned long)s_tm_n, (unsigned long)s_tm_same, (unsigned long)s_tm_chars, s_tm_us / 1000.0f, \
-    (unsigned long)s_la_n, s_la_us / 1000.0f, (unsigned long)s_sp_n, (unsigned long)s_ev_n)
-#else
-#define TM_RESET()
-#define TM_PRINT(tag)
-#endif
 
 void UITask::loop() {
   pollConnection();
