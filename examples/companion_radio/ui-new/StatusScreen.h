@@ -185,7 +185,7 @@ private:
       if (g->hdop > 0 && g->hdop < 99) snprintf(a, sizeof(a), "%.1f", g->hdop); else strcpy(a, "-");
       row(d, f, rsv, "HDOP", a);
       if (g->ttff_ms)       snprintf(a, sizeof(a), "%lu s", (unsigned long)(g->ttff_ms / 1000));
-      else if (g->start_ms) {
+      else if (on && g->start_ms) {
         const unsigned long s = (millis() - g->start_ms) / 1000;
         if (!Features::IS_EINK) snprintf(a, sizeof(a), "%lu s", s);
         else if (s < 60)        strcpy(a, "<1 min");   // seconds would refresh the panel every second

@@ -151,6 +151,13 @@ static void releaseShift(lv_obj_t* kbd) {
 static char        s_var_txt[12][8];
 static const char* s_var_map[13];
 
+// The cursor is only drawn while the field is FOCUSED, and the popup (a touch
+// on another object) can take that state away: put it back after a pick.
+static void keepCursor(lv_obj_t* ta) {
+  lv_obj_add_state(ta, LV_STATE_FOCUSED);
+  lv_obj_invalidate(ta);
+}
+
 static void closePopup() {
   if (s_popup) { lv_obj_delete_async(s_popup); s_popup = nullptr; }
 }
@@ -160,7 +167,10 @@ static void onPopupPick(lv_event_t* e) {
   uint32_t id = lv_buttonmatrix_get_selected_button(m);
   if (id == LV_BUTTONMATRIX_BUTTON_NONE || !s_popup_kbd) return;
   lv_obj_t* ta = lv_keyboard_get_textarea(s_popup_kbd);
-  if (ta) lv_textarea_add_text(ta, lv_buttonmatrix_get_button_text(m, id));
+  if (ta) {
+    lv_textarea_add_text(ta, lv_buttonmatrix_get_button_text(m, id));
+    keepCursor(ta);
+  }
   releaseShift(s_popup_kbd);
   closePopup();
 }
@@ -248,6 +258,7 @@ static void onEvent(lv_event_t* e) {
     return;
   }
   lv_keyboard_def_event_cb(e);    // type the character / backspace / OK
+  if (lv_obj_t* ta = lv_keyboard_get_textarea(kbd)) keepCursor(ta);
   if (strcmp(t, KB_BS) != 0) releaseShift(kbd);
 }
 
