@@ -573,6 +573,34 @@ static lv_obj_t* flexBox(lv_obj_t* parent, lv_flex_flow_t flow) {
   return b;
 }
 
+// A full-width row of centred items that grows with them (button rows in
+// popups, the clock's tabs and actions).
+static lv_obj_t* centerRow(lv_obj_t* parent) {
+  lv_obj_t* r = lv_obj_create(parent);
+  styleSurface(r, theme::BG);
+  lv_obj_remove_flag(r, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_size(r, LV_PCT(100), LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(r, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(r, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(r, theme::GAP, 0);
+  return r;
+}
+
+// A small pill button with a label, right-aligned in its parent row.
+static lv_obj_t* pillButton(lv_obj_t* row, const char* text, uint32_t bg, lv_event_cb_t cb, uintptr_t user) {
+  lv_obj_t* b = lv_button_create(row);
+  lv_obj_set_size(b, LV_SIZE_CONTENT, 24);
+  lv_obj_set_style_pad_hor(b, 10, 0);
+  lv_obj_set_style_pad_ver(b, 0, 0);
+  lv_obj_set_style_radius(b, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_shadow_width(b, 0, 0);
+  lv_obj_set_style_bg_color(b, lv_color_hex(bg), 0);
+  lv_obj_align(b, LV_ALIGN_RIGHT_MID, -2, 0);
+  lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, (void*)user);
+  lv_obj_center(label(b, text, THEME_FONT_SMALL, theme::TEXT));
+  return b;
+}
+
 // ── Settings kit ──
 // Every settings page is built from the same few pieces: group() -- a section
 // title and the card its rows sit on, hairlines between them -- and rows on
@@ -3152,16 +3180,7 @@ static void chatSection(lv_obj_t* parent, const char* text, int fold, int unread
     lv_obj_align_to(n, t, LV_ALIGN_OUT_RIGHT_MID, 8, 0);
   }
   if (filter < 0 || folded) return;
-  lv_obj_t* b = lv_button_create(row);
-  lv_obj_set_size(b, LV_SIZE_CONTENT, 24);
-  lv_obj_set_style_pad_hor(b, 10, 0);
-  lv_obj_set_style_pad_ver(b, 0, 0);
-  lv_obj_set_style_radius(b, LV_RADIUS_CIRCLE, 0);
-  lv_obj_set_style_shadow_width(b, 0, 0);
-  lv_obj_set_style_bg_color(b, lv_color_hex(fav_only ? theme::ACCENT_DIM : theme::SURFACE), 0);
-  lv_obj_align(b, LV_ALIGN_RIGHT_MID, -2, 0);
-  lv_obj_add_event_cb(b, onChatFilter, LV_EVENT_CLICKED, (void*)(uintptr_t)filter);
-  lv_obj_center(label(b, fav_only ? UI_SYMBOL_STAR " Fav" : "All", THEME_FONT_SMALL, theme::TEXT));
+  pillButton(row, fav_only ? UI_SYMBOL_STAR " Fav" : "All", fav_only ? theme::ACCENT_DIM : theme::SURFACE, onChatFilter, filter);
 }
 
 // Section title with an "All" / "★ Fav" pill on the right that flips the
@@ -3172,16 +3191,7 @@ static void sectionWithFilter(lv_obj_t* parent, const char* text, bool fav_only,
   lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_size(row, LV_PCT(100), 26);
   lv_obj_align(label(row, text, THEME_FONT_SMALL, theme::TEXT_MUTED), LV_ALIGN_BOTTOM_LEFT, 0, -2);
-  lv_obj_t* b = lv_button_create(row);
-  lv_obj_set_size(b, LV_SIZE_CONTENT, 24);
-  lv_obj_set_style_pad_hor(b, 10, 0);
-  lv_obj_set_style_pad_ver(b, 0, 0);
-  lv_obj_set_style_radius(b, LV_RADIUS_CIRCLE, 0);
-  lv_obj_set_style_shadow_width(b, 0, 0);
-  lv_obj_set_style_bg_color(b, lv_color_hex(fav_only ? theme::ACCENT_DIM : theme::SURFACE), 0);
-  lv_obj_align(b, LV_ALIGN_RIGHT_MID, -2, 0);
-  lv_obj_add_event_cb(b, onChatFilter, LV_EVENT_CLICKED, (void*)(uintptr_t)which);
-  lv_obj_center(label(b, fav_only ? UI_SYMBOL_STAR " Fav" : "All", THEME_FONT_SMALL, theme::TEXT));
+  pillButton(row, fav_only ? UI_SYMBOL_STAR " Fav" : "All", fav_only ? theme::ACCENT_DIM : theme::SURFACE, onChatFilter, which);
 }
 
 void UITask::showChats() {

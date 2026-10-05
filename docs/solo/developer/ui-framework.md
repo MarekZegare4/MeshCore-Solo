@@ -238,6 +238,8 @@ filled while selected), `drawDisclosure` (▸ / ▾ on an accordion section),
 `drawPageDots`, `drawLoadingDots` (the waiting animation), `drawSignalBars`
 (SNR as four bars).
 
+`MessagesScreen`'s history lists draw each message through one `drawHeadedBubble()` (sender, a `BubbleMark` -- delivery glyph or hop count -- and age over the body; `expand` wraps the body, otherwise the selected row marquees): a new list of chat-like rows passes it the row's pieces instead of laying out its own bubble.
+
 `FullscreenMsgView::wrapLines()` is a standalone pixel-accurate word-wrapper
 (O(n), variable-width-font aware) reusable by any multi-line layout; it writes
 into the shared `s_wrap_trans` / `s_wrap_lines` scratch (single-threaded render,

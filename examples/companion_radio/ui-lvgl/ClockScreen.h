@@ -248,17 +248,6 @@ static lv_obj_t* wheel(lv_obj_t* parent, uint8_t n, int sel, lv_event_cb_t cb, u
 
 static lv_obj_t* colon(lv_obj_t* parent) { return label(parent, ":", THEME_FONT_LARGE, theme::TEXT_MUTED); }
 
-static lv_obj_t* row(lv_obj_t* parent) {
-  lv_obj_t* r = lv_obj_create(parent);
-  styleSurface(r, theme::BG);
-  lv_obj_remove_flag(r, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_size(r, LV_PCT(100), LV_SIZE_CONTENT);
-  lv_obj_set_flex_flow(r, LV_FLEX_FLOW_ROW);
-  lv_obj_set_flex_align(r, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_column(r, theme::GAP, 0);
-  return r;
-}
-
 }  // namespace clockview
 
 static void onOpenClock(lv_event_t* e)   { (void)e; s_ui->showClock(); }
@@ -304,7 +293,7 @@ void UITask::buildClock() {
   s_big = s_go_lbl = s_alarm_sw = s_cal = nullptr;
 
   // Tabs
-  lv_obj_t* tabs = row(body);
+  lv_obj_t* tabs = centerRow(body);
   static const char* const NAMES[TAB_COUNT] = { "Alarm", "Timer", "Stopwatch", "Calendar" };
   for (int t = 0; t < TAB_COUNT; t++) {
     lv_obj_t* b = lv_button_create(tabs);
@@ -318,7 +307,7 @@ void UITask::buildClock() {
   }
 
   if (s_tab == TAB_ALARM) {
-    lv_obj_t* r = row(body);
+    lv_obj_t* r = centerRow(body);
     wheel(r, 24, _prefs->alarm_hour % 24, onAlarmWheel, 0);
     colon(r);
     wheel(r, 60, _prefs->alarm_min % 60, onAlarmWheel, 1);
@@ -384,7 +373,7 @@ void UITask::buildClock() {
       lv_obj_set_style_text_align(s_big, LV_TEXT_ALIGN_CENTER, 0);
       lv_obj_set_style_pad_ver(s_big, 18, 0);
     } else {
-      lv_obj_t* r = row(body);
+      lv_obj_t* r = centerRow(body);
       wheel(r, 24, s_timer_h, onTimerWheel, 0);
       colon(r);
       wheel(r, 60, s_timer_m, onTimerWheel, 1);
@@ -398,7 +387,7 @@ void UITask::buildClock() {
     lv_obj_set_style_pad_ver(s_big, 18, 0);
   }
 
-  lv_obj_t* acts = row(body);
+  lv_obj_t* acts = centerRow(body);
   lv_obj_t* go = lv_button_create(acts);
   lv_obj_set_size(go, 150, 40);
   lv_obj_set_style_shadow_width(go, 0, 0);

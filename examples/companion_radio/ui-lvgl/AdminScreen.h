@@ -291,17 +291,6 @@ static lv_obj_t* adminPopupButton(lv_obj_t* parent, const char* text, uint8_t ac
   return b;
 }
 
-static lv_obj_t* adminRowBox(lv_obj_t* parent) {
-  lv_obj_t* r = lv_obj_create(parent);
-  styleSurface(r, theme::BG);
-  lv_obj_remove_flag(r, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_size(r, LV_PCT(100), LV_SIZE_CONTENT);
-  lv_obj_set_flex_flow(r, LV_FLEX_FLOW_ROW);
-  lv_obj_set_flex_align(r, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_column(r, theme::GAP, 0);
-  return r;
-}
-
 // A typed value arrived: its editor.
 void UITask::adminValuePopup() {
   using namespace adminview;
@@ -317,7 +306,7 @@ void UITask::adminValuePopup() {
   lv_obj_t* panel = navPopupPanel(f->label, false);
   s_val_lbl = s_choice = nullptr;
   if (f->kind == admin::K_ONOFF) {
-    lv_obj_t* r = adminRowBox(panel);
+    lv_obj_t* r = centerRow(panel);
     label(r, "Off", THEME_FONT_BODY, theme::TEXT_MUTED);
     lv_obj_t* sw = lv_switch_create(r);
     lv_obj_set_size(sw, 56, 28);
@@ -325,7 +314,7 @@ void UITask::adminValuePopup() {
     lv_obj_add_event_cb(sw, onAdminValue, LV_EVENT_VALUE_CHANGED, (void*)(uintptr_t)V_TOGGLE);
     label(r, "On", THEME_FONT_BODY, theme::TEXT_MUTED);
   } else if (f->kind == admin::K_NUMBER) {
-    lv_obj_t* r = adminRowBox(panel);
+    lv_obj_t* r = centerRow(panel);
     adminPopupButton(r, LV_SYMBOL_MINUS, V_MINUS, false);
     s_val_lbl = label(r, "", THEME_FONT_LARGE, theme::TEXT);
     lv_obj_set_width(s_val_lbl, 80);
@@ -342,7 +331,7 @@ void UITask::adminValuePopup() {
   if (f->isRadio()) {
     noteLabel(panel, "A mismatch cuts the node off.");
   }
-  lv_obj_t* r = adminRowBox(panel);
+  lv_obj_t* r = centerRow(panel);
   adminPopupButton(r, LV_SYMBOL_OK " Save", V_SAVE, true);
 }
 
@@ -388,7 +377,7 @@ void UITask::adminReplyPopup(const char* text) {
     lv_obj_set_scrollbar_mode(box, LV_SCROLLBAR_MODE_ACTIVE);
   }
   noteLabel(box, text[0] ? text : "(empty)", THEME_FONT_BODY, theme::TEXT);
-  lv_obj_t* r = adminRowBox(panel);
+  lv_obj_t* r = centerRow(panel);
   adminPopupButton(r, "OK", adminview::V_CLOSE, false);
 }
 
