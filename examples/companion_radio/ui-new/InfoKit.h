@@ -194,26 +194,13 @@ inline int big(DisplayDriver& d, int x, int y, const char* value, const char* un
 }
 inline int bigH(DisplayDriver& d) { return 2 * d.getLineHeight(); }
 
-// An on/off switch, right edge at x_right, centred on a text line at y: a
-// filled pill with the knob right when on, an outline with the knob left off.
-// `inv` draws it in a selected row's colours (dark on the light bar) and
-// leaves the ink dark, as the row found it.
-inline int switchW(DisplayDriver& d) { return 13 * miniIconScale(d); }
+// An on/off state, right edge at x_right on a text line at y: the words ON /
+// OFF. (A drawn pill switch read as a battery on the small screens.) `inv`
+// draws it in a selected row's colours (dark on the light bar).
+inline int switchW(DisplayDriver& d) { return d.getTextWidth("OFF"); }
 inline void toggle(DisplayDriver& d, int x_right, int y, bool on, bool inv = false) {
-  const DisplayDriver::Color ink = inv ? DisplayDriver::DARK : DisplayDriver::LIGHT;
-  const DisplayDriver::Color paper = inv ? DisplayDriver::LIGHT : DisplayDriver::DARK;
-  const int s = miniIconScale(d), w = switchW(d), h = 7 * s;
-  const int x = x_right - w, ty = y + (d.getLineHeight() - h) / 2;
-  d.setColor(ink);
-  if (on) {
-    d.fillSoftRect(x, ty, w, h);
-    d.setColor(paper);
-    d.fillRect(x + w - 5 * s, ty + s, 3 * s, h - 2 * s);
-  } else {
-    d.drawSoftRect(x, ty, w, h);
-    d.fillRect(x + 2 * s, ty + 2 * s, 3 * s, h - 4 * s);
-  }
-  d.setColor(ink);
+  d.setColor(inv ? DisplayDriver::DARK : DisplayDriver::LIGHT);
+  d.drawTextRightAlign(x_right, y, on ? "ON" : "OFF");
 }
 
 // ── List rows (call after drawRowSelection(); text is already in the row's ink)
@@ -233,7 +220,7 @@ inline int valueRow(DisplayDriver& d, int y, const char* label, const char* valu
   return sel && r > 0 ? r : 0;
 }
 // A row from a screen's value formatter: exactly "ON" / "OFF" is a yes/no
-// setting and gets the switch; anything else (an option that can be "Off"
+// setting and gets switchRow(); anything else (an option that can be "Off"
 // among numbers included) is a value. Returns valueRow()'s marquee delay.
 inline void switchRow(DisplayDriver& d, int y, const char* label, bool on, bool sel, int reserve, int x0 = 2);
 inline int listRow(DisplayDriver& d, int y, const char* label, const char* value, bool sel,
@@ -244,7 +231,7 @@ inline int listRow(DisplayDriver& d, int y, const char* label, const char* value
   }
   return valueRow(d, y, label, value, sel, reserve, x0);
 }
-// An on/off row: the label, then a switch at the right edge.
+// An on/off row: the label, then ON / OFF at the right edge.
 inline void switchRow(DisplayDriver& d, int y, const char* label, bool on, bool sel, int reserve, int x0) {
   d.setCursor(x0, y);
   d.print(label);

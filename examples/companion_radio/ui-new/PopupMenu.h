@@ -101,7 +101,7 @@ struct PopupMenu {
     return true;
   }
   static int valueWidth(DisplayDriver& d, const char* v) {
-    return (!strcmp(v, "ON") || !strcmp(v, "OFF")) ? info::switchW(d) : d.getTextWidth(v);
+    return d.getTextWidth(v);
   }
 
   int render(DisplayDriver& display) {
