@@ -474,17 +474,19 @@ class HomeScreen : public UIScreen {
       memset(&r, 0, sizeof(r));
       r.label = label; r.kind = k; r.act = a; r.n = v;
     };
+    // A panel with a whole screen behind it lists the way in first, its
+    // shortcuts after.
     if (page == SETTINGS) {
+      add("All settings", Q_MORE, QA_MORE, 0);
 #if FEAT_BRIGHTNESS_SETTING
       add("Brightness", Q_BAR, QA_BRIGHTNESS, _node_prefs ? _node_prefs->display_brightness + 1 : 0);
 #endif
 #if ENV_INCLUDE_GPS == 1
       if (sensors.getLocationProvider()) add("GPS", Q_SWITCH, QA_GPS, _task->getGPSState() ? 1 : 0);
 #endif
-      add("All settings", Q_MORE, QA_MORE, 0);
     } else if (page == QUICK_MSG) {
-      n = recentChats(rows, quickFit() - 1);
       add("All messages", Q_MORE, QA_MORE, 0);
+      n += recentChats(rows + n, quickFit() - 1);
     } else if (page == BLUETOOTH) {
       const bool on = _task->isSerialEnabled();
       add("Bluetooth", Q_SWITCH, QA_BT, on ? 1 : 0);
@@ -510,12 +512,12 @@ class HomeScreen : public UIScreen {
       strcpy(rows[n - 1].value, AutoAdvertScreen::OPT_LABELS[AutoAdvertScreen::indexOf(
                                   _node_prefs ? _node_prefs->advert_auto_interval_sec : 0)]);
     } else if (page == TOOLS) {
+      add("All tools", Q_MORE, QA_MORE, 0);
       for (int i = 0; i < ToolsScreen::RECENT_MAX; i++) {
         const ToolsScreen::Action a = ToolsScreen::s_recent[i];
         add(ToolsScreen::labelOf(a), Q_VALUE, QA_TOOL, (uint8_t)a);
         toolState(a, rows[n - 1].value, sizeof(rows[0].value));
       }
-      add("All tools", Q_MORE, QA_MORE, 0);
     } else if (page == SHUTDOWN) {
       add("Lock screen", Q_VALUE, QA_LOCK, 0);
       add("Hibernate", Q_VALUE, QA_HIBERNATE, 0);
