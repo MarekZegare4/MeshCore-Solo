@@ -620,7 +620,7 @@ public:
   void onShow() override {
     const bool keep = _keep_place;   // back from a screen opened here: same row
     _keep_place = false;
-    _dirty = false;
+    _task->savePrefsIfDirty(_dirty);   // a change made before a screen opened from here
     _edit_name = false;
     _scope_mgmt_active = false;
     _scope_rename_idx = -2;
