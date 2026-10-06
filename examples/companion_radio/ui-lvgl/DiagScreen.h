@@ -36,83 +36,60 @@ static uint32_t totalRecv() {
 }
 
 // One chart's samples as drawn: a copy, so the draw callback needn't know
-// which ring (of which size) they came from.
-struct Chart { int16_t v[96]; int n, cap, min_span; bool bars; };
-static Chart s_charts[4];
+// which ring (of which size) they came from. What the axis and the pill
+// say is set once (setupCharts()).
+static chart::Chart s_charts[4];
 template <int N>
-static Chart* chartOf(int k, const uicore::History<N>& h, int min_span, bool bars) {
-  Chart& c = s_charts[k];
-  c.n = h.n; c.cap = N; c.min_span = min_span; c.bars = bars;
+static void chartOf(int k, const uicore::History<N>& h) {
+  chart::Chart& c = s_charts[k];
+  c.n = h.n; c.cap = N;
   for (int i = 0; i < h.n; i++) c.v[i] = h.at(i);
-  return &c;
 }
 
-// A history in its box, newest at the right: a line over a faint fill, or
-// bars from the bottom, scaled between the samples' own min and max (at
-// least min_span apart, so a steady reading stays flat).
-static void onChartDraw(lv_event_t* e) {
-  lv_obj_t* o = (lv_obj_t*)lv_event_get_target(e);
-  const Chart& c = *(const Chart*)lv_event_get_user_data(e);
-  lv_layer_t* layer = lv_event_get_layer(e);
-  lv_area_t a;
-  lv_obj_get_coords(o, &a);
-  const int x0 = a.x1 + 2, w = a.x2 - a.x1 - 4, y0 = a.y1 + 3, h = a.y2 - a.y1 - 5, base = a.y2 - 1;
-  lv_draw_line_dsc_t ld;
-  lv_draw_line_dsc_init(&ld);
-  if (c.n < (c.bars ? 1 : 2)) {   // nothing yet: a dotted baseline
-    ld.color = lv_color_hex(theme::TEXT_MUTED);
-    ld.width = 1; ld.dash_width = 2; ld.dash_gap = 4;
-    ld.p1.x = x0; ld.p2.x = x0 + w; ld.p1.y = ld.p2.y = base - 1;
-    lv_draw_line(layer, &ld);
-    return;
+// A sample's age: the charts sample every 5 minutes, SNR every packet.
+static void whenAgo(const chart::Chart& c, int i, char* out, size_t n) {
+  chart::ago((uint32_t)(c.n - 1 - i) * (s_hist.INTERVAL_MS / 60000UL), out, n);
+}
+static void setupCharts() {
+  using chart::Chart;
+  static const char* const HOURS[5] = { "8 h", "6 h", "4 h", "2 h", "now" };
+  for (int k = 0; k < 4; k++) {
+    Chart& c = s_charts[k];
+    c.where = whenAgo;
+    for (int j = 0; j < 5; j++) c.under[j] = HOURS[j];
   }
-  int lo = c.bars ? 0 : c.v[0], hi = c.v[0];
-  for (int i = 0; i < c.n; i++) { if (c.v[i] < lo) lo = c.v[i]; if (c.v[i] > hi) hi = c.v[i]; }
-  if (hi - lo < c.min_span) {
-    if (c.bars) hi = lo + c.min_span;
-    else { const int mid = (hi + lo) / 2; lo = mid - c.min_span / 2; hi = lo + c.min_span; }
-  }
-  auto X = [&](int i) { return (int32_t)(x0 + w - (c.n - 1 - i) * w / (c.cap - 1)); };
-  auto Y = [&](int v) { return (int32_t)(y0 + h - (v - lo) * h / (hi - lo)); };
-  ld.color = lv_color_hex(theme::ACCENT);
-  if (c.bars) {   // a bar a sample, a pixel apart
-    const int pitch = (w + c.cap / 2) / c.cap, bw = pitch > 2 ? pitch - 1 : 1;
-    lv_draw_rect_dsc_t rd;
-    lv_draw_rect_dsc_init(&rd);
-    rd.bg_color = lv_color_hex(theme::ACCENT);
-    rd.bg_opa = LV_OPA_70;
-    for (int i = 0; i < c.n; i++) {
-      if (c.v[i] <= 0) continue;
-      lv_area_t r = { X(i) - bw + 1, Y(c.v[i]), X(i), base };
-      lv_draw_rect(layer, &rd, &r);
-    }
-    return;
-  }
-  lv_draw_line_dsc_t fill;
-  lv_draw_line_dsc_init(&fill);
-  fill.color = lv_color_hex(theme::ACCENT);
-  fill.opa = LV_OPA_20;
-  fill.width = 1;
-  ld.width = 2;
-  ld.round_start = ld.round_end = 1;
-  for (int i = 1; i < c.n; i++) {
-    const int32_t xa = X(i - 1), xb = X(i), ya = Y(c.v[i - 1]), yb = Y(c.v[i]);
-    for (int32_t x = (i == 1 ? xa : xa + 1); x <= xb; x++) {
-      fill.p1.x = fill.p2.x = x;
-      fill.p1.y = xb > xa ? ya + (yb - ya) * (x - xa) / (xb - xa) : yb;
-      fill.p2.y = base;
-      lv_draw_line(layer, &fill);
-    }
-    ld.p1.x = xa; ld.p1.y = ya; ld.p2.x = xb; ld.p2.y = yb;
-    lv_draw_line(layer, &ld);
-  }
+  Chart& b = s_charts[0];   // mV, in steps of 10 mV and up
+  b.min_span = 100; b.unit = 10;
+  b.axis = [](int v, int step, char* o, size_t n) {
+    if (step % 100 == 0) snprintf(o, n, "%d.%d V", v / 1000, v % 1000 / 100);
+    else snprintf(o, n, "%d.%02d", v / 1000, v % 1000 / 10);
+  };
+  b.value = [](const Chart& c, int i, char* o, size_t n) { snprintf(o, n, "%.2f V", c.v[i] / 1000.0f); };
+  Chart& f = s_charts[1];   // dBm
+  f.min_span = 6;
+  f.axis = [](int v, int, char* o, size_t n) { snprintf(o, n, "%d", v); };
+  f.value = [](const Chart& c, int i, char* o, size_t n) { snprintf(o, n, "%d dBm", c.v[i]); };
+  Chart& r = s_charts[2];   // dB x4, a sample a packet
+  r.min_span = 20; r.unit = 4;
+  r.axis = [](int v, int, char* o, size_t n) { snprintf(o, n, "%d", v / 4); };
+  r.value = [](const Chart& c, int i, char* o, size_t n) { snprintf(o, n, "%.1f dB", c.v[i] / 4.0f); };
+  r.where = [](const Chart& c, int i, char* o, size_t n) {
+    const int k = c.n - 1 - i;
+    if (!k) snprintf(o, n, "last packet"); else snprintf(o, n, "%d packet%s back", k, k == 1 ? "" : "s");
+  };
+  static const char* const PKTS[3] = { "32 back", "16", "last" };
+  for (int j = 0; j < 5; j++) r.under[j] = j < 3 ? PKTS[j] : nullptr;
+  Chart& t = s_charts[3];   // packets per interval
+  t.bars = true; t.min_span = 4;
+  t.axis = [](int v, int, char* o, size_t n) { snprintf(o, n, "%d", v); };
+  t.value = [](const Chart& c, int i, char* o, size_t n) { snprintf(o, n, "%d packet%s", c.v[i], c.v[i] == 1 ? "" : "s"); };
 }
 
-// A chart card: the title and the value now, the chart, the span under it.
-static void chartCard(lv_obj_t* parent, int k, const char* title, const char* from) {
+// A chart card: the title and the value now over the chart.
+static void chartCard(lv_obj_t* parent, int k, const char* title) {
   lv_obj_t* card = infoCard(parent);
   lv_obj_set_style_pad_ver(card, 6, 0);
-  lv_obj_set_style_pad_row(card, 2, 0);
+  lv_obj_set_style_pad_row(card, 4, 0);
   lv_obj_t* r = lv_obj_create(card);
   lv_obj_remove_style_all(r);
   fillWidth(r);
@@ -120,19 +97,7 @@ static void chartCard(lv_obj_t* parent, int k, const char* title, const char* fr
   lv_obj_align(label(r, title, THEME_FONT_SMALL, theme::TEXT_MUTED), LV_ALIGN_LEFT_MID, 0, 0);
   s_ch_now[k] = label(r, "", THEME_FONT_BODY, theme::TEXT);
   lv_obj_align(s_ch_now[k], LV_ALIGN_RIGHT_MID, 0, 0);
-  lv_obj_t* ch = lv_obj_create(card);
-  lv_obj_remove_style_all(ch);
-  lv_obj_remove_flag(ch, LV_OBJ_FLAG_CLICKABLE);
-  fillWidth(ch);
-  lv_obj_set_height(ch, 48);
-  lv_obj_add_event_cb(ch, onChartDraw, LV_EVENT_DRAW_MAIN_END, &s_charts[k]);
-  s_ch_obj[k] = ch;
-  lv_obj_t* ax = lv_obj_create(card);
-  lv_obj_remove_style_all(ax);
-  fillWidth(ax);
-  lv_obj_set_height(ax, LV_SIZE_CONTENT);
-  lv_obj_align(label(ax, from, THEME_FONT_SMALL, theme::TEXT_MUTED), LV_ALIGN_LEFT_MID, 0, 0);
-  lv_obj_align(label(ax, "now", THEME_FONT_SMALL, theme::TEXT_MUTED), LV_ALIGN_RIGHT_MID, 0, 0);
+  s_ch_obj[k] = chart::create(card, s_charts[k], 96);
 }
 
 static void extraRow(diag::Row* rows, int& n, const char* lbl, const char* fmt, ...) {
@@ -251,8 +216,10 @@ static lv_obj_t* s_noise_status = nullptr;
 
 static void onNoiseRun(lv_event_t* e) { (void)e; s_ui->diagNoiseRun(); }
 
-// A sweep as bars from -130 dBm up (1.5 px a dB), the step nearest the mesh's
-// frequency in the accent colour, then its quietest / loudest / mesh values.
+// A sweep as bars (Chart.h), the step nearest the mesh's frequency in the
+// accent, then its quietest / loudest values.
+static chart::Chart s_sweep_chart;
+static char s_sweep_under[3][12];
 static void plotSweep(lv_obj_t* list, const char* title, const Sweep& sw, float mesh_f) {
   sectionTitle(list, title);
   int lo = 0, hi = 0;
@@ -260,23 +227,24 @@ static void plotSweep(lv_obj_t* list, const char* title, const Sweep& sw, float 
     if (sw.v[i] < sw.v[lo]) lo = i;
     if (sw.v[i] > sw.v[hi]) hi = i;
   }
-  lv_obj_t* plot = lv_obj_create(list);
-  lv_obj_remove_style_all(plot);
-  lv_obj_set_size(plot, sw.n * 3, 100);
-  lv_obj_set_style_bg_color(plot, lv_color_hex(theme::SURFACE), 0);
-  lv_obj_set_style_bg_opa(plot, LV_OPA_COVER, 0);
-  lv_obj_remove_flag(plot, LV_OBJ_FLAG_SCROLLABLE);
-  int mesh_i = (int)lroundf((mesh_f - sw.f0) / sw.step);
-  for (int i = 0; i < sw.n; i++) {
-    int h = (sw.v[i] + 130) * 3 / 2;
-    h = h < 1 ? 1 : (h > 100 ? 100 : h);
-    lv_obj_t* bar = lv_obj_create(plot);
-    lv_obj_remove_style_all(bar);
-    lv_obj_set_size(bar, 2, h);
-    lv_obj_set_pos(bar, i * 3, 100 - h);
-    lv_obj_set_style_bg_color(bar, lv_color_hex(i == mesh_i ? theme::ACCENT : theme::TEXT_MUTED), 0);
-    lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
-  }
+  chart::Chart& c = s_sweep_chart;
+  c = chart::Chart();
+  c.n = c.cap = sw.n;
+  for (int i = 0; i < sw.n; i++) c.v[i] = sw.v[i];
+  c.bars = true;
+  c.bar = theme::TEXT_MUTED;
+  c.mark = (int16_t)lroundf((mesh_f - sw.f0) / sw.step);
+  c.min_span = 10;
+  c.axis = [](int v, int, char* o, size_t n) { snprintf(o, n, "%d", v); };
+  c.value = [](const chart::Chart& c, int i, char* o, size_t n) { snprintf(o, n, "%d dBm", c.v[i]); };
+  c.where = [](const chart::Chart&, int i, char* o, size_t n) { snprintf(o, n, "%.3f MHz", s_near.f0 + s_near.step * i); };
+  snprintf(s_sweep_under[0], sizeof(s_sweep_under[0]), "%.2f", sw.f0);
+  snprintf(s_sweep_under[1], sizeof(s_sweep_under[1]), "%.3f", mesh_f);
+  snprintf(s_sweep_under[2], sizeof(s_sweep_under[2]), "%.2f MHz", sw.f0 + sw.step * (sw.n - 1));
+  for (int j = 0; j < 3; j++) c.under[j] = s_sweep_under[j];
+  lv_obj_t* box = infoCard(list);
+  lv_obj_set_style_pad_ver(box, 6, 0);
+  chart::create(box, c, 120);
   lv_obj_t* card = infoCard(list);
   char v[40];
   snprintf(v, sizeof(v), "%.3f MHz: %d dBm", sw.f0 + sw.step * lo, sw.v[lo]);
@@ -385,10 +353,11 @@ void UITask::buildDiag() {
 
   s_noise_status = nullptr;
   if (s_tab == TAB_HISTORY) {
-    chartCard(s_list, 0, "Battery", "8 h ago");
-    chartCard(s_list, 1, "Noise floor", "8 h ago");
-    chartCard(s_list, 2, "SNR, last packets", "32 packets ago");
-    chartCard(s_list, 3, "Packets heard, per 5 min", "8 h ago");
+    setupCharts();
+    chartCard(s_list, 0, "Battery");
+    chartCard(s_list, 1, "Noise floor (dBm)");
+    chartCard(s_list, 2, "SNR of the last packets (dB)");
+    chartCard(s_list, 3, "Packets heard, per 5 min");
     fillHistory();
     return;
   }
@@ -491,10 +460,10 @@ void UITask::diagSection(int sec) {
 void UITask::fillHistory() {
   using namespace diagview;
   s_hist_shown = s_hist.version;
-  chartOf(0, s_hist.batt, 20, false);
-  chartOf(1, s_hist.noise, 6, false);
-  chartOf(2, s_hist.snr, 20, false);
-  chartOf(3, s_hist.traffic, 4, true);
+  chartOf(0, s_hist.batt);
+  chartOf(1, s_hist.noise);
+  chartOf(2, s_hist.snr);
+  chartOf(3, s_hist.traffic);
   for (int k = 0; k < 4; k++) lv_obj_invalidate(s_ch_obj[k]);
   setTextFmt(s_ch_now[0], "%.2f V", (_batt_mv ? _batt_mv : getBattMilliVolts()) / 1000.0f);
   const int nf = (int)radio_driver.getNoiseFloor();

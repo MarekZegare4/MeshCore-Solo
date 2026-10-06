@@ -977,7 +977,7 @@ void UITask::navToolsPopup() {
   _nav_trail_lbl = label(list, "", THEME_FONT_SMALL, theme::TEXT);
   profileview::s_prof = trailprofile::Sampler();   // its height profile, as it is now
   profileview::s_prof.feedAll(_core->trail.store());
-  profileChart(list, 72);
+  profileChart(list, 120);
   lv_obj_t* r = buttonBar(list);
   _nav_trail_btn = toolButton(r, "", navmap::TL_TRAIL_TOGGLE, true);
   toolButton(r, LV_SYMBOL_SAVE " Save", navmap::TL_TRAIL_SAVE, false);
@@ -1251,7 +1251,7 @@ void UITask::savedTrailPopup(int idx) {
   if (ok) snprintf(info, sizeof(info), "%s  -  %s  -  %d points", dist, dur, pts);
   else snprintf(info, sizeof(info), "Can't read this file");
   label(panel, info, THEME_FONT_BODY, theme::TEXT);
-  if (ok) profileChart(panel, 60);
+  if (ok) profileChart(panel, 104);
   if (!_core->trail.store().empty())
     label(panel, "Loading replaces the trail on the map.", THEME_FONT_SMALL, theme::TEXT_MUTED);
   lv_obj_t* r = buttonBar(panel);

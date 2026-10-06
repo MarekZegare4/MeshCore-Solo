@@ -1,7 +1,7 @@
 #pragma once
-// A trail's height profile (ui-core/TrailProfile.h) as a chart: the height
-// over the distance, a line in the accent over a faint fill, the climb and
-// the highest and lowest points over it, top left. In the live trail's Map tools section and
+// A trail's height profile (ui-core/TrailProfile.h) as a chart (Chart.h):
+// the height over the distance, the climb and the highest and lowest points
+// over it. In the live trail's Map tools section and
 // a saved trail's popup. ui-new draws the same on e-ink and the OLED
 // (TrailScreen.h).
 //
@@ -10,42 +10,12 @@
 namespace profileview {
 
 static trailprofile::Sampler s_prof;   // what the chart on screen shows
+static chart::Chart s_chart;
+static char s_under[3][12];
 
-static void onDraw(lv_event_t* e) {
-  const trailprofile::Sampler& p = s_prof;
-  if (p.n < 2) return;
-  lv_obj_t* o = (lv_obj_t*)lv_event_get_target(e);
-  lv_layer_t* layer = lv_event_get_layer(e);
-  lv_area_t a;
-  lv_obj_get_coords(o, &a);
-  int lo = p.st.lo, hi = p.st.hi;
-  if (hi - lo < 20) { const int mid = (hi + lo) / 2; lo = mid - 10; hi = mid + 10; }
-  const float total = p.total > 0 ? p.total : 1.0f;
-  const int x0 = a.x1 + 2, w = a.x2 - a.x1 - 4, y0 = a.y1 + 20, h = a.y2 - y0 - 2, base = a.y2 - 1;   // under the caption
-  auto X = [&](int i) { return (int32_t)(x0 + p.dist[i] / total * w); };
-  auto Y = [&](int i) { return (int32_t)(y0 + h - (p.alt[i] - lo) * h / (hi - lo)); };
-
-  lv_draw_line_dsc_t fill;   // under the line, a column at a time (triangles would leave seams)
-  lv_draw_line_dsc_init(&fill);
-  fill.color = lv_color_hex(theme::ACCENT);
-  fill.opa = LV_OPA_20;
-  fill.width = 1;
-  lv_draw_line_dsc_t ld;
-  lv_draw_line_dsc_init(&ld);
-  ld.color = lv_color_hex(theme::ACCENT);
-  ld.width = 2;
-  ld.round_start = ld.round_end = 1;
-  for (int i = 1; i < p.n; i++) {
-    const int32_t xa = X(i - 1), xb = X(i), ya = Y(i - 1), yb = Y(i);
-    for (int32_t x = (i == 1 ? xa : xa + 1); x <= xb; x++) {
-      fill.p1.x = fill.p2.x = x;
-      fill.p1.y = xb > xa ? ya + (yb - ya) * (x - xa) / (xb - xa) : yb;
-      fill.p2.y = base;
-      lv_draw_line(layer, &fill);
-    }
-    ld.p1.x = xa; ld.p1.y = ya; ld.p2.x = xb; ld.p2.y = yb;
-    lv_draw_line(layer, &ld);
-  }
+static void distText(float m, char* out, size_t n) {
+  if (m < 1000) snprintf(out, n, "%d m", (int)lroundf(m));
+  else snprintf(out, n, "%.1f km", m / 1000.0f);
 }
 
 }  // namespace profileview
@@ -55,16 +25,36 @@ static void onDraw(lv_event_t* e) {
 static lv_obj_t* profileChart(lv_obj_t* parent, int h) {
   using namespace profileview;
   if (!s_prof.st.any || s_prof.n < 2) return nullptr;
-  lv_obj_t* c = lv_obj_create(parent);
-  styleSurface(c, theme::SURFACE);
-  lv_obj_remove_flag(c, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_remove_flag(c, LV_OBJ_FLAG_CLICKABLE);
-  fillWidth(c);
-  lv_obj_set_height(c, h);
-  lv_obj_set_style_radius(c, theme::RADIUS_SM, 0);
-  lv_obj_add_event_cb(c, onDraw, LV_EVENT_DRAW_MAIN_END, NULL);
+  chart::Chart& c = s_chart;
+  c = chart::Chart();
+  const float total = s_prof.total > 0 ? s_prof.total : 1.0f;
+  c.n = s_prof.n;
+  c.spaced = true;
+  for (int i = 0; i < c.n; i++) {
+    c.v[i] = s_prof.alt[i];
+    c.x[i] = (uint16_t)lroundf(s_prof.dist[i] / total * 10000);
+  }
+  c.min_span = 20;
+  c.axis = [](int v, int, char* o, size_t n) { snprintf(o, n, "%d m", v); };
+  c.value = [](const chart::Chart& c, int i, char* o, size_t n) { snprintf(o, n, "%d m", c.v[i]); };
+  c.where = [](const chart::Chart& c, int i, char* o, size_t n) { (void)c; distText(s_prof.dist[i], o, n); };
+  distText(0, s_under[0], sizeof(s_under[0]));
+  distText(total / 2, s_under[1], sizeof(s_under[1]));
+  distText(total, s_under[2], sizeof(s_under[2]));
+  for (int j = 0; j < 3; j++) c.under[j] = s_under[j];
+  const int lh = lv_font_get_line_height(THEME_FONT_SMALL);
+  c.top = lh + 2;   // the caption
+  lv_obj_t* box = lv_obj_create(parent);
+  styleSurface(box, theme::SURFACE);
+  lv_obj_remove_flag(box, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_remove_flag(box, LV_OBJ_FLAG_CLICKABLE);
+  fillWidth(box);
+  lv_obj_set_height(box, h);
+  lv_obj_set_style_radius(box, theme::RADIUS_SM, 0);
+  lv_obj_set_style_pad_all(box, 6, 0);
+  lv_obj_t* o = chart::create(box, c, h - 12);
   char t[64];
   snprintf(t, sizeof(t), "Climb %d m  -  highest %d m  -  lowest %d m", s_prof.st.gain, s_prof.st.hi, s_prof.st.lo);
-  lv_obj_align(label(c, t, THEME_FONT_SMALL, theme::TEXT_MUTED), LV_ALIGN_TOP_LEFT, 6, 2);
-  return c;
+  lv_obj_align(label(o, t, THEME_FONT_SMALL, theme::TEXT_MUTED), LV_ALIGN_TOP_LEFT, 0, 0);
+  return box;
 }

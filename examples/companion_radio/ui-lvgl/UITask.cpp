@@ -3530,6 +3530,7 @@ void UITask::nodeAction(uint8_t action) {
 
 static lv_obj_t* switchRow(lv_obj_t* parent, const char* text, const char* sub, uint8_t* pref);   // below
 #include "MapScreen.h"
+#include "Chart.h"
 #include "ProfileView.h"
 #include "NavMap.h"
 #include "MapAreas.h"
@@ -4641,6 +4642,37 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_open(const char* name) {
   if (!strcmp(name, "region0")) { s_ui->mapRegionPopup(0); return; }
   if (!strcmp(name, "advert")) { s_ui->advertPopup(); return; }
   if (!strcmp(name, "trailsave")) { s_ui->navToolAction(navmap::TL_TRAIL_SAVE); return; }   // Map tools > Save
+  if (!strcmp(name, "histdemo")) {   // 8 h of made-up history, for the charts
+    using namespace diagview;
+    for (int i = 0; i < 96; i++) {
+      s_hist.batt.push((int16_t)(4150 - i * 4 + (i % 7) * 3));
+      s_hist.noise.push((int16_t)(-112 + (i % 11 == 0 ? 6 : 0) + (i / 24)));
+      s_hist.traffic.push((int16_t)((i * 37) % 13 + (i % 16 == 0 ? 20 : 0)));
+    }
+    for (int i = 0; i < 32; i++) s_hist.snr.push((int16_t)(4 * (8 - (i * 7) % 19)));
+    s_hist.version++;
+    s_near.f0 = 869.525f - s_near.step * (s_near.n / 2);   // and a noise sweep
+    for (int i = 0; i < s_near.n; i++) s_near.v[i] = (int16_t)(-118 + (i % 9 == 0 ? 7 : (i * 5) % 4));
+    s_floor_med = -116; s_floor_lo = -118;
+    s_noise_have = true;
+    return;
+  }
+  if (!strcmp(name, "profdemo")) {   // a made-up height profile in a popup, for the chart
+    using namespace profileview;
+    s_prof = trailprofile::Sampler();
+    for (int i = 0; i < 100; i++) {
+      s_prof.dist[i] = i * 62.0f;
+      s_prof.alt[i] = (int16_t)(420 + 80 * sinf(i / 14.0f) + i * 1.5f);
+      s_prof.st.add(s_prof.alt[i]);
+    }
+    s_prof.n = 100; s_prof.total = 99 * 62.0f;
+    lv_obj_t* box = lv_obj_create(lv_layer_top());
+    styleSurface(box, theme::BG);
+    lv_obj_set_size(box, 304, 132);
+    lv_obj_center(box);
+    profileChart(box, 120);
+    return;
+  }
   if (!strcmp(name, "savedtrail0")) { navmap::scanTrails(); s_ui->savedTrailPopup(0); return; }
   if (!strncmp(name, "trail@", 6)) {   // "trail@name.trl" from /sdcard/trails: Load, as the saved-trail popup does
     navmap::scanTrails();
