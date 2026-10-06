@@ -554,7 +554,7 @@ void UITask::buildHomeClock(lv_obj_t* box) {
   lv_obj_add_flag(clk, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_set_style_opa(clk, LV_OPA_70, LV_STATE_PRESSED);
   lv_obj_add_event_cb(clk, onClockTap, LV_EVENT_CLICKED, NULL);
-  _home_clock = clockFace(clk, THEME_FONT_CLOCK, THEME_FONT_TITLE);
+  _home_clock = clockFace(clk, nullptr, THEME_FONT_TITLE);
   _home_date = label(clk, "", THEME_FONT_BODY, theme::TEXT_MUTED);
   label(clk, the_mesh.getNodeName(), THEME_FONT_BODY, theme::ACCENT);
 

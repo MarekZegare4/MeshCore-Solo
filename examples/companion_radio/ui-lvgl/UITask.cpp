@@ -1282,24 +1282,118 @@ static void prefsFlush() {
   the_mesh.savePrefs();
 }
 
+// The big clock in the boot splash's lettering, as ui-new draws it on the
+// OLED and e-ink (ui-core/Lettering.h: block digits in 3 px strokes): HH:MM
+// at SC x, the seconds after them at SC_SEC x on the same baseline. The
+// lettering leans a glyph row at a time, steps SC px tall at this size;
+// here the lean is worked out per screen row, so it's a smooth slant.
+#include "../ui-core/Lettering.h"
+namespace bigclock {
+static const int SC = 4, SC_SEC = 2;
+struct Text { char hm[8]; char sec[4]; };
+
+static int lean(int py, int h, int sc) { return (2 * sc * (h - 1 - py) + (h - 1) / 2) / (h - 1); }   // 2 glyph px at the top, 0 at the bottom
+static int32_t width(const char* t, int sc) {
+  const int w = lettering::textW(t, 0);
+  return w <= 0 ? 0 : w * sc + ((int)strlen(t) - 1) * (sc + 1);
+}
+static void draw(lv_layer_t* layer, int32_t x, int32_t y, const char* t, int sc, lv_color_t col) {
+  const int h = lettering::LOGO_H * sc;
+  lv_draw_rect_dsc_t d;
+  lv_draw_rect_dsc_init(&d);
+  d.bg_color = col;
+  for (const char* p = t; *p; p++) {
+    const lettering::PixGlyph* g = lettering::pixGlyph(*p);
+    if (!g) continue;
+    const int gw = (int)strlen(g->rows[0]);
+    for (int py = 0; py < h; ) {
+      const int r = py / sc, off = lean(py, h, sc);
+      int end = py + 1;   // the rows under it on the same glyph row, leaning as far
+      while (end < h && end / sc == r && lean(end, h, sc) == off) end++;
+      const char* row = g->rows[r];
+      for (int c = 0; c < gw; c++) {   // runs of ink as one rect
+        if (row[c] != '#') continue;
+        int e = c;
+        while (e + 1 < gw && row[e + 1] == '#') e++;
+        lv_area_t a = { x + off + c * sc, y + py, x + off + (e + 1) * sc - 1, y + end - 1 };
+        lv_draw_rect(layer, &d, &a);
+        c = e;
+      }
+      py = end;
+    }
+    x += (gw + 2) * sc + sc + 1;
+  }
+}
+
+static void onDraw(lv_event_t* e) {
+  lv_obj_t* o = (lv_obj_t*)lv_event_get_target(e);
+  const Text* t = (const Text*)lv_obj_get_user_data(o);
+  if (!t) return;
+  lv_area_t a;
+  lv_obj_get_coords(o, &a);
+  const lv_color_t col = lv_obj_get_style_text_color(o, LV_PART_MAIN);
+  draw(lv_event_get_layer(e), a.x1, a.y1, t->hm, SC, col);
+  if (t->sec[0])
+    draw(lv_event_get_layer(e), a.x1 + width(t->hm, SC) + 3 * SC, a.y2 + 1 - lettering::LOGO_H * SC_SEC, t->sec, SC_SEC, col);
+}
+static void onDelete(lv_event_t* e) { lv_free(lv_obj_get_user_data((lv_obj_t*)lv_event_get_target(e))); }
+
+static lv_obj_t* create(lv_obj_t* parent) {
+  lv_obj_t* o = lv_obj_create(parent);
+  lv_obj_remove_style_all(o);
+  lv_obj_remove_flag(o, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_style_text_color(o, lv_color_hex(theme::TEXT), 0);
+  Text* t = (Text*)lv_malloc(sizeof(Text));
+  if (t) { snprintf(t->hm, sizeof(t->hm), "--:--"); t->sec[0] = 0; }
+  lv_obj_set_user_data(o, t);
+  lv_obj_set_size(o, width("--:--", SC), lettering::LOGO_H * SC);
+  lv_obj_add_event_cb(o, onDraw, LV_EVENT_DRAW_MAIN_END, NULL);
+  lv_obj_add_event_cb(o, onDelete, LV_EVENT_DELETE, NULL);
+  return o;
+}
+static void set(lv_obj_t* o, const char* hm, const char* sec) {
+  Text* t = (Text*)lv_obj_get_user_data(o);
+  if (!t || (!strcmp(t->hm, hm) && !strcmp(t->sec, sec))) return;
+  snprintf(t->hm, sizeof(t->hm), "%s", hm);
+  snprintf(t->sec, sizeof(t->sec), "%s", sec);
+  const int32_t w = width(hm, SC) + (sec[0] ? 3 * SC + width(sec, SC_SEC) : 0);
+  if (w != lv_obj_get_width(o)) lv_obj_set_width(o, w);
+  lv_obj_invalidate(o);
+}
+}  // namespace bigclock
+
 // A big clock (Home, the lock screen): the digits and, on a 12-hour clock,
-// AM / PM beside them in `small`, on the digits' baseline. clockFaceSet()
-// once a second; "--:--" until the time is known.
+// AM / PM beside them in `small`, on the digits' baseline. `big` null: the
+// digits in the lettering (bigclock above). clockFaceSet() once a second;
+// "--:--" until the time is known.
 static lv_obj_t* clockFace(lv_obj_t* parent, const lv_font_t* big, const lv_font_t* small) {
   lv_obj_t* f = flexBox(parent, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(f, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_END);
-  lv_obj_set_style_pad_column(f, 4, 0);
-  label(f, "--:--", big, theme::TEXT);
+  lv_obj_set_style_pad_column(f, big ? 4 : 3 * bigclock::SC, 0);
+  if (big) label(f, "--:--", big, theme::TEXT);
+  else { bigclock::create(f); lv_obj_set_style_pad_bottom(f, 6, 0); }   // clear of the line under it
   lv_obj_t* ap = label(f, "", small, theme::TEXT_MUTED);
-  lv_obj_set_style_pad_bottom(ap, big->base_line - small->base_line, 0);
+  if (big) lv_obj_set_style_pad_bottom(ap, big->base_line - small->base_line, 0);
+  else lv_obj_set_style_translate_y(ap, small->base_line, 0);   // its baseline on the digits' foot
   lv_obj_add_flag(ap, LV_OBJ_FLAG_HIDDEN);
   return f;
 }
 static void clockFaceSet(lv_obj_t* f, const struct tm* ti, const NodePrefs* p) {
+  lv_obj_t* digits = lv_obj_get_child(f, 0);
   lv_obj_t* ap = lv_obj_get_child(f, 1);
-  char clk[12] = "--:--";
-  if (ti) fmtClock(clk, sizeof(clk), *ti, p, false, true);
-  setText(lv_obj_get_child(f, 0), clk);
+  if (lv_obj_check_type(digits, &lv_label_class)) {
+    char clk[12] = "--:--";
+    if (ti) fmtClock(clk, sizeof(clk), *ti, p, false, true);
+    setText(digits, clk);
+  } else {
+    char hm[8] = "--:--", sec[4] = "";
+    if (ti) {
+      if (p && p->clock_12h) snprintf(hm, sizeof(hm), "%d:%02d", ti->tm_hour % 12 ? ti->tm_hour % 12 : 12, ti->tm_min);
+      else snprintf(hm, sizeof(hm), "%02d:%02d", ti->tm_hour, ti->tm_min);
+      if (!p || !p->clock_hide_seconds) snprintf(sec, sizeof(sec), "%02d", ti->tm_sec);
+    }
+    bigclock::set(digits, hm, sec);
+  }
   bool h12 = ti && p && p->clock_12h;
   if (h12) setText(ap, ti->tm_hour < 12 ? "AM" : "PM");
   if (h12 != !lv_obj_has_flag(ap, LV_OBJ_FLAG_HIDDEN)) {

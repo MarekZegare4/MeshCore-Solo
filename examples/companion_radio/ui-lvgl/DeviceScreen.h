@@ -174,7 +174,7 @@ void UITask::lockScreen() {
     refreshLock();
     return;
   }
-  s_lock_clock = clockFace(s_lock, THEME_FONT_CLOCK, THEME_FONT_TITLE);
+  s_lock_clock = clockFace(s_lock, nullptr, THEME_FONT_TITLE);
   s_lock_date = label(s_lock, "", THEME_FONT_BODY, theme::TEXT_MUTED);
   s_lock_unread = label(s_lock, "", THEME_FONT_BODY, theme::ACCENT);
   lv_obj_set_style_pad_top(s_lock_unread, 8, 0);
