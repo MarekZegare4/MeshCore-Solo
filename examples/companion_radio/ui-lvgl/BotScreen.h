@@ -218,14 +218,14 @@ void UITask::botRow(int row) {
   if (botcfg::isHour(r.kind)) {
     lv_obj_t* panel = navPopupPanel(r.label, false);
     label(panel, "Same hour for both = no quiet hours.", THEME_FONT_SMALL, theme::TEXT_MUTED);
-    lv_obj_t* rw = adminRowBox(panel);
+    lv_obj_t* rw = centerRow(panel);
     botHourButton(rw, LV_SYMBOL_MINUS, B_MINUS, false);
     s_hour_lbl = label(rw, "", THEME_FONT_LARGE, theme::TEXT);
     lv_obj_set_width(s_hour_lbl, 80);
     lv_obj_set_style_text_align(s_hour_lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_text_fmt(s_hour_lbl, "%02d:00", botcfg::hour(p, r.kind));
     botHourButton(rw, LV_SYMBOL_PLUS, B_PLUS, false);
-    rw = adminRowBox(panel);
+    rw = centerRow(panel);
     botHourButton(rw, LV_SYMBOL_OK " Done", B_DONE, true);
   }
 }

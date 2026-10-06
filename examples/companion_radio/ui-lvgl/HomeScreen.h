@@ -491,7 +491,14 @@ void UITask::homeSwipePoll() {
   lv_point_t p;
   lv_indev_get_point(in, &p);
   if (!down) { home::s_touching = false; return; }
-  if (!home::s_touching) { home::s_touching = true; home::s_swiped = false; home::s_start = p; return; }
+  if (!home::s_touching) {
+    home::s_touching = true;
+    home::s_start = p;
+    // A touch on the top layer (the quick panel's slider, the status bar) isn't
+    // Home's: a sideways drag there would end it and turn the page under it.
+    home::s_swiped = lv_indev_search_obj(lv_layer_top(), &p) != nullptr;
+    return;
+  }
   if (home::s_swiped || home::s_drag_pos >= 0) return;   // a tile being dragged isn't a swipe
   int dx = p.x - home::s_start.x, dy = p.y - home::s_start.y;
   if (abs(dx) < home::SWIPE_PX || abs(dx) < 2 * abs(dy)) return;

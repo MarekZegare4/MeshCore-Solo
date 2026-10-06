@@ -259,7 +259,10 @@ static void onEvent(lv_event_t* e) {
     return;
   }
   lv_keyboard_def_event_cb(e);    // type the character / backspace / OK
-  if (lv_obj_t* ta = lv_keyboard_get_textarea(kbd)) keepCursor(ta);
+  // OK and hide put the keyboard (and the field's cursor) away themselves
+  const bool closes = strcmp(t, KB_OK) == 0 || strcmp(t, KB_HIDE) == 0;
+  lv_obj_t* ta = lv_keyboard_get_textarea(kbd);
+  if (ta && !closes && !lv_obj_has_flag(kbd, LV_OBJ_FLAG_HIDDEN)) keepCursor(ta);
   if (strcmp(t, KB_BS) != 0) releaseShift(kbd);
 }
 

@@ -2,21 +2,27 @@
 // The quick panel, as a phone's: pulled down from the status bar (or a tap
 // on it), over any screen. Tiles that switch at a tap -- Bluetooth, WiFi,
 // GPS, sound, the trail, live share -- the advert, the lock, and the
-// brightness under them. Holding a tile opens its settings. The tiles are one
-// row that scrolls sideways. Swiped up, a tap on the status bar, the side
-// button or another screen puts it away; the screen under it stays live (no
-// dimming layer: blending a full-screen fill into every frame of the slide
-// was what made it stutter). ui-new has the
-// same things as Home pages (Radio, Bluetooth, Advert, GPS).
+// brightness under them. Holding a tile opens its settings. The tiles are two
+// pages of four, swiped sideways. Swiped up, a tap under it or on the status
+// bar, the side button or another screen puts it away. The screen under it
+// is frozen and dimmed in one snapshot (freeze::early, as under a popup), so
+// the slide redraws an image and the panel -- a live screen under it, or a
+// dim blended over that, was redrawn every frame -- and nothing under it
+// takes a touch. ui-new has the same things as Home pages (Radio, Bluetooth,
+// Advert, GPS).
 //
 // Single-TU fragment: included by ui-lvgl/UITask.cpp after QuickScreen.h.
 
 namespace qpanel {
 
 enum : uint8_t { T_BT, T_WIFI, T_GPS, T_SOUND, T_ADVERT, T_TRAIL, T_SHARE, T_LOCK, T_COUNT };
-static const int VISIBLE = 4;         // tiles in view; the rest scroll in (a half tile peeks)
+static const int PER_PAGE = 4;
 
 static lv_obj_t* s_panel = nullptr;
+static lv_obj_t* s_catch = nullptr;   // under it, while it's out: a tap there closes it
+static lv_obj_t* s_pages = nullptr;
+static lv_obj_t* s_dot[2];
+static uint8_t s_look[T_COUNT];       // what tileSet() last drew (0: nothing yet)
 static lv_obj_t* s_tile[T_COUNT];
 static lv_obj_t* s_icon[T_COUNT];
 static lv_obj_t* s_cap[T_COUNT];
@@ -36,6 +42,7 @@ static void placeCb(void* o, int32_t v) { (void)o; place(v); }
 static void hidden(lv_anim_t* a) {
   (void)a;
   lv_obj_add_flag(s_panel, LV_OBJ_FLAG_HIDDEN);
+  if (s_catch) { lv_obj_delete(s_catch); s_catch = nullptr; }   // the frozen screen goes with it
 }
 static void slide(int32_t to, bool away) {
   lv_anim_delete(s_panel, NULL);
@@ -47,6 +54,7 @@ static void onTile(lv_event_t* e) {
   if (!s_open) return;   // a swipe up that began on it: the panel is going
   s_ui->quickPanelTile((int)(uintptr_t)lv_event_get_user_data(e), lv_event_get_code(e) == LV_EVENT_LONG_PRESSED);
 }
+static void onCatch(lv_event_t* e) { (void)e; s_ui->quickPanelClose(true); }
 static void onPanelGesture(lv_event_t* e) {
   (void)e;
   if (lv_indev_get_gesture_dir(lv_indev_active()) == LV_DIR_TOP) s_ui->quickPanelClose(true);
@@ -80,13 +88,25 @@ static lv_obj_t* tile(lv_obj_t* parent, int t, int w) {
   return b;
 }
 
+static void dotsSet(int page) {
+  for (int i = 0; i < 2; i++)
+    lv_obj_set_style_bg_color(s_dot[i], lv_color_hex(i == page ? theme::TEXT_MUTED : theme::SURFACE_2), 0);
+}
+static void onPagesScrolled(lv_event_t* e) {
+  (void)e;
+  dotsSet(lv_obj_get_scroll_x(s_pages) > lv_obj_get_width(s_pages) / 2);
+}
+
 // A tile's look: on in the accent with dark text, off on the surface;
 // `dim`: nothing to switch on this device.
 static void tileSet(int t, const char* icon, const char* cap, bool on, bool dim = false) {
   const uint32_t fg = on ? theme::BG : dim ? theme::TEXT_MUTED : theme::TEXT;
-  const uint32_t bg = on ? theme::ACCENT : theme::SURFACE;
-  lv_obj_set_style_bg_color(s_tile[t], lv_color_hex(bg), 0);
-  lv_obj_set_style_bg_color(s_tile[t], lv_color_hex(on ? theme::mix(theme::ACCENT, theme::BG, 75) : theme::SURFACE_2), LV_STATE_PRESSED);
+  const uint8_t look = 1 | (on ? 2 : 0);
+  if (s_look[t] != look) {   // LVGL restyles, and redraws, on every set (the refresh is each second)
+    s_look[t] = look;
+    lv_obj_set_style_bg_color(s_tile[t], lv_color_hex(on ? theme::ACCENT : theme::SURFACE), 0);
+    lv_obj_set_style_bg_color(s_tile[t], lv_color_hex(on ? theme::mix(theme::ACCENT, theme::BG, 75) : theme::SURFACE_2), LV_STATE_PRESSED);
+  }
   setText(s_icon[t], icon);
   setText(s_cap[t], cap);
   setTextColor(s_icon[t], fg);
@@ -143,20 +163,42 @@ void UITask::quickPanelBuild() {
   lv_obj_remove_flag(s_panel, LV_OBJ_FLAG_GESTURE_BUBBLE);   // a swipe on it (or a tile) is its own
   lv_obj_add_event_cb(s_panel, onPanelGesture, LV_EVENT_GESTURE, NULL);
 
-  // One row, scrolling sideways in whole tiles: three and a half in view
-  // is what tells it scrolls. Text and icons get room, and a flick stops
-  // on a tile instead of drifting.
-  lv_obj_t* grid = flexBox(s_panel, LV_FLEX_FLOW_ROW);
-  lv_obj_set_size(grid, w - 2 * theme::PAD, 56);
-  lv_obj_add_flag(grid, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_scroll_dir(grid, LV_DIR_HOR);
-  lv_obj_set_scroll_snap_x(grid, LV_SCROLL_SNAP_START);
-  lv_obj_set_scrollbar_mode(grid, LV_SCROLLBAR_MODE_OFF);
-  lv_obj_remove_flag(grid, LV_OBJ_FLAG_SCROLL_ELASTIC);
-  lv_obj_add_flag(grid, LV_OBJ_FLAG_SCROLL_ONE);
-  lv_obj_set_style_pad_column(grid, theme::GAP, 0);
-  const int tw = (w - 2 * theme::PAD - VISIBLE * theme::GAP) / (VISIBLE - 1) - 6;   // ~3.5 tiles in view
-  for (int t = 0; t < T_COUNT; t++) s_tile[t] = tile(grid, t, tw);
+  // Two pages of four tiles, a swipe sideways turning one (snapped, one at
+  // a time), the dots under them saying which.
+  const int32_t pw = w - 2 * theme::PAD;
+  s_pages = flexBox(s_panel, LV_FLEX_FLOW_ROW);
+  lv_obj_set_size(s_pages, pw, 56);
+  lv_obj_add_flag(s_pages, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scroll_dir(s_pages, LV_DIR_HOR);
+  lv_obj_set_scroll_snap_x(s_pages, LV_SCROLL_SNAP_START);
+  lv_obj_set_scrollbar_mode(s_pages, LV_SCROLLBAR_MODE_OFF);
+  lv_obj_remove_flag(s_pages, LV_OBJ_FLAG_SCROLL_ELASTIC);
+  lv_obj_add_flag(s_pages, LV_OBJ_FLAG_SCROLL_ONE);
+  lv_obj_set_style_pad_column(s_pages, theme::GAP, 0);
+  lv_obj_add_event_cb(s_pages, onPagesScrolled, LV_EVENT_SCROLL_END, NULL);
+  const int tw = (pw - (PER_PAGE - 1) * theme::GAP) / PER_PAGE;
+  lv_obj_t* page = nullptr;
+  for (int t = 0; t < T_COUNT; t++) {
+    if (t % PER_PAGE == 0) {
+      page = flexBox(s_pages, LV_FLEX_FLOW_ROW);
+      lv_obj_set_size(page, pw, 56);
+      lv_obj_add_flag(page, LV_OBJ_FLAG_SNAPPABLE);
+      lv_obj_set_style_pad_column(page, theme::GAP, 0);
+    }
+    s_tile[t] = tile(page, t, tw);
+    s_look[t] = 0;
+  }
+  lv_obj_t* dots = flexBox(s_panel, LV_FLEX_FLOW_ROW);
+  lv_obj_set_style_pad_column(dots, 6, 0);
+  for (int i = 0; i < 2; i++) {
+    s_dot[i] = lv_obj_create(dots);
+    lv_obj_remove_style_all(s_dot[i]);
+    lv_obj_remove_flag(s_dot[i], LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_size(s_dot[i], 6, 6);
+    lv_obj_set_style_radius(s_dot[i], LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_opa(s_dot[i], LV_OPA_COVER, 0);
+  }
+  dotsSet(0);
 
   lv_obj_t* row = flexBox(s_panel, LV_FLEX_FLOW_ROW);
   lv_obj_set_size(row, LV_PCT(100), 30);
@@ -200,7 +242,22 @@ bool UITask::quickPanelBegin() {
   pickerClose();
   quickPanelRefresh();
   lv_anim_delete(s_panel, NULL);
+  if (!s_catch) {   // a still copy of the screen, dimmed, under it: a tap or swipe there closes it
+    s_catch = lv_obj_create(lv_layer_top());
+    lv_obj_remove_style_all(s_catch);
+    lv_obj_set_size(s_catch, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_bg_color(s_catch, lv_color_hex(0x000000), 0);
+    lv_obj_add_flag(s_catch, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_remove_flag(s_catch, LV_OBJ_FLAG_GESTURE_BUBBLE);
+    lv_obj_add_event_cb(s_catch, onCatch, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(s_catch, onPanelGesture, LV_EVENT_GESTURE, NULL);
+    lv_obj_move_to_index(s_catch, lv_obj_get_index(s_panel));
+    lv_obj_add_event_cb(s_catch, freeze::ownerDeleted, LV_EVENT_DELETE, NULL);
+    freeze::early(s_catch, LV_OPA_50);   // no memory, or a popup's still frozen: the screen stays as it is
+  }
   lv_obj_remove_flag(s_panel, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_scroll_to_x(s_pages, 0, LV_ANIM_OFF);   // the first page each time
+  dotsSet(0);
   layoutNow(s_panel);
   s_h = lv_obj_get_height(s_panel) + theme::STATUS_H;
   place(-s_h);
