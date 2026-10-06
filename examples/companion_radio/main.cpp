@@ -202,7 +202,11 @@ void setup() {
   #ifdef ST7789
     disp->setTextSize(2);
   #endif
-    disp->drawTextCentered(disp->width() / 2, 28, "Loading...");
+    // Three dots mid-screen: no words, so no orientation (the settings aren't read yet).
+    const int dot = disp->width() >= 240 ? 6 : 3;
+    disp->setColor(DisplayDriver::LIGHT);
+    for (int i = -1; i <= 1; i++)
+      disp->fillRect(disp->width() / 2 + i * 3 * dot - dot / 2, disp->height() / 2 - dot / 2, dot, dot);
     disp->endFrame();
   }
 #endif
