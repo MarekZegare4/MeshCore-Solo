@@ -314,12 +314,14 @@ struct NodePrefs {  // persisted to file
   // Per-channel melody override (2 bitmasks, 1 bit per channel)
   uint64_t ch_notif_melody_set;  // bit i = channel i has explicit melody [del→onChannelRemoved]
   uint64_t ch_notif_melody_2;    // bit i = use melody 2 (else melody 1, when set bit is set)
-  // Scope-list index per channel (see ScopeList) -- 0 ("*"/unscoped) by
-  // default. Fixed at 64 slots (not
+  // Scope-list index per channel (see ScopeList): 0 = "*" (unscoped), 1.. a
+  // list entry, CH_SCOPE_DEFAULT (the default for every channel) = whatever
+  // the list's default is (MyMesh::channelScope()). Fixed at 64 slots (not
   // MAX_GROUP_CHANNELS, which varies by board/variant and would make
   // sizeof(NodePrefs) variant-dependent) -- same implicit channel-count cap
   // every ch_notif_*/ch_fav_bitmask uint64_t bitmask above already has.
   static const uint8_t MAX_SCOPED_CHANNELS = 64;
+  static const uint8_t CH_SCOPE_DEFAULT = 0xFF;
   uint8_t  ch_scope_idx[MAX_SCOPED_CHANNELS]; // [del→onChannelRemoved]
   struct DmNotifEntry { uint8_t prefix[4]; uint8_t state; }; // state: 0=default,1=muted,2=force-on
   static const int DM_NOTIF_TABLE_MAX = 16;
@@ -524,6 +526,11 @@ struct NodePrefs {  // persisted to file
   // 1 = the user switched Bluetooth off: it stays off after a reboot or
   // hibernate (MyMesh::startInterface). USB keeps working either way.
   uint8_t  ble_off;
+
+  // 1 once ch_scope_idx knows CH_SCOPE_DEFAULT. A 2.0-rc1 file has 0 here and
+  // its channels' 0 ("*", then the only start value) becomes "follow the
+  // default" on load (DataStore sanitize).
+  uint8_t  ch_scope_follow;
 
   // Single source of truth for the live-share option tables (shared by the Map
   // UI labels and the auto-send engine in UITask).

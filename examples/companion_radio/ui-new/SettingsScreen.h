@@ -761,13 +761,9 @@ public:
         if (res == PopupMenu::SELECTED) {
           int sel = _scope_action_menu.selectedIndex();
           if (sel == 0) {                                   // Set as default
+            // DMs, the relay's primary slot and every channel left on
+            // "Default" follow it; the list marks it [default].
             the_mesh.setDefaultScope((uint8_t)_scope_action_idx);
-            // "Default" is the protocol's own word (CMD_SET_DEFAULT_FLOOD_SCOPE,
-            // and what the app shows), but on its own it doesn't say default
-            // for *what* -- channels carry their own pick and don't inherit it.
-            // Spell out the two things it actually governs, at the moment the
-            // user sets it, rather than leaving the list marker to imply more.
-            _task->showAlert("Default: DMs + relay", 1400);
           } else if (sel == 1 && _scope_action_idx >= 1) {  // Rename
             _scope_rename_idx = _scope_action_idx;
             _kb->begin(sl.name((uint8_t)_scope_action_idx), 23);

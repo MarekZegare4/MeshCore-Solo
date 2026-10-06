@@ -63,10 +63,11 @@ class MessagesScreen : public UIScreen {
   char      _ctx_notif_item[22];
   char      _ctx_melody_item[20];
   char      _ctx_scope_item[30];   // "Scope: <name>"
-  // Scope sub-picker: single-select from the shared named-scope list,
-  // reusing _ctx_menu itself as a popup -- same idiom as _pin_picker_active's
-  // "Pick slot" submenu below (row index == list index directly, no
-  // per-row value cycling needed since Enter just picks and closes).
+  char      _ctx_scope_def[34];    // the picker's first row: "Default (<name>)"
+  // Scope sub-picker: single-select from Default + the shared named-scope
+  // list, reusing _ctx_menu itself as a popup -- same idiom as
+  // _pin_picker_active's "Pick slot" submenu below (rows as chanctl::scope(),
+  // no per-row value cycling needed since Enter just picks and closes).
   bool      _scope_pick_active = false;
   char      _ctx_pin_item[28];   // "Pin to dial" or "Unpin (slot N)"
   char      _ctx_fav_item[12]; // "Fav: ON" / "Fav: OFF" — shared by the channel,
@@ -1670,7 +1671,7 @@ public:
       the_mesh.getChannel(_sel_channel_idx, ch);
       char title[32];
       NodePrefs* p_hdr = _task->getNodePrefs();
-      uint8_t hdr_sc_idx = (p_hdr && _sel_channel_idx < NodePrefs::MAX_SCOPED_CHANNELS) ? p_hdr->ch_scope_idx[_sel_channel_idx] : 0;
+      uint8_t hdr_sc_idx = p_hdr ? the_mesh.channelScope(_sel_channel_idx) : 0;
       if (hdr_sc_idx != 0) {
         // Non-wildcard scope set on this channel -- surface it in the title,
         // same as the app's own per-channel scope tag, so it's obvious at a
@@ -2076,9 +2077,9 @@ public:
         }
         auto res = _ctx_menu.handleInput(c);
         if (_scope_pick_active) {
-          // Scope sub-menu: row index == list index directly ("*" first).
+          // Scope sub-menu: Default first, then the list ("*" first).
           if (res == PopupMenu::SELECTED) {
-            the_mesh.setChannelScope(_ctx_ch_idx, (uint8_t)_ctx_menu.selectedIndex());
+            the_mesh.setChannelScope(_ctx_ch_idx, chanctl::scopeFromRow(_ctx_menu.selectedIndex()));
             the_mesh.savePrefs();
           }
           if (res != PopupMenu::NONE) _scope_pick_active = false;
@@ -2121,12 +2122,12 @@ public:
             _history.setChUnread(ch_idx, 0);
             markReadAlert(cleared);
           } else if (sel == 4) {              // Scope
-            NodePrefs* p2 = _task->getNodePrefs();
-            uint8_t cur = (p2 && ch_idx < NodePrefs::MAX_SCOPED_CHANNELS) ? p2->ch_scope_idx[ch_idx] : 0;
             const ScopeList& sl = the_mesh.scopeList();
+            snprintf(_ctx_scope_def, sizeof(_ctx_scope_def), "Default (%s)", sl.name(sl.default_idx));
             _ctx_menu.begin("Scope", 4);
+            _ctx_menu.addItem(_ctx_scope_def);
             for (uint8_t i = 0; i <= sl.count; i++) _ctx_menu.addItem(sl.name(i));
-            _ctx_menu.setSelected(cur);
+            _ctx_menu.setSelected(chanctl::scope(_task->getNodePrefs(), ch_idx));
             _scope_pick_active = true;
             return true;   // list rebuild below would close the submenu
           } else if (sel == 5) {              // Pin / Unpin
@@ -2211,9 +2212,9 @@ public:
         { int pinned_slot = _task->findFavouriteChannelSlot(ch_idx);
           if (pinned_slot >= 0) snprintf(_ctx_pin_item, sizeof(_ctx_pin_item), "Unpin (slot %d)", pinned_slot + 1);
           else                  snprintf(_ctx_pin_item, sizeof(_ctx_pin_item), "Pin to dial"); }
-        { NodePrefs* p2 = _task->getNodePrefs();
-          uint8_t sc_idx = (p2 && ch_idx < NodePrefs::MAX_SCOPED_CHANNELS) ? p2->ch_scope_idx[ch_idx] : 0;
-          snprintf(_ctx_scope_item, sizeof(_ctx_scope_item), "Scope: %s", the_mesh.scopeList().name(sc_idx)); }
+        { const uint8_t row = chanctl::scope(_task->getNodePrefs(), ch_idx);
+          snprintf(_ctx_scope_item, sizeof(_ctx_scope_item), "Scope: %s",
+                   row ? the_mesh.scopeList().name(row - 1) : "Default"); }
         _ctx_menu.begin("Channel options", 6);
         _ctx_menu.addItem("Mark all read");
         _ctx_menu.addValueItem(_ctx_notif_item);

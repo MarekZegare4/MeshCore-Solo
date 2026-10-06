@@ -804,6 +804,7 @@ void MyMesh::removeScope(uint8_t idx) {
   // fix-up ScopeList::remove() applied to default_idx.
   for (uint8_t i = 0; i < NodePrefs::MAX_SCOPED_CHANNELS; i++) {
     uint8_t ci = _prefs.ch_scope_idx[i];
+    if (ci == NodePrefs::CH_SCOPE_DEFAULT) continue;   // follows the default, fixed up above
     if (ci == idx) _prefs.ch_scope_idx[i] = 0;
     else if (ci > idx) _prefs.ch_scope_idx[i] = ci - 1;
   }
@@ -835,7 +836,7 @@ void MyMesh::setDefaultScope(uint8_t idx) {
 
 void MyMesh::setChannelScope(uint8_t channel_idx, uint8_t idx) {
   if (channel_idx >= NodePrefs::MAX_SCOPED_CHANNELS) return;
-  _prefs.ch_scope_idx[channel_idx] = _scope_list.clamp(idx);
+  _prefs.ch_scope_idx[channel_idx] = idx == NodePrefs::CH_SCOPE_DEFAULT ? idx : _scope_list.clamp(idx);
 }
 
 void MyMesh::rebuildRepeatScopes() {
@@ -887,17 +888,12 @@ void MyMesh::sendFloodScoped(const mesh::GroupChannel& channel, mesh::Packet* pk
     // this channel's own on-device pick, same precedence DMs already have.
     sendFloodScoped(send_scope, pkt, delay_millis);
   } else {
-    // Resolve THIS channel's own scope-list pick (Messages > channel context
-    // menu > Scope:). Index 0 is "*", which means unscoped -- NOT "inherit the
-    // default": the default is what DMs and the relay filter's primary slot
-    // use, and what a channel is seeded with on upgrade, but once a channel
-    // has a pick that pick is the whole story. The list default is only the
-    // fallback for a channel we can't identify at all (findChannelIdx() == -1,
-    // e.g. a send whose secret isn't in channels[]), where there's no pick to
-    // read in the first place.
+    // THIS channel's own scope (Messages > channel context menu > Scope:):
+    // "Default" follows the list's default, "*" sends unscoped. A channel we
+    // can't identify (findChannelIdx() == -1, e.g. a send whose secret isn't
+    // in channels[]) takes the default too.
     int channel_idx = findChannelIdx(channel);
-    uint8_t list_idx = (channel_idx >= 0 && channel_idx < NodePrefs::MAX_SCOPED_CHANNELS)
-                       ? _prefs.ch_scope_idx[channel_idx] : _scope_list.default_idx;
+    uint8_t list_idx = channel_idx >= 0 ? channelScope((uint8_t)channel_idx) : _scope_list.default_idx;
     TransportKey scope = _scope_list.key(list_idx);
     sendFloodScoped(scope, pkt, delay_millis);
   }
@@ -1841,6 +1837,7 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
 
   // defaults
   memset(&_prefs, 0, sizeof(_prefs));
+  memset(_prefs.ch_scope_idx, NodePrefs::CH_SCOPE_DEFAULT, sizeof(_prefs.ch_scope_idx));
   _prefs.airtime_factor = 1.0;
   strcpy(_prefs.node_name, "NONAME");
   _prefs.freq = LORA_FREQ;
@@ -1938,7 +1935,7 @@ void MyMesh::begin() {
   _store->loadPrefs(_prefs, sensors.node_lat, sensors.node_lon);
   // True only on the first boot after upgrading a device that had the old
   // single Scope field set -- acted on once the channels are loaded, below.
-  bool scope_migrated_legacy = _store->loadScopeList(_scope_list, _prefs);
+  _store->loadScopeList(_scope_list, _prefs);
   rebuildRepeatScopes();
 
   // sanitise bad pref values. NaN/inf must be reset BEFORE constrain(): constrain
@@ -1973,20 +1970,6 @@ void MyMesh::begin() {
   // even after the user explicitly deleted it.
   if (!_store->loadChannels(this)) {
     addChannel("Public", PUBLIC_GROUP_PSK); // pre-configure Andy's public channel
-  }
-
-  // First boot after upgrading from the single device-wide Scope field: every
-  // channel now carries its own pick, and an unset pick means "*" == unscoped,
-  // not "inherit the default". Left alone, an upgrader's channel traffic would
-  // quietly go out unscoped while their DMs kept the old scope. Seed only the
-  // slots that actually hold a channel today -- a blanket fill would also hand
-  // the scope to whatever channel gets created in an empty slot later on.
-  if (scope_migrated_legacy && _scope_list.default_idx >= 1) {
-    for (uint8_t i = 0; i < NodePrefs::MAX_SCOPED_CHANNELS; i++) {
-      ChannelDetails ch;
-      if (getChannel(i, ch) && ch.name[0]) _prefs.ch_scope_idx[i] = _scope_list.default_idx;
-    }
-    savePrefs();
   }
 
   applyRepeaterRadio();   // companion params, or the repeater profile if relaying with one set

@@ -82,9 +82,9 @@ void UITask::channelMenu(int idx) {
             (void*)(uintptr_t)C_MELODY);
   const ScopeList& sl = the_mesh.scopeList();
   if (sl.count > 0) {   // only once regions are set up (Settings in the app)
-    int o = 0;
-    for (uint8_t i = 0; i <= sl.count && o < (int)sizeof(s_scope_opts) - 24; i++)
-      o += snprintf(s_scope_opts + o, sizeof(s_scope_opts) - o, "%s%s", i ? "\n" : "", sl.name(i));
+    int o = snprintf(s_scope_opts, sizeof(s_scope_opts), "Default (%s)", sl.name(sl.default_idx));
+    for (uint8_t i = 0; i <= sl.count && o < (int)sizeof(s_scope_opts) - 26; i++)
+      o += snprintf(s_scope_opts + o, sizeof(s_scope_opts) - o, "\n%s", sl.name(i));
     choiceRow(g, "Scope", "Region it's sent in", s_scope_opts, chanctl::scope(_prefs, idx), onChanDropdown,
               (void*)(uintptr_t)C_SCOPE);
   }
@@ -110,7 +110,7 @@ void UITask::channelSet(uint8_t which, int v) {
   using namespace chanview;
   if (!chanctl::exists(s_idx) || !_prefs) return;
   if (which == C_NOTIF) chanctl::setNotif(_prefs, s_idx, (uint8_t)v);
-  else if (which == C_SCOPE) the_mesh.setChannelScope(s_idx, (uint8_t)v);
+  else if (which == C_SCOPE) the_mesh.setChannelScope(s_idx, chanctl::scopeFromRow(v));
   else if (which == C_MELODY) { chanctl::setMelody(_prefs, s_idx, (uint8_t)v); hearMelody(v); }
   prefsSave();
 }

@@ -495,12 +495,19 @@ public:
   // fixes up repeat_extra_scope_mask, and clears any channel's ch_scope_idx
   // that pointed at it (shift-and-clamp, matching ScopeList::remove()).
   void removeScope(uint8_t idx);
-  // Marks list index idx as the default (used for DMs and any channel/
-  // repeater slot without its own pick). Persists the list and rebuilds
+  // Marks list index idx as the default (used for DMs, the repeater's primary
+  // slot and every channel left on "Default"). Persists the list and rebuilds
   // repeat_scopes[].
   void setDefaultScope(uint8_t idx);
-  // Sets channel_idx's own scope-list pick (0 = "*"). Persists prefs.
+  // Sets channel_idx's own scope-list pick (0 = "*", NodePrefs::CH_SCOPE_DEFAULT
+  // = follow the default). The caller saves the prefs.
   void setChannelScope(uint8_t channel_idx, uint8_t idx);
+  // The list index channel_idx sends in, its "follow the default" resolved.
+  uint8_t channelScope(uint8_t channel_idx) const {
+    uint8_t ci = channel_idx < NodePrefs::MAX_SCOPED_CHANNELS ? _prefs.ch_scope_idx[channel_idx]
+                                                              : NodePrefs::CH_SCOPE_DEFAULT;
+    return ci == NodePrefs::CH_SCOPE_DEFAULT ? _scope_list.default_idx : _scope_list.clamp(ci);
+  }
 
   bool isAckPending(uint32_t expected_ack) const {
     if (expected_ack == 0) return false;   // 0 marks an empty/cleared slot, not a real ACK

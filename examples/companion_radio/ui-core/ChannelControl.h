@@ -193,9 +193,15 @@ static void setFavourite(NodePrefs* p, uint8_t idx, bool on) {
   if (on) p->ch_fav_bitmask |= 1ULL << idx; else p->ch_fav_bitmask &= ~(1ULL << idx);
 }
 
-// Scope: index into the_mesh.scopeList() (0 = "*", unscoped).
+// Scope as a picker row: 0 = Default (follow the list's default), then the
+// list itself from 1 ("*" = unscoped, then the named entries).
 static uint8_t scope(const NodePrefs* p, uint8_t idx) {
-  return (p && idx < NodePrefs::MAX_SCOPED_CHANNELS) ? p->ch_scope_idx[idx] : 0;
+  const uint8_t ci = (p && idx < NodePrefs::MAX_SCOPED_CHANNELS) ? p->ch_scope_idx[idx] : NodePrefs::CH_SCOPE_DEFAULT;
+  return ci == NodePrefs::CH_SCOPE_DEFAULT ? 0 : ci + 1;
+}
+// A picker row back to the ch_scope_idx value (MyMesh::setChannelScope()).
+static uint8_t scopeFromRow(int row) {
+  return row <= 0 ? NodePrefs::CH_SCOPE_DEFAULT : (uint8_t)(row - 1);
 }
 
 // CONTRACT: every NodePrefs field that keys on a channel index is cleared
@@ -214,8 +220,8 @@ static bool onRemoved(NodePrefs* p, uint8_t idx) {
   if (p->ch_notif_melody_set & m) { p->ch_notif_melody_set &= ~m; p->ch_notif_melody_2 &= ~m; changed = true; }
   if (p->ch_notif_override & m)   { p->ch_notif_override &= ~m; p->ch_notif_muted &= ~m; changed = true; }
   if (p->ch_fav_bitmask & m)      { p->ch_fav_bitmask &= ~m; changed = true; }
-  if (idx < NodePrefs::MAX_SCOPED_CHANNELS && p->ch_scope_idx[idx]) {
-    p->ch_scope_idx[idx] = 0;   // back to "*", same as a never-configured channel
+  if (idx < NodePrefs::MAX_SCOPED_CHANNELS && p->ch_scope_idx[idx] != NodePrefs::CH_SCOPE_DEFAULT) {
+    p->ch_scope_idx[idx] = NodePrefs::CH_SCOPE_DEFAULT;   // back to Default, as a new channel
     changed = true;
   }
   int slot = favslots::findChannel(p, idx);
