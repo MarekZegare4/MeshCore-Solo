@@ -21,7 +21,7 @@ enum : uint8_t { TAB_SKY, TAB_SIGNAL, TAB_DETAILS, TAB_COUNT };
 static uint8_t s_tab = TAB_SKY;   // kept across visits
 
 static lv_obj_t* s_sky = nullptr;      // sky plot (drawn)
-static lv_obj_t* s_bars = nullptr;     // signal bars (drawn, as wide as the satellites need)
+static lv_obj_t* s_bars = nullptr;     // signal bars (drawn, the box's width or as wide as the satellites need)
 static lv_obj_t* s_status = nullptr;
 static lv_obj_t* s_used = nullptr;
 static lv_obj_t* s_on_btn = nullptr;
@@ -326,6 +326,7 @@ void UITask::buildGps() {
     lv_obj_remove_flag(s_bars, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_flag(s_bars, LV_OBJ_FLAG_EVENT_BUBBLE);
     lv_obj_set_size(s_bars, BAR_PITCH, BARS_H);
+    lv_obj_set_style_min_width(s_bars, LV_PCT(100), 0);   // the scale's lines span the box from the start
     lv_obj_add_event_cb(s_bars, onGpsBarsDraw, LV_EVENT_DRAW_MAIN_END, NULL);
 
     // Constellations: used / in view, a pill each (a pill never breaks in two).
