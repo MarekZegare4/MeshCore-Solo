@@ -382,8 +382,48 @@ static void importOldPrefs(File& f, NodePrefs& p, double& lat, double& lon) {
   if (p.buzzer_quiet > 1) p.buzzer_quiet = 0;
 }
 
+// A device that ran Meshtastic before (the L1 ships with it) can still have
+// its settings folder at /prefs: our file can't be read from a folder, and the
+// rename that commits every save can't replace one, so no setting survived a
+// restart. The folder is of no use here: it goes.
+#if defined(ESP32)
+static void removeTree(FILESYSTEM* fs, const char* path) {
+  File dir = fs->open(path, "r", false);
+  if (!dir) return;
+  File f = dir.openNextFile();
+  while (f) {
+    char sub[64];
+    snprintf(sub, sizeof(sub), "%s", f.path());
+    const bool is_dir = f.isDirectory();
+    f.close();
+    if (is_dir) removeTree(fs, sub); else fs->remove(sub);
+    f = dir.openNextFile();
+  }
+  dir.close();
+  fs->rmdir(path);
+}
+#endif
+static void removeStrayDir(FILESYSTEM* fs, const char* path) {
+#if defined(NRF52_PLATFORM) || defined(STM32_PLATFORM) || defined(ESP32)
+#if defined(ESP32)
+  File f = fs->open(path, "r", false);
+#else
+  File f = fs->open(path, FILE_O_READ);
+#endif
+  const bool is_dir = f && f.isDirectory();
+  if (f) f.close();
+  if (!is_dir) return;
+#if defined(ESP32)
+  removeTree(fs, path);
+#else
+  fs->rmdir_r(path);
+#endif
+#endif
+}
+
 // `prefs` comes in holding the defaults; what the file holds replaces them.
 void DataStore::loadPrefs(NodePrefs& prefs, double& node_lat, double& node_lon) {
+  removeStrayDir(_fs, "/prefs");
   File file = openRead(_fs, "/prefs");
   if (file) {
     PrefsHeader h;
