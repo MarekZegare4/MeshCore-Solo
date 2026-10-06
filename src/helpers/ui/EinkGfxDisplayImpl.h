@@ -4,7 +4,13 @@
 
 #include "EinkGfxDisplay.h"
 #include "MiscFixedRenderer.h"
-#include "MiscFixed8x13Font.h"
+#if EINK_LARGE_FONT == 2
+  #include "MiscFixed9x15Font.h"
+  #define EINK_LARGE_GFXFONT MiscFixed9x15
+#else
+  #include "MiscFixed8x13Font.h"
+  #define EINK_LARGE_GFXFONT MiscFixed8x13
+#endif
 
 EinkGfxDisplay::EinkGfxDisplay(int w, int h, Adafruit_GFX& gfx, uint16_t ink, uint16_t paper)
     : DisplayDriver(w, h), _gfx(gfx), _ink(ink), _paper(paper), _curr(ink), _font(&MiscFixed) {
@@ -13,7 +19,7 @@ EinkGfxDisplay::EinkGfxDisplay(int w, int h, Adafruit_GFX& gfx, uint16_t ink, ui
 
 void EinkGfxDisplay::updateLayout() {
   const bool landscape = width() >= height();
-  _font = (EINK_LARGE_FONT && landscape) ? &MiscFixed8x13 : &MiscFixed;
+  _font = (EINK_LARGE_FONT && landscape) ? &EINK_LARGE_GFXFONT : &MiscFixed;
   _px = (!EINK_LARGE_FONT && landscape) ? 2 : 1;
   _cell_w = miscFixedCellW(*_font);
   _cell_h = _font->yAdvance;

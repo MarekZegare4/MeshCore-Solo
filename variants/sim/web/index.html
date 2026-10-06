@@ -158,7 +158,7 @@
 
   <div id="log"></div>
 
-  <!-- ?build=meshcore_sim_eink_landscape (or _portrait) loads another build of
+  <!-- ?build=meshcore_sim_eink_landscape (or _portrait, _wide) loads another build of
        the same UI; the e-ink driver sizes the canvas itself. -->
   <script>
     document.write('<script src="build/' +
@@ -215,7 +215,7 @@
       }
     }
 
-    const SimFactory = window.MeshCoreSimEinkLandscape || window.MeshCoreSimEinkPortrait || window.MeshCoreSim;
+    const SimFactory = window.MeshCoreSimEinkLandscape || window.MeshCoreSimEinkPortrait || window.MeshCoreSimEinkWide || window.MeshCoreSim;
     if (typeof SimFactory !== 'function') {
       statusEl.textContent = 'error: build/meshcore_sim.js missing or failed to load -- run variants/sim/build_wasm.sh first.';
     } else {

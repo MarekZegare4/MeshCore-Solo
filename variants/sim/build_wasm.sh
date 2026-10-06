@@ -194,15 +194,17 @@ if [ "$SIM_UI" = "lvgl" ]; then
   LINK_EXTRA=(-sFETCH=1)   # map downloads (LvglPort.h) go through emscripten_fetch
 fi
 
-# SIM_EINK=landscape|portrait: ui-new on the Wio Tracker L1 E-ink's 2.13" panel
-# (122x250, solo/wio-tracker-l1-eink's two builds) instead of the OLED ->
-# web/index.html?build=meshcore_sim_eink_landscape (or _portrait).
+# SIM_EINK=landscape|portrait|wide: ui-new on the Wio Tracker L1 E-ink's 2.13"
+# panel (122x250, solo/wio-tracker-l1-eink's two builds) or the 4.2" one
+# (400x300, its third) instead of the OLED ->
+# web/index.html?build=meshcore_sim_eink_landscape (or _portrait, _wide).
 SIM_EINK="${SIM_EINK:-}"
 if [ -n "$SIM_EINK" ]; then
   case "$SIM_EINK" in
-    landscape) EINK_DEFS=(-DDISPLAY_ROTATION=1 -DEINK_LARGE_FONT=1); EXPORT_NAME=MeshCoreSimEinkLandscape ;;
-    portrait)  EINK_DEFS=(-DDISPLAY_ROTATION=0);                     EXPORT_NAME=MeshCoreSimEinkPortrait ;;
-    *) echo "error: SIM_EINK must be landscape or portrait" >&2; exit 1 ;;
+    landscape) EINK_DEFS=(-DDISPLAY_ROTATION=1 -DEINK_LARGE_FONT=1 -DSIM_EINK_PANEL_W=122 -DSIM_EINK_PANEL_H=250); EXPORT_NAME=MeshCoreSimEinkLandscape ;;
+    portrait)  EINK_DEFS=(-DDISPLAY_ROTATION=0 -DSIM_EINK_PANEL_W=122 -DSIM_EINK_PANEL_H=250);                     EXPORT_NAME=MeshCoreSimEinkPortrait ;;
+    wide)      EINK_DEFS=(-DDISPLAY_ROTATION=0 -DEINK_LARGE_FONT=2 -DSIM_EINK_PANEL_W=400 -DSIM_EINK_PANEL_H=300); EXPORT_NAME=MeshCoreSimEinkWide ;;
+    *) echo "error: SIM_EINK must be landscape, portrait or wide" >&2; exit 1 ;;
   esac
   OUT_NAME="meshcore_sim_eink_$SIM_EINK"
   # Distinct factories (set above): web/mesh.html?a=... loads one beside
@@ -213,7 +215,7 @@ if [ -n "$SIM_EINK" ]; then
   done
   # EINK_DISPLAY_MODEL is only tested for presence outside GxEPDDisplay
   # (Features.h: the e-ink settings and timings), which the sim doesn't build.
-  DEFINES=("${kept[@]}" -DDISPLAY_CLASS=SimEinkDisplay -DSIM_EINK_PANEL_W=122 -DSIM_EINK_PANEL_H=250
+  DEFINES=("${kept[@]}" -DDISPLAY_CLASS=SimEinkDisplay
            -DEINK_DISPLAY_MODEL=SimEinkPanel -DMAX_GROUP_CHANNELS=40 "${EINK_DEFS[@]}")
 fi
 

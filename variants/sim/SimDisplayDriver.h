@@ -463,7 +463,7 @@ public:
 };
 
 #ifdef SIM_EINK_PANEL_W
-// An e-ink panel (the Wio Tracker L1 E-ink's 2.13", 122x250 before rotation):
+// An e-ink panel (the Wio Tracker L1 E-ink's 2.13", 122x250 before rotation, or a 4.2" 400x300):
 // EinkGfxDisplay draws, exactly as GxEPDDisplay does on the board, into a 1-bit
 // canvas, and a frame that changed is put on the page in paper and ink. The
 // host page counts refreshes from Module.__einkRefreshes. Bodies in target.cpp,

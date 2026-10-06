@@ -14,7 +14,8 @@ class Adafruit_GFX;
 // (GxEPDDisplay.cpp on a board, the sim's target.cpp): it pulls in the font
 // tables.
 
-// EINK_LARGE_FONT: a landscape panel writes in the 8x13 at its own resolution.
+// EINK_LARGE_FONT: a landscape panel writes in the 8x13 at its own resolution
+// (1), or the 9x15 (2, the 4.2" 400x300).
 // Without it a landscape panel doubles the 6x9 (every pixel 2x2) -- for small
 // dense panels where 8x13 would be too fine. A portrait panel always uses the
 // 6x9: its narrow width wants the smaller cell.

@@ -231,14 +231,14 @@
 
   <script src="build/meshcore_sim.js"></script>
   <script src="build/repeater/meshcore_sim_repeater.js"></script>
-  <!-- ?a=meshcore_sim_eink_landscape (or _portrait): A is that e-ink build. -->
+  <!-- ?a=meshcore_sim_eink_landscape (or _portrait, _wide): A is that e-ink build. -->
   <script>
     const A_BUILD = (new URLSearchParams(location.search).get('a') || '').replace(/[^\w]/g, '');
     if (A_BUILD) document.write('<script src="build/' + A_BUILD + '.js"><\/script>');
   </script>
   <script>
     const logEl = document.getElementById('log');
-    const FactoryA = (opts) => (window.MeshCoreSimEinkLandscape || window.MeshCoreSimEinkPortrait || MeshCoreSim)(opts);
+    const FactoryA = (opts) => (window.MeshCoreSimEinkLandscape || window.MeshCoreSimEinkPortrait || window.MeshCoreSimEinkWide || MeshCoreSim)(opts);
     function log(msg) {
       const line = document.createElement('div');
       line.textContent = '[' + new Date().toISOString().substr(11, 12) + '] ' + msg;
