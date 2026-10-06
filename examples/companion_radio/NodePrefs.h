@@ -520,6 +520,11 @@ struct NodePrefs {  // persisted to file
   // clock fields as rows below. The L2 has its own lock screen.
   uint8_t  lock_compact;
 
+  // ── Bluetooth ──────────────────────────────────────────────────────────
+  // 1 = the user switched Bluetooth off: it stays off after a reboot or
+  // hibernate (MyMesh::startInterface). USB keeps working either way.
+  uint8_t  ble_off;
+
   // Single source of truth for the live-share option tables (shared by the Map
   // UI labels and the auto-send engine in UITask).
   static const uint8_t LOC_SHARE_MOVE_COUNT = 4;

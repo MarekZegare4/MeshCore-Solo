@@ -332,6 +332,7 @@ static void sanitize(NodePrefs& p) {
   if (p.quiet_to > 23) p.quiet_to = 7;
   if (!battery::validCurve(p.batt_curve_mv)) memset(p.batt_curve_mv, 0, sizeof(p.batt_curve_mv));
   flag(p.lock_compact, 0);
+  flag(p.ble_off, 0);
 }
 
 // The settings a firmware before 2.0 kept in /new_prefs that still matter

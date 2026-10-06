@@ -64,8 +64,8 @@ public:
   bool isClientConnected() const { return _serial->isClientConnected(); }
   uint16_t getBattMilliVolts() const { return _board->getBattMilliVolts(); }
   bool isSerialEnabled() const { return _serial->isEnabled(); }
-  void enableSerial() { _serial->enable(); }
-  void disableSerial() { _serial->disable(); }
+  void enableSerial() { _serial->enable(); the_mesh.rememberBle(true); }
+  void disableSerial() { _serial->disable(); the_mesh.rememberBle(false); }
   virtual void notify(UIEventType t = UIEventType::none) = 0;
   // Single choke point for every controlled power-down (low-battery auto-off,
   // long-press power-off, and every board.reboot() caller too): flush

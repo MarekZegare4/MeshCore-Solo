@@ -2047,7 +2047,7 @@ bool MyMesh::isValidClientRepeatFreq(uint32_t f) const {
 
 void MyMesh::startInterface(BaseSerialInterface &serial) {
   _serial = &serial;
-  serial.enable();
+  if (!_prefs.ble_off) serial.enable();
 }
 
 static bool isAllZero(const uint8_t* buf, size_t n) {

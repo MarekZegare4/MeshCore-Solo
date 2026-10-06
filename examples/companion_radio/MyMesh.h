@@ -414,6 +414,12 @@ public:
   }
 
   void savePrefs() { _store->savePrefs(_prefs, sensors.node_lat, sensors.node_lon); }
+  // Bluetooth on/off as the user left it (NodePrefs::ble_off), kept over reboots.
+  void rememberBle(bool on) {
+    if (_prefs.ble_off == (on ? 0 : 1)) return;
+    _prefs.ble_off = on ? 0 : 1;
+    savePrefs();
+  }
   void saveRTCTime() { _store->saveRTCTime(); }
   // Contact updates (new adverts, path/lastmod changes) are lazily debounced
   // (see dirty_contacts_expiry) to avoid wearing flash on every packet --
