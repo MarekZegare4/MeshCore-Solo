@@ -481,9 +481,9 @@ void UITask::usbPoll() {
     restartScreen("The computer has given the SD card back.");
     return;
   }
-  // Behind a screen PIN the card (message history) isn't offered: a cable
-  // plugged in while locked is noticed once the PIN is entered.
-  if (locked() && pinSet()) return;
+  // Not over the lock screen (slider or PIN): a cable plugged in while locked
+  // is noticed once the screen is unlocked.
+  if (locked()) return;
   bool host = lvport::usbHost();
   if (host == s_host) return;
   s_host = host;
@@ -501,7 +501,7 @@ void UITask::usbPoll() {
 void UITask::usbTap(bool drive) {
   using namespace usbview;
   if (s_overlay) { lv_obj_delete_async(s_overlay); s_overlay = nullptr; }
-  if (!drive || (locked() && pinSet())) return;
+  if (!drive || locked()) return;
   storeview::stopWalk();
   if (mapview::s_dl.active()) mapDownloadStop();
   if (!lvport::usbDriveStart()) { showToast("No SD card to share", 3000); return; }
