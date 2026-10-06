@@ -63,8 +63,8 @@ class SplashScreen : public UIScreen {
   char _solo_ver[24];
   char _line2[32];
 
-  // A word in the wordmark's lettering, 1:1, top-left at (x, y).
-  static void drawLettering(DisplayDriver& d, const char* text, int x, int y, int gap) {
+  // A word in the wordmark's lettering at `sc` px a pixel, top-left at (x, y).
+  static void drawLettering(DisplayDriver& d, const char* text, int x, int y, int gap, int sc) {
     for (const char* p = text; *p; p++) {
       char c = (char)tolower((unsigned char)*p);
       int cw = lettering::charW(c);
@@ -74,10 +74,10 @@ class SplashScreen : public UIScreen {
           if (!lettering::inked(c, col, r)) { col++; continue; }
           int e = col;
           while (e + 1 < cw && lettering::inked(c, e + 1, r)) e++;
-          d.fillRect(x + col, y + r, e - col + 1, 1);
+          d.fillRect(x + col * sc, y + r * sc, (e - col + 1) * sc, sc);
           col = e + 1;
         }
-      x += cw + gap;
+      x += cw * sc + gap;
     }
   }
 
@@ -103,21 +103,36 @@ public:
     const int lh = display.getLineHeight();
     const int cx = display.width() / 2;
 
-    // Block from the wordmark down to the second text line, centred above the dots.
+    // The wordmark and "solo" grow in whole pixels with the panel (1x on 128 px,
+    // 3x on the 4.2"), as far as the block still fits over the dots.
     const int dots_h = 8;
-    const int block_h = lettering::LOGO_H * 2 + 5 + lh * 2 + 2;
+    int sc = display.width() / lettering::LOGO_W;
+    while (sc > 1 && (lettering::LOGO_H * 2 + 5) * sc + lh * 2 + 2 > display.height() - dots_h) sc--;
+    if (sc < 1) sc = 1;
+
+    // Block from the wordmark down to the second text line, centred above the dots.
+    const int logo_h = lettering::LOGO_H * sc;
+    const int block_h = logo_h * 2 + 5 * sc + lh * 2 + 2;
     int top = (display.height() - dots_h - block_h) / 2;
     if (top < 0) top = 0;
 
     // Wordmark: rises 6 px into place over the first 400 ms (ease-out).
     int rise = 0;
-    if (t < 400) { int k = 400 - (int)t; rise = (6 * k * k) / (400 * 400); }
-    display.drawXbm((display.width() - lettering::LOGO_W) / 2, top + rise, lettering::LOGO, lettering::LOGO_W, lettering::LOGO_H);
+    if (t < 400) { int k = 400 - (int)t; rise = (6 * sc * k * k) / (400 * 400); }
+    const int lx = (display.width() - lettering::LOGO_W * sc) / 2;
+    for (int r = 0; r < lettering::LOGO_H; r++)
+      for (int col = 0; col < lettering::LOGO_W; ) {   // runs of inked pixels as one rect
+        if (!lettering::logoBit(col, r)) { col++; continue; }
+        int e = col;
+        while (e + 1 < lettering::LOGO_W && lettering::logoBit(e + 1, r)) e++;
+        display.fillRect(lx + col * sc, top + rise + r * sc, (e - col + 1) * sc, sc);
+        col = e + 1;
+      }
 
-    int y = top + lettering::LOGO_H + 3;
-    const int solo_w = lettering::textW("solo", 2);
-    if (t >= 400) drawLettering(display, "solo", cx - solo_w / 2, y, 2);   // once the wordmark has landed
-    y += lettering::LOGO_H + 2;
+    int y = top + logo_h + 3 * sc;
+    const int solo_w = lettering::textW("solo", 0) * sc + 2 * sc * 3;
+    if (t >= 400) drawLettering(display, "solo", cx - solo_w / 2, y, 2 * sc, sc);   // once the wordmark has landed
+    y += logo_h + 2 * sc;
     display.drawTextCentered(cx, y, _solo_ver[0] ? _solo_ver : "dev");
     y += lh + 2;
     display.drawTextCentered(cx, y, _line2);
