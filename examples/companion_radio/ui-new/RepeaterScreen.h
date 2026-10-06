@@ -240,7 +240,7 @@ public:
 
     if (c == KEY_CANCEL) {
       _task->savePrefsIfDirty(_dirty);
-      _task->gotoToolsScreen();
+      _task->leaveTool();
       return true;
     }
     if (c == KEY_UP)   { _sel = (_sel > 0) ? _sel - 1 : _item_count - 1; return true; }

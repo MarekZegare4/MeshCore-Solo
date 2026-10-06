@@ -605,7 +605,7 @@ class HomeScreen : public UIScreen {
         if (the_mesh.advert()) _advert_sent_ms = millis();   // the row says so
         else _task->showAlert("Advert failed", 1000);
         break;
-      case QA_TOOL: ToolsScreen::run(_task, (ToolsScreen::Action)r.n); break;
+      case QA_TOOL: ToolsScreen::run(_task, (ToolsScreen::Action)r.n, true); break;
       case QA_LOCK: _task->lockScreen(); break;
       case QA_HIBERNATE: _shutdown_init = true; break;   // waits for the button to be released
       case QA_GPS: _task->toggleGPS(false); break;
@@ -2022,7 +2022,8 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
 
 // onShow() is invoked by setCurrScreen(), so most navigators are just that.
 void UITask::gotoSettingsScreen()  { setCurrScreen(settings); }
-void UITask::gotoToolsScreen()     { setCurrScreen(tools_screen); }
+void UITask::gotoToolsScreen()     { _tool_from_home = false; setCurrScreen(tools_screen); }
+void UITask::leaveTool()           { if (_tool_from_home) gotoHomeScreen(); else gotoToolsScreen(); }
 void UITask::gotoBotScreen()       { setCurrScreen(bot_screen); }
 void UITask::gotoNearbyScreen()    { setCurrScreen(nearby_screen); }
 

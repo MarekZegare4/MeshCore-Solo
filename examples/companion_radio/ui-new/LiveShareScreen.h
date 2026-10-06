@@ -191,7 +191,7 @@ public:
   bool handleInput(char c) override {
     if (c == KEY_CANCEL) {
       _task->savePrefsIfDirty(_dirty);
-      _task->gotoToolsScreen();
+      _task->leaveTool();
       return true;
     }
     if (c == KEY_UP)   { moveSel(-1); return true; }

@@ -253,11 +253,11 @@ public:
               the_mesh.savePrefs();
             }
             _task->stopMelody();
-            _task->gotoToolsScreen();
+            _task->leaveTool();
             break;
           case MI_DISCARD:
             _task->stopMelody();
-            _task->gotoToolsScreen();
+            _task->leaveTool();
             break;
           default: break;
         }
@@ -265,7 +265,7 @@ public:
       return true;
     }
 
-    if (cancel)   { _task->stopMelody(); _task->gotoToolsScreen(); return true; }
+    if (cancel)   { _task->stopMelody(); _task->leaveTool(); return true; }
     if (menu_key) { openMenu(); return true; }
 
     if (left && _cursor > 0) { _cursor--; clampScroll(); return true; }

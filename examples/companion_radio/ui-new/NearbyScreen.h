@@ -825,9 +825,9 @@ public:
 
     // ── list view ───────────────────────────────────────────────────────────
     if (c == KEY_CANCEL) {
-      if (_pick_admin_target) { _pick_admin_target = false; _task->gotoToolsScreen(); return true; }
+      if (_pick_admin_target) { _pick_admin_target = false; _task->leaveTool(); return true; }
       if (_source == SRC_SCAN) leaveScan();
-      else                     _task->gotoToolsScreen();
+      else                     _task->leaveTool();
       return true;
     }
     if (c == KEY_CONTEXT_MENU) { openActionMenu(); return true; }

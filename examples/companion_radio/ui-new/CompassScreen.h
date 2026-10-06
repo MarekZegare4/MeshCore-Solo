@@ -120,7 +120,7 @@ public:
   }
 
   bool handleInput(char c) override {
-    if (c == KEY_CANCEL) { _task->gotoToolsScreen(); return true; }
+    if (c == KEY_CANCEL) { _task->leaveTool(); return true; }
     return true;
   }
 };

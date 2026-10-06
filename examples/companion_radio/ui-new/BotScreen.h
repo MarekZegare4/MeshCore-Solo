@@ -174,7 +174,7 @@ public:
 
     if (cancel) {
       _task->savePrefsIfDirty(_dirty);
-      _task->gotoToolsScreen();
+      _task->leaveTool();
       return true;
     }
     if (keyIsPrev(c)) { _tab = (_tab + botcfg::TAB_COUNT - 1) % botcfg::TAB_COUNT; _sel = _scroll = 0; return true; }

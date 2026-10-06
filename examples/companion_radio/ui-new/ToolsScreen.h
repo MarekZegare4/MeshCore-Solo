@@ -34,8 +34,10 @@ public:
     return "";
   }
 
-  // Opens a tool and moves it to the front of the recent list.
-  static void run(UITask* task, Action a) {
+  // Opens a tool and moves it to the front of the recent list. from_home: the
+  // tool's Back returns to Home instead of this list.
+  static void run(UITask* task, Action a, bool from_home = false) {
+    task->setToolFromHome(from_home);
     if (s_recent[0] != a) { s_recent[1] = s_recent[0]; s_recent[0] = a; }
     switch (a) {
       case ACT_NEARBY:      task->gotoNearbyScreen();      break;

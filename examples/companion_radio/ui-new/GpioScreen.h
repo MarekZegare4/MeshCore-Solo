@@ -134,7 +134,7 @@ public:
   }
 
   bool handleInput(char c) override {
-    if (c == KEY_CANCEL) { _task->gotoToolsScreen(); return true; }
+    if (c == KEY_CANCEL) { _task->leaveTool(); return true; }
     if (c == KEY_UP)   { _sel = (_sel > 0) ? _sel - 1 : _item_count - 1; return true; }
     if (c == KEY_DOWN) { _sel = (_sel < _item_count - 1) ? _sel + 1 : 0; return true; }
     if (!_prefs) return false;

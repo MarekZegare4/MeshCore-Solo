@@ -228,7 +228,7 @@ public:
     if (c == KEY_CANCEL) {
       _task->savePrefsIfDirty(_cfg_dirty);
       if (_return_home) _task->gotoHomeScreen();
-      else              _task->gotoToolsScreen();
+      else              _task->leaveTool();
       return true;
     }
     if (c == KEY_CONTEXT_MENU) { openActionMenu(); return true; }
