@@ -565,12 +565,13 @@ void UITask::pinPopup(bool channel, uint8_t ch_idx, const uint8_t* pub_key) {
     lv_obj_set_style_pad_hor(b, 4, 0);
     lv_obj_set_style_radius(b, theme::RADIUS, 0);
     lv_obj_set_style_shadow_width(b, 0, 0);
-    lv_obj_set_style_bg_color(b, lv_color_hex(s == here ? theme::ACCENT_DIM : theme::SURFACE), 0);
+    lv_obj_set_style_bg_color(b, lv_color_hex(theme::SURFACE), 0);
     lv_obj_add_event_cb(b, onPinSlot, LV_EVENT_CLICKED, (void*)(uintptr_t)s);
     lv_obj_t* l = label(b, t, THEME_FONT_SMALL, used ? theme::TEXT : theme::TEXT_MUTED);
     lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
     lv_obj_set_width(l, 82);
     lv_obj_center(l);
+    if (s == here) styleSelected(b, true);
   }
   label(panel, here >= 0 ? "Tap its slot again to unpin." : "A taken slot is replaced.", THEME_FONT_SMALL, theme::TEXT_MUTED);
 }

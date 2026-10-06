@@ -301,9 +301,9 @@ void UITask::buildClock() {
     lv_obj_set_flex_grow(b, 1);
     lv_obj_set_style_shadow_width(b, 0, 0);
     lv_obj_set_style_radius(b, theme::RADIUS, 0);
-    lv_obj_set_style_bg_color(b, lv_color_hex(t == s_tab ? theme::ACCENT_DIM : theme::SURFACE), 0);
     lv_obj_add_event_cb(b, onClockTab, LV_EVENT_CLICKED, (void*)(uintptr_t)t);
     lv_obj_center(label(b, NAMES[t], THEME_FONT_SMALL, theme::TEXT));
+    styleSelected(b, t == s_tab);
   }
 
   if (s_tab == TAB_ALARM) {
@@ -392,7 +392,6 @@ void UITask::buildClock() {
   lv_obj_set_size(go, 150, 40);
   lv_obj_set_style_shadow_width(go, 0, 0);
   lv_obj_set_style_radius(go, theme::RADIUS, 0);
-  lv_obj_set_style_bg_color(go, lv_color_hex(theme::ACCENT_DIM), 0);
   lv_obj_add_event_cb(go, onClockAct, LV_EVENT_CLICKED, (void*)(uintptr_t)ACT_START_STOP);
   s_go_lbl = label(go, "", THEME_FONT_BODY, theme::TEXT);
   lv_obj_center(s_go_lbl);
@@ -492,7 +491,6 @@ void UITask::showRing(const char* text) {
     lv_obj_set_size(b, 200, 56);
     lv_obj_set_style_shadow_width(b, 0, 0);
     lv_obj_set_style_radius(b, theme::RADIUS, 0);
-    lv_obj_set_style_bg_color(b, lv_color_hex(theme::ACCENT_DIM), 0);
     lv_obj_add_event_cb(b, onRingDismiss, LV_EVENT_CLICKED, NULL);
     lv_obj_center(label(b, "Dismiss", THEME_FONT_LARGE, theme::TEXT));
     stylePrimary(b);

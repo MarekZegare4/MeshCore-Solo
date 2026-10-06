@@ -1048,8 +1048,9 @@ static lv_obj_t* segmented(lv_obj_t* parent, const char** map, int sel, int w, i
   lv_obj_set_style_bg_opa(m, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_width(m, 0, 0);
   lv_obj_set_style_bg_color(m, lv_color_hex(item), LV_PART_ITEMS);
-  lv_obj_set_style_bg_color(m, lv_color_hex(theme::ACCENT_DIM), LV_PART_ITEMS | LV_STATE_CHECKED);
+  lv_obj_set_style_bg_color(m, lv_color_hex(theme::ACCENT), LV_PART_ITEMS | LV_STATE_CHECKED);
   lv_obj_set_style_text_color(m, lv_color_hex(theme::TEXT), LV_PART_ITEMS);
+  lv_obj_set_style_text_color(m, lv_color_hex(theme::BG), LV_PART_ITEMS | LV_STATE_CHECKED);
   lv_obj_set_style_text_font(m, THEME_FONT_SMALL, LV_PART_ITEMS);
   lv_obj_set_style_shadow_width(m, 0, LV_PART_ITEMS);
   lv_obj_set_style_radius(m, theme::RADIUS_SM, LV_PART_ITEMS);
@@ -1101,6 +1102,21 @@ static void stylePrimary(lv_obj_t* b) {
     lv_obj_set_style_text_color(lv_obj_get_child(b, i), lv_color_hex(theme::BG), 0);
 }
 
+// Something selected / on (a tab, a chip, a row): the accent with dark text,
+// or back to the surface with light text. Every label under it follows.
+static void textUnder(lv_obj_t* o, uint32_t col) {
+  for (uint32_t i = 0; i < lv_obj_get_child_count(o); i++) {
+    lv_obj_t* c = lv_obj_get_child(o, i);
+    if (lv_obj_check_type(c, &lv_label_class)) setTextColor(c, col);
+    else textUnder(c, col);
+  }
+}
+static void styleSelected(lv_obj_t* b, bool on) {
+  lv_obj_set_style_bg_color(b, lv_color_hex(on ? theme::ACCENT : theme::SURFACE), 0);
+  lv_obj_set_style_bg_color(b, lv_color_hex(on ? theme::mix(theme::ACCENT, theme::BG, 75) : theme::SURFACE_2), LV_STATE_PRESSED);
+  textUnder(b, on ? theme::BG : theme::TEXT);
+}
+
 // A row of equal buttons at the foot of a popup or screen: buttonBar(), then
 // barButton() for each -- `accent` for the main action or one that's on
 // (barButtonOn() flips it later). Returns the button; its label is child 0.
@@ -1113,9 +1129,7 @@ static lv_obj_t* buttonBar(lv_obj_t* parent) {
   lv_obj_set_style_pad_column(bar, theme::GAP, 0);
   return bar;
 }
-static void barButtonOn(lv_obj_t* b, bool on) {
-  lv_obj_set_style_bg_color(b, lv_color_hex(on ? theme::ACCENT_DIM : theme::SURFACE), 0);
-}
+static void barButtonOn(lv_obj_t* b, bool on) { styleSelected(b, on); }
 static lv_obj_t* barButton(lv_obj_t* bar, const char* text, lv_event_cb_t cb, uintptr_t user, bool accent = false) {
   lv_obj_t* b = lv_button_create(bar);
   lv_obj_set_height(b, 40);
@@ -1123,10 +1137,9 @@ static lv_obj_t* barButton(lv_obj_t* bar, const char* text, lv_event_cb_t cb, ui
   lv_obj_set_style_pad_hor(b, 4, 0);
   lv_obj_set_style_radius(b, theme::RADIUS, 0);
   lv_obj_set_style_shadow_width(b, 0, 0);
-  barButtonOn(b, accent);
-  lv_obj_set_style_bg_color(b, lv_color_hex(theme::SURFACE_2), LV_STATE_PRESSED);
   lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, (void*)user);
   lv_obj_center(label(b, text, THEME_FONT_SMALL, theme::TEXT));
+  barButtonOn(b, accent);
   return b;
 }
 
@@ -2681,7 +2694,7 @@ static void chatSection(lv_obj_t* parent, const char* text, int fold, int unread
     lv_obj_align_to(n, t, LV_ALIGN_OUT_RIGHT_MID, 8, 0);
   }
   if (filter < 0 || folded) return;
-  pillButton(row, fav_only ? UI_SYMBOL_STAR " Fav" : "All", fav_only ? theme::ACCENT_DIM : theme::SURFACE, onChatFilter, filter);
+  styleSelected(pillButton(row, fav_only ? UI_SYMBOL_STAR " Fav" : "All", theme::SURFACE, onChatFilter, filter), fav_only);
 }
 
 // Section title with an "All" / "★ Fav" pill on the right that flips the
@@ -2692,7 +2705,7 @@ static void sectionWithFilter(lv_obj_t* parent, const char* text, bool fav_only,
   lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_size(row, LV_PCT(100), 26);
   lv_obj_align(label(row, text, THEME_FONT_SMALL, theme::TEXT_MUTED), LV_ALIGN_BOTTOM_LEFT, 0, -2);
-  pillButton(row, fav_only ? UI_SYMBOL_STAR " Fav" : "All", fav_only ? theme::ACCENT_DIM : theme::SURFACE, onChatFilter, which);
+  styleSelected(pillButton(row, fav_only ? UI_SYMBOL_STAR " Fav" : "All", theme::SURFACE, onChatFilter, which), fav_only);
 }
 
 void UITask::showChats() {
@@ -2998,9 +3011,9 @@ void UITask::buildNearby() {
     lv_obj_set_style_radius(c, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_shadow_width(c, 0, 0);
     bool on = f == _nearby->filter();
-    lv_obj_set_style_bg_color(c, lv_color_hex(on ? theme::ACCENT_DIM : theme::SURFACE), 0);   // selected (Theme.h)
     lv_obj_add_event_cb(c, onNearbyChip, LV_EVENT_CLICKED, (void*)(uintptr_t)f);
     lv_obj_center(label(c, NearbyModel::filterLabel(f), THEME_FONT_SMALL, theme::TEXT));
+    styleSelected(c, on);   // (Theme.h)
   }
 
   _nearby_status = label(body, "", THEME_FONT_SMALL, theme::TEXT_MUTED);
@@ -3633,26 +3646,28 @@ static void onMsgLoc(lv_event_t* e) {
   if (r >= 0) s_ui->messageLocationAction(s_msg_meta[r].loc, (uintptr_t)lv_event_get_user_data(e) != 0);
 }
 
-static void msgLocButton(lv_obj_t* parent, const char* text, bool save, bool accent) {
+static void msgLocButton(lv_obj_t* parent, const char* text, bool save, bool accent, bool own) {
   lv_obj_t* b = lv_button_create(parent);
   lv_obj_set_size(b, LV_SIZE_CONTENT, 28);
   lv_obj_set_style_pad_hor(b, 10, 0);
   lv_obj_set_style_pad_ver(b, 0, 0);
   lv_obj_set_style_radius(b, LV_RADIUS_CIRCLE, 0);
   lv_obj_set_style_shadow_width(b, 0, 0);
-  lv_obj_set_style_bg_color(b, lv_color_hex(accent ? theme::ACCENT : theme::SURFACE_2), 0);
+  // on our own amber bubble the main one goes dark instead
+  lv_obj_set_style_bg_color(b, lv_color_hex(accent ? (own ? theme::BG : theme::ACCENT) : theme::SURFACE_2), 0);
   lv_obj_add_event_cb(b, onMsgLoc, LV_EVENT_CLICKED, (void*)(uintptr_t)(save ? 1 : 0));
-  lv_obj_center(label(b, text, THEME_FONT_SMALL, accent ? theme::BG : theme::TEXT));
+  lv_obj_center(label(b, text, THEME_FONT_SMALL, accent ? (own ? theme::ACCENT : theme::BG) : theme::TEXT));
 }
 
 // A message's text, wrapped at `max_w` and shrunk to fit. "@[nick]" mentions
-// (how a reply names who it answers) show as "@nick" in the accent -- in the
-// text colour on our own amber bubbles -- and underlined when the nick is
+// (how a reply names who it answers) show as "@nick" in the accent -- dark,
+// as the rest, on our own amber bubbles -- and underlined when the nick is
 // ours (*mentions_me set). Plain text stays a label.
 static lv_obj_t* msgText(lv_obj_t* parent, const char* text, bool own, int max_w, bool* mentions_me) {
   *mentions_me = false;
+  const uint32_t col = own ? theme::BG : theme::TEXT;
   if (!strstr(text, "@[")) {
-    lv_obj_t* t = label(parent, text, THEME_FONT_BODY, theme::TEXT);
+    lv_obj_t* t = label(parent, text, THEME_FONT_BODY, col);
     lv_label_set_long_mode(t, LV_LABEL_LONG_WRAP);
     lv_obj_set_style_max_width(t, max_w, 0);
     lv_obj_set_width(t, LV_SIZE_CONTENT);
@@ -3661,7 +3676,7 @@ static lv_obj_t* msgText(lv_obj_t* parent, const char* text, bool own, int max_w
   lv_obj_t* sg = lv_spangroup_create(parent);
   lv_obj_remove_flag(sg, LV_OBJ_FLAG_CLICKABLE);   // a hold still reaches the bubble (its menu)
   lv_obj_set_style_text_font(sg, THEME_FONT_BODY, 0);
-  lv_obj_set_style_text_color(sg, lv_color_hex(theme::TEXT), 0);
+  lv_obj_set_style_text_color(sg, lv_color_hex(col), 0);
   lv_spangroup_set_mode(sg, LV_SPAN_MODE_BREAK);
   const char* me = the_mesh.getNodeName();
   char part[MAX_TEXT_LEN + 1];
@@ -3687,7 +3702,7 @@ static lv_obj_t* msgText(lv_obj_t* parent, const char* text, bool own, int max_w
     lv_span_t* sp = lv_spangroup_new_span(sg);
     lv_span_set_text(sp, part);
     lv_style_t* st = lv_span_get_style(sp);
-    lv_style_set_text_color(st, lv_color_hex(own ? theme::TEXT : theme::ACCENT));
+    lv_style_set_text_color(st, lv_color_hex(own ? theme::BG : theme::ACCENT));
     if (mine) { lv_style_set_text_decor(st, LV_TEXT_DECOR_UNDERLINE); *mentions_me = true; }
     p = close + 1;
   }
@@ -3698,7 +3713,8 @@ static lv_obj_t* msgText(lv_obj_t* parent, const char* text, bool own, int max_w
   return sg;
 }
 
-// One message bubble. Own messages right-aligned in amber, others left.
+// One message bubble. Own messages right-aligned in amber with dark text
+// (the delivery mark too: green or red on amber can't be read), others left.
 // loc: the text carries a position (Go / Save buttons); hold: a long press
 // opens the message menu. Returns its row; *age_out = the age label.
 static lv_obj_t* bubble(lv_obj_t* list, const char* from, const char* text, bool own,
@@ -3719,13 +3735,14 @@ static lv_obj_t* bubble(lv_obj_t* list, const char* from, const char* text, bool
   lv_obj_remove_flag(b, LV_OBJ_FLAG_SCROLLABLE);
   if (hold) {   // hold: reply / path / target (ConversationScreen.h)
     lv_obj_add_event_cb(b, onMsgHold, LV_EVENT_LONG_PRESSED, nullptr);
-    lv_obj_set_style_bg_color(b, lv_color_hex(theme::SURFACE_2), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(b, lv_color_hex(own ? theme::mix(theme::ACCENT, theme::BG, 75) : theme::SURFACE_2), LV_STATE_PRESSED);
   } else {
     lv_obj_remove_flag(b, LV_OBJ_FLAG_CLICKABLE);
   }
   lv_obj_set_size(b, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
   lv_obj_set_style_max_width(b, 250, 0);
-  lv_obj_set_style_bg_color(b, lv_color_hex(own ? theme::ACCENT_DIM : theme::SURFACE), 0);
+  lv_obj_set_style_bg_color(b, lv_color_hex(own ? theme::ACCENT : theme::SURFACE), 0);
+  const uint32_t muted = own ? theme::mix(theme::BG, theme::ACCENT, 60) : theme::TEXT_MUTED;
   lv_obj_set_style_border_width(b, 0, 0);
   lv_obj_set_style_radius(b, theme::RADIUS, 0);
   lv_obj_set_style_pad_all(b, 6, 0);
@@ -3742,8 +3759,8 @@ static lv_obj_t* bubble(lv_obj_t* list, const char* from, const char* text, bool
   if (from && from[0]) {
     lv_obj_t* hdr = flexBox(b, LV_FLEX_FLOW_ROW);
     lv_obj_set_style_pad_column(hdr, 8, 0);
-    label(hdr, from, THEME_FONT_SMALL, theme::ACCENT);   // names are <= 31 chars: fits the bubble
-    if (meta_in_header) *age_out = label(hdr, meta, THEME_FONT_SMALL, theme::TEXT_MUTED);
+    label(hdr, from, THEME_FONT_SMALL, own ? theme::BG : theme::ACCENT);   // names are <= 31 chars: fits the bubble
+    if (meta_in_header) *age_out = label(hdr, meta, THEME_FONT_SMALL, muted);
   }
   bool mentions_me;
   msgText(b, text, own, 238, &mentions_me);
@@ -3756,15 +3773,15 @@ static lv_obj_t* bubble(lv_obj_t* list, const char* from, const char* text, bool
     lv_obj_t* acts = flexBox(b, LV_FLEX_FLOW_ROW);
     lv_obj_set_style_pad_column(acts, 6, 0);
     lv_obj_set_style_pad_top(acts, 2, 0);
-    msgLocButton(acts, UI_SYMBOL_COMPASS " Go", false, true);
-    msgLocButton(acts, UI_SYMBOL_FLAG " Save", true, false);
+    msgLocButton(acts, UI_SYMBOL_COMPASS " Go", false, true, own);
+    msgLocButton(acts, UI_SYMBOL_FLAG " Save", true, false, own);
   }
 
   if (!meta_in_header) {   // the age, then the delivery mark in its colour (as L1)
     lv_obj_t* line = flexBox(b, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(line, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(line, 6, 0);
-    *age_out = label(line, meta, THEME_FONT_SMALL, theme::TEXT_MUTED);
+    *age_out = label(line, meta, THEME_FONT_SMALL, muted);
     if (relays > 0) {   // as L1: the count alone says it got out, no check beside it
       lv_obj_t* c = lv_obj_create(line);
       lv_obj_remove_style_all(c);
@@ -3779,7 +3796,7 @@ static lv_obj_t* bubble(lv_obj_t* list, const char* from, const char* text, bool
       lv_label_set_text_fmt(n, "%d", relays);
       lv_obj_center(n);
     } else if (status && status[0]) {
-      label(line, status, THEME_FONT_SMALL, status_col);
+      label(line, status, THEME_FONT_SMALL, own ? theme::BG : status_col);
     }
   }
   return row;

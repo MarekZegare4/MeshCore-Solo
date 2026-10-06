@@ -399,10 +399,10 @@ void UITask::buildDiag() {
     lv_obj_set_size(b, LV_PCT(100), 40);
     lv_obj_set_style_shadow_width(b, 0, 0);
     lv_obj_set_style_radius(b, theme::RADIUS, 0);
-    lv_obj_set_style_bg_color(b, lv_color_hex(theme::ACCENT_DIM), 0);
     lv_obj_add_event_cb(b, onNoiseRun, LV_EVENT_CLICKED, NULL);
     s_noise_status = label(b, s_noise_have ? LV_SYMBOL_REFRESH "  Measure again" : LV_SYMBOL_PLAY "  Measure", THEME_FONT_BODY, theme::TEXT);
     lv_obj_center(s_noise_status);
+    stylePrimary(b);
     if (s_noise_have) {
       float mesh_f = _prefs ? _prefs->freq : 0;
       lv_obj_t* card = infoCard(s_list);

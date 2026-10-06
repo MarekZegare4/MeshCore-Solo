@@ -58,9 +58,10 @@ static lv_obj_t* botHourButton(lv_obj_t* parent, const char* text, uint8_t act, 
   lv_obj_set_flex_grow(b, 1);
   lv_obj_set_style_shadow_width(b, 0, 0);
   lv_obj_set_style_radius(b, theme::RADIUS, 0);
-  lv_obj_set_style_bg_color(b, lv_color_hex(accent ? theme::ACCENT_DIM : theme::SURFACE), 0);
+  lv_obj_set_style_bg_color(b, lv_color_hex(theme::SURFACE), 0);
   lv_obj_add_event_cb(b, onBotHour, LV_EVENT_CLICKED, (void*)(uintptr_t)act);
   lv_obj_center(label(b, text, act == botview::B_DONE ? THEME_FONT_BODY : THEME_FONT_LARGE, theme::TEXT));
+  if (accent) stylePrimary(b);
   return b;
 }
 
@@ -195,7 +196,7 @@ void UITask::botRow(int row) {
         ChannelDetails ch;
         if (!the_mesh.getChannel(i, ch) || !ch.name[0]) continue;
         lv_obj_t* rw = listRow(list, ch.name, NULL, onBotPick, (void*)(uintptr_t)i);
-        if (i == p->bot_channel_idx) lv_obj_set_style_bg_color(rw, lv_color_hex(theme::ACCENT_DIM), 0);
+        if (i == p->bot_channel_idx) styleSelected(rw, true);
         n++;
       }
     } else {
@@ -206,7 +207,7 @@ void UITask::botRow(int row) {
         memcpy(s_rooms[n], c.id.pub_key, NodePrefs::FAVOURITE_PREFIX_LEN);
         lv_obj_t* rw = listRow(list, c.name, NULL, onBotPick, (void*)(uintptr_t)n);
         if (memcmp(c.id.pub_key, p->bot_room_prefix, NodePrefs::FAVOURITE_PREFIX_LEN) == 0)
-          lv_obj_set_style_bg_color(rw, lv_color_hex(theme::ACCENT_DIM), 0);
+          styleSelected(rw, true);
         n++;
       }
     }

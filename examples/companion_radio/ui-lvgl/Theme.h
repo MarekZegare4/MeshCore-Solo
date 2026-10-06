@@ -5,10 +5,11 @@
 // The accent (amber by default; Settings > Display > Accent colour)
 // on near-black, soft corners. The accent means one of three things:
 //  - ACCENT fill, dark text: the primary action of a screen or popup
-//    (Download, Install, Save, Go) -- stylePrimary() in UITask.cpp;
-//  - ACCENT_DIM fill, light text: something selected / on (a tab, a chip, a
-//    segment, a mode that is running);
+//    (Download, Install, Save, Go) -- stylePrimary() in UITask.cpp -- and
+//    something selected / on (a tab, a chip, a segment, a mode that is
+//    running, own bubbles) -- styleSelected();
 //  - ACCENT text or icon: a name, a count, a background mode, a value.
+// No accent mixed toward black for "selected": it came out brown.
 // Everything else is BG / SURFACE / SURFACE_2 with TEXT or TEXT_MUTED.
 #include <src/themes/lv_theme_private.h>   // lv_theme_t's fields, to layer a theme
 
@@ -18,7 +19,6 @@ namespace theme {
   static const uint32_t SURFACE   = 0x1A1A1F;   // cards, rows, bubbles (incoming)
   static const uint32_t SURFACE_2 = 0x27272E;   // pressed / raised
   static uint32_t ACCENT          = 0xFFB000;   // primary actions, names, badges, modes (setAccent)
-  static uint32_t ACCENT_DIM      = 0x6B4A00;   // selected / on fill, own bubbles (setAccent)
   static const uint32_t TEXT      = 0xF2EEE6;
   static const uint32_t TEXT_MUTED= 0x9A958C;
   static const uint32_t OK        = 0x6FCF6F;   // delivered / relayed
@@ -83,11 +83,10 @@ namespace theme {
     if (idx < 0 || idx >= ACCENT_COUNT) idx = 0;
     s_accent = idx;
     ACCENT = ACCENTS[idx].col;
-    ACCENT_DIM = mix(ACCENT, BG, 42);
   }
 
   // Over LVGL's default theme, for every widget: a checked button is
-  // "selected" (ACCENT_DIM, not the default theme's full accent), buttons
+  // "selected" (the accent, dark text), buttons
   // have the card radius and give a little under the finger (the default
   // theme's transitions animate it both ways). Scrollbars are thin and hug
   // the edge, inside the padding every panel and list has, instead of the
@@ -115,7 +114,7 @@ namespace theme {
       lv_style_set_transform_width(&s_press, -2);
       lv_style_set_transform_height(&s_press, -2);
       lv_style_init(&s_checked);
-      lv_style_set_text_color(&s_checked, lv_color_hex(TEXT));
+      lv_style_set_text_color(&s_checked, lv_color_hex(BG));
       lv_style_init(&s_sbar);
       lv_style_set_width(&s_sbar, 3);
       lv_style_set_pad_right(&s_sbar, 2);    // vertical bar: 2 px off the edge
@@ -123,8 +122,8 @@ namespace theme {
       lv_style_set_pad_top(&s_sbar, RADIUS / 2);
       lv_style_set_pad_left(&s_sbar, RADIUS / 2);
     }
-    lv_style_set_bg_color(&s_checked, lv_color_hex(ACCENT_DIM));
-    lv_theme_t* base = lv_theme_default_init(disp, lv_color_hex(ACCENT), lv_color_hex(ACCENT_DIM), true, THEME_FONT_BODY);
+    lv_style_set_bg_color(&s_checked, lv_color_hex(ACCENT));
+    lv_theme_t* base = lv_theme_default_init(disp, lv_color_hex(ACCENT), lv_color_hex(ACCENT), true, THEME_FONT_BODY);
     s_theme = *base;
     lv_theme_set_parent(&s_theme, base);
     lv_theme_set_apply_cb(&s_theme, applyTheme);

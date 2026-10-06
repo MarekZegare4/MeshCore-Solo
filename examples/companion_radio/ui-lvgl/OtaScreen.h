@@ -202,7 +202,6 @@ void UITask::buildOta() {
   lv_obj_set_size(b, LV_PCT(100), 40);
   lv_obj_set_style_shadow_width(b, 0, 0);
   lv_obj_set_style_radius(b, theme::RADIUS, 0);
-  lv_obj_set_style_bg_color(b, lv_color_hex(theme::ACCENT_DIM), 0);
   lv_obj_add_event_cb(b, onOtaButton, LV_EVENT_CLICKED, NULL);
   _ota_btn = b;
   _ota_btn_lbl = label(b, "", THEME_FONT_BODY, theme::TEXT);

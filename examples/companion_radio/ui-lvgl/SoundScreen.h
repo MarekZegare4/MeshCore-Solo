@@ -33,12 +33,14 @@ static const char* OCTAVES[] = { "4", "5", "6", "" };
 static const char* DURS[]    = { "1/4", "1/8", "1/16", "1/32", "" };
 static const char* SLOTS[]   = { "Melody 1", "Melody 2", "" };
 
-// Selected: dim accent with a border; sounding now (Play): full accent.
+// Selected: an accent border; sounding now (Play): the accent, dark text.
 static void styleCell(int i, bool sel) {
   if (i < 0 || i >= soundctl::MAX_NOTES || !s_cells[i]) return;
-  uint32_t bg = i == s_hl ? theme::ACCENT : sel ? theme::ACCENT_DIM : theme::SURFACE;
-  lv_obj_set_style_bg_color(s_cells[i], lv_color_hex(bg), 0);
+  const bool hl = i == s_hl;
+  lv_obj_set_style_bg_color(s_cells[i], lv_color_hex(hl ? theme::ACCENT : theme::SURFACE), 0);
   lv_obj_set_style_border_width(s_cells[i], sel ? 2 : 0, 0);
+  setTextColor(lv_obj_get_child(s_cells[i], 0), hl ? theme::BG : theme::TEXT);
+  setTextColor(lv_obj_get_child(s_cells[i], 1), hl ? theme::BG : theme::TEXT_MUTED);
 }
 
 // Moves the "sounding" light to note `idx` (-1: none).

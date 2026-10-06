@@ -325,8 +325,8 @@ void UITask::areaLayout() {
   lv_obj_set_style_text_color(s_info, lv_color_hex(too ? theme::FAIL : theme::TEXT), 0);
   lv_label_set_text_fmt(s_zoom, "z%d", a.zmax);
   if (s_trails_btn) {
-    lv_obj_set_style_bg_color(s_trails_btn, lv_color_hex(s_trails ? theme::ACCENT_DIM : theme::SURFACE), 0);
     lv_label_set_text(lv_obj_get_child(s_trails_btn, 0), s_trails ? LV_SYMBOL_OK " Trails" : "Trails");
+    styleSelected(s_trails_btn, s_trails);
   }
 }
 

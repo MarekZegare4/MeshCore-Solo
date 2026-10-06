@@ -196,7 +196,6 @@ void UITask::buildChannelEdit() {
   lv_obj_set_size(save, LV_PCT(100), 38);
   lv_obj_set_style_shadow_width(save, 0, 0);
   lv_obj_set_style_radius(save, theme::RADIUS, 0);
-  lv_obj_set_style_bg_color(save, lv_color_hex(theme::ACCENT_DIM), 0);
   lv_obj_add_event_cb(save, onChanSave, LV_EVENT_CLICKED, NULL);
   lv_obj_center(label(save, LV_SYMBOL_OK " Save", THEME_FONT_BODY, theme::TEXT));
   stylePrimary(save);

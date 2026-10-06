@@ -285,9 +285,10 @@ static lv_obj_t* adminPopupButton(lv_obj_t* parent, const char* text, uint8_t ac
   lv_obj_set_flex_grow(b, 1);
   lv_obj_set_style_shadow_width(b, 0, 0);
   lv_obj_set_style_radius(b, theme::RADIUS, 0);
-  lv_obj_set_style_bg_color(b, lv_color_hex(accent ? theme::ACCENT_DIM : theme::SURFACE), 0);
+  lv_obj_set_style_bg_color(b, lv_color_hex(theme::SURFACE), 0);
   lv_obj_add_event_cb(b, onAdminValue, LV_EVENT_CLICKED, (void*)(uintptr_t)act);
   lv_obj_center(label(b, text, act == adminview::V_MINUS || act == adminview::V_PLUS ? THEME_FONT_LARGE : THEME_FONT_BODY, theme::TEXT));
+  if (accent) stylePrimary(b);
   return b;
 }
 
