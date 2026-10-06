@@ -434,23 +434,29 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
   // ── detail rendering ──────────────────────────────────────────────────────────
   void renderStoredDetail(DisplayDriver& display) {
     const Entry& e = _entries[_sel];
-    const int hdr  = display.listStart();   // content top (gap below the header separator)
     display.drawInvertedHeader(e.name, true, ctxMenuOpen());
+    drawStoredFields(display, e, 0, display.listStart(), display.width(), display.height());
+  }
 
+  // A stored node's position, distance, type, age and path, in the box from
+  // x0 / top, w wide down to bottom: the detail view's body, and on a wide
+  // screen the pane beside the list.
+  void drawStoredFields(DisplayDriver& display, const Entry& e, int x0, int top, int w, int bottom) {
+    const int tx = x0 + 2;
     int step = display.lineStep();
-    if (step * 5 > display.height() - hdr) step = (display.height() - hdr) / 5;
+    if (step * 5 > bottom - top) step = (bottom - top) / 5;
     char buf[32];
     // Without a line to spare for the path (the OLED), the position takes one
     // row, unlabelled: then there are five rows either way.
-    const bool one_pos = hdr + step * 5 + display.getLineHeight() > display.height();
+    const bool one_pos = top + step * 5 + display.getLineHeight() > bottom;
     if (one_pos) {
       snprintf(buf, sizeof(buf), "%.5f,%.5f", e.lat_e6 / 1e6, e.lon_e6 / 1e6);
-      display.drawTextEllipsized(2, hdr, display.width() - 4, buf);
+      display.drawTextEllipsized(tx, top, w - 4, buf);
     } else {
       snprintf(buf, sizeof(buf), "Lat: %.5f", e.lat_e6 / 1e6);
-      display.setCursor(2, hdr); display.print(buf);
+      display.setCursor(tx, top); display.print(buf);
       snprintf(buf, sizeof(buf), "Lon: %.5f", e.lon_e6 / 1e6);
-      display.setCursor(2, hdr + step); display.print(buf);
+      display.setCursor(tx, top + step); display.print(buf);
     }
     const int r0 = one_pos ? -1 : 0;   // the rows under the position move up one
 
@@ -462,34 +468,34 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
     } else {
       snprintf(buf, sizeof(buf), "Dist: no GPS");
     }
-    display.setCursor(2, hdr + step * (2 + r0)); display.print(buf);
+    display.setCursor(tx, top + step * (2 + r0)); display.print(buf);
     snprintf(buf, sizeof(buf), "Type: %s", typeName(e.type));
-    display.setCursor(2, hdr + step * (3 + r0)); display.print(buf);
+    display.setCursor(tx, top + step * (3 + r0)); display.print(buf);
     char age[16];
     fmtAge(age, sizeof(age), e.lastmod);
     // For a live [LOC] row, label the timestamp as a position share and note
     // whether the sender's identity is verified (DM) or name-only (channel).
     if (e.is_live) snprintf(buf, sizeof(buf), "Sharing pos: %s %s", age, e.live_verified ? "(DM)" : "(chan)");
     else           snprintf(buf, sizeof(buf), "Seen: %s", age);
-    display.drawTextEllipsized(2, hdr + step * (4 + r0), display.width() - 4, buf);
+    display.drawTextEllipsized(tx, top + step * (4 + r0), w - 4, buf);
 
-    const int W = display.width(), H = display.height(), lh = display.getLineHeight();
+    const int lh = display.getLineHeight();
     int rows = 5 + r0;
     // How a message gets there: a chain from you to it, a ring per repeater
     // on the way.
     ContactInfo ci;
-    if (hdr + step * rows + lh <= H && e.contact_idx >= 0 && the_mesh.getContactByIdx(e.contact_idx, ci)) {
-      const int y = hdr + step * rows;
-      display.setCursor(2, y);
+    if (top + step * rows + lh <= bottom && e.contact_idx >= 0 && the_mesh.getContactByIdx(e.contact_idx, ci)) {
+      const int y = top + step * rows;
+      display.setCursor(tx, y);
       display.print("Path:");
-      int x = 2 + display.getTextWidth("Path: ");
+      int x = tx + display.getTextWidth("Path: ");
       if (ci.out_path_len == 0xFF) {
         display.print(" flood");
       } else {
         const int hops = ci.out_path_len & 63;
         const int r = lh / 4 > 2 ? lh / 4 : 2, cy = y + lh / 2 - 1, gap = r + 3;
         // up to 5 rings, as many as leave room for the count after them
-        const int fit = (W - 2 - x - display.getTextWidth("5 hops")) / (2 * r + 1 + gap) - 2;
+        const int fit = (x0 + w - 2 - x - display.getTextWidth("5 hops")) / (2 * r + 1 + gap) - 2;
         const int cap = fit < 5 ? (fit < 1 ? 1 : fit) : 5, shown = hops > cap ? cap : hops;
         for (int k = 0; k <= shown + 1; k++) {   // you and it filled, the hops as rings
           if (k) for (int dx = x - gap + 1; dx < x; dx += 2) display.fillRect(dx, cy, 1, 1);
@@ -508,11 +514,11 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
     // Where it is, on a compass rose (north up), where the screen has the room
     // (e-ink): beside the rows on a wide one, under them on a tall one.
     if (!Features::IS_EINK || e.dist_km < 0.0f) return;
-    const int below = hdr + step * rows + lh;
+    const int below = top + step * rows + lh;
     int r, cx, cy;
-    if (H - below > W / 2) { r = (W < H - below ? W : H - below) / 2 - lh; cx = W / 2; cy = below + lh / 2 + r; }
-    else { r = (H - hdr) / 2 - lh / 2 - 1; cx = W - r - 3; cy = hdr + lh / 2 + r; }
-    const int text_r = 2 + display.getTextWidth("Lon: -000.00000");
+    if (bottom - below > w / 2) { r = (w < bottom - below ? w : bottom - below) / 2 - lh; cx = x0 + w / 2; cy = below + lh / 2 + r; }
+    else { r = (bottom - top) / 2 - lh / 2 - 1; cx = x0 + w - r - 3; cy = top + lh / 2 + r; }
+    const int text_r = tx + display.getTextWidth("Lon: -000.00000");
     if (r < 2 * lh || (cy - r < below - lh && cx - r < text_r)) return;
     info::rose(display, cx, cy, r, geo::bearingDeg(_own_lat, _own_lon, e.lat_e6, e.lon_e6));
   }
@@ -661,10 +667,13 @@ public:
       _list_refresh_ms = millis();
     }
 
-    int item_h   = display.lineStep();
+    // A screen 40 characters wide (the 4.2" e-ink) keeps the list to the left
+    // and shows the highlighted node's detail beside it.
+    const bool split = _source == SRC_STORED && _count > 0 && display.width() >= 40 * display.getCharWidth();
+    const int lw = split ? display.width() * 11 / 20 : display.width();   // the list's right edge
     // An arrow towards the node before its distance: one more cell.
     const bool arrows = _source == SRC_STORED && _sort != SORT_TIME;
-    int dist_col = display.width() - display.getCharWidth() * (arrows ? 9 : 7);
+    int dist_col = lw - display.getCharWidth() * (arrows ? 9 : 7);
 
     display.setColor(DisplayDriver::LIGHT);
     const char* flt = (_filter != F_ALL) ? filterLabel(_filter) : nullptr;
@@ -708,7 +717,7 @@ public:
       drawList(display, _count, _sel, _scroll, [&](int idx, int y, bool sel, int reserve) {
         const Entry& e = _entries[idx];
 
-        drawRowSelection(display, y, sel, reserve);
+        drawRowSelection(display, y, sel, reserve, lw);
 
         char filt[32];
         int tx = 2;
@@ -737,7 +746,7 @@ public:
         display.setColor(sel ? DisplayDriver::DARK : DisplayDriver::LIGHT);
         char right[10];
         if (_source == SRC_SCAN) {   // live scan: how well we hear it, as bars
-          drawSignalBars(display, display.width() - reserve - 2, y, e.snr_x4);
+          drawSignalBars(display, lw - reserve - 2, y, e.snr_x4);
           right[0] = '\0';
         } else if (_sort == SORT_TIME) {
           geo::fmtAgeShort(right, sizeof(right), rtc_clock.getCurrentTime(), e.lastmod);
@@ -746,14 +755,21 @@ public:
           if (e.dist_km >= 0.0f) geo::fmtDist(right, sizeof(right), e.dist_km, useImperial());
           else                   strcpy(right, "-");   // no fix of ours or theirs
         }
-        if (right[0]) display.drawTextRightAlign(display.width() - reserve - 2, y, right);
+        if (right[0]) display.drawTextRightAlign(lw - reserve - 2, y, right);
         if (arrows && e.dist_km >= 0.0f) {
           const int deg = geo::bearingDeg(_own_lat, _own_lon, e.lat_e6, e.lon_e6);
           const MiniIcon& ic = *ICON_ARROWS[((deg + 22) % 360) / 45];
-          miniIconDraw(display, display.width() - reserve - 2 - display.getTextWidth(right) - 3
+          miniIconDraw(display, lw - reserve - 2 - display.getTextWidth(right) - 3
                                 - ic.w * miniIconScale(display), y, ic);
         }
-      });
+      }, lw);
+      if (split && _sel < _count) {
+        const int top = display.listStart();
+        display.setColor(DisplayDriver::LIGHT);
+        display.fillRect(lw + 2, top, display.sepH(), display.height() - top);
+        drawStoredFields(display, _entries[_sel], lw + 2 + display.sepH() + 2, top,
+                         display.width() - lw - 4 - display.sepH(), display.height());
+      }
     }
 
     if (renderActivePopup(display)) return 50;

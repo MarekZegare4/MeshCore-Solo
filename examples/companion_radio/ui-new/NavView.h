@@ -10,6 +10,7 @@
 #include <helpers/ui/DisplayDriver.h>
 #include "../GeoUtils.h"
 #include "../ui-core/EtaTracker.h"   // navview::EtaTracker (shared with ui-lvgl)
+#include "InfoKit.h"                 // info::rose()
 
 namespace navview {
 
@@ -42,12 +43,33 @@ inline void draw(DisplayDriver& d,
 
   const int step = d.lineStep();
   int y = d.listStart();
+  // A screen 40 characters wide (the 4.2"): the lines down the left, and a
+  // compass rose (north up) at the right with an arrow to the target and a
+  // mark on the rim where you're heading.
+  const bool wide = d.width() >= 40 * d.getCharWidth();
 
   // Distance — emphasised at size 2.
   d.setTextSize(2);
-  d.drawTextCentered(cx, y, dist);
+  if (wide) { d.setCursor(2, y); d.print(dist); }
+  else      d.drawTextCentered(cx, y, dist);
   y += d.getLineHeight() + 3;
   d.setTextSize(1);
+  if (wide) {
+    const int lh = d.getLineHeight(), top = d.listStart();
+    const int r = (d.height() - top) / 2 - lh;
+    const int rx = d.width() - r - lh, ry = top + (d.height() - top) / 2 + lh / 4;
+    info::rose(d, rx, ry, r, to_deg);
+    if (cog_valid) {   // a small filled triangle outside the rim, pointing in
+      const float a = cog_deg * (float)M_PI / 180.0f, sa = sinf(a), ca = cosf(a);
+      const int s = miniIconScale(d) * 2;
+      for (int k = 0; k <= 3 * s; k++) {
+        const float rr = r + 2 + k, half = k / 2.0f;
+        const int px = rx + (int)lroundf(rr * sa), py = ry - (int)lroundf(rr * ca);
+        info::line(d, px - (int)lroundf(half * ca), py - (int)lroundf(half * sa),
+                      px + (int)lroundf(half * ca), py + (int)lroundf(half * sa));
+      }
+    }
+  }
 
   char line[20];
   snprintf(line, sizeof(line), "To:  %d %s", to_deg, geo::bearingCardinal(to_deg));

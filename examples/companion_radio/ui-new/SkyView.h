@@ -5,7 +5,8 @@
 //             north at the top): a filled dot is a satellite the fix uses, a
 //             hollow one is tracked but unused, a single pixel is in view with
 //             no signal. Beside it: fix, used / in view, HDOP, PDOP and the
-//             time to first fix (or how long it's been looking).
+//             time to first fix (or how long it's been looking), and on a
+//             40-character screen a signal bar a satellite under them.
 //   Signal -- a bar per satellite, its height the signal (C/N0, 50 dB-Hz =
 //             full), filled when used; a dotted line marks 30 dB-Hz (good).
 //             The top line counts used / in view per constellation.
@@ -45,16 +46,19 @@ namespace skyview {
     return n;
   }
 
+  inline void signalRows(DisplayDriver& d, GpsSky& g, int x0, int y, int x1);
+
   inline void renderSky(DisplayDriver& d, GpsSky& g, int top) {
     const int lh = d.getLineHeight();
     const int cw = d.getCharWidth();
-    const int s = miniIconScale(d);
     // A wide screen sets the numbers beside the plot, a tall one (portrait
     // e-ink) under it, the plot then as wide as the screen.
     const bool stacked = d.height() - top > d.width();
     const int r = stacked ? (d.width() - 1) / 2 - 1 : (d.height() - 1 - top) / 2 - 1;
     const int cx = stacked ? d.width() / 2 : r + 1;
     const int cy = top + (stacked ? lh / 2 : 0) + r + 1;
+    // The marks grow with the plot, so a big one (the 4.2") doesn't lose them.
+    const int s = miniIconScale(d) > r / 40 ? miniIconScale(d) : r / 40;
 
     info::circle(d, cx, cy, r);         // the horizon
     info::circle(d, cx, cy, r / 2, 2);  // 45 degrees up, dotted
@@ -80,6 +84,8 @@ namespace skyview {
           d.fillRect(x - s, y - s, 2 * s + 1, 2 * s + 1);
           d.setColor(DisplayDriver::LIGHT);
           d.drawRect(x - s, y - s, 2 * s + 1, 2 * s + 1);
+        } else if (s > 1) {   // in view, no signal: a small point
+          d.fillRect(x - 1, y - 1, 3, 3);
         } else {
           dot(d, x, y);
         }
@@ -113,6 +119,45 @@ namespace skyview {
     }
     else buf[0] = 0;
     d.setCursor(x0, y); d.print(buf);
+    // A screen 40 characters wide (the 4.2" e-ink) lists the strongest under
+    // the numbers as well, a bar each.
+    y += step + lh / 2;
+    if (!stacked && d.width() >= 40 * cw && d.height() - y >= 4 * lh)
+      signalRows(d, g, x0, y, d.width() - 2);
+  }
+
+  // Satellites in order: used first, then the strongest. Returns the count.
+  inline int sorted(const GpsSky& g, int* idx) {
+    int n = g.count;
+    for (int i = 0; i < n; i++) idx[i] = i;
+    auto key = [&](int i) { return (g.used(g.sats[i]) ? 100 : 0) + g.sats[i].snr; };
+    for (int i = 1; i < n; i++) {   // insertion sort, <= 64
+      int v = idx[i], j = i - 1;
+      while (j >= 0 && key(idx[j]) < key(v)) { idx[j + 1] = idx[j]; j--; }
+      idx[j + 1] = v;
+    }
+    return n;
+  }
+
+  // A row a satellite from x0 / y to x1, as many as fit above the bottom:
+  // its system letter and number, then a bar as long as its signal (50
+  // dB-Hz = full), filled when the fix uses it.
+  inline void signalRows(DisplayDriver& d, GpsSky& g, int x0, int y, int x1) {
+    const int lh = d.getLineHeight(), step = lh + 1;
+    int idx[GpsSky::MAX_SATS];
+    const int n = sorted(g, idx);
+    const int bx = x0 + d.getTextWidth("G000") + 4, bw = x1 - bx, bh = lh - 6;
+    char buf[8];
+    for (int k = 0; k < n && y + lh <= d.height(); k++, y += step) {
+      const GpsSky::Sat& sat = g.sats[idx[k]];
+      snprintf(buf, sizeof(buf), "%c%d", GpsSky::sysLetter(sat.sys), sat.prn);
+      d.setCursor(x0, y); d.print(buf);
+      const int by = y + 3, snr = sat.snr > 50 ? 50 : sat.snr;
+      const int len = snr <= 0 ? 0 : (bw * snr / 50 > 2 ? bw * snr / 50 : 2);
+      if (!len)              dot(d, bx, by + bh / 2);
+      else if (g.used(sat))  d.fillRect(bx, by, len, bh);
+      else                   d.drawRect(bx, by, len, bh);
+    }
   }
 
   inline void renderSignal(DisplayDriver& d, GpsSky& g, int top) {
@@ -135,19 +180,13 @@ namespace skyview {
 
     // Used first, then the strongest.
     int idx[GpsSky::MAX_SATS];
-    int n = g.count;
-    for (int i = 0; i < n; i++) idx[i] = i;
-    auto key = [&](int i) { return (g.used(g.sats[i]) ? 100 : 0) + g.sats[i].snr; };
-    for (int i = 1; i < n; i++) {   // insertion sort, <= 64
-      int v = idx[i], j = i - 1;
-      while (j >= 0 && key(idx[j]) < key(v)) { idx[j + 1] = idx[j]; j--; }
-      idx[j + 1] = v;
-    }
+    int n = sorted(g, idx);
     int fit = (W + 1) / 3;   // bars at least 2 px wide, 1 px apart
     if (n > fit) n = fit;
     if (!n) return;
     int bw = (W + 1) / n - 1;
-    if (bw > 8) bw = 8;
+    const int cap = W >= 40 * d.getCharWidth() ? W / 16 : 8;   // wider on the 4.2"
+    if (bw > cap) bw = cap;
 
     const int y0 = top + lh + 3, y1 = d.height() - 1, H = y1 - y0;
     for (int x = 0; x < W; x += 3) dot(d, x, y1 - H * 30 / 50);   // 30 dB-Hz

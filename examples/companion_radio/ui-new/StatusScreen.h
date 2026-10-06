@@ -52,7 +52,9 @@ private:
   // E-ink draws them as charts (chartBlock()) over a longer span: a sample
   // every 5 minutes, 8 hours. Its Radio chart also has the SNR of the last
   // 32 packets.
+public:
   static const int HIST_N = Features::IS_EINK ? 96 : 32;
+private:
   static constexpr const char* HIST_SPAN = Features::IS_EINK ? "8 h ago" : "32 min";
   uicore::StatusHistory<HIST_N, Features::IS_EINK ? 300000UL : 60000UL> _hist;
 
@@ -60,16 +62,18 @@ private:
   // chart under it.
   template <int N>
   void chartBlock(DisplayDriver& d, info::Flow& f, int rsv, const char* title, const char* now,
-                  const info::History<N>& hs, int min_span, bool bars, const char* span) {
+                  const info::History<N>& hs, int min_span, bool bars, const char* span,
+                  info::ChartAxisFmt axis) {
     const int lh = d.getLineHeight(), ch = 3 * lh;
     if (!f.place(d.lineStep() + info::chartH(d, ch) + 2)) return;
     info::valueRow(d, f.at, title, now, false, rsv, 1);
-    info::chart(d, 1, f.at + d.lineStep(), d.width() - rsv - 3, ch, hs, min_span, bars, span, "now");
+    info::chart(d, 1, f.at + d.lineStep(), d.width() - rsv - 3, ch, hs, min_span, bars, span, "now", axis);
   }
 
   void addTab(uint8_t t, const char* label) { _tabs[_count] = t; _labels[_count] = label; _count++; }
   uint8_t tab() const { return _tabs[_cur]; }
 
+public:
   static uint32_t totalRx() {
     uint32_t n = 0;
     for (uint8_t t = 0; t < 16; t++) n += the_mesh.getNumRecvByType(t);
@@ -80,6 +84,7 @@ private:
     for (uint8_t t = 0; t < 16; t++) n += the_mesh.getNumSentByType(t);
     return n;
   }
+private:
 
   int battMv() const { return _task->getBattMilliVolts(); }
   int battPct() const {
@@ -120,7 +125,7 @@ private:
     const int nf = (int)radio_driver.getNoiseFloor();
     if (nf) snprintf(a, sizeof(a), "%d dBm", nf); else strcpy(a, "-");
     if (Features::IS_EINK) {
-      chartBlock(d, f, rsv, "Noise", a, _hist.noise, 6, false, HIST_SPAN);
+      chartBlock(d, f, rsv, "Noise", a, _hist.noise, 6, false, HIST_SPAN, info::axisPlain);
     } else if (f.place(d.lineStep())) {   // label, the last half hour, the value now
       info::valueRow(d, f.at, "Noise", a, false, rsv, 1);
       const int x0 = 1 + d.getTextWidth("Noise") + 6;
@@ -134,7 +139,7 @@ private:
       drawSignalBars(d, d.width() - rsv - 2 - d.getTextWidth(b) - 5, f.at, (int)(snr * 4));
     }
     snprintf(b, sizeof(b), "%.1f dB", radio_driver.getLastSNR());
-    if (Features::IS_EINK) chartBlock(d, f, rsv, "SNR", b, _hist.snr, 20, false, "32 pkts");
+    if (Features::IS_EINK) chartBlock(d, f, rsv, "SNR", b, _hist.snr, 20, false, "32 pkts", info::axisQuarterDb);
     else row(d, f, rsv, "Last SNR", b);
   }
 
@@ -210,7 +215,7 @@ private:
     row(d, f, rsv, "Battery", a);
     row(d, f, rsv, "Source", board.isExternalPowered() ? "USB" : "Battery");
     if (Features::IS_EINK) {
-      chartBlock(d, f, rsv, "Trend", nullptr, _hist.batt, 20, false, HIST_SPAN);
+      chartBlock(d, f, rsv, "Trend", nullptr, _hist.batt, 20, false, HIST_SPAN, info::axisVolts);
     } else if (f.place(d.lineStep())) {
       d.setCursor(1, f.at);
       d.print("Trend");
@@ -255,7 +260,7 @@ private:
     if (Features::IS_EINK) {   // packets per 5 minutes, as bars
       const int ch = 3 * lh;
       if (f.place(info::chartH(d, ch) + 2))
-        info::chart(d, 1, f.at, d.width() - rsv - 3, ch, _hist.traffic, 4, true, HIST_SPAN, "now");
+        info::chart(d, 1, f.at, d.width() - rsv - 3, ch, _hist.traffic, 4, true, HIST_SPAN, "now", info::axisPlain);
     } else if (f.place(lh + 6)) {
       info::spark(d, 1, f.at, d.width() - rsv - 3, lh + 3, _hist.traffic, 4);
     }
@@ -352,6 +357,8 @@ public:
   }
 
   const info::History<HIST_N>& battHistory() const { return _hist.batt; }
+  const info::History<HIST_N>& noiseHistory() const { return _hist.noise; }
+  const info::History<HIST_N>& trafficHistory() const { return _hist.traffic; }
 
   // Contacts heard from in the last hour (cached for 10 s: it walks them all).
   static int heardLastHour() {

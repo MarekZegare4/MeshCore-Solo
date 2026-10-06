@@ -82,16 +82,24 @@ public:
 
     const int lh            = display.getLineHeight();
     const int cw            = display.getCharWidth();
-    const int cell_w        = cw * 2 + 6;  // fits 2-char label with margin
+    const bool wide         = display.width() >= 40 * cw;
+    const int cell_w        = cw * 2 + (wide ? 12 : 6);  // fits 2-char label with margin
     const int notes_y       = display.listStart();
     const int cell_h        = lh + 6;
     _visible_notes          = display.width() / cell_w;
 
-    char hdr[32];
-    snprintf(hdr, sizeof(hdr), "M%d BPM:%u %d/%d", _slot + 1, soundctl::bpm(_bpm_idx), _len, MAX_NOTES);
-    display.setCursor(0, 0);
-    display.print(hdr);
-    display.fillRect(0, display.headerH() - 1, display.width(), display.sepH());
+    // A screen 40 characters wide (the 4.2"): a titled header, and the
+    // melody drawn as a roll under the notes (see drawRoll()).
+    char hdr[40];
+    if (wide) {
+      snprintf(hdr, sizeof(hdr), "Melody %d  %u BPM  %d/%d", _slot + 1, soundctl::bpm(_bpm_idx), _len, MAX_NOTES);
+      drawScreenHeader(display, hdr, -1, 0, true, _menu.active);
+    } else {
+      snprintf(hdr, sizeof(hdr), "M%d BPM:%u %d/%d", _slot + 1, soundctl::bpm(_bpm_idx), _len, MAX_NOTES);
+      display.setCursor(0, 0);
+      display.print(hdr);
+      display.fillRect(0, display.headerH() - 1, display.width(), display.sepH());
+    }
 
     for (int i = 0; i < _visible_notes; i++) {
       int ni = _scroll + i;
@@ -142,12 +150,40 @@ public:
       display.print("U/D to add note");
     }
 
+    if (wide) drawRoll(display, info_y + lh + 6, bottom_y - 6, cell_w);
     display.setCursor(0, bottom_y);
-    display.print("ENT:oct MENU:opts");
+    display.print(wide ? "Up/Down: note  Enter: octave  Hold: options" : "ENT:oct MENU:opts");
 
     if (_menu.active) _menu.render(display);
 
     return 200;
+  }
+
+  // The visible notes as a roll from y0 to y1: under each note's cell a bar
+  // as high as its pitch (C4 at the bottom to B6 at the top, a dotted line
+  // at each C) and as wide as its length (a 1/4 fills the cell); a rest is
+  // a dash on the floor. The selected note's column is marked at its sides.
+  void drawRoll(DisplayDriver& d, int y0, int y1, int cell_w) {
+    const int steps = (soundctl::OCT_MAX - soundctl::OCT_MIN + 1) * 7;   // C4..B6
+    const int h = y1 - y0, W = _visible_notes * cell_w;
+    if (h < steps * 2) return;
+    const int bar_h = h / steps > 5 ? 5 : h / steps > 2 ? h / steps : 2;
+    d.setColor(DisplayDriver::LIGHT);
+    for (int o = 0; o <= soundctl::OCT_MAX - soundctl::OCT_MIN; o++) {
+      const int y = y1 - (o * 7) * h / steps;
+      for (int x = 0; x < W; x += 3) d.fillRect(x, y, 1, 1);
+    }
+    for (int i = 0; i < _visible_notes; i++) {
+      const int ni = _scroll + i, cx = i * cell_w;
+      if (ni == _cursor)
+        for (int y = y0; y < y1; y += 2) { d.fillRect(cx, y, 1, 1); d.fillRect(cx + cell_w - 2, y, 1, 1); }
+      if (ni >= _len) continue;
+      const uint8_t p = notePitch(_notes[ni]);
+      const int w = (cell_w - 4) >> noteDurIdx(_notes[ni]);
+      if (p == 0) { d.fillRect(cx + 2, y1 - 1, w > 2 ? w : 2, 1); continue; }
+      const int k = (noteOctave(_notes[ni]) - soundctl::OCT_MIN) * 7 + p - 1;
+      d.fillRect(cx + 2, y1 - (k + 1) * h / steps, w > 2 ? w : 2, bar_h);
+    }
   }
 
   void cycleMenuValue(int sel, int dir) {

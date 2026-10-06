@@ -6,10 +6,12 @@
 // fixed 128x64, so a larger-font e-ink layout gets them scaled for free.
 
 #include <helpers/ui/DisplayDriver.h>
+#include <stdio.h>
 #include <string.h>
 #include <math.h>
 #include "icons.h"
 #include "../ui-core/StatusHistory.h"
+#include "../ui-core/Lettering.h"
 
 namespace info {
 
@@ -62,8 +64,9 @@ inline void section(DisplayDriver& d, int y, const char* label, int reserve = 0)
 }
 
 // A battery glyph the size of a mini icon (7 x 5 at 1x, 9 x 7 in the large
-// set), its corners softly rounded, filled to frac.
-static constexpr int BATT_BODY_W = MINI_ICONS_LARGE ? 8 : 6, BATT_BODY_H = MINI_ICONS_LARGE ? 7 : 5;
+// set, 12 x 9 in the 9 px one), its corners softly rounded, filled to frac.
+static constexpr int BATT_BODY_W = MINI_ICONS_LARGE == 2 ? 11 : MINI_ICONS_LARGE ? 8 : 6,
+                     BATT_BODY_H = MINI_ICONS_LARGE == 2 ? 9 : MINI_ICONS_LARGE ? 7 : 5;
 inline int batteryW(DisplayDriver& d) { return (BATT_BODY_W + 1) * miniIconScale(d); }
 inline int batteryH(DisplayDriver& d) { return BATT_BODY_H * miniIconScale(d); }
 inline void battery(DisplayDriver& d, int x, int y, float frac) {
@@ -297,26 +300,44 @@ inline void fadeColumn(DisplayDriver& d, int x, int y0, int y1) {
 // or, with `bars`, one bar each from the bottom, for counts -- the newest at
 // the right edge, then a caption line under the frame: `left` at its left
 // (how far back it goes), `right` at its right. chartH() is the whole
-// block's height.
+// block's height. `axis`, on a chart 30 characters wide or more (the 4.2"
+// e-ink), prints the top, middle and bottom values in a column to the left
+// of the frame: it writes one sample value in the unit the reader knows.
 inline int chartH(DisplayDriver& d, int frame_h) { return frame_h + d.getLineHeight() + 3; }
+typedef void (*ChartAxisFmt)(char* buf, int n, int v);
 template <int N>
 inline void chart(DisplayDriver& d, int x, int y, int w, int h, const History<N>& hs, int min_span,
-                  bool bars, const char* left, const char* right) {
+                  bool bars, const char* left, const char* right, ChartAxisFmt axis = nullptr) {
+  const bool empty = hs.n < (bars ? 1 : 2);
+  int lo = 0, hi = 0;
+  if (!empty) {
+    lo = bars ? 0 : hs.at(0); hi = lo;
+    for (int i = 0; i < hs.n; i++) { int v = hs.at(i); if (v < lo) lo = v; if (v > hi) hi = v; }
+    if (hi - lo < min_span) { if (bars) hi = lo + min_span; else { int mid = (hi + lo) / 2; lo = mid - min_span / 2; hi = lo + min_span; } }
+  }
+  const int lh = d.getLineHeight();
+  if (axis && !empty && w >= 30 * d.getCharWidth() && h >= 2 * lh) {
+    char t[3][12];
+    const int v[3] = { hi, (hi + lo) / 2, lo };
+    int gw = 0;
+    for (int k = 0; k < 3; k++) { axis(t[k], sizeof(t[k]), v[k]); int tw = d.getTextWidth(t[k]); if (tw > gw) gw = tw; }
+    d.drawTextRightAlign(x + gw, y + 1, t[0]);
+    if (h >= 3 * lh) d.drawTextRightAlign(x + gw, y + (h - lh) / 2, t[1]);
+    d.drawTextRightAlign(x + gw, y + h - lh - 1, t[2]);
+    x += gw + 3; w -= gw + 3;
+  }
   d.drawSoftRect(x, y, w, h);
   const int s = miniIconScale(d);
   for (int i = x + 3; i < x + w - 3; i += 3 * s) d.fillRect(i, y + h / 2, s, s);
   const int ix = x + 2, iy = y + 2, iw = w - 4, ih = h - 4;
-  if (hs.n < (bars ? 1 : 2)) {   // nothing to draw yet: say so over the line
-    const int tw = d.getTextWidth("no data"), tx = x + (w - tw) / 2, ty = y + (h - d.getLineHeight()) / 2;
+  if (empty) {   // nothing to draw yet: say so over the line
+    const int tw = d.getTextWidth("no data"), tx = x + (w - tw) / 2, ty = y + (h - lh) / 2;
     d.setColor(DisplayDriver::DARK);
-    d.fillRect(tx - 2, ty, tw + 4, d.getLineHeight());
+    d.fillRect(tx - 2, ty, tw + 4, lh);
     d.setColor(DisplayDriver::LIGHT);
     d.setCursor(tx, ty);
     d.print("no data");
   } else {
-    int lo = bars ? 0 : hs.at(0), hi = lo;
-    for (int i = 0; i < hs.n; i++) { int v = hs.at(i); if (v < lo) lo = v; if (v > hi) hi = v; }
-    if (hi - lo < min_span) { if (bars) hi = lo + min_span; else { int mid = (hi + lo) / 2; lo = mid - min_span / 2; hi = lo + min_span; } }
     const int bw = iw / N > 1 ? iw / N : 1;
     int px = -1, py = 0;
     for (int i = 0; i < hs.n; i++) {
@@ -337,6 +358,33 @@ inline void chart(DisplayDriver& d, int x, int y, int w, int h, const History<N>
   const int ty = y + h + 2;
   if (left && *left)   { d.setCursor(x, ty); d.print(left); }
   if (right && *right) d.drawTextRightAlign(x + w, ty, right);
+}
+
+// Axis formats for chart(): the unit each History is kept in, as read.
+inline void axisPlain(char* b, int n, int v) { snprintf(b, n, "%d", v); }
+inline void axisVolts(char* b, int n, int v) { snprintf(b, n, "%.2f", v / 1000.0f); }        // mV
+inline void axisQuarterDb(char* b, int n, int v) { snprintf(b, n, "%.0f", v / 4.0f); }    // dB x4
+
+// Text in the splash's slanted lettering (ui-core/Lettering.h: digits, ':',
+// '.', '-' and a few letters) at `sc` px a pixel, `gap` px between
+// characters, its top-left at x / y. letteringW() measures it the same way.
+inline void lettering(DisplayDriver& d, int x, int y, const char* t, int sc, int gap) {
+  for (const char* p = t; *p; p++) {
+    const int cw = ::lettering::charW(*p);
+    if (cw < 0) continue;
+    for (int r = 0; r < ::lettering::LOGO_H; r++)
+      for (int col = 0; col < cw; col++) {
+        if (!::lettering::inked(*p, col, r)) continue;
+        int e = col;
+        while (e + 1 < cw && ::lettering::inked(*p, e + 1, r)) e++;
+        d.fillRect(x + col * sc, y + r * sc, (e - col + 1) * sc, sc);
+        col = e;
+      }
+    x += cw * sc + gap;
+  }
+}
+inline int letteringW(const char* t, int sc, int gap) {
+  return ::lettering::textW(t, 0) * sc + gap * ((int)strlen(t) - 1);
 }
 
 // Blocks stacked down from `top`, with the first `skip` left out: the way a

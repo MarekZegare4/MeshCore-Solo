@@ -185,15 +185,37 @@ class ClockToolsScreen : public UIScreen {
     return (mq_delay > 0 && mq_delay < 60000) ? mq_delay : 60000;
   }
 
+  // On a screen 40 characters wide (the 4.2"): `t` in the big clock's
+  // lettering, as large as fits between the header and the hint line, with
+  // character `cur` underlined (-1: none). False elsewhere: draw it in text.
+  bool bigDigits(DisplayDriver& d, const char* t, int cur) {
+    if (d.width() < 40 * d.getCharWidth()) return false;
+    const int lh = d.getLineHeight(), top = d.listStart(), bottom = d.height() - 2 * lh;
+    int sc = 6;   // the Home clock's size at most
+    while (sc > 1 && (info::letteringW(t, sc, sc + 1) > d.width() - 2 * lh
+                      || lettering::LOGO_H * sc > bottom - top - lh)) sc--;
+    const int gap = sc + 1, h = lettering::LOGO_H * sc;
+    const int x0 = (d.width() - info::letteringW(t, sc, gap)) / 2, y = top + (bottom - top - h) / 2;
+    info::lettering(d, x0, y, t, sc, gap);
+    if (cur >= 0) {
+      int x = x0;
+      for (int i = 0; i < cur && t[i]; i++) x += lettering::charW(t[i]) * sc + gap;
+      d.fillRect(x, y + h + sc, lettering::charW(t[cur]) * sc, sc);
+    }
+    return true;
+  }
+
   int renderTimer(DisplayDriver& d) {
     drawScreenHeader(d, "Timer");
     const int cx = d.width() / 2;
     if (_task->isTimerRunning()) {
       char buf[16];
       fmtHMS(buf, sizeof(buf), _task->timerRemainingMs());
-      d.setTextSize(2);
-      d.drawTextCentered(cx, d.listStart() + 4, buf);
-      d.setTextSize(1);
+      if (!bigDigits(d, buf, -1)) {
+        d.setTextSize(2);
+        d.drawTextCentered(cx, d.listStart() + 4, buf);
+        d.setTextSize(1);
+      }
       d.drawTextCentered(cx, d.height() - d.getLineHeight() - 1, "Ent=stop");
       return liveTickMs(d, 1000);
     }
@@ -201,6 +223,10 @@ class ClockToolsScreen : public UIScreen {
     // LEFT/RIGHT move the cursor one digit, UP/DOWN change it, Enter starts.
     char buf[12];
     snprintf(buf, sizeof(buf), "%02u:%02u:%02u", _timer_h, _timer_m, _timer_s);
+    if (bigDigits(d, buf, _timer_cur + (_timer_cur / 2))) {
+      d.drawTextCentered(cx, d.height() - d.getLineHeight() - 1, "Up/Dn=set Ent=start");
+      return 60000;
+    }
     d.setTextSize(2);
     const int ty = d.listStart() + 2;
     d.drawTextCentered(cx, ty, buf);
@@ -220,9 +246,11 @@ class ClockToolsScreen : public UIScreen {
     char buf[16];
     bool tenths = !d.isEink() && _sw_running;   // tenths only on a fast panel
     fmtStopwatch(buf, sizeof(buf), stopwatchMs(), tenths);
-    d.setTextSize(2);
-    d.drawTextCentered(cx, d.listStart() + 4, buf);
-    d.setTextSize(1);
+    if (!bigDigits(d, buf, -1)) {
+      d.setTextSize(2);
+      d.drawTextCentered(cx, d.listStart() + 4, buf);
+      d.setTextSize(1);
+    }
     const char* hint = _sw_running ? "Ent=stop" : "Ent=start Dn=reset";
     d.drawTextCentered(cx, d.height() - d.getLineHeight() - 1, hint);
     return _sw_running ? liveTickMs(d, 100) : 60000;

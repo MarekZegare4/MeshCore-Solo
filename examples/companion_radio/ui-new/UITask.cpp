@@ -232,21 +232,6 @@ static BigClock bigClockSize(const DisplayDriver& d) {
   if (sc < 1) sc = 1;
   return { sc, lettering::LOGO_H * sc };
 }
-static void drawLettering(DisplayDriver& d, int x, int y, const char* t, int sc, int gap) {
-  for (const char* p = t; *p; p++) {
-    const int cw = lettering::charW(*p);
-    if (cw < 0) continue;
-    for (int r = 0; r < lettering::LOGO_H; r++)
-      for (int col = 0; col < cw; col++) {
-        if (!lettering::inked(*p, col, r)) continue;
-        int e = col;
-        while (e + 1 < cw && lettering::inked(*p, e + 1, r)) e++;
-        d.fillRect(x + col * sc, y + r * sc, (e - col + 1) * sc, sc);
-        col = e;
-      }
-    x += cw * sc + gap;
-  }
-}
 // The big clock's text, gaps and AM / PM, measured: its full width (w), the
 // digits' (dw). draw() puts its left edge at x.
 struct BigClockText {
@@ -267,7 +252,7 @@ struct BigClockText {
     w = dw + (ap ? (int)d.getTextWidth(ap) + 2 * sc : 0);
   }
   void draw(DisplayDriver& d, int x, int y) const {
-    drawLettering(d, x, y, t, sc, gap);
+    info::lettering(d, x, y, t, sc, gap);
     if (!ap) return;
     d.setCursor(x + dw + 2 * sc, y + lettering::LOGO_H * sc - d.getLineHeight() + 1);
     d.print(ap);
@@ -989,8 +974,12 @@ public:
     const int W = d.width(), H = d.height(), lh = d.getLineHeight();
     const int s = miniIconScale(d);
     const bool tall = H - top > W;
+    // A screen 40 characters wide (the 4.2"): a square map and a column of
+    // labelled rows beside it, one line apart.
+    const bool wide = !tall && W >= 40 * d.getCharWidth();
     const int rows_h = tall ? 4 * (lh + lh / 2) : 0;
-    const int pw = tall ? W : W / 2, ph = H - top - rows_h;   // map panel
+    const int ph = H - top - rows_h;
+    const int pw = tall ? W : wide ? (ph < W * 3 / 5 ? ph : W * 3 / 5) : W / 2;   // map panel
     d.setColor(DisplayDriver::LIGHT);
     d.drawSoftRect(0, top, pw, ph);
     if (!drawMapPreview(d, 2, top + 2, pw - 4, ph - 4)) {
@@ -1005,6 +994,8 @@ public:
       d.setCursor(tx, ty);
       d.print(why);
     }
+
+    if (wide) { drawMapColumn(d, pw + 6, top, W - 2); return; }
 
     // The column: four rows, always, like the Status tiles.
     const int cx = tall ? 2 : pw + 3, cw = W - cx;
@@ -1049,6 +1040,72 @@ public:
     }
   }
 
+  // The wide Map page's column, x0..x1 from top: GPS and the position, the
+  // trail, then live contacts, the target and waypoints, each an icon, a
+  // label and the value at the right, the groups split by a dotted rule.
+  void drawMapColumn(DisplayDriver& d, int x0, int top, int x1) {
+    const int lh = d.getLineHeight(), s = miniIconScale(d), step = d.lineStep() + 2;
+    const int lx = x0 + PAGE_ICON_PX * s + 2 * s;   // labels clear of the widest icon
+    int y = top + 1;
+    auto row = [&](const MiniIcon* ic, const char* label, const char* val) {
+      if (ic) miniIconDraw(d, x0, y + (lh - ic->h * s) / 2 - s, *ic);
+      d.setCursor(lx, y); d.print(label);
+      d.drawTextRightAlign(x1, y, val);
+      y += step;
+    };
+    auto rule = [&]() { info::rule(d, x0, y + lh / 2 - 2, x1 - x0); y += lh / 2 + 2; };
+    char buf[24];
+#if ENV_INCLUDE_GPS == 1
+    LocationProvider* loc = sensors.getLocationProvider();
+    const bool on = _task->getGPSState();
+    if (!loc)                 strcpy(buf, "none");
+    else if (!on)             strcpy(buf, "off");
+    else if (!loc->isValid()) strcpy(buf, "no fix");
+    else                      snprintf(buf, sizeof(buf), "%ld sats", loc->satellitesCount());
+    row(&ICON_GPS, "GPS", buf);
+    int32_t mla, mlo;
+    if (_task->currentLocation(mla, mlo)) {
+      snprintf(buf, sizeof(buf), "%.5f", mla / 1e6); row(nullptr, "Lat", buf);
+      snprintf(buf, sizeof(buf), "%.5f", mlo / 1e6); row(nullptr, "Lon", buf);
+    }
+#else
+    row(&ICON_GPS, "GPS", "none");
+#endif
+    rule();
+    TrailStore& tr = _task->trail();
+    if (tr.empty() && !tr.isActive()) strcpy(buf, "-");
+    else geo::fmtDist(buf, sizeof(buf), tr.totalDistanceMeters() / 1000.0f, _task->useImperial(), true);
+    row(&ICON_TRAIL, "Trail", buf);
+    if (!tr.empty() || tr.isActive()) {
+      const uint32_t t = tr.elapsedSeconds();
+      snprintf(buf, sizeof(buf), "%luh %02lum", (unsigned long)(t / 3600), (unsigned long)(t / 60 % 60));
+      row(nullptr, tr.isActive() ? (tr.isPaused() ? "Paused" : "Rec") : "Time", buf);
+      snprintf(buf, sizeof(buf), "%d", tr.count());
+      row(nullptr, "Points", buf);
+    }
+    rule();
+    const float km = statusDistanceKm();
+    int32_t tla, tlo;
+    const bool target = _task->activeTargetPos(tla, tlo);
+    const int live = _task->liveTrack().active(rtc_clock.getCurrentTime());
+    snprintf(buf, sizeof(buf), "%d", live);
+    row(&ICON_MAP_CONTACT, "Live", buf);
+    if (live > 0 && km >= 0 && !target) {
+      geo::fmtDist(buf, sizeof(buf), km, _task->useImperial(), true);
+      row(nullptr, "Nearest", buf);
+    }
+    if (target) {
+      if (km >= 0) geo::fmtDist(buf, sizeof(buf), km, _task->useImperial(), true);
+      else         strcpy(buf, "-");
+      row(&ICON_MAP_TARGET, "Target", buf);
+    }
+    snprintf(buf, sizeof(buf), "%d", _task->waypoints().count());
+    row(&ICON_MAP_WAYPOINT, "Waypoints", buf);
+  }
+
+  // The Favourites grid: landscape 3x2, portrait 2x3.
+  static int favCols(DisplayDriver& d) { return d.isLandscape() ? 3 : 2; }
+
   // The clock fields set in Settings (dashboard_fields), in order; their count.
   int clockFields(uint8_t* out) {
     int n = 0;
@@ -1090,14 +1147,21 @@ public:
     uint8_t fields[3];
     const int nf = clockFields(fields);
 
+    // The month under the date, where it fits: a tall screen (portrait
+    // e-ink), or the 4.2" landscape one with the clock moved to the top.
+    const int fields_h = nf ? 2 * lh + 1 + lh / 2 : 0;
+    const int cal_h = calendar::height(d, ti);
+    bool cal = false;
     int date_y;
     if (d.height() > d.width()) {   // portrait e-ink: stacked digits
       date_y = drawClockTall(d, lh / 2, &ti, h12);
+      cal = true;
     } else {
       const BigClock bc = bigClockSize(d);
       const int bar = 3 * bc.sc / 2;              // the seconds bar and its gaps
       const int block = bc.h + bar + 1 + lh;
-      const int y = nf ? bc.sc : (H - block) / 2;
+      cal = bc.sc + block + lh / 2 + 2 + cal_h <= H - fields_h;
+      const int y = nf || cal ? bc.sc : (H - block) / 2;
       drawBigClock(d, W / 2, y, &ti, h12, bc.sc);
       const int bar_y = y + bc.h + bar / 2 + 1;
       if (show_sec) {   // fills over the minute: dotted track, solid part
@@ -1114,11 +1178,11 @@ public:
     snprintf(buf, sizeof(buf), "%s %d %s %d", WDAY[ti.tm_wday], ti.tm_mday, MON[ti.tm_mon], 1900 + ti.tm_year);
     d.drawTextCentered(W / 2, date_y, buf);
 
-    // A tall screen (portrait e-ink): the month under the date, in the room
-    // above the clock fields.
     const int cal_top = date_y + lh + lh / 2 + 2;
-    const int cal_bottom = nf ? H - 2 * lh - 1 - lh / 2 : H;
-    if (H > W && calendar::height(d, ti) <= cal_bottom - cal_top) calendar::draw(d, 0, cal_top, W, ti, alarmDays(ti));
+    if (cal && cal_h <= H - fields_h - cal_top) {   // no wider than four characters a day
+      const int cw = W < 28 * d.getCharWidth() ? W : 28 * d.getCharWidth();
+      calendar::draw(d, (W - cw) / 2, cal_top, cw, ti, alarmDays(ti));
+    }
 
     if (nf == 0) return;
     refresh_sensors();
@@ -1158,6 +1222,9 @@ public:
     if (synced) localTm(unix_ts, _node_prefs ? _node_prefs->tz_offset_hours : 0, ti);
     const bool h12 = _node_prefs && _node_prefs->clock_12h;
     const bool compact = _node_prefs && _node_prefs->lock_compact && W > H;
+    // The month and the rows under the big clock: on a tall screen (portrait
+    // e-ink), and on one 40 characters wide (the 4.2").
+    const bool extras = H > W || W >= 40 * d.getCharWidth();
 
     char pill[24] = "";
     if (compact) {
@@ -1205,9 +1272,9 @@ public:
         char buf[16];
         snprintf(buf, sizeof(buf), "%s %d %s", WDAY[ti.tm_wday], ti.tm_mday, MON[ti.tm_mon]);
         d.drawTextCentered(W / 2, date_y, buf);
-        if (H > W) drawLockTallExtras(d, date_y + lh + lh / 2 + 2, hint ? pill_y - 3 : H, ti, unread);
+        if (extras) drawLockTallExtras(d, date_y + lh + lh / 2 + 2, hint ? pill_y - 3 : H, ti, unread);
       }
-      if (!hint && unread > 0 && !(synced && H > W)) snprintf(pill, sizeof(pill), "%d%s new", unread, _task->getAnyUnreadOverflow() ? "+" : "");
+      if (!hint && unread > 0 && !(synced && extras)) snprintf(pill, sizeof(pill), "%d%s new", unread, _task->getAnyUnreadOverflow() ? "+" : "");
     }
 
     if (hint) {
@@ -1227,7 +1294,7 @@ public:
     d.setColor(DisplayDriver::LIGHT);
   }
 
-  // Under a tall lock clock (portrait e-ink), between y and bottom: the month,
+  // Under the lock clock on a tall or a 4.2" screen, between y and bottom: the month,
   // then a row each for unread messages, the armed alarm and the clock fields
   // -- the rows first, the calendar only if there's room for it as well.
   void drawLockTallExtras(DisplayDriver& d, int y, int bottom, const struct tm& ti, int unread) {
@@ -1251,7 +1318,8 @@ public:
     }
     const int rows_h = n * step;
     if (calendar::height(d, ti) + d.getLineHeight() / 2 + rows_h <= bottom - y) {
-      calendar::draw(d, 0, y, W, ti, alarmDays(ti));
+      const int cw = W < 28 * d.getCharWidth() ? W : 28 * d.getCharWidth();   // as on the Clock page
+      calendar::draw(d, (W - cw) / 2, y, cw, ti, alarmDays(ti));
       y += calendar::height(d, ti) + d.getLineHeight() / 2;
     }
     for (int k = 0; k < n && y + d.getLineHeight() <= bottom; k++, y += step) {
@@ -1262,30 +1330,51 @@ public:
   }
 
   // The Status page: four tiles split by dotted rules, each one subject's
-  // headline (icon + main value) over a detail line. Enter opens the Status
-  // screen with all of it.
+  // headline (icon + main value) over a detail line. A tile with the room
+  // (the 4.2" panel) adds a line and a chart of its history under it. Enter
+  // opens the Status screen with all of it.
   void drawStatusTiles(DisplayDriver& d, int top) {
     const int W = d.width(), H = d.height() - top;
     const int lh = d.getLineHeight(), s = miniIconScale(d);
     const int mid_x = W / 2, mid_y = top + H / 2;
+    const bool roomy = H / 2 >= 7 * lh;   // three lines and a chart a tile
+    StatusScreen* st = (StatusScreen*)_task->statusScreen();
     d.setColor(DisplayDriver::LIGHT);
     info::vrule(d, mid_x, top, H);
     info::rule(d, 0, mid_y, W);
-    auto tile = [&](int col, int row, const MiniIcon* ic, float batt, const char* head, const char* detail) {
-      const int x = col ? mid_x + 3 : 1, y = row ? mid_y + 2 : top + 1;
-      const int w = (col ? W - x : mid_x - 2 - x);
+    // The tile's box, inside the rules.
+    auto box = [&](int col, int row, int& x, int& y, int& w, int& h) {
+      x = col ? mid_x + 3 : 1; y = row ? mid_y + 2 : top + 1;
+      w = col ? W - x : mid_x - 2 - x;
+      h = (row ? top + H : mid_y - 1) - y;
+    };
+    auto tile = [&](int col, int row, const MiniIcon* ic, float batt, const char* head, const char* detail,
+                    const char* more = "") {
+      int x, y, w, h;
+      box(col, row, x, y, w, h);
       const int iy = y + (lh - info::batteryH(d)) / 2 - s;
       int tx = x;
       if (ic)            { miniIconDraw(d, x, iy, *ic); tx = x + ic->w * s + 2 * s; }
       else if (batt >= 0) { info::battery(d, x, iy, batt); tx = x + info::batteryW(d) + 2 * s; }
       d.drawTextEllipsized(tx, y, x + w - tx, head);
       d.drawTextEllipsized(x, y + lh + 2, w, detail);
+      if (roomy && more[0]) d.drawTextEllipsized(x, y + 2 * (lh + 2), w, more);
     };
-    char h[20], t[20];
+    // Under a roomy tile's three lines: a history.
+    auto tileChart = [&](int col, int row, const info::History<StatusScreen::HIST_N>& hs, int min_span, bool bars) {
+      int x, y, w, h;
+      box(col, row, x, y, w, h);
+      const int cy = y + 3 * (lh + 2) + 2, ch = y + h - cy - 3;
+      if (ch >= 2 * lh) info::chart(d, x, cy, w - 4, ch, hs, min_span, bars, nullptr, nullptr);
+    };
+    char h[20], t[20], m[28];
 
     snprintf(h, sizeof(h), "%.3f", _node_prefs->freq);
     snprintf(t, sizeof(t), "SF%u %gk", (unsigned)_node_prefs->sf, _node_prefs->bw);
-    tile(0, 0, &ICON_PG_RADIO, -1, h, t);
+    const int nf = (int)radio_driver.getNoiseFloor();
+    if (nf) snprintf(m, sizeof(m), "Noise %d dBm", nf); else m[0] = 0;
+    tile(0, 0, &ICON_PG_RADIO, -1, h, t, m);
+    if (roomy && st) tileChart(0, 0, st->noiseHistory(), 6, false);
 
 #if ENV_INCLUDE_GPS == 1
     {
@@ -1304,7 +1393,10 @@ public:
 #endif
       }
       if (loc && on) snprintf(t, sizeof(t), "%ld sats", loc->satellitesCount());
-      tile(1, 0, &ICON_GPS, -1, h, t);
+      int32_t la, lo;
+      m[0] = 0;
+      if (loc && on && loc->isValid() && _task->currentLocation(la, lo)) snprintf(m, sizeof(m), "%.4f %.4f", la / 1e6, lo / 1e6);
+      tile(1, 0, &ICON_GPS, -1, h, t, m);
     }
 #else
     tile(1, 0, &ICON_GPS, -1, "No GPS", "");
@@ -1315,14 +1407,18 @@ public:
     snprintf(h, sizeof(h), "%d%%", pct);
     snprintf(t, sizeof(t), "%d.%02d V%s", mv / 1000, (mv % 1000) / 10, board.isExternalPowered() ? " USB" : "");
     tile(0, 1, nullptr, pct / 100.0f, h, t);
-    if (StatusScreen* st = (StatusScreen*)_task->statusScreen()) {   // the battery's trend beside its %
+    if (st && roomy) tileChart(0, 1, st->battHistory(), 20, false);
+    else if (st) {   // the battery's trend beside its %
       const int x0 = 1 + info::batteryW(d) + 2 * s + d.getTextWidth(h) + 3 * s, x1 = mid_x - 3;
       if (x1 - x0 >= 12) info::spark(d, x0, mid_y + 2, x1 - x0, lh - 1, st->battHistory(), 20);
     }
 
-    snprintf(h, sizeof(h), "%d nodes", the_mesh.getNumContacts());
+    const int nc = the_mesh.getNumContacts();
+    snprintf(h, sizeof(h), "%d node%s", nc, nc == 1 ? "" : "s");
     snprintf(t, sizeof(t), "%d in 1 h", StatusScreen::heardLastHour());
-    tile(1, 1, &ICON_MAP_CONTACT, -1, h, t);
+    snprintf(m, sizeof(m), "RX %lu  TX %lu", (unsigned long)StatusScreen::totalRx(), (unsigned long)StatusScreen::totalTx());
+    tile(1, 1, &ICON_MAP_CONTACT, -1, h, t, m);
+    if (roomy && st) tileChart(1, 1, st->trafficHistory(), 4, true);
   }
 
   // Small 5x5 glyph shown in the page-indicator row for each HomePage.
@@ -1378,6 +1474,9 @@ public:
           int hh = lt.tm_hour;
           if (_node_prefs->clock_12h) { hh %= 12; if (hh == 0) hh = 12; }
           snprintf(filtered_name, sizeof(filtered_name), "%d:%02d", hh, lt.tm_min);
+          if (display.width() >= 40 * display.getCharWidth())   // the 4.2": the date beside it
+            snprintf(filtered_name + strlen(filtered_name), sizeof(filtered_name) - strlen(filtered_name),
+                     "  %s %d %s", WDAY[lt.tm_wday], lt.tm_mday, MON[lt.tm_mon]);
         } else {
           display.translateUTF8ToBlocks(filtered_name, _node_prefs->node_name, sizeof(filtered_name));
         }
@@ -1473,7 +1572,7 @@ public:
       display.setColor(DisplayDriver::LIGHT);
       display.setTextSize(1);
 
-      const int cols    = display.isLandscape() ? 3 : 2;
+      const int cols    = favCols(display);
       const int rows    = NodePrefs::FAVOURITES_COUNT / cols;
       const int grid_y  = content_y + 4;            // the gap under the page icons, as on every page
       const int grid_h  = display.height() - grid_y;
@@ -1508,6 +1607,8 @@ public:
         bool    resolved = false;
         uint32_t last_ts = 0;                 // heard from / last post, for a tall card
         int32_t  plat = 0, plon = 0;          // a contact's advertised position
+        const char* last_text = nullptr;      // the newest message, for a big card
+        bool     last_out = false;
 
         if (prefix && _task->favouriteSlotKind(i) == NodePrefs::FAV_KIND_CHANNEL) {
           uint8_t ch_idx = prefix[0];
@@ -1523,7 +1624,7 @@ public:
             MessageHistory& h = _task->core().history;
             for (int j = 0; j < h.chHistCount(); j++) {
               const ChHistEntry& e = h.chAtPos(h.chHistPosNewest(j));
-              if (e.ch_idx == ch_idx) { last_ts = e.timestamp; break; }
+              if (e.ch_idx == ch_idx) { last_ts = e.timestamp; last_text = e.text; break; }
             }
           }
         } else if (prefix) {
@@ -1537,6 +1638,9 @@ public:
               resolved = true;
               last_ts  = c.lastmod;
               plat = c.gps_lat; plon = c.gps_lon;
+              MessageHistory& h = _task->core().history;
+              const int rp = h.dmHistEntryForContact(c.id.pub_key, 0);
+              if (rp >= 0) { last_text = h.dmAtPos(rp).text; last_out = h.dmAtPos(rp).outgoing; }
               break;
             }
           }
@@ -1566,7 +1670,41 @@ public:
           if (sel && r > 0) mq_delay = r;
           if (unread > 0)
             display.drawUnreadBadge(tx + tw - 3, name_y, unread, sel, overflow);
-          if (tall) {
+          // A card six lines tall on a screen 40 characters wide (the 4.2"):
+          // the newest message under the name, how long ago and how far along
+          // the bottom.
+          if (th >= 6 * line_h && display.width() >= 40 * display.getCharWidth()) {
+            display.setColor(sel ? DisplayDriver::DARK : DisplayDriver::LIGHT);
+            const int by = ty + th - line_h - 3;   // the bottom line
+            const uint32_t now = rtc_clock.getCurrentTime();
+            char buf[16];
+            if (last_ts) {
+              geo::fmtAgeShort(buf, sizeof(buf), now, last_ts);
+              display.setCursor(tx + 3, by); display.print(buf);
+            }
+            int32_t mla, mlo;
+            if ((plat || plon) && _task->currentLocation(mla, mlo)) {
+              geo::fmtDist(buf, sizeof(buf), geo::haversineKm(mla, mlo, plat, plon), _task->useImperial(), true);
+              display.drawTextRightAlign(tx + tw - 3, by, buf);
+            }
+            const int my = name_y + line_h + line_h / 3;   // the message, wrapped
+            const int nl_max = (by - 2 - my) / line_h;
+            if (nl_max > 0) {
+              char pv[MSG_TEXT_BUF + 4], tr_pv[MSG_TEXT_BUF + 4];
+              if (last_text) snprintf(pv, sizeof(pv), "%s%s", last_out ? "Me: " : "", last_text);
+              else           snprintf(pv, sizeof(pv), "No messages");
+              display.translateUTF8ToBlocks(tr_pv, pv, sizeof(tr_pv));
+              char lines[5][FS_CHARS_MAX];
+              const int cap = nl_max < 4 ? nl_max : 4;
+              int n = FullscreenMsgView::wrapLines(display, tr_pv, tw - 6, lines, cap + 1);
+              if (n > cap) {   // more than fits: the last line shown ends in an ellipsis
+                n = cap;
+                const size_t l = strlen(lines[n - 1]);
+                if (l + 4 < sizeof(lines[0])) strcat(lines[n - 1], " ...");
+              }
+              for (int k = 0; k < n; k++) display.drawTextEllipsized(tx + 3, my + k * line_h, tw - 6, lines[k]);
+            }
+          } else if (tall) {
             display.setColor(sel ? DisplayDriver::DARK : DisplayDriver::LIGHT);   // the badge leaves its own
             const int s = miniIconScale(display), gap = line_h / 3;
             int y = name_y + line_h + gap;
@@ -1645,7 +1783,7 @@ public:
         return true;
       }
       DisplayDriver* d = _task->getDisplay();
-      const int cols = (d && d->isLandscape()) ? 3 : 2;
+      const int cols = d ? favCols(*d) : 2;
       const int rows = NodePrefs::FAVOURITES_COUNT / cols;
       int col = _fav_sel % cols;
       int row = _fav_sel / cols;
