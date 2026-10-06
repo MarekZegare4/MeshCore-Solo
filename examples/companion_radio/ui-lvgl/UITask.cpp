@@ -4629,6 +4629,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_open(const char* name) {
   for (auto& s : SCREENS) if (!strcmp(s.n, name)) { (s_ui->*s.fn)(); return; }
   if (!strncmp(name, "page", 4)) { s_ui->showSchemaSettings(atoi(name + 4)); return; }
   if (!strcmp(name, "map")) { s_ui->openMap(true); return; }
+  if (!strcmp(name, "gps")) { s_ui->showGps(false); return; }
   if (!strcmp(name, "nodesmap")) { s_ui->openMap(false); return; }   // as from Nodes
   if (!strcmp(name, "battcurve")) { s_ui->showBattCurve(); return; }
   if (!strcmp(name, "homeedit")) { s_ui->showHome(); s_ui->homeEdit(true); return; }   // arranging the apps
