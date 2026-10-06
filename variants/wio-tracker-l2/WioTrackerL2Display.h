@@ -189,16 +189,16 @@ public:
 class WioTrackerL2Display : public LGFXDisplay {
   LGFX_WioTrackerL2 disp;
 
-  // The backlight from one PWM level to another over ~180 ms, on a square
+  // The backlight from one PWM level to another over ~80 ms, on a square
   // curve (the eye sees the low end's steps). Blocks; 0 ends in standby.
   void fade(uint8_t from, uint8_t to) {
-    const int STEPS = 12;
+    const int STEPS = 8;
     for (int i = 1; i <= STEPS; i++) {
       const int t = i * 256 / STEPS;   // 0..256
       const int k = from < to ? t * t / 256 : 256 - (256 - t) * (256 - t) / 256;
       const int v = from + ((int)to - from) * k / 256;
       display->panel()->setBrightness((uint8_t)(i == STEPS ? to : (v < 1 ? 1 : v)));
-      delay(15);
+      delay(8);
     }
   }
 
