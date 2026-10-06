@@ -10,10 +10,10 @@
 // (e.g. landscape e-ink renders text at 2×).
 //
 // To add a mini-icon:
-//   1. Draw it as ASCII-art rows, one string per row (width ≤ 8): any char
+//   1. Draw it as ASCII-art rows, one string per row (width ≤ 16): any char
 //      other than ' ' or '.' is a filled pixel. packRow() packs each string
-//      into one byte at compile time, so the strings never reach flash — the
-//      binary holds only the packed bytes, identical to hand-written hex.
+//      into a 16-bit word at compile time, so the strings never reach flash —
+//      the binary holds only the packed words, identical to hand-written hex.
 //   2. Wrap the rows in a MINI_ICON(name, width, ...) — width and row count are
 //      bundled with the data, so the draw site carries no magic numbers.
 //   3. Draw it with miniIconDraw(display, x, topY, name).
@@ -22,33 +22,34 @@
 // packRow() is written as a single-expression recursion so it stays a valid
 // constant expression on any C++ standard the firmware targets (≥ C++11), not
 // just the relaxed C++14 constexpr with loops. It packs up to the string's NUL
-// (capped at 8 cols), so width lives once in MINI_ICON, not in every row.
-constexpr uint8_t packBit(const char* s, int x) {
-  return (s[x] && s[x] != ' ' && s[x] != '.') ? (uint8_t)(1u << x) : 0;
+// (capped at 16 cols), so width lives once in MINI_ICON, not in every row.
+constexpr uint16_t packBit(const char* s, int x) {
+  return (s[x] && s[x] != ' ' && s[x] != '.') ? (uint16_t)(1u << x) : 0;
 }
-constexpr uint8_t packRow(const char* s, int x = 0) {
-  return (!s[x] || x >= 8) ? 0 : (uint8_t)(packBit(s, x) | packRow(s, x + 1));
+constexpr uint16_t packRow(const char* s, int x = 0) {
+  return (!s[x] || x >= 16) ? 0 : (uint16_t)(packBit(s, x) | packRow(s, x + 1));
 }
 
 // A mini-icon bundles its pixel data with its dimensions, so call sites can't
 // pass a stale width/height. Built via the MINI_ICON macro below.
-struct MiniIcon { uint8_t w, h; const uint8_t* rows; };
+struct MiniIcon { uint8_t w, h; const uint16_t* rows; };
 
 // Define a mini-icon: the row count (height) is derived from the initializer,
-// the width is stated once. Emits a packed byte array plus a MiniIcon view.
+// the width is stated once. Emits a packed word array plus a MiniIcon view.
 #define MINI_ICON(name, width, ...)                                            \
-  static constexpr uint8_t name##_rows[] = { __VA_ARGS__ };                    \
+  static constexpr uint16_t name##_rows[] = { __VA_ARGS__ };                   \
   static constexpr MiniIcon name = { (uint8_t)(width),                         \
-                                     (uint8_t)sizeof(name##_rows), name##_rows }
+      (uint8_t)(sizeof(name##_rows) / sizeof(name##_rows[0])), name##_rows }
 
 // The landscape e-ink build writes in the 8x13, whose digits stand 9 px:
 // there the status, page and check glyphs come in a 7 px set instead of 5.
+// The 4.2" build's 9x15 (digits 10 px) takes a 9 px set: MINI_ICONS_LARGE 2.
 #if defined(EINK_LARGE_FONT) && EINK_LARGE_FONT
-  #define MINI_ICONS_LARGE 1
+  #define MINI_ICONS_LARGE EINK_LARGE_FONT
 #else
   #define MINI_ICONS_LARGE 0
 #endif
-static constexpr int PAGE_ICON_PX = MINI_ICONS_LARGE ? 7 : 5;   // the page glyphs' box
+static constexpr int PAGE_ICON_PX = MINI_ICONS_LARGE == 2 ? 9 : MINI_ICONS_LARGE ? 7 : 5;   // the page glyphs' box
 
 // Pixel scale from the font: 1× on an 8px OLED line, 2× on a 16px landscape
 // e-ink line, etc. Bitmaps are authored on the 1× grid.
@@ -57,10 +58,10 @@ inline int miniIconScale(DisplayDriver& d) {
   return s < 1 ? 1 : s;
 }
 
-// Draw a w×h (w ≤ 8) bitmap with the current ink colour, scaled by the font and
+// Draw a w×h (w ≤ 16) bitmap with the current ink colour, scaled by the font and
 // vertically centred in the text line that starts at top_y.
 inline void miniIconDraw(DisplayDriver& d, int x, int top_y,
-                         const uint8_t* rows, int w, int h) {
+                         const uint16_t* rows, int w, int h) {
   const int s = miniIconScale(d);
   int y = top_y + (d.getLineHeight() - h * s) / 2;
   if (y < top_y) y = top_y;
@@ -104,16 +105,35 @@ inline void drawSlotIcon(DisplayDriver& d, int x, int box_w, int box_h, const Mi
 
 // Horizontal row of `count` square dots (scaled, vertically centred). Used by
 // the "awaiting ACK" marker, where the dot count = number of send attempts.
+// The dots are 3 px beside the larger icon sets.
+static constexpr int DOT_ROW_PX = MINI_ICONS_LARGE ? 3 : 2;
+inline int miniIconDotRowWidth(DisplayDriver& d, int count) { return count * (DOT_ROW_PX + 1) * miniIconScale(d); }
 inline void miniIconDotRow(DisplayDriver& d, int x, int top_y, int count) {
   const int s = miniIconScale(d);
-  const int dot = 2 * s, pitch = 3 * s;   // 2px dot + 1px gap, scaled
+  const int dot = DOT_ROW_PX * s, pitch = (DOT_ROW_PX + 1) * s;   // dot + 1px gap, scaled
   int y = top_y + (d.getLineHeight() - dot) / 2;
   if (y < top_y) y = top_y;
   for (int i = 0; i < count; i++) d.fillRect(x + i * pitch, y, dot, dot);
 }
 
 // Mini-icon bitmaps (authored on the 1× grid as ASCII-art; see packRow above).
-#if MINI_ICONS_LARGE
+#if MINI_ICONS_LARGE == 2
+MINI_ICON(ICON_CHECK, 9,   // ✓
+  packRow("........#"),
+  packRow(".......#."),
+  packRow("#.....#.."),
+  packRow(".#...#..."),
+  packRow("..#.#...."),
+  packRow("...#....."));
+MINI_ICON(ICON_CROSS, 7,   // ✗
+  packRow("#.....#"),
+  packRow(".#...#."),
+  packRow("..#.#.."),
+  packRow("...#..."),
+  packRow("..#.#.."),
+  packRow(".#...#."),
+  packRow("#.....#"));
+#elif MINI_ICONS_LARGE
 MINI_ICON(ICON_CHECK, 7,   // ✓
   packRow("......#"),
   packRow(".....#."),
@@ -139,9 +159,202 @@ MINI_ICON(ICON_CROSS, 4,   // ✗
   packRow("#..#"));
 #endif
 
-// Tiny 3×5 digits — for a small count that needs to sit in an icon-sized slot
+// Tiny 3×5 digits (5x7 and 5x10 in the large sets) — for a small count that needs to sit in an icon-sized slot
 // (e.g. next to ICON_CHECK) where the normal font is too tall to fit. See
 // miniIconDrawNumber/miniIconNumberWidth below.
+#if MINI_ICONS_LARGE == 2   // 5x10, as tall as the 9x15's own digits
+MINI_ICON(ICON_DIGIT_0, 5,
+  packRow(".###."),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow(".###."));
+MINI_ICON(ICON_DIGIT_1, 5,
+  packRow("..#.."),
+  packRow(".##.."),
+  packRow("#.#.."),
+  packRow("..#.."),
+  packRow("..#.."),
+  packRow("..#.."),
+  packRow("..#.."),
+  packRow("..#.."),
+  packRow("..#.."),
+  packRow("#####"));
+MINI_ICON(ICON_DIGIT_2, 5,
+  packRow(".###."),
+  packRow("#...#"),
+  packRow("....#"),
+  packRow("....#"),
+  packRow("...#."),
+  packRow("..#.."),
+  packRow(".#..."),
+  packRow("#...."),
+  packRow("#...."),
+  packRow("#####"));
+MINI_ICON(ICON_DIGIT_3, 5,
+  packRow(".###."),
+  packRow("#...#"),
+  packRow("....#"),
+  packRow("....#"),
+  packRow("..##."),
+  packRow("....#"),
+  packRow("....#"),
+  packRow("....#"),
+  packRow("#...#"),
+  packRow(".###."));
+MINI_ICON(ICON_DIGIT_4, 5,
+  packRow("...#."),
+  packRow("..##."),
+  packRow(".#.#."),
+  packRow("#..#."),
+  packRow("#..#."),
+  packRow("#..#."),
+  packRow("#####"),
+  packRow("...#."),
+  packRow("...#."),
+  packRow("...#."));
+MINI_ICON(ICON_DIGIT_5, 5,
+  packRow("#####"),
+  packRow("#...."),
+  packRow("#...."),
+  packRow("#...."),
+  packRow("####."),
+  packRow("....#"),
+  packRow("....#"),
+  packRow("....#"),
+  packRow("#...#"),
+  packRow(".###."));
+MINI_ICON(ICON_DIGIT_6, 5,
+  packRow(".###."),
+  packRow("#...#"),
+  packRow("#...."),
+  packRow("#...."),
+  packRow("####."),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow(".###."));
+MINI_ICON(ICON_DIGIT_7, 5,
+  packRow("#####"),
+  packRow("....#"),
+  packRow("....#"),
+  packRow("...#."),
+  packRow("...#."),
+  packRow("..#.."),
+  packRow("..#.."),
+  packRow("..#.."),
+  packRow("..#.."),
+  packRow("..#.."));
+MINI_ICON(ICON_DIGIT_8, 5,
+  packRow(".###."),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow(".###."),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow(".###."));
+MINI_ICON(ICON_DIGIT_9, 5,
+  packRow(".###."),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow(".####"),
+  packRow("....#"),
+  packRow("....#"),
+  packRow("#...#"),
+  packRow(".###."));
+#elif MINI_ICONS_LARGE   // 5x7 beside the 7 px ones
+MINI_ICON(ICON_DIGIT_0, 5,
+  packRow(".###."),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow(".###."));
+MINI_ICON(ICON_DIGIT_1, 5,
+  packRow("..#.."),
+  packRow(".##.."),
+  packRow("..#.."),
+  packRow("..#.."),
+  packRow("..#.."),
+  packRow("..#.."),
+  packRow(".###."));
+MINI_ICON(ICON_DIGIT_2, 5,
+  packRow(".###."),
+  packRow("#...#"),
+  packRow("....#"),
+  packRow("...#."),
+  packRow("..#.."),
+  packRow(".#..."),
+  packRow("#####"));
+MINI_ICON(ICON_DIGIT_3, 5,
+  packRow("#####"),
+  packRow("...#."),
+  packRow("..#.."),
+  packRow("...#."),
+  packRow("....#"),
+  packRow("#...#"),
+  packRow(".###."));
+MINI_ICON(ICON_DIGIT_4, 5,
+  packRow("...#."),
+  packRow("..##."),
+  packRow(".#.#."),
+  packRow("#..#."),
+  packRow("#####"),
+  packRow("...#."),
+  packRow("...#."));
+MINI_ICON(ICON_DIGIT_5, 5,
+  packRow("#####"),
+  packRow("#...."),
+  packRow("####."),
+  packRow("....#"),
+  packRow("....#"),
+  packRow("#...#"),
+  packRow(".###."));
+MINI_ICON(ICON_DIGIT_6, 5,
+  packRow("..##."),
+  packRow(".#..."),
+  packRow("#...."),
+  packRow("####."),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow(".###."));
+MINI_ICON(ICON_DIGIT_7, 5,
+  packRow("#####"),
+  packRow("....#"),
+  packRow("...#."),
+  packRow("..#.."),
+  packRow(".#..."),
+  packRow(".#..."),
+  packRow(".#..."));
+MINI_ICON(ICON_DIGIT_8, 5,
+  packRow(".###."),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow(".###."),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow(".###."));
+MINI_ICON(ICON_DIGIT_9, 5,
+  packRow(".###."),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow(".####"),
+  packRow("....#"),
+  packRow("...#."),
+  packRow(".##.."));
+#else
 MINI_ICON(ICON_DIGIT_0, 3,
   packRow("###"), 
   packRow("#.#"), 
@@ -203,6 +416,8 @@ MINI_ICON(ICON_DIGIT_9, 3,
   packRow("..#"), 
   packRow("###"));
 
+#endif
+
 static constexpr const MiniIcon* MINI_ICON_DIGITS[10] = {
   &ICON_DIGIT_0, &ICON_DIGIT_1, &ICON_DIGIT_2, &ICON_DIGIT_3, &ICON_DIGIT_4,
   &ICON_DIGIT_5, &ICON_DIGIT_6, &ICON_DIGIT_7, &ICON_DIGIT_8, &ICON_DIGIT_9,
@@ -215,7 +430,7 @@ static constexpr const MiniIcon* MINI_ICON_DIGITS[10] = {
 inline int miniIconNumberWidth(DisplayDriver& d, int n) {
   const int s = miniIconScale(d);
   int digits = (n >= 10) ? 2 : 1;
-  return digits * 3 * s + (digits - 1) * s;
+  return digits * ICON_DIGIT_0.w * s + (digits - 1) * s;
 }
 
 // Draws `n` (clamped to 0-99) as a left-to-right run of tiny digit icons —
@@ -223,14 +438,108 @@ inline int miniIconNumberWidth(DisplayDriver& d, int n) {
 // legibly. Vertically centred in the text line the same way miniIconDraw is.
 inline void miniIconDrawNumber(DisplayDriver& d, int x, int top_y, int n) {
   const int s = miniIconScale(d);
+  // The 9x15's digits stand on its baseline a pixel below the centred box.
+  if (MINI_ICONS_LARGE == 2) top_y += 1;
   if (n < 0) n = 0;
   if (n > 99) n = 99;
-  if (n >= 10) { miniIconDraw(d, x, top_y, *MINI_ICON_DIGITS[n / 10]); x += 3 * s + s; }
+  if (n >= 10) { miniIconDraw(d, x, top_y, *MINI_ICON_DIGITS[n / 10]); x += ICON_DIGIT_0.w * s + s; }
   miniIconDraw(d, x, top_y, *MINI_ICON_DIGITS[n % 10]);
 }
 
 // Top-bar status glyphs (replace the single-letter M / B / A indicators).
-#if MINI_ICONS_LARGE
+#if MINI_ICONS_LARGE == 2
+MINI_ICON(ICON_MUTE, 10,   // speaker + cross (sound off)
+  packRow("...#......"),
+  packRow("..##......"),
+  packRow("####.#...#"),
+  packRow("####..#.#."),
+  packRow("####...#.."),
+  packRow("####..#.#."),
+  packRow("####.#...#"),
+  packRow("..##......"),
+  packRow("...#......"));
+MINI_ICON(ICON_BLUETOOTH, 7,   // ᛒ bluetooth rune
+  packRow("...#..."),
+  packRow("...##.."),
+  packRow("#..#.#."),
+  packRow(".#.##.."),
+  packRow("..##..."),
+  packRow(".#.##.."),
+  packRow("#..#.#."),
+  packRow("...##.."),
+  packRow("...#..."));
+MINI_ICON(ICON_ADVERT, 9,   // ((•)) advert
+  packRow(".#.....#."),
+  packRow("#.......#"),
+  packRow("#..###..#"),
+  packRow("#.#####.#"),
+  packRow("#.#####.#"),
+  packRow("#.#####.#"),
+  packRow("#..###..#"),
+  packRow("#.......#"),
+  packRow(".#.....#."));
+MINI_ICON(ICON_ALARM, 9,   // bell — an alarm is armed
+  packRow("....#...."),
+  packRow("...###..."),
+  packRow("..#####.."),
+  packRow("..#####.."),
+  packRow("..#####.."),
+  packRow(".#######."),
+  packRow("#########"),
+  packRow("........."),
+  packRow("...###..."));
+MINI_ICON(ICON_TRAIL, 7,   // map pin (GPS trail logging)
+  packRow("..###.."),
+  packRow(".#####."),
+  packRow("##...##"),
+  packRow("##...##"),
+  packRow("##...##"),
+  packRow(".#####."),
+  packRow("..###.."),
+  packRow("...#..."),
+  packRow("...#..."));
+MINI_ICON(ICON_REPEATER, 9,   // » relaying (repeater active)
+  packRow("#...#...."),
+  packRow(".#...#..."),
+  packRow("..#...#.."),
+  packRow("...#...#."),
+  packRow("....#...#"),
+  packRow("...#...#."),
+  packRow("..#...#.."),
+  packRow(".#...#..."),
+  packRow("#...#...."));
+MINI_ICON(ICON_GPS, 9,   // reticle with its dot: GPS has a fix
+  packRow("...###..."),
+  packRow(".##...##."),
+  packRow(".#.....#."),
+  packRow("#...#...#"),
+  packRow("#..###..#"),
+  packRow("#...#...#"),
+  packRow(".#.....#."),
+  packRow(".##...##."),
+  packRow("...###..."));
+MINI_ICON(ICON_GPS_SEARCH, 9,   // the reticle broken: still searching
+  packRow("...#.#..."),
+  packRow(".##...##."),
+  packRow(".#.....#."),
+  packRow("#.......#"),
+  packRow("........."),
+  packRow("#.......#"),
+  packRow(".#.....#."),
+  packRow(".##...##."),
+  packRow("...#.#..."));
+
+MINI_ICON(ICON_CHART, 9,   // ascending bars — Home › Status
+  packRow("........#"),
+  packRow("......#.#"),
+  packRow("......#.#"),
+  packRow("....#.#.#"),
+  packRow("....#.#.#"),
+  packRow("..#.#.#.#"),
+  packRow("..#.#.#.#"),
+  packRow("#.#.#.#.#"),
+  packRow("#########"));
+#elif MINI_ICONS_LARGE
 MINI_ICON(ICON_MUTE, 8,   // speaker + cross (sound off)
   packRow("...#...."),
   packRow("..##...."),
@@ -377,7 +686,106 @@ MINI_ICON(ICON_CHART, 5,   // ascending bars — Home › Status
 // Home-carousel page glyphs — a uniform 5x5 set, deliberately smaller than the
 // menu/status icons above, used in place of the page-indicator dots. One per
 // HomePage; see UITask HomeScreen::pageIcon().
-#if MINI_ICONS_LARGE
+#if MINI_ICONS_LARGE == 2
+MINI_ICON(ICON_PG_CLOCK, 9,   // clock face + hands
+  packRow("...###..."),
+  packRow(".##.#.##."),
+  packRow(".#..#..#."),
+  packRow("#...#...#"),
+  packRow("#...###.#"),
+  packRow("#.......#"),
+  packRow(".#.....#."),
+  packRow(".##...##."),
+  packRow("...###..."));
+MINI_ICON(ICON_PG_STAR, 9,   // favourites
+  packRow("....#...."),
+  packRow("....#...."),
+  packRow("...###..."),
+  packRow("#########"),
+  packRow(".#######."),
+  packRow("..#####.."),
+  packRow("..##.##.."),
+  packRow(".##...##."),
+  packRow(".#.....#."));
+MINI_ICON(ICON_PG_RADIO, 9,   // antenna with waves — radio
+  packRow(".#.....#."),
+  packRow("#...#...#"),
+  packRow("#..###..#"),
+  packRow("#...#...#"),
+  packRow(".#..#..#."),
+  packRow("....#...."),
+  packRow("...#.#..."),
+  packRow("..#...#.."),
+  packRow(".#.....#."));
+MINI_ICON(ICON_PG_BT, 7,   // bluetooth
+  packRow("...#..."),
+  packRow("...##.."),
+  packRow("#..#.#."),
+  packRow(".#.##.."),
+  packRow("..##..."),
+  packRow(".#.##.."),
+  packRow("#..#.#."),
+  packRow("...##.."),
+  packRow("...#..."));
+MINI_ICON(ICON_PG_ADVERT, 9,   // advert page: the same waves
+  packRow(".#.....#."),
+  packRow("#.......#"),
+  packRow("#..###..#"),
+  packRow("#.#####.#"),
+  packRow("#.#####.#"),
+  packRow("#.#####.#"),
+  packRow("#..###..#"),
+  packRow("#.......#"),
+  packRow(".#.....#."));
+MINI_ICON(ICON_PG_SETTINGS, 9,   // cog with a hub hole
+  packRow("...#.#..."),
+  packRow(".#######."),
+  packRow(".##...##."),
+  packRow("##.....##"),
+  packRow(".#.....#."),
+  packRow("##.....##"),
+  packRow(".##...##."),
+  packRow(".#######."),
+  packRow("...#.#..."));
+MINI_ICON(ICON_PG_MAP, 10,   // folded map
+  packRow("##########"),
+  packRow("#..#..#..#"),
+  packRow("#..#..#..#"),
+  packRow("#..#..#..#"),
+  packRow("#..#..#..#"),
+  packRow("#..#..#..#"),
+  packRow("#..#..#..#"),
+  packRow("#..#..#..#"),
+  packRow("##########"));
+MINI_ICON(ICON_PG_TOOLS, 9,   // wrench, open jaw top right
+  packRow("......#.#"),
+  packRow("......#.#"),
+  packRow("......###"),
+  packRow(".....##.."),
+  packRow("....##..."),
+  packRow("...##...."),
+  packRow("..##....."),
+  packRow(".##......"),
+  packRow("##......."));
+MINI_ICON(ICON_PG_MSG, 9,   // speech bubble with three dots
+  packRow("#########"),
+  packRow("#.......#"),
+  packRow("#.#.#.#.#"),
+  packRow("#.......#"),
+  packRow("#########"),
+  packRow("##......."),
+  packRow("#........"));
+MINI_ICON(ICON_PG_POWER, 9,   // power symbol
+  packRow("....#...."),
+  packRow("..#.#.#.."),
+  packRow(".#..#..#."),
+  packRow("#...#...#"),
+  packRow("#.......#"),
+  packRow("#.......#"),
+  packRow(".#.....#."),
+  packRow("..#...#.."),
+  packRow("...###..."));
+#elif MINI_ICONS_LARGE
 MINI_ICON(ICON_PG_CLOCK, 7,   // clock face + hands
   packRow("..###.."),
   packRow(".#.#.#."),
@@ -522,15 +930,44 @@ MINI_ICON(ICON_PG_POWER, 5,      // power symbol — shutdown
 
 // Trail-map markers — centred on a point (see miniIconDrawCentered) rather
 // than anchored to a text line.
+#if MINI_ICONS_LARGE == 2
+MINI_ICON(ICON_MAP_DOT, 5,   // ● filled trail point
+  packRow("..#.."),
+  packRow(".###."),
+  packRow("#####"),
+  packRow(".###."),
+  packRow("..#.."));
+#else
 MINI_ICON(ICON_MAP_DOT, 3,        // ● filled trail point
   packRow("###"),
   packRow("###"),
   packRow("###"));
+#endif
+#if MINI_ICONS_LARGE == 2
+MINI_ICON(ICON_MAP_RING, 5,   // ○ hollow ring — a new trail segment start
+  packRow(".###."),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow("#...#"),
+  packRow(".###."));
+#else
 MINI_ICON(ICON_MAP_RING, 3,       // ○ hollow ring — marks a new trail segment start
   packRow("###"),
   packRow("#.#"),
   packRow("###"));
-#if MINI_ICONS_LARGE   // the markers that also head rows of text
+#endif
+#if MINI_ICONS_LARGE == 2   // the markers that also head rows of text
+MINI_ICON(ICON_MAP_WAYPOINT, 9,   // ◇ hollow diamond — saved waypoint
+  packRow("....#...."),
+  packRow("...#.#..."),
+  packRow("..#...#.."),
+  packRow(".#.....#."),
+  packRow("#.......#"),
+  packRow(".#.....#."),
+  packRow("..#...#.."),
+  packRow("...#.#..."),
+  packRow("....#...."));
+#elif MINI_ICONS_LARGE
 MINI_ICON(ICON_MAP_WAYPOINT, 7,   // ◇ hollow diamond — saved waypoint
   packRow("...#..."),
   packRow("..#.#.."),
@@ -547,19 +984,56 @@ MINI_ICON(ICON_MAP_WAYPOINT, 5,   // ◇ hollow diamond — saved waypoint
   packRow(".#.#."),
   packRow("..#.."));
 #endif
+#if MINI_ICONS_LARGE == 2
+MINI_ICON(ICON_MAP_START, 9,   // + trail start marker
+  packRow("....#...."),
+  packRow("....#...."),
+  packRow("....#...."),
+  packRow("....#...."),
+  packRow("#########"),
+  packRow("....#...."),
+  packRow("....#...."),
+  packRow("....#...."),
+  packRow("....#...."));
+#else
 MINI_ICON(ICON_MAP_START, 5,      // + trail start marker
   packRow("..#.."),
   packRow("..#.."),
   packRow("#####"),
   packRow("..#.."),
   packRow("..#.."));
+#endif
+#if MINI_ICONS_LARGE == 2
+MINI_ICON(ICON_MAP_CURRENT, 9,   // ✕ live position / last trail point
+  packRow("##.....##"),
+  packRow("###...###"),
+  packRow(".###.###."),
+  packRow("..#####.."),
+  packRow("...###..."),
+  packRow("..#####.."),
+  packRow(".###.###."),
+  packRow("###...###"),
+  packRow("##.....##"));
+#else
 MINI_ICON(ICON_MAP_CURRENT, 5,    // ✕ live position / last trail point
   packRow("#...#"),
   packRow(".#.#."),
   packRow("..#.."),
   packRow(".#.#."),
   packRow("#...#"));
-#if MINI_ICONS_LARGE
+#endif
+#if MINI_ICONS_LARGE == 2
+MINI_ICON(ICON_MAP_CONTACT, 9,   // ◆ filled diamond — a live-tracked contact
+  packRow("....#...."),
+  packRow("...###..."),
+  packRow("..#####.."),
+  packRow(".#######."),
+  packRow("#########"),
+  packRow(".#######."),
+  packRow("..#####.."),
+  packRow("...###..."),
+  packRow("....#...."));
+#elif MINI_ICONS_LARGE
 MINI_ICON(ICON_MAP_CONTACT, 7,   // ◆ filled diamond — a live-tracked contact
   packRow("...#..."),
   packRow("..###.."),
@@ -576,6 +1050,19 @@ MINI_ICON(ICON_MAP_CONTACT, 5,    // ◆ filled diamond — a live-tracked conta
   packRow(".###."),
   packRow("..#.."));
 #endif
+#if MINI_ICONS_LARGE == 2
+MINI_ICON(ICON_MAP_NORTH, 7,   // "N" with a peaked roof — compass north marker
+  packRow("...#..."),
+  packRow("..###.."),
+  packRow(".#...#."),
+  packRow("#.....#"),
+  packRow("##....#"),
+  packRow("#.#...#"),
+  packRow("#..#..#"),
+  packRow("#...#.#"),
+  packRow("#....##"),
+  packRow("#.....#"));
+#else
 MINI_ICON(ICON_MAP_NORTH, 5,      // "N" with a peaked roof — compass north marker
   packRow("..#.."),
   packRow(".###."),
@@ -584,15 +1071,111 @@ MINI_ICON(ICON_MAP_NORTH, 5,      // "N" with a peaked roof — compass north ma
   packRow("#.#.#"),
   packRow("#..##"),
   packRow("#...#"));
+#endif
+#if MINI_ICONS_LARGE == 2
+MINI_ICON(ICON_MAP_TARGET, 7,   // ⚑ flag on a pole — the active Locator/Nav target
+  packRow("#######"),
+  packRow("#.....#"),
+  packRow("#.....#"),
+  packRow("#######"),
+  packRow("#......"),
+  packRow("#......"),
+  packRow("#......"),
+  packRow("#......"),
+  packRow("#......"));
+#else
 MINI_ICON(ICON_MAP_TARGET, 5,     // ⚑ flag on a pole — the active Locator/Nav target
   packRow("####."),
   packRow("#..#."),
   packRow("####."),
   packRow("#...."),
   packRow("#...."));
+#endif
 
 // Arrows towards the eight compass points (north up), for a bearing beside
 // a distance: ICON_ARROWS[((deg + 22) % 360) / 45].
+#if MINI_ICONS_LARGE == 2
+MINI_ICON(ICON_ARROW_N, 9,
+  packRow("....#...."),
+  packRow("...###..."),
+  packRow("..#.#.#.."),
+  packRow(".#..#..#."),
+  packRow("....#...."),
+  packRow("....#...."),
+  packRow("....#...."),
+  packRow("....#...."),
+  packRow("....#...."));
+MINI_ICON(ICON_ARROW_NE, 9,
+  packRow("....#####"),
+  packRow(".......##"),
+  packRow("......#.#"),
+  packRow(".....#..#"),
+  packRow("....#...#"),
+  packRow("...#....."),
+  packRow("..#......"),
+  packRow(".#......."),
+  packRow("#........"));
+MINI_ICON(ICON_ARROW_E, 9,
+  packRow("........."),
+  packRow(".....#..."),
+  packRow("......#.."),
+  packRow(".......#."),
+  packRow("#########"),
+  packRow(".......#."),
+  packRow("......#.."),
+  packRow(".....#..."),
+  packRow("........."));
+MINI_ICON(ICON_ARROW_SE, 9,
+  packRow("#........"),
+  packRow(".#......."),
+  packRow("..#......"),
+  packRow("...#....."),
+  packRow("....#...#"),
+  packRow(".....#..#"),
+  packRow("......#.#"),
+  packRow(".......##"),
+  packRow("....#####"));
+MINI_ICON(ICON_ARROW_S, 9,
+  packRow("....#...."),
+  packRow("....#...."),
+  packRow("....#...."),
+  packRow("....#...."),
+  packRow("....#...."),
+  packRow(".#..#..#."),
+  packRow("..#.#.#.."),
+  packRow("...###..."),
+  packRow("....#...."));
+MINI_ICON(ICON_ARROW_SW, 9,
+  packRow("........#"),
+  packRow(".......#."),
+  packRow("......#.."),
+  packRow(".....#..."),
+  packRow("#...#...."),
+  packRow("#..#....."),
+  packRow("#.#......"),
+  packRow("##......."),
+  packRow("#####...."));
+MINI_ICON(ICON_ARROW_W, 9,
+  packRow("........."),
+  packRow("...#....."),
+  packRow("..#......"),
+  packRow(".#......."),
+  packRow("#########"),
+  packRow(".#......."),
+  packRow("..#......"),
+  packRow("...#....."),
+  packRow("........."));
+MINI_ICON(ICON_ARROW_NW, 9,
+  packRow("#####...."),
+  packRow("##......."),
+  packRow("#.#......"),
+  packRow("#..#....."),
+  packRow("#...#...."),
+  packRow(".....#..."),
+  packRow("......#.."),
+  packRow(".......#."),
+  packRow("........#"));
+#else
 MINI_ICON(ICON_ARROW_N, 7,
   packRow("...#..."),
   packRow("..###.."),
@@ -657,10 +1240,51 @@ MINI_ICON(ICON_ARROW_NW, 7,
   packRow("....#.."),
   packRow(".....#."),
   packRow("......#"));
+#endif
 static constexpr const MiniIcon* ICON_ARROWS[8] = { &ICON_ARROW_N, &ICON_ARROW_NE, &ICON_ARROW_E, &ICON_ARROW_SE,
                                                  &ICON_ARROW_S, &ICON_ARROW_SW, &ICON_ARROW_W, &ICON_ARROW_NW };
 
 // Keyboard special-key glyphs.
+#if MINI_ICONS_LARGE == 2
+MINI_ICON(ICON_KEYBOARD, 9,   // PIN keyboard to ABC keyboard switch icon
+  packRow("#.#.#.#.#"),
+  packRow("#########"),
+  packRow("#.#.#.#.#"),
+  packRow("#########"),
+  packRow("#.#.#.#.#"));
+MINI_ICON(ICON_SHIFT, 9,   // ⇧  caps
+  packRow("....#...."),
+  packRow("...###..."),
+  packRow("..#####.."),
+  packRow(".#######."),
+  packRow("#########"),
+  packRow("...###..."),
+  packRow("...###..."),
+  packRow("...###..."),
+  packRow("...###..."));
+MINI_ICON(ICON_BACKSPACE, 11,   // ⌫  delete-left (× knocked out of the arrow body)
+  packRow("....#######"),
+  packRow("...########"),
+  packRow("..###.###.#"),
+  packRow(".#####.#.##"),
+  packRow("#######.###"),
+  packRow(".#####.#.##"),
+  packRow("..###.###.#"),
+  packRow("...########"),
+  packRow("....#######"));
+MINI_ICON(ICON_SPACE_L, 7,
+  packRow("#......"),
+  packRow("#......"),
+  packRow("#......"),
+  packRow("#......"),
+  packRow("#######"));
+MINI_ICON(ICON_SPACE_R, 7,
+  packRow("......#"),
+  packRow("......#"),
+  packRow("......#"),
+  packRow("......#"),
+  packRow("#######"));
+#else
 MINI_ICON(ICON_KEYBOARD, 7,   // PIN keyboard to ABC keyboard switch icon
   packRow("#.#.#.#"),
   packRow("#######"),
@@ -682,7 +1306,7 @@ MINI_ICON(ICON_BACKSPACE, 8,   // ⌫  delete-left (× knocked out of the arrow 
   packRow(".###.#.#"),
   packRow("..######"),
   packRow("...#####"));
-// Space ⎵ is wider than the 8-px mini-icon limit, so it is two halves drawn
+// Space ⎵ is two halves drawn
 // side by side (offset by ICON_SPACE_L.w * scale): ticks at both far ends + bar.
 MINI_ICON(ICON_SPACE_L, 8,
   packRow("#......."),
@@ -695,6 +1319,7 @@ MINI_ICON(ICON_SPACE_R, 8,
   packRow(".......#"),
   packRow("########"));
 
+#endif
 
 // Width of the right-edge column drawScrollIndicator occupies, or 0 when the
 // list fits and no indicator is drawn. Subtract from a row's content width so
@@ -784,8 +1409,10 @@ inline void drawScrollIndicator(DisplayDriver& d, int right_x, int top_y, int tr
 // `row(idx, y, sel, reserve)` draws one item — including its own selection bar —
 // using `reserve` to keep right-aligned content clear of the indicator. Returns
 // the visible row count (callers cache it for input handling).
+// right_x narrows the list to a left column (a list beside a detail pane).
 template <class RenderRow>
-inline int drawList(DisplayDriver& d, int total, int sel, int& scroll, RenderRow row) {
+inline int drawList(DisplayDriver& d, int total, int sel, int& scroll, RenderRow row, int right_x = -1) {
+  if (right_x < 0) right_x = d.width();
   const int item_h  = d.lineStep();
   const int start_y = d.listStart();
   int visible = d.listVisible(item_h);
@@ -796,7 +1423,7 @@ inline int drawList(DisplayDriver& d, int total, int sel, int& scroll, RenderRow
   const int reserve = scrollIndicatorReserve(d, total, visible);
   for (int i = 0; i < visible && (scroll + i) < total; i++)
     row(scroll + i, start_y + i * item_h, scroll + i == sel, reserve);
-  drawScrollIndicator(d, start_y, visible * item_h, total, visible, scroll);
+  drawScrollIndicator(d, right_x, start_y, visible * item_h, total, visible, scroll);
   return visible;
 }
 
@@ -852,8 +1479,8 @@ inline int drawLoadingDots(DisplayDriver& d, int cx, int y_bottom) {
 // row callback, then draw content over it. Captures the geometry every list row
 // repeated by hand; rows that intentionally differ (full-width, custom height)
 // still call display.drawSelectionRow() directly.
-inline void drawRowSelection(DisplayDriver& d, int y, bool sel, int reserve) {
-  d.drawSelectionRow(0, y - 1, d.width() - reserve, d.lineStep() - 1, sel);
+inline void drawRowSelection(DisplayDriver& d, int y, bool sel, int reserve, int right_x = -1) {
+  d.drawSelectionRow(0, y - 1, (right_x < 0 ? d.width() : right_x) - reserve, d.lineStep() - 1, sel);
 }
 
 // Favourite marker for a list row, on every screen that lists something

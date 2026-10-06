@@ -519,7 +519,7 @@ class MessagesScreen : public UIScreen {
   static int ackGlyphWidth(DisplayDriver& d, AckState s, int sends, int relay_count = 0) {
     const int sc = miniIconScale(d);
     switch (s) {
-      case ACK_PENDING: return sends * 3 * sc;   // dot+gap pitch (icons.h), slightly generous
+      case ACK_PENDING: return miniIconDotRowWidth(d, sends);
       case ACK_OK:      return relay_count > 0 ? miniIconNumberWidth(d, relay_count) : ICON_CHECK.w * sc;
       case ACK_FAIL:    return ICON_CROSS.w * sc;
       default:          return 0;
@@ -553,7 +553,7 @@ class MessagesScreen : public UIScreen {
   static int expandedBoxH(DisplayDriver& d, const char* body, int full_avail) {
     d.translateUTF8ToBlocks(s_wrap_trans, body, sizeof(s_wrap_trans));
     int nl = FullscreenMsgView::wrapLines(d, s_wrap_trans, bubbleMaxW(d, full_avail) - 6, s_wrap_lines, 8);
-    return (1 + (nl > 0 ? nl : 1)) * d.getLineHeight() + 1;
+    return (1 + (nl > 0 ? nl : 1)) * d.getLineHeight() + 3;   // 2 px under the descenders
   }
   static BubbleBox computeBubbleBox(int full_avail, int max_w, bool outgoing, int header_w, int body_w) {
     int w = header_w > body_w ? header_w : body_w;
@@ -593,7 +593,10 @@ class MessagesScreen : public UIScreen {
     const int ack_w = mark.width(display);
     // A little air between a marker and the age, so "12" + "1s" doesn't read as "121s".
     const int mk_gap = (ack_w > 0 && age_w > 0) ? 2 : 0;
-    const int header_w = 3 + (sender[0] ? display.getTextWidth(sender) : -3) + ack_w + mk_gap + age_w + 3;
+    // The marker after the name: a character's gap beside the larger icons,
+    // whose digits stand as tall as the text and would read as part of it.
+    const int nm_gap = MINI_ICONS_LARGE ? display.getCharWidth() : 3;
+    const int header_w = 3 + (sender[0] ? display.getTextWidth(sender) + (ack_w ? nm_gap - 3 : 0) : -3) + ack_w + mk_gap + age_w + 3;
     int body_w, nl = 0;
     if (expand) {
       display.translateUTF8ToBlocks(s_wrap_trans, body, sizeof(s_wrap_trans));
@@ -614,12 +617,12 @@ class MessagesScreen : public UIScreen {
     // The name gives way to the marker and the age (a long name is
     // ellipsized), and the marker sits right after whatever width the name
     // actually got -- not after its full width, which would run it into the age.
-    int name_avail = box.w - 6 - age_w - ack_w - mk_gap;
+    int name_avail = box.w - 6 - age_w - ack_w - mk_gap - (ack_w ? nm_gap - 3 : 0);
     if (name_avail < display.getCharWidth()) name_avail = display.getCharWidth();
     int name_w = sender[0] ? display.getTextWidth(sender) : 0;
     if (name_w > name_avail) name_w = name_avail;
     if (sender[0]) display.drawTextEllipsized(box.x + 3, y + 1, name_avail, sender);
-    int gx = box.x + 3 + (name_w ? name_w + 3 : 0);
+    int gx = box.x + 3 + (name_w ? name_w + nm_gap : 0);
     if (mark.kind == BubbleMark::ACK)       drawAckGlyph(display, gx, y + 1, mark.status, mark.sends, mark.relay);
     else if (mark.kind == BubbleMark::HOPS) miniIconDrawNumber(display, gx, y + 1, mark.hops);
     if (age[0]) { display.setCursor(box.x + box.w - age_w, y + 1); display.print(age); }

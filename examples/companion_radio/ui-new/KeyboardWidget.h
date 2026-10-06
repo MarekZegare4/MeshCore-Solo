@@ -569,7 +569,9 @@ struct KeyboardWidget {
     // lines: cursor_mode's own 3-line hint (drawn in this same region,
     // regardless of Compact, for a physical-button user) already relies on
     // that floor and would otherwise get clipped.
-    const int kb_h      = compact_ui ? (KB_T9_ROWS + 1) * lh : (rows + 1) * lh;
+    // A tall screen (the 4.2" panel: 20 lines) gives the keys half a line more each.
+    const int key_lh    = display.height() >= 18 * lh ? lh * 3 / 2 : lh;
+    const int kb_h      = compact_ui ? (KB_T9_ROWS + 1) * lh : (rows + 1) * key_lh;
     const int preview_h = display.height() - kb_h - display.sepH();
     const int prev_lines = (preview_h / lh) > 1 ? (preview_h / lh) : 1;
     const int sep_y   = prev_lines * lh;
@@ -577,6 +579,11 @@ struct KeyboardWidget {
     const int cell_h  = (display.height() - chars_y) / (rows + 1);
     const int spec_y  = chars_y + rows * cell_h;
     const int spec_w  = display.width() / KB_SPECIAL;
+    const int key_ty  = key_lh > lh ? (cell_h - lh) / 2 : 0;   // a key's text, centred in a tall cell
+    // A special key's icon top: by the text line as ever, by its own height in a tall cell.
+    auto iconY = [&](const MiniIcon& ic) {
+      return spec_y + (key_lh > lh ? (cell_h - ic.h * miniIconScale(display)) / 2 : (cell_h - lh) / 2);
+    };
 
     // Multi-line text preview: the view follows cursor_pos (normally == len,
     // i.e. the end — so this is identical to the old "always the last line"
@@ -706,13 +713,12 @@ struct KeyboardWidget {
           ch_buf[0] = ch;
           ch_buf[1] = '\0';
           int tw = display.getTextWidth(ch_buf);
-          display.setCursor(cx + (cell_w - tw) / 2, y);
+          display.setCursor(cx + (cell_w - tw) / 2, y + key_ty);
           display.print(ch_buf);
         }
       }
       // special row with backspace, abc kb switch & submit
       const int psw = display.width() / KB_PIN_SPECIAL;
-      const int icy = spec_y + (cell_h - lh) / 2;
       for (int i = 0; i < KB_PIN_SPECIAL; i++) {
         bool sel = (row == rows && col == i);
         int sx = i * psw;
@@ -721,7 +727,7 @@ struct KeyboardWidget {
                            : (i == 1) ? ICON_KEYBOARD
                                       : ICON_CHECK;
         int ix = sx + (psw - ic.w * s) / 2;
-        miniIconDraw(display, ix, icy, ic);
+        miniIconDraw(display, ix, iconY(ic), ic);
       }
       return 50;
     }
@@ -763,7 +769,7 @@ struct KeyboardWidget {
             int cx = c * cell_w;
             display.drawSelectionRow(cx, y - 1, cell_w - 1, cell_h, sel);
             int tw = display.getTextWidth(label);
-            display.setCursor(cx + (cell_w - tw) / 2, y);
+            display.setCursor(cx + (cell_w - tw) / 2, y + key_ty);
             display.print(label);
           }
         }
@@ -778,7 +784,7 @@ struct KeyboardWidget {
             int cx = c * cell_w;
             display.drawSelectionRow(cx, y - 1, cell_w - 1, cell_h, sel);
             int tw = display.getTextWidth(ch_buf);
-            display.setCursor(cx + (cell_w - tw) / 2, y);
+            display.setCursor(cx + (cell_w - tw) / 2, y + key_ty);
             display.print(ch_buf);
           }
         }
@@ -786,7 +792,6 @@ struct KeyboardWidget {
 
       // special row: caps ⇧ · space ⎵ · delete ⌫ · placeholders {} (text) · OK ✓
       const int s   = miniIconScale(display);
-      const int icy = spec_y + (cell_h - lh) / 2;   // centre icons within the cell
       for (int i = 0; i < KB_SPECIAL; i++) {
         bool sel    = (row == rows && col == i);
         bool active = (i == 0 && caps);
@@ -804,19 +809,19 @@ struct KeyboardWidget {
             lbl = pageIsSymbols(next) ? "#@" : scriptHint(scriptAt(next));
           }
           int tw = display.getTextWidth(lbl);
-          display.setCursor(sx + (spec_w - tw) / 2, spec_y);
+          display.setCursor(sx + (spec_w - tw) / 2, spec_y + key_ty);
           display.print(lbl);
         } else if (i == 1) {                  // space ⎵ — two halves side by side
           int icw = (ICON_SPACE_L.w + ICON_SPACE_R.w) * s;
           int ix  = sx + (spec_w - icw) / 2;
-          miniIconDraw(display, ix, icy, ICON_SPACE_L);
-          miniIconDraw(display, ix + ICON_SPACE_L.w * s, icy, ICON_SPACE_R);
+          miniIconDraw(display, ix, iconY(ICON_SPACE_L), ICON_SPACE_L);
+          miniIconDraw(display, ix + ICON_SPACE_L.w * s, iconY(ICON_SPACE_R), ICON_SPACE_R);
         } else {
           const MiniIcon& ic = (i == 0) ? ICON_SHIFT
                              : (i == 2) ? ICON_BACKSPACE
                                         : ICON_CHECK;   // i == 5 → OK
           int ix = sx + (spec_w - ic.w * s) / 2;
-          miniIconDraw(display, ix, icy, ic);
+          miniIconDraw(display, ix, iconY(ic), ic);
           // Underline the ⇧ icon while caps_lock is held. Without it the two
           // Shift states are indistinguishable -- caps_lock sets caps too, so
           // the highlight above is identical -- even though they behave
