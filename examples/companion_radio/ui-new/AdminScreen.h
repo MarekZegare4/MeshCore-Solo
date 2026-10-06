@@ -103,7 +103,7 @@ class AdminScreen : public UIScreen {
   // Right-column text for the row in _value_editing (freq draws its own editor).
   void formatEditValue(const admin::Field& f, char* buf, size_t n) const {
     switch (f.kind) {
-      case admin::K_ONOFF:    snprintf(buf, n, "%s", S().value != 0 ? "ON" : "OFF"); break;
+      case admin::K_ONOFF:    snprintf(buf, n, "%s", S().value != 0 ? "On" : "Off"); break;
       case admin::K_RADIO_BW: snprintf(buf, n, "%.1f", S().radio_bw); break;
       case admin::K_RADIO_SF: snprintf(buf, n, "%d", (int)S().radio_sf); break;
       case admin::K_RADIO_CR: snprintf(buf, n, "%d", (int)S().radio_cr); break;

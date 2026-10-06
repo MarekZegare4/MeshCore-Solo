@@ -194,13 +194,14 @@ inline int big(DisplayDriver& d, int x, int y, const char* value, const char* un
 }
 inline int bigH(DisplayDriver& d) { return 2 * d.getLineHeight(); }
 
-// An on/off state, right edge at x_right on a text line at y: the words ON /
-// OFF. (A drawn pill switch read as a battery on the small screens.) `inv`
-// draws it in a selected row's colours (dark on the light bar).
-inline int switchW(DisplayDriver& d) { return d.getTextWidth("OFF"); }
+// An on/off state, right edge at x_right on a text line at y: the words On /
+// Off, written as every other value. (A drawn pill switch read as a battery
+// on the small screens.) `inv` draws it in a selected row's colours (dark on
+// the light bar).
+inline int switchW(DisplayDriver& d) { return d.getTextWidth("Off"); }
 inline void toggle(DisplayDriver& d, int x_right, int y, bool on, bool inv = false) {
   d.setColor(inv ? DisplayDriver::DARK : DisplayDriver::LIGHT);
-  d.drawTextRightAlign(x_right, y, on ? "ON" : "OFF");
+  d.drawTextRightAlign(x_right, y, on ? "On" : "Off");
 }
 
 // ── List rows (call after drawRowSelection(); text is already in the row's ink)
@@ -219,8 +220,8 @@ inline int valueRow(DisplayDriver& d, int y, const char* label, const char* valu
   const int r = d.drawTextEllipsized(lx, y, right - lx, value, sel);
   return sel && r > 0 ? r : 0;
 }
-// A row from a screen's value formatter: exactly "ON" / "OFF" is a yes/no
-// setting and gets switchRow(); anything else (an option that can be "Off"
+// A row from a screen's value formatter: exactly "ON" / "OFF" (the marker, not
+// what's shown) is a yes/no setting and gets switchRow(); anything else (an option that can be "Off"
 // among numbers included) is a value. Returns valueRow()'s marquee delay.
 inline void switchRow(DisplayDriver& d, int y, const char* label, bool on, bool sel, int reserve, int x0 = 2);
 inline int listRow(DisplayDriver& d, int y, const char* label, const char* value, bool sel,

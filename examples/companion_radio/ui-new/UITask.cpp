@@ -2663,7 +2663,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE int sim_buzzer_get_volume() {
 // real toggle does: buzzer.quiet(), writes NodePrefs.buzzer_quiet, clears
 // buzzer_auto (manual mute always wins over auto-mute-on-BT-connect,
 // same as pressing it on the device would), the_mesh.savePrefs(), and
-// the real on-screen "Buzzer: ON/OFF" alert -- so muting from the host
+// the real on-screen "Buzzer: On/Off" alert -- so muting from the host
 // page's button is visibly the same event as muting from the keypad.
 extern "C" EMSCRIPTEN_KEEPALIVE void sim_buzzer_toggle_quiet() {
   if (g_sim_ui_task_for_js) g_sim_ui_task_for_js->toggleBuzzer();
@@ -3895,7 +3895,7 @@ void UITask::toggleBuzzer() {
     soundctl::setMode(_node_prefs, buzzer, on ? soundctl::MODE_ON : soundctl::MODE_OFF, isClientConnected());
     if (on) notify(UIEventType::ack);
     the_mesh.savePrefs();
-    showAlert(buzzer.isQuiet() ? "Buzzer: OFF" : "Buzzer: ON", 800);
+    showAlert(buzzer.isQuiet() ? "Buzzer: Off" : "Buzzer: On", 800);
     _next_refresh = 0;
   #endif
 }
@@ -3915,7 +3915,7 @@ void UITask::cycleBuzzerMode() {
   mode = (mode + 1) % soundctl::MODE_COUNT;  // ON → OFF → Auto → ON
   soundctl::setMode(_node_prefs, buzzer, (uint8_t)mode, isClientConnected());
   if (mode == soundctl::MODE_ON) notify(UIEventType::ack);
-  static const char* labels[] = { "Buzzer: ON", "Buzzer: OFF", "Buzzer: Auto" };
+  static const char* labels[] = { "Buzzer: On", "Buzzer: Off", "Buzzer: Auto" };
   showAlert(labels[mode], 800);
   _next_refresh = 0;
 #endif

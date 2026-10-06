@@ -87,7 +87,7 @@ class GpioScreen : public UIScreen {
     else if (mode == 2 || mode == 3) next = analog_ok ? 4 : 0;
     else                             next = 0;   // was Analog -> back to OFF
     _task->setGpioMode(pin + 1, next);
-    const char* name = (next == 0) ? "OFF" : (next == 1) ? "Input" : (next == 2) ? "Output" : "Analog";
+    const char* name = (next == 0) ? "Off" : (next == 1) ? "Input" : (next == 2) ? "Output" : "Analog";
     char msg[24];
     snprintf(msg, sizeof(msg), "GPIO%d: %s", pin + 1, name);
     _task->showAlert(msg, 800);
@@ -98,7 +98,7 @@ class GpioScreen : public UIScreen {
     bool on = (gpioModeOf(pin) == 3);
     _task->setGpioMode(pin + 1, on ? 2 : 3);
     char msg[24];
-    snprintf(msg, sizeof(msg), "GPIO%d: %s", pin + 1, on ? "OFF" : "ON");
+    snprintf(msg, sizeof(msg), "GPIO%d: %s", pin + 1, on ? "Off" : "On");
     _task->showAlert(msg, 800);
   }
 
