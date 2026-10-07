@@ -766,7 +766,7 @@ class HomeScreen : public UIScreen {
     // icon won't fit above the reserved area, every lower-priority icon after
     // it is dropped too (the list is ordered high→low).
     //
-    // Priority: BT > GPS fix > alarm > mute > auto-advert > trail > live-share >
+    // Priority: power > BT > GPS fix > alarm > mute > auto-advert > trail > live-share >
     // repeater. Battery (drawn above) is always rightmost. The background modes
     // (advert / trail / live-share / repeater) stay outside any BT gate — they
     // keep running with Bluetooth off, so their cue must not vanish with it.
@@ -782,6 +782,7 @@ class HomeScreen : public UIScreen {
     const bool gps_fix = gps_on && loc->isValid();
     struct Sicon { bool active; const MiniIcon* icon; };
     const Sicon icons[] = {
+      { board.isExternalPowered(),                                 &ICON_CHARGE },   // USB power: next to the battery
       { _task->isSerialEnabled() && _task->isBLEConnected(),       &ICON_BLUETOOTH },
       { gps_on,                                                    gps_fix ? &ICON_GPS : &ICON_GPS_SEARCH },
       { _node_prefs && _node_prefs->alarm_on,                      &ICON_ALARM },

@@ -16,8 +16,13 @@ class SimMainBoard : public mesh::MainBoard {
   // plumbed through, same reasoning as SimLocationProvider.h's singleton.
   static uint16_t& battMilliVoltsRef() { static uint16_t mv = 4000; return mv; }
 
+  static bool& externalPowerRef() { static bool on = false; return on; }
+
 public:
   void begin() { }
+
+  bool isExternalPowered() override { return externalPowerRef(); }
+  static void setExternalPower(bool on) { externalPowerRef() = on; }
 
   uint16_t getBattMilliVolts() override { return battMilliVoltsRef(); }
   static void setBattMilliVolts(uint16_t mv) { battMilliVoltsRef() = mv; }
@@ -42,5 +47,8 @@ public:
 // sim_location_set().
 extern "C" inline EMSCRIPTEN_KEEPALIVE void sim_battery_set_mv(int mv) {
   SimMainBoard::setBattMilliVolts((uint16_t)mv);
+}
+extern "C" inline EMSCRIPTEN_KEEPALIVE void sim_external_power_set(int on) {
+  SimMainBoard::setExternalPower(on != 0);
 }
 #endif

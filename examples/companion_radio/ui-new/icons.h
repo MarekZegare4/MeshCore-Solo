@@ -488,6 +488,16 @@ MINI_ICON(ICON_ALARM, 9,   // bell — an alarm is armed
   packRow("#########"),
   packRow("........."),
   packRow("...###..."));
+MINI_ICON(ICON_CHARGE, 9,   // lightning bolt -- on external power
+  packRow("......##."),
+  packRow(".....##.."),
+  packRow("....##..."),
+  packRow("...#####."),
+  packRow(".#####..."),
+  packRow("...##...."),
+  packRow("..##....."),
+  packRow(".##......"),
+  packRow(".#......."));
 MINI_ICON(ICON_TRAIL, 7,   // map pin (GPS trail logging)
   packRow("..###.."),
   packRow(".#####."),
@@ -572,6 +582,14 @@ MINI_ICON(ICON_ALARM, 7,   // bell — an alarm is armed
   packRow(".#####."),
   packRow("#######"),
   packRow("...#..."));
+MINI_ICON(ICON_CHARGE, 7,   // lightning bolt -- on external power
+  packRow("....##."),
+  packRow("...##.."),
+  packRow("..##..."),
+  packRow(".#####."),
+  packRow("...##.."),
+  packRow("..##..."),
+  packRow("..#...."));
 MINI_ICON(ICON_TRAIL, 7,   // map pin (GPS trail logging)
   packRow("..###.."),
   packRow(".#####."),
@@ -644,6 +662,13 @@ MINI_ICON(ICON_ALARM, 5,   // bell — an alarm is armed
   packRow(".###."),
   packRow("#####"),
   packRow("..#.."));
+MINI_ICON(ICON_CHARGE, 5,   // lightning bolt -- on external power
+  packRow("...#."),
+  packRow("..##."),
+  packRow(".####"),
+  packRow("..##."),
+  packRow(".##.."),
+  packRow(".#..."));
 
 MINI_ICON(ICON_TRAIL, 6,   // map pin / location marker (GPS trail logging)
   packRow(".####."),
