@@ -108,8 +108,11 @@ locator) keeps it on.
 
 > [!NOTE]
 > **Wio Tracker L2:** the Diagnostics app, with a **Noise** tab that
-> measures the noise floor over time, and the **GPS** app, which draws a sky
-> plot of the satellites and each one's signal strength.
+> measures the noise floor over time and history charts you can touch for the
+> value at that moment, and the **GPS** app, on three tabs: **Sky** (a plot
+> of the satellites and the fix), **Signal** (a bar per satellite with its
+> strength, and the constellations) and **Details** (position, precision,
+> time to first fix and what the receiver reports).
 
 ## GPIO
 

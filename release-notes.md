@@ -1,3 +1,30 @@
+## MeshCore Solo Companion Firmware v2.0-rc2
+
+### What's new
+
+- **A third Wio Tracker L1 E-ink build, for a 4.2" 400 × 300 panel** (`WioTrackerL1Eink42`), with a 9 × 15 font, its own icons, and screens laid out for the room: tiles on the status page, a node list with a detail pane, charts, the sky view and the clock tools.
+- **Alerts drop in from the top** on the OLED and E-ink builds, as a banner that slides down and away, instead of a box over the middle of the screen. A new-message alert lasts two seconds; on E-ink it simply appears and goes.
+- **A bolt beside the battery when USB power is connected.** Where the board can sense it (the nRF52 boards, the Wio Tracker L2); the screen redraws as the cable goes in or out.
+- **The splash grows with the screen**, and the start-up "Loading..." is three dots in the middle of the screen, so it needs no orientation.
+- **Wio Tracker L2:**
+  - GPS on three tabs: Sky, Signal (a bar per satellite, with a dB-Hz scale) and Details.
+  - Charts with a value axis, a grid and a readout under your finger; the big clock in the splash's lettering.
+  - The USB-drive offer waits until the screen is unlocked, with a PIN or without.
+  - A pull-down quick panel from the status bar, and a faster screen fade.
+- **A channel's scope can follow the default.** "Default" is the new start value for a channel, and follows whichever scope the list marks as default; `*` still sends unscoped.
+- **Home panels list the way in first:** "All settings", "All messages" and "All tools" head their panels, the shortcuts after.
+- **On / Off** are written the same way on every screen, and the GPS switch no longer looks like a battery.
+
+### Fixes
+
+- **Settings were lost on restart on a device that had run Meshtastic.** It leaves a `/prefs` folder behind, which our settings file could neither be read from nor saved over, so no change survived. The folder is now removed on start.
+- **Bluetooth switched off stays off** over a reboot or hibernation.
+- **A tool opened from the Tools page goes back to Home** on Back, not to the full tools list.
+- **A change made in Settings is saved** on the way to a screen opened from it.
+- **L2 GPS signal chart** spans its box from the first bar.
+
+---
+
 ## MeshCore Solo Companion Firmware v2.0-rc1
 
 A release candidate for 2.0: please report anything that looks wrong before the final release.

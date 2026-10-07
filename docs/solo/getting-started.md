@@ -36,16 +36,20 @@ order:
 | **Status** | Radio, GPS, battery and mesh at a glance; Enter opens the [Status screen](./tools.md#status) |
 | **Bluetooth** | Bluetooth on / off and the phone: connected, or the pairing PIN |
 | **Advert** | Send an advert now, and the auto-advert interval |
-| **Settings** | Brightness, GPS on / off, then all settings |
+| **Settings** | All settings, then brightness and GPS on / off |
 | **Map** | Your position, the trail, people sharing theirs and the target ([Navigation](./navigation.md#map)) |
-| **Tools** | The two tools you used last with their state, then all tools |
-| **Messages** | The two latest conversations with their unread counts, then all messages |
+| **Tools** | All tools, then the two you used last with their state |
+| **Messages** | All messages, then the two latest conversations with their unread counts |
 | **Shutdown** | Lock the screen, or hibernate (with the battery level) |
 
-Most pages are **quick panels**: a few rows and a last one that opens the
-full screen. **Up / Down** picks a row and **Enter** acts on it. A value row
+Most pages are **quick panels**: a few rows, the first of which opens the
+full screen, the rest shortcuts. **Up / Down** picks a row and **Enter** acts
+on it. A value row
 (brightness, auto-advert) goes into editing: **Left / Right** change it while
 you watch, **Enter** or **Back** keeps it.
+
+A tool opened from the Tools page returns to the home screen on **Back**;
+one opened from the full Tools list returns to that list.
 
 Settings › Home Pages sets their order and hides the ones you don't use;
 Settings and Messages are always shown.
@@ -61,6 +65,21 @@ Settings and Messages are always shown.
 > sets the brightness. Hold a tile for its settings. Swipe it up, or tap
 > below it, to put it away.
 
+## Alerts and the battery
+
+A new message, a changed setting and similar notices drop in as a banner from
+the top of the screen and slide away after a moment; on e-ink they just
+appear and go. A message's lasts two seconds. Typing on the keyboard isn't
+interrupted.
+
+The battery sits at the top right, as an icon, a percentage or the voltage
+(Settings › Display). A small bolt beside it means external power is
+connected over USB.
+
+> [!NOTE]
+> Boards without a way to sense USB power (the Heltec V3, V4 and the
+> Cardputer ADV) don't show the bolt.
+
 ## Connecting the phone app
 
 Every build serves the MeshCore app over **Bluetooth and USB**, one at a time:
@@ -68,7 +87,8 @@ while Bluetooth is connected, USB is ignored. To use USB, disconnect Bluetooth
 first or turn it off on the device.
 
 The Bluetooth pairing PIN is shown on the Bluetooth home page until the phone
-is paired.
+is paired. Switching Bluetooth off keeps it off after a restart or
+hibernation, until you switch it on again.
 
 > [!NOTE]
 > **Wio Tracker L2:** the PIN is under Settings › Bluetooth.

@@ -90,7 +90,7 @@ correctly whatever the keyboard is set to.
 | Mark all read | Clears its unread count |
 | Notif, Melody | Its own notification and sound, instead of the global ones |
 | Fav | Marks it as a favourite (shared with the app) |
-| Scope | The region its messages are tagged with (`*` = none); the list is in Settings › Radio › Scope |
+| Scope | The region its messages are tagged with: **Default** follows the list's default, `*` sends none; the list is in Settings › Radio › Scope |
 | Pin to dial | Puts it on the Favourites page |
 | Edit, Delete | Renames it or changes its secret; removes it |
 

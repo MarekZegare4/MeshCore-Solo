@@ -22,8 +22,8 @@ A few notes:
   ones; the power set above is the ceiling.
 - **Scope** is a list of named regions (plus `*`, no region). Messages are
   tagged with a scope so repeaters can tell communities on the same frequency
-  apart. The default one is used for direct messages and repeating, and each
-  channel picks its own (see [Messages](./messages.md#channels)). Anyone who
+  apart. The default one is used for direct messages and repeating, and a channel
+  follows it unless it picks its own (see [Messages](./messages.md#channels)). Anyone who
   types the same name gets the same scope; it isn't encryption.
 - **Low battery** shuts the device down at the voltage you choose, which is
   also 0 % on the battery indicator.

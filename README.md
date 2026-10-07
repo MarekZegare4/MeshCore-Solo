@@ -17,7 +17,7 @@ Discussion: [MeshCore Discord](https://discord.gg/sdhYArU2jr) — [Solo firmware
 | Device | MCU | Display | Firmware file |
 | ------ | --- | ------- | ------------- |
 | Seeed Wio Tracker L1 (OLED) | nRF52840 | SSD1306 / SH1106 128 × 64 | `solo-<version>-WioTrackerL1.uf2` |
-| Seeed Wio Tracker L1 (E-ink) | nRF52840 | GxEPD2 250 × 122 | `solo-<version>-WioTrackerL1Eink-landscape.uf2` or `-portrait.uf2` |
+| Seeed Wio Tracker L1 (E-ink) | nRF52840 | GxEPD2 250 × 122, or 4.2" 400 × 300 | `solo-<version>-WioTrackerL1Eink-landscape.uf2`, `-portrait.uf2` or `solo-<version>-WioTrackerL1Eink42.uf2` |
 | Seeed Wio Tracker L2 | ESP32-S3 | 320 × 240 touch LCD | `solo-<version>-Wio-Tracker-L2-merged.bin` |
 | GAT562 30S Mesh Kit | nRF52840 | SSD1306 128 × 64 | `solo-<version>-GAT562-30S-Mesh-Kit.uf2` |
 | GAT562 Mesh Watch13 *(experimental)* | nRF52840 | SSD1306 128 × 64 | `solo-<version>-GAT562-Mesh-Watch13.uf2` |

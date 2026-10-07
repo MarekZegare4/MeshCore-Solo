@@ -64,15 +64,23 @@ Fn shortcuts.
 
 ## E-ink
 
-The e-ink Wio Tracker L1 (250 × 122) comes in two builds, one per
+The e-ink Wio Tracker L1 comes in three builds, one per screen and
 orientation, since every screen is laid out for one shape:
 
-- **Landscape** writes in a larger 8 × 13 font, with larger icons.
-- **Portrait** keeps the 6 × 9 font and fits more lines.
+- **Landscape** (250 × 122) writes in a larger 8 × 13 font, with larger icons.
+- **Portrait** (250 × 122) keeps the 6 × 9 font and fits more lines.
+- **4.2"** (400 × 300, Good Display GDEY042T81, on the same wiring in place of
+  the 2.13") writes in a 9 × 15 font with its own icon set, and uses the
+  room for tiles on the status page, a node list with a detail pane, charts,
+  the sky view and the clock tools.
 
 | Landscape | Portrait | |
 | :---: | :---: | :---: |
 | ![A channel in landscape](./img/eink-channel.png) | ![Clock and calendar in portrait](./img/eink-clock.png) | ![The sky view in portrait](./img/eink-sky.png) |
+
+| 4.2" |
+| :---: |
+| ![The status page on the 4.2"](./img/eink42-status.png) |
 
 The e-ink screens show more than the OLED, the portrait one most:
 
