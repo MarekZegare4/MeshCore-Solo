@@ -3327,6 +3327,11 @@ void UITask::loop() {
 
   if (curr) curr->poll();
 
+  // A cable plugged in or pulled out: redraw at once, so the bolt by the
+  // battery follows it instead of waiting for the screen's next refresh.
+  { static bool ext = board.isExternalPowered();
+    const bool now = board.isExternalPowered();
+    if (now != ext) { ext = now; _next_refresh = 0; } }
 
   if (_display != NULL && _display->isOn()) {
     // Lock-screen password prompt
