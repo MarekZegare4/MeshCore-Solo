@@ -128,6 +128,7 @@ public:
   void setTrails(bool on);
   void setVectorMap(bool on);
   void simMapAt(const char* spec);      // Map tools > Live tiles
+  void simCompose(const char* text);    // the open thread's field: this text, keyboard up
   // Navigation map (NavMap.h)
   void navTargetsPopup();
   void navClosePopup();
@@ -169,6 +170,8 @@ public:
   void bannerOpen();   // the message banner tapped: its conversation
   void back();
   void sendFromCompose();
+  int composeLimit() const;                 // bytes the open thread's message may take
+  int composeLen(const char* typed) const;  // what `typed` takes once sent
   void setKeyboardVisible(bool show);
   void showToast(const char* text, uint32_t ms = 2500);
   // Clock tools (ClockScreen.h)

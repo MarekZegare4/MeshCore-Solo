@@ -3551,17 +3551,41 @@ static void onKeyboard(lv_event_t* e) {
   else if (code == LV_EVENT_CANCEL) s_ui->setKeyboardVisible(false);
 }
 
-// Compose limit is in UTF-8 bytes (the over-the-air limit), not characters:
-// Cyrillic / Greek / accented letters take two bytes each. Leaves room for the
-// "Name: " prefix a channel send adds.
-static const size_t COMPOSE_MAX_BYTES = MAX_TEXT_LEN - 40;
+// What a message may take is counted in UTF-8 bytes (the over-the-air limit),
+// not characters: Cyrillic / Greek / accented letters take two bytes each. The
+// limit is what the send leaves of it -- a channel post carries this node's
+// name -- and a placeholder counts as what it expands to (MessageText.h).
+int UITask::composeLimit() const { return msgtext::limit(_thread_is_channel, _prefs); }
+int UITask::composeLen(const char* typed) const { return msgtext::sentLen(typed, _prefs); }
+
+static lv_obj_t* s_compose_left = nullptr;   // the bytes left, a tag over the field's right end
+
+// Only once the end is near (40 bytes, as on the other screens): a tag sitting
+// on the field's top edge, so the field keeps its width and its text.
+static void composeLeftRefresh(lv_obj_t* ta) {
+  if (!s_compose_left || !ta) return;
+  const int left = s_ui->composeLimit() - s_ui->composeLen(lv_textarea_get_text(ta));
+  if (left > 40) { lv_obj_add_flag(s_compose_left, LV_OBJ_FLAG_HIDDEN); return; }
+  char t[8];
+  snprintf(t, sizeof(t), "%d", left);
+  setText(s_compose_left, t);
+  setTextColor(s_compose_left, left < 0 ? theme::FAIL : left <= 20 ? theme::ACCENT : theme::TEXT_MUTED);
+  lv_obj_remove_flag(s_compose_left, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_update_layout(s_compose_left);
+  lv_obj_align_to(s_compose_left, ta, LV_ALIGN_OUT_TOP_RIGHT, -8, lv_obj_get_height(s_compose_left) / 2);
+}
 
 static void onComposeInsert(lv_event_t* e) {
   lv_obj_t* ta = (lv_obj_t*)lv_event_get_target(e);
   const char* ins = (const char*)lv_event_get_param(e);
-  if (ins && strlen(lv_textarea_get_text(ta)) + strlen(ins) > COMPOSE_MAX_BYTES)
+  if (!ins) return;
+  char joined[2 * MAX_TEXT_LEN + 1];   // the text with the insert (at the end: the length is the same)
+  snprintf(joined, sizeof(joined), "%s%s", lv_textarea_get_text(ta), ins);
+  if (s_ui->composeLen(joined) > s_ui->composeLimit())
     lv_textarea_set_insert_replace(ta, "");   // reject: would exceed the byte limit
 }
+
+static void onComposeChanged(lv_event_t* e) { composeLeftRefresh((lv_obj_t*)lv_event_get_target(e)); }
 
 static void onComposeClicked(lv_event_t* e) { (void)e; s_ui->setKeyboardVisible(true); }
 static void onComposeMore(lv_event_t* e) { (void)e; s_ui->quickPopup(); }
@@ -3640,6 +3664,7 @@ void UITask::buildThread() {
 
   _compose_ta = nullptr;
   _keyboard = nullptr;
+  s_compose_left = nullptr;
   if (can_send) {
     lv_obj_t* bar = lv_obj_create(body);
     styleSurface(bar, theme::BG);
@@ -3657,8 +3682,17 @@ void UITask::buildThread() {
     lv_obj_center(label(more, LV_SYMBOL_PLUS, THEME_FONT_BODY, theme::TEXT));
     _compose_ta = textField(bar, "Message");   // FOCUSED while the keyboard is up
     lv_obj_add_event_cb(_compose_ta, onComposeInsert, LV_EVENT_INSERT, NULL);
+    lv_obj_add_event_cb(_compose_ta, onComposeChanged, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_set_width(_compose_ta, lv_display_get_horizontal_resolution(NULL) - 8 - 34 - 4);   // beside "+"
     lv_obj_align(_compose_ta, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_obj_add_flag(bar, LV_OBJ_FLAG_OVERFLOW_VISIBLE);   // the count's tag rises above the bar
+    s_compose_left = label(bar, "", THEME_FONT_SMALL, theme::TEXT_MUTED);   // bytes left
+    lv_obj_set_style_bg_color(s_compose_left, lv_color_hex(theme::BG), 0);
+    lv_obj_set_style_bg_opa(s_compose_left, LV_OPA_COVER, 0);
+    lv_obj_set_style_pad_hor(s_compose_left, 4, 0);
+    lv_obj_set_style_radius(s_compose_left, theme::RADIUS, 0);
+    lv_obj_add_flag(s_compose_left, LV_OBJ_FLAG_HIDDEN);
+    composeLeftRefresh(_compose_ta);
 
     // In the body's flex column below the compose bar: showing it shrinks the
     // message list, so the text field stays visible just above the keys.
@@ -4157,6 +4191,7 @@ void UITask::sendFromCompose() {
   if (!typed || !typed[0]) return;
   char text[MSG_TEXT_BUF];
   msgtext::expandOutgoing(typed, text, sizeof(text), _prefs);   // {loc}, {time}, ... (MessageText.h)
+  if (composeLen(typed) > composeLimit()) { showToast("Too long"); return; }   // the count beside the field says by how much
   if (!sendThreadText(text)) return;
   lv_textarea_set_text(_compose_ta, "");
   setKeyboardVisible(false);
@@ -4615,6 +4650,12 @@ bool UITask::cpuNeeded() {
 }
 
 #if defined(SIM_PLATFORM) && defined(__EMSCRIPTEN__)
+void UITask::simCompose(const char* text) {
+  if (!_compose_ta) return;
+  setKeyboardVisible(true);
+  lv_textarea_set_text(_compose_ta, text);
+}
+
 // Sim tests: straight to a screen by name.
 extern "C" EMSCRIPTEN_KEEPALIVE void sim_open(const char* name) {
   if (!s_ui) return;
@@ -4635,6 +4676,8 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_open(const char* name) {
   if (!strcmp(name, "homeedit")) { s_ui->showHome(); s_ui->homeEdit(true); return; }   // arranging the apps
   if (!strncmp(name, "accent@", 7)) { theme::setAccent(atoi(name + 7)); return; }   // "accent@4": Cyan
   if (!strncmp(name, "map@", 4)) { s_ui->simMapAt(name + 4); return; }   // "map@lat,lon,z"
+  if (!strncmp(name, "channel@", 8)) { s_ui->openChannel(atoi(name + 8)); return; }
+  if (!strncmp(name, "compose@", 8)) { s_ui->simCompose(name + 8); return; }
   if (!strcmp(name, "vector")) { s_ui->setVectorMap(true); return; }
   if (!strcmp(name, "maptools")) { s_ui->navToolsPopup(); return; }
   if (!strcmp(name, "areasel")) { s_ui->areaSelectBegin(); return; }

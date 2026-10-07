@@ -112,6 +112,7 @@ static const char* const KB_T9_GROUPS_GREEK[9] = {
 // (10*CIPHER_BLOCK_SIZE = 160) so a full-length message can be composed; each
 // field passes its own smaller max to begin() where its store is smaller.
 static const int KB_MAX_LEN    = 160;
+static const int KB_COUNT_FROM = 40;    // a message's bytes left show from here on (the L2's too)
 
 // Longest preview line we render per row, in CHARACTERS. Caps the per-line
 // stack buffers so a very wide display (small font → many chars per line)
@@ -275,6 +276,13 @@ struct KeyboardWidget {
   // the right of the preview; set it after begin(), which clears it. Kept past
   // the PIN pad's ABC switch.
   const char* prompt = nullptr;
+  // What the message may take once sent (a channel's "Name: " comes out of it,
+  // a {loc} grows): sent_limit 0 = max_len as typed. sent_len measures `buf`
+  // as it will go out; both are set by the owner after begin(). Input stops
+  // there, and the bytes left show near it (see render()).
+  int sent_limit = 0;
+  int (*sent_len)(const char* buf, void* ctx) = nullptr;
+  void* sent_ctx = nullptr;
   static const int PIN_MAX_LEN = 16;
   int  row, col;
   int  page;        // see totalPages()/scriptAt()/pageIsSymbols() below
@@ -420,6 +428,9 @@ struct KeyboardWidget {
     pin_kb_mask_enabled = false;
     pin_mode = false;
     prompt = nullptr;
+    sent_limit = 0;
+    sent_len = nullptr;
+    sent_ctx = nullptr;
     t9_cell = -1;
     t9_cycle = 0;
     _ph_menu.active = false;
@@ -599,8 +610,19 @@ struct KeyboardWidget {
     // works in codepoints via the kbUtf8*() helpers; this was the last
     // byte-based holdout.
     int cpl = display.width() / cw;  // chars per preview line
-    if (cpl < 1) cpl = 1;
     if (cpl > KB_PREVIEW_CAP) cpl = KB_PREVIEW_CAP;  // never overrun linebuf below
+    // A message near its end: the bytes left at the right of the preview's last
+    // line, the text wrapped short of it so the count is always there.
+    char count[8];
+    count[0] = '\0';
+    if (!isPin() && sent_limit > 0) {
+      const int n = sent_limit - sentNow();
+      if (n <= KB_COUNT_FROM) {
+        snprintf(count, sizeof(count), "%d", n);
+        cpl -= (int)strlen(count) + 2;   // its digits, the cursor, a space
+      }
+    }
+    if (cpl < 1) cpl = 1;
     // Which preview line the cursor sits on = how many whole codepoints precede it.
     int cursor_chars = 0;
     for (int p = 0; p < cursor_pos; ) { p += kbUtf8CharBytesAt(buf, p, len); cursor_chars++; }
@@ -658,12 +680,21 @@ struct KeyboardWidget {
       display.print(linebuf_t);
       ps = pe;
     }
-    if (!isPin()) {
+    if (count[0]) {
+      const int tw = display.getTextWidth(count), y = (prev_lines - 1) * lh;
+      if (count[0] == '-') {   // over (a placeholder grew): inverted
+        display.fillRect(display.width() - tw - 2, y, tw + 2, lh);
+        display.setColor(DisplayDriver::DARK);
+      }
+      display.setCursor(display.width() - tw - (count[0] == '-' ? 1 : 0), y);
+      display.print(count);
+      display.setColor(DisplayDriver::LIGHT);
+    } else if (!isPin()) {
       // Bottom-right of the preview: what the field is, or near the limit how
       // much room is left. Only when it clears the text on that line.
       char left[12];
       const char* tag = prompt;
-      if (max_len > 0 && len * 4 >= max_len * 3) { snprintf(left, sizeof(left), "%d left", max_len - len); tag = left; }
+      if (sent_limit <= 0 && max_len > 0 && len * 4 >= max_len * 3) { snprintf(left, sizeof(left), "%d left", max_len - len); tag = left; }
       if (tag) {
         int tw = display.getTextWidth(tag);
         // Codepoints on the last preview line, plus the cursor if it's there.
@@ -901,7 +932,29 @@ struct KeyboardWidget {
     return true;
   }
 
+  // What buf takes once sent (sent_len set), or as typed.
+  int sentNow() { return sent_len ? sent_len(buf, sent_ctx) : len; }
+
+  // A message never grows past what it may send (sent_limit, its placeholders
+  // as they expand): a key that would take it there is undone. Shortening is
+  // always let through, even while over (a {loc} that grew since).
   Result handleInput(char c) {
+    if (sent_limit <= 0 || isPin()) return handleKey(c);
+    char was[KB_MAX_LEN + 1];
+    memcpy(was, buf, len + 1);
+    const int was_len = len, was_cur = cursor_pos, before = sentNow();
+    Result r = handleKey(c);
+    const int after = sentNow();
+    if (after > sent_limit && after > before) {
+      memcpy(buf, was, was_len + 1);
+      len = was_len;
+      cursor_pos = was_cur;
+      t9_cell = -1;   // a T9 cycle would otherwise go on replacing the char before it
+    }
+    return r;
+  }
+
+  Result handleKey(char c) {
     // placeholder overlay consumes all input
     if (_ph_menu.active) {
       auto res = _ph_menu.handleInput(c);

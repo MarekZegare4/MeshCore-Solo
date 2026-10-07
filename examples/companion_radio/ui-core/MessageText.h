@@ -105,4 +105,43 @@ static void expandOutgoing(const char* text, char* out, int n, const NodePrefs* 
   expand(text + pre, out + pre, n - pre, p);
 }
 
+// ── What fits ─────────────────────────────────────────────────────────────────
+
+// The bytes a typed message takes over the air once its placeholders are
+// replaced (a {loc} is longer than it looks).
+static int sentLen(const char* typed, const NodePrefs* p) {
+  if (!strchr(typed, '{')) return (int)strlen(typed);
+  char out[2 * MAX_TEXT_LEN + 1];
+  expandOutgoing(typed, out, sizeof(out), p);
+  return (int)strlen(out);
+}
+
+// What a message to a channel / a contact may take, in bytes (not characters:
+// a Cyrillic or accented letter is two). MAX_TEXT_LEN less what the send adds:
+// a channel post goes out as "<this node's name>: <text>"; a direct message
+// that may be resent more than three times keeps two bytes spare (the resends'
+// own limit, BaseChatMesh::composeMsgPacket).
+//
+// The route and the packet's own bytes do not come out of it: the path, the
+// header and the transport codes sit outside the payload, and MAX_TEXT_LEN is
+// sized so the worst packet (a 64-byte path, scoped, text padded to the cipher
+// block) still fits the radio's MAX_TRANS_UNIT. Checked below, so a change to
+// any of those constants cannot silently make a full message unsendable.
+#define MSGTEXT_BLOCKS(n) (((n) + CIPHER_BLOCK_SIZE - 1) / CIPHER_BLOCK_SIZE * CIPHER_BLOCK_SIZE)
+static_assert(1 + 4 + 1 + MAX_PATH_SIZE                       // header, transport codes, path_len, path
+              + 2 * PATH_HASH_SIZE + CIPHER_MAC_SIZE          // direct: dest + src hash, MAC
+              + MSGTEXT_BLOCKS(5 + MAX_TEXT_LEN + 2) <= MAX_TRANS_UNIT,
+              "a full direct message must fit the radio frame with the longest path");
+static_assert(1 + 4 + 1 + MAX_PATH_SIZE + PATH_HASH_SIZE + CIPHER_MAC_SIZE
+              + MSGTEXT_BLOCKS(5 + MAX_TEXT_LEN) <= MAX_TRANS_UNIT,
+              "a full channel post must fit the radio frame with the longest path");
+#undef MSGTEXT_BLOCKS
+
+static int limit(bool channel, const NodePrefs* p) {
+  int n = MAX_TEXT_LEN;
+  if (channel) n -= (int)strlen(the_mesh.getNodeName()) + 2;
+  else if (p && p->dm_resend_count > 3) n -= 2;
+  return n;
+}
+
 }  // namespace msgtext

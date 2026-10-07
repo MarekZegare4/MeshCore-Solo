@@ -324,6 +324,11 @@ class MessagesScreen : public UIScreen {
     if (_sending_to_channel && the_mesh.getChannel(_sel_channel_idx, ch)) to = ch.name;
     snprintf(_kb_prompt, sizeof(_kb_prompt), "%.12s", to);
     _kb->prompt = _kb_prompt;
+    // The room it really has: this node's name rides a channel post, and the
+    // placeholders grow when sent.
+    _kb->sent_limit = msgtext::limit(_sending_to_channel, _task->getNodePrefs());
+    _kb->sent_len = [](const char* b, void* t) { return msgtext::sentLen(b, ((UITask*)t)->getNodePrefs()); };
+    _kb->sent_ctx = _task;
   }
 
   // Recipient chosen while sharing — open the keyboard with the prepared text.
@@ -948,6 +953,15 @@ class MessagesScreen : public UIScreen {
   bool _ch_view_pending_rebuild = false; // tracks redraw after channel create/delete
 
 public:
+#ifdef SIM_PLATFORM
+  // Sim tests: channel 0's keyboard holding `text`.
+  void simCompose(const char* text) {
+    _sel_channel_idx = 0;
+    snprintf(_share_text, sizeof(_share_text), "%s", text);
+    beginShareCompose(true);
+  }
+#endif
+
   MessagesScreen(UITask* task, KeyboardWidget* kb)
     : _task(task), _kb(kb), _phase(MODE_SELECT), _mode_sel(0),
       _contact_sel(0), _contact_scroll(0), _num_contacts(0), _room_mode(false), _login_mode(false),
@@ -2448,13 +2462,16 @@ public:
         if (_kb->len > prefix_len) {
           // Expand only the body — prefix "@[nick] " is preserved verbatim, so a nick
           // that happens to contain a placeholder token isn't substituted.
-          char expanded[KB_MAX_LEN + 1];
+          char expanded[2 * KB_MAX_LEN + 1];
           if (prefix_len > 0) {
             memcpy(expanded, _kb->buf, prefix_len);
             expandMsg(_kb->buf + prefix_len, expanded + prefix_len, sizeof(expanded) - prefix_len);
           } else {
             expandMsg(_kb->buf, expanded, sizeof(expanded));
           }
+          // Too long for what it adds (the keyboard's "N over" says by how much): it
+          // would be cut short, or refused, so it stays on the keyboard.
+          if ((int)strlen(expanded) > msgtext::limit(_sending_to_channel, _task->getNodePrefs())) return true;
           bool ok = sendText(expanded);
           afterSend(ok);
         }

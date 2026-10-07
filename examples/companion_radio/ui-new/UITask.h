@@ -274,6 +274,9 @@ public:
   void gotoHomeScreen() { setCurrScreen(home); }
   void gotoSettingsScreen();
   void gotoMessagesScreen();
+#ifdef SIM_PLATFORM
+  void simCompose(const char* text);   // sim tests: a channel post's keyboard holding `text`
+#endif
   void openContactDM(const ContactInfo& ci);
   void openChannelHistory(uint8_t channel_idx);   // Favourites dial: open a pinned channel
   void openRoomServer(const ContactInfo& ci);     // Favourites dial: open a pinned room (logs in first)

@@ -2190,6 +2190,13 @@ void UITask::gotoMessagesScreen() {
   setCurrScreen(messages_screen);
 }
 
+#ifdef SIM_PLATFORM
+void UITask::simCompose(const char* text) {
+  gotoMessagesScreen();
+  ((MessagesScreen*)messages_screen)->simCompose(text);
+}
+#endif
+
 void UITask::openContactDM(const ContactInfo& ci) {
   ((MessagesScreen*)messages_screen)->reset();
   ((MessagesScreen*)messages_screen)->enterDM(ci);
@@ -2659,6 +2666,11 @@ void UITask::injectSimKeyLongPress(char c) {
 // D-pad buttons, whatever), not this function.
 extern "C" EMSCRIPTEN_KEEPALIVE void sim_enqueue_key(char c) {
   if (g_sim_ui_task_for_js) g_sim_ui_task_for_js->injectSimKey(c);
+}
+
+// Sim tests: a channel post's keyboard, holding `text`.
+extern "C" EMSCRIPTEN_KEEPALIVE void sim_compose(const char* text) {
+  if (g_sim_ui_task_for_js) g_sim_ui_task_for_js->simCompose(text);
 }
 
 // Long-press counterpart -- the host page's own press-and-hold timer (see
