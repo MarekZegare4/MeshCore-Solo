@@ -2293,6 +2293,7 @@ void UITask::clearAllDMUnread() { _core->clearAllDMUnread(); }
 
 void UITask::showAlert(const char* text, int duration_millis) {
   snprintf(_alert, sizeof(_alert), "%s", text);
+  if (!alertShowing()) _alert_t0 = millis();   // a banner already down only changes its text
   _alert_expiry = (millis() + duration_millis) | 1;   // 0 means none
 }
 
@@ -2354,7 +2355,7 @@ void UITask::onMessageArrived(const UiEvent& ev) {
   if (!in_view) {
     char alert_buf[80];
     snprintf(alert_buf, sizeof(alert_buf), "Msg: %.20s", ev.text);
-    showAlert(alert_buf, 3000);
+    showAlert(alert_buf, 2000);
   }
 
   if (_display != NULL && !_locked) {
@@ -2392,25 +2393,39 @@ void UITask::userLedHandler() {
 #endif
 }
 
-// Centred alert box. Long text used to be drawn as one drawTextCentered line
-// that overflowed the border on both sides (e.g. "GPS on, tracking started"
-// is already wider than a 128 px OLED); wrap it to up to three lines inside
-// the box instead. Uses the shared wrap scratch (s_wrap_*) — single-threaded
+// The alert as a banner over the top edge: it slides down, stays, slides back
+// up (e-ink just appears and goes), so what is on screen below it stays
+// readable. Long text used to be drawn as one drawTextCentered line that
+// overflowed the border on both sides (e.g. "GPS on, tracking started" is
+// already wider than a 128 px OLED); it wraps to up to three lines inside the
+// banner instead. Uses the shared wrap scratch (s_wrap_*) -- single-threaded
 // render path, same contract as the message views.
 void UITask::renderAlertOverlay() {
   _display->setTextSize(1);
   const int lh    = _display->getLineHeight();
   const int pad   = 3;
-  const int box_w = _display->width() - 8;
-  const int box_x = 4;
+  const int W     = _display->width();
   _display->translateUTF8ToBlocks(s_wrap_trans, _alert, sizeof(s_wrap_trans));
-  int nl = FullscreenMsgView::wrapLines(*_display, s_wrap_trans, box_w - pad * 2, s_wrap_lines, 3);
+  int nl = FullscreenMsgView::wrapLines(*_display, s_wrap_trans, W - pad * 2 - 2, s_wrap_lines, 3);
   if (nl < 1) nl = 1;
-  int box_h = nl * lh + pad * 2;
-  int box_y = (_display->height() - box_h) / 2;
-  _display->drawPanel(box_x, box_y, box_w, box_h);
+  const int h = nl * lh + pad * 2;
+  // How far down it is, in percent: eased out over MOVE ms in and out.
+  const int MOVE = 150;
+  int k = 100;
+  if (!_display->isEink()) {
+    const int el = (int)(millis() - _alert_t0), rem = (int)(_alert_expiry - millis());
+    if (el < MOVE) k = el * 100 / MOVE;
+    if (rem < MOVE && rem * 100 / MOVE < k) k = rem * 100 / MOVE;
+    if (k < 0) k = 0;
+    k = 100 - (100 - k) * (100 - k) / 100;
+  }
+  const int y = -h + h * k / 100;
+  _display->setColor(DisplayDriver::DARK);
+  _display->fillRect(0, y, W, h);
+  _display->setColor(DisplayDriver::LIGHT);
+  _display->drawRect(0, y, W, h);
   for (int i = 0; i < nl; i++)
-    _display->drawTextCentered(_display->width() / 2, box_y + pad + i * lh, s_wrap_lines[i]);
+    _display->drawTextCentered(W / 2, y + pad + i * lh, s_wrap_lines[i]);
 }
 
 void UITask::setCurrScreen(UIScreen* c) {
@@ -3331,6 +3346,7 @@ void UITask::loop() {
       _display->endFrame();
       PERF_T2();
       _next_refresh = millis() + delay_millis;
+      if (alertSliding()) _next_refresh = millis() + 25;
     } else if (_locked && refreshDue() && home) {
       PERF_T0();
       _display->startFrame();
@@ -3343,7 +3359,10 @@ void UITask::loop() {
       }
       // Alert overlay on top — without this a ringing alarm on a locked device
       // played its melody against a screen that never said what was ringing.
-      if (alertShowing()) renderAlertOverlay();
+      if (alertShowing()) {
+        renderAlertOverlay();
+        if (alertSliding()) _next_refresh = millis() + 25;
+      }
       PERF_T1();
       _display->endFrame();
       PERF_T2();
@@ -3365,6 +3384,7 @@ void UITask::loop() {
         // history scrollbar reserve — don't stay stuck behind the alert. Unchanged
         // frames are skipped by the display CRC, so e-ink isn't thrashed.
         _next_refresh = millis() + delay_millis;
+        if (alertSliding()) _next_refresh = millis() + 25;   // the slide, a frame at a time
         if ((int32_t)(_next_refresh - _alert_expiry) > 0) _next_refresh = _alert_expiry;
       } else {
         _next_refresh = millis() + delay_millis;

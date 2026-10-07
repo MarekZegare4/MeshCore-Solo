@@ -79,6 +79,7 @@ class UITask : public UITaskBase, public UiCoreHost {
   char _bot_buzz_buf[400];
   KeyboardWidget _kb;        // shared across all screens — only one active at a time
   unsigned long _alert_expiry;
+  unsigned long _alert_t0 = 0;   // when the banner began to come down
   int _last_notif_ch_idx;
   uint8_t _last_notif_dm_prefix[4];
   bool _last_notif_dm_valid;
@@ -351,6 +352,11 @@ public:
   // Wrap-safe (millis() rolls over after ~49.7 days). _next_refresh 0 = draw
   // on the next pass; _alert_expiry 0 = no alert.
   bool refreshDue() const { return !_next_refresh || (int32_t)(millis() - _next_refresh) >= 0; }
+  // The banner is on its way in or out (not on e-ink): redraw every frame.
+  bool alertSliding() const {
+    return alertShowing() && !_display->isEink() &&
+           ((int32_t)(millis() - _alert_t0) < 150 || (int32_t)(_alert_expiry - millis()) < 150);
+  }
   bool alertShowing() const { return _alert_expiry && (int32_t)(_alert_expiry - millis()) > 0; }
   // Clock tools engine API (ui-core/ClockEngine.h) — ClockToolsScreen drives
   // these; the engine runs from tickCore() so it fires regardless of the screen.
