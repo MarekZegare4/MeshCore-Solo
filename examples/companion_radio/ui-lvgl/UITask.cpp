@@ -1735,7 +1735,7 @@ void UITask::wake() {
   if (_display) _display->turnOn();   // dark until the frame below is on the panel
   refreshStatusBar();
   if (_screen == SCR_HOME) refreshHome();
-  if (_screen == SCR_THREAD) refreshThread();
+  if (_screen == SCR_THREAD) { if (locked()) refreshThread(); else reopenThreadIfUnread(); }   // locked: on unlocking
   lv_obj_invalidate(lv_screen_active());
   lv_refr_now(NULL);
   lvport::backlightFadeIn();
@@ -1913,12 +1913,13 @@ void UITask::onMessageArrived(const UiEvent& ev) {
   if (_screen == SCR_CHATS && !_nav_overlay) refreshChats();   // new unread counts (not under an open popup)
 }
 
+// On screen: a conversation left open under the lock or a dark display isn't read.
 bool UITask::isViewingChannel(uint8_t channel_idx) {
-  return _screen == SCR_THREAD && _thread_is_channel && _thread_channel == channel_idx;
+  return !_asleep && !locked() && _screen == SCR_THREAD && _thread_is_channel && _thread_channel == channel_idx;
 }
 
 bool UITask::isViewingDM(const uint8_t* pub_key) {
-  return _screen == SCR_THREAD && !_thread_is_channel && memcmp(_thread_key, pub_key, 4) == 0;
+  return !_asleep && !locked() && _screen == SCR_THREAD && !_thread_is_channel && memcmp(_thread_key, pub_key, 4) == 0;
 }
 
 // ── Status bar + toast (top layer, over every screen) ─────────────────────────
@@ -3631,6 +3632,21 @@ void UITask::threadOpenAt(int first) {
   _thread_skip = first < THREAD_MAX_SHOWN ? 0 : first - (THREAD_MAX_SHOWN - 4);
 }
 
+// Back on over a conversation: what came in while asleep opens it again on
+// its first unread (the typed text kept, the keyboard down); else just the
+// fresh content.
+void UITask::reopenThreadIfUnread() {
+  bool unread = _thread_is_channel ? _core->history.chUnread(_thread_channel) > 0 : _core->dmUnread(_thread_key) > 0;
+  if (!unread || _nav_overlay) { refreshThread(); return; }
+  char typed[MSG_TEXT_BUF] = "";
+  if (_compose_ta) snprintf(typed, sizeof(typed), "%s", lv_textarea_get_text(_compose_ta));
+  uint8_t key[PUB_KEY_SIZE];   // openDM() clears _thread_key before reading its argument
+  memcpy(key, _thread_key, sizeof(key));
+  if (_thread_is_channel) openChannel(_thread_channel);
+  else openDM(key);
+  if (_compose_ta && typed[0]) { lv_textarea_set_text(_compose_ta, typed); composeLeftRefresh(_compose_ta); }
+}
+
 void UITask::openChannel(uint8_t channel_idx) {
   _thread_is_channel = true;
   _thread_channel = channel_idx;
@@ -4747,6 +4763,10 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_open(const char* name) {
   if (!strcmp(name, "dm")) { s_ui->simDm(); return; }
   if (!strcmp(name, "send")) { s_ui->simSend(); return; }
   if (!strcmp(name, "unread")) { s_ui->simUnread(); return; }
+  if (!strcmp(name, "sleep")) { s_ui->simSleep(true); return; }
+  if (!strcmp(name, "wake")) { s_ui->simSleep(false); return; }
+  if (!strcmp(name, "lock")) { s_ui->simLock(true); return; }
+  if (!strcmp(name, "unlock")) { s_ui->simLock(false); return; }
   if (!strcmp(name, "vector")) { s_ui->setVectorMap(true); return; }
   if (!strcmp(name, "maptools")) { s_ui->navToolsPopup(); return; }
   if (!strcmp(name, "areasel")) { s_ui->areaSelectBegin(); return; }

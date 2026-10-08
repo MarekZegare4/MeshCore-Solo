@@ -60,6 +60,7 @@ class UITask : public UITaskBase, public UiCoreHost {
   GenericVibration vibration;
 #endif
   unsigned long _next_refresh, _auto_off;
+  bool _display_was_on = true;   // loop(): the display back on and unlocked
   NodePrefs* _node_prefs;
   bool _locked;
   bool _tool_from_home = false;
@@ -285,6 +286,7 @@ public:
   void simCompose(const char* text);   // sim tests: a channel post's keyboard holding `text`
   void simMessage(const char* text);   // sim tests: a channel message arrives
   void simUnread(int which);           // sim tests: read and new messages, opened
+  void simDisplay(bool on);            // sim tests: the display off / on
 #endif
   void openContactDM(const ContactInfo& ci);
   void openChannelHistory(uint8_t channel_idx);   // Favourites dial: open a pinned channel

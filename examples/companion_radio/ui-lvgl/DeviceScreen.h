@@ -224,6 +224,7 @@ void UITask::unlockScreen() {
   _pin_entry[0] = '\0';
   if (_screen == SCR_HOME) refreshHome();
   else if (_screen == SCR_CHATS) refreshChats();   // counts moved on while locked
+  else if (_screen == SCR_THREAD) reopenThreadIfUnread();   // on to what came in meanwhile
 }
 
 bool UITask::locked() const { return devview::s_lock != nullptr; }

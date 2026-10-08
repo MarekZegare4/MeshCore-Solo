@@ -1063,6 +1063,13 @@ public:
     _dm_hist_scroll = 0;
     _dm_fs.active = false;
   }
+  // The display came back on over a conversation: what was filed while it was
+  // dark is unread -- read on from its first message, as on opening.
+  void onDisplayOn() {
+    if (_ctx_menu.active) return;
+    if (_phase == CHANNEL_HIST && !_fs.active && _history.chUnread(_sel_channel_idx) > 0) beginChannelView(_sel_channel_idx);
+    else if (_phase == DM_HIST && !_dm_fs.active && _task->getDMUnread(_sel_contact.id.pub_key) > 0) beginDmView();
+  }
   void beginChannelView(uint8_t channel_idx) {
     _sel_channel_idx = channel_idx;
     _unread_at_entry = (int)_history.chUnread(channel_idx);

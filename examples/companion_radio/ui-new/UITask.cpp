@@ -2221,6 +2221,12 @@ void UITask::simUnread(int which) {
   }
 }
 
+void UITask::simDisplay(bool on) {
+  if (!_display) return;
+  if (on) _display->turnOn(); else _display->turnOff();
+  _next_refresh = 0;
+}
+
 void UITask::simCompose(const char* text) {
   gotoMessagesScreen();
   ((MessagesScreen*)messages_screen)->simCompose(text);
@@ -2273,11 +2279,14 @@ void UITask::pickBotRoomTarget() {
 // ── UI Core wiring ──────────────────────────────────────────────────────────
 MyMesh::Listener* UITask::meshListener() { return _core; }
 
+// On screen: a conversation left open under the lock or a dark display isn't read.
 bool UITask::isViewingChannel(uint8_t channel_idx) {
-  return ((MessagesScreen*)messages_screen)->isViewingChannel(channel_idx);
+  return curr == messages_screen && _display && _display->isOn() && !_locked
+      && ((MessagesScreen*)messages_screen)->isViewingChannel(channel_idx);
 }
 bool UITask::isViewingDM(const uint8_t* pub_key) {
-  return ((MessagesScreen*)messages_screen)->isViewingDM(pub_key);
+  return curr == messages_screen && _display && _display->isOn() && !_locked
+      && ((MessagesScreen*)messages_screen)->isViewingDM(pub_key);
 }
 void UITask::onViewedHistoryGrew(bool channel) {
   ((MessagesScreen*)messages_screen)->onViewedHistoryGrew(channel);
@@ -2732,6 +2741,11 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_unread(int which) {
   if (g_sim_ui_task_for_js) g_sim_ui_task_for_js->simUnread(which);
 }
 
+// Sim tests: the display off (0) or on (1), as the auto-off and a key press do.
+extern "C" EMSCRIPTEN_KEEPALIVE void sim_display(int on) {
+  if (g_sim_ui_task_for_js) g_sim_ui_task_for_js->simDisplay(on != 0);
+}
+
 // Sim tests: a channel message arrives, alerted in Settings > Message alert's
 // style (0 Normal, 1 Compact, 2 Off).
 extern "C" EMSCRIPTEN_KEEPALIVE void sim_message(const char* text, int style) {
@@ -3155,6 +3169,11 @@ void UITask::loop() {
 #endif
   pollConnection();   // BLE link state -> hasConnection() (see UITaskBase)
   drainCoreEvents();  // react to what the Core filed during mesh processing (alerts, wake, sounds)
+  {  // a conversation in view again (display on, unlocked): on to what came in meanwhile
+    bool on = _display && _display->isOn() && !_locked;
+    if (on && !_display_was_on && curr == messages_screen) ((MessagesScreen*)messages_screen)->onDisplayOn();
+    _display_was_on = on;
+  }
   if (status_screen) ((StatusScreen*)status_screen)->sample();   // Status history lines, once a minute
 #if UI_HAS_JOYSTICK
   uint8_t joy_rot = _node_prefs ? _node_prefs->joystick_rotation : JOYSTICK_ROTATION;

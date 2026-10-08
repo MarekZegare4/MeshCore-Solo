@@ -131,6 +131,8 @@ public:
   void simCompose(const char* text);    // the open thread's field: this text, keyboard up
   void simDm();                         // the first chat contact's thread
   void simUnread();                     // read and new messages to open on
+  void simSleep(bool on) { if (on) sleep(); else wake(); }
+  void simLock(bool on) { if (on) lockScreen(); else unlockScreen(); }
   void simSend() { sendFromCompose(); } // the field, sent
   // Navigation map (NavMap.h)
   void navTargetsPopup();
@@ -427,6 +429,7 @@ private:
   void refreshNode();
   void buildThread();
   void threadOpenAt(int first);
+  void reopenThreadIfUnread();
   void refreshThread();
   void refreshThreadAges();
   uint32_t threadSignature() const;
