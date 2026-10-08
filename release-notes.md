@@ -1,10 +1,17 @@
 ## MeshCore Solo Companion Firmware v2.0-rc2
 
+The second release candidate for 2.0. Settings carry over from rc1; coming from 1.x, read the rc1 notes below first.
+
+> [!NOTE]
+> **Wio Tracker L2: install this release by hand.** Settings › Firmware update only offers final releases, never a release candidate.
+
 ### What's new
 
 - **A third Wio Tracker L1 E-ink build, for a 4.2" 400 × 300 panel** (`WioTrackerL1Eink42`), with a 9 × 15 font, its own icons, and screens laid out for the room: tiles on the status page, a node list with a detail pane, charts, the sky view and the clock tools.
 - **Alerts drop in from the top** on the OLED and E-ink builds, as a banner that slides down and away, instead of a box over the middle of the screen. A new-message alert lasts two seconds; on E-ink it simply appears and goes.
 - **A bolt beside the battery when USB power is connected.** Where the board can sense it (the nRF52 boards, the Wio Tracker L2); the screen redraws as the cable goes in or out.
+- **Message alert** in Settings › Display (OLED and E-ink): **Normal** is the banner, **Compact** an envelope with the number of new messages beside the battery, blinking for a moment, **Off** no alert at all.
+- **The bytes a message has left**, on every screen, counted as it will go out: a channel post less your name, placeholders as they will be filled in, an accented or Cyrillic letter as two. It shows over the last 40 bytes, and nothing past the limit can be typed or sent.
 - **The splash grows with the screen**, and the start-up "Loading..." is three dots in the middle of the screen, so it needs no orientation.
 - **Wio Tracker L2:**
   - GPS on three tabs: Sky, Signal (a bar per satellite, with a dB-Hz scale) and Details.
@@ -22,6 +29,9 @@
 - **A tool opened from the Tools page goes back to Home** on Back, not to the full tools list.
 - **A change made in Settings is saved** on the way to a screen opened from it.
 - **L2 GPS signal chart** spans its box from the first bar.
+- **L2: a direct message waiting for delivery shows a dot per send**, as on the L1, so each automatic resend adds one; it used to stay at "..." until it failed.
+- **L2: the radio LED lights only while transmitting**; it was lit all the time and went dark on transmit.
+- **L2: the Nodes list and the scan results update** when a node starts or stops sharing its location live, or when its name or signal report arrives later.
 
 ---
 

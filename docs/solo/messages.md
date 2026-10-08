@@ -55,6 +55,11 @@ history). Pick a quick message or **Custom message** for the keyboard.
   `{loc}` (your GPS position), `{time}`, `{batt}`, and the readings of any
   sensor the device has: `{temp}`, `{hum}`, `{pres}`, `{alt}`, `{lux}`,
   `{dist}`, `{co2}`.
+- **How much is left:** a message holds 160 bytes, less what the send adds
+  (a channel post carries your name and ": "). Within the last 40 the
+  keyboard shows the bytes left, counting placeholders as they will be
+  filled in. An accented or Cyrillic letter takes two bytes. The keyboard
+  stops taking letters at the limit.
 
 > [!NOTE]
 > **Wio Tracker L2:** the compose bar sits under the conversation; its **+**
