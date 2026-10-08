@@ -489,24 +489,45 @@ void DataStore::saveRTCTime() {
   }
 }
 
+// The day this firmware was built (__DATE__, "Mmm dd yyyy"), 00:00 UTC: the
+// clock can't be any earlier than that.
+static uint32_t buildDayEpoch() {
+  static const char M[] = "JanFebMarAprMayJunJulAugSepOctNovDec";
+  const char* d = __DATE__;
+  int m = 1;
+  while (m <= 12 && strncmp(M + 3 * (m - 1), d, 3) != 0) m++;
+  int day = atoi(d + 4), y = atoi(d + 7);
+  if (m > 12 || day < 1 || y < 2024) return 0;
+  y -= m <= 2;   // days from 1970-01-01 (H. Hinnant's days_from_civil)
+  int era = y / 400, yoe = y - era * 400;
+  int doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + day - 1;
+  int doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+  return (uint32_t)(era * 146097 + doe - 719468) * 86400UL;
+}
+
 void DataStore::restoreRTCTime() {
   File file = openRead(_fs, "/rtc_save");
+  uint32_t t = 0;
   if (file) {
-    uint32_t t = 0;
     file.read((uint8_t *)&t, sizeof(t));
     file.close();
-#ifndef SIM_PLATFORM
-    // Real hardware has no other way to know the time before a GPS fix or
-    // a phone/CLI sync, so restoring the last-known saved time is the
-    // right call there. The sim's RTCClock (SimRTCClock.h) is already
-    // backed by the real host wall clock (time(NULL)) from the moment it's
-    // constructed -- overwriting that with a stale save from a previous
-    // visit (persisted via IDBFS, see the site's "returning visitor" note)
-    // would make a returning instance's on-screen clock drift away from
-    // the visitor's own real time instead of just showing it.
-    if (t > 1000000000UL) _clock->setCurrentTime(t);
-#endif
   }
+  // Saved at power-off and every half hour (MyMesh::loop()); a flash or a
+  // reset in between can leave it far behind -- never earlier than the build.
+  uint32_t built = buildDayEpoch();
+  if (t < built) t = built;
+#ifndef SIM_PLATFORM
+  // Real hardware has no other way to know the time before a GPS fix or
+  // a phone/CLI sync, so restoring the last-known saved time is the
+  // right call there. The sim's RTCClock (SimRTCClock.h) is already
+  // backed by the real host wall clock (time(NULL)) from the moment it's
+  // constructed -- overwriting that with a stale save from a previous
+  // visit (persisted via IDBFS, see the site's "returning visitor" note)
+  // would make a returning instance's on-screen clock drift away from
+  // the visitor's own real time instead of just showing it.
+  // Only ever forward: a board with its own RTC chip may already know better.
+  if (t > 1000000000UL && t > _clock->getCurrentTime()) _clock->setCurrentTime(t);
+#endif
 }
 
 void DataStore::loadContacts(DataStoreHost* host) {

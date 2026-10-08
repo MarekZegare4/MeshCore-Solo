@@ -1561,6 +1561,7 @@ void UITask::loop() {
       if (lvport::touched()) { lvport::swallowTouch(); wake(); }
     }
   } else {
+    if (lv_display_get_inactive_time(NULL) < 1000) the_mesh.noteUserInput();
     // Locked, nobody's using it: the lock screen goes dark after LOCK_OFF_MS
     // even with auto-off at Never (a woken-up pocket, a boot PIN, a message).
     uint32_t aoff = autoOffMillis();

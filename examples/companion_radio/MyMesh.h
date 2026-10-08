@@ -428,7 +428,11 @@ public:
   // this before rebooting; UITask::shutdown() (low-battery auto-shutdown,
   // long-press power-off) needs the same flush or a whole session's worth
   // of learned contacts can be lost.
-  void flushDirtyContacts() { if (dirty_contacts_expiry) { saveContacts(); dirty_contacts_expiry = 0; } }
+  void flushDirtyContacts() {
+    if (dirty_contacts_expiry || dirty_paths_expiry) { saveContacts(); dirty_contacts_expiry = dirty_paths_expiry = 0; }
+  }
+  // A key press / touch: the lazy contacts write waits until the user pauses.
+  void noteUserInput() { _last_input_ms = millis(); }
   DataStore* getDataStore() const { return _store; }
   void applyApc();   // (re)initialise Adaptive Power Control from prefs
   // Adaptive Power Control is suppressed while repeating: a repeater wants full,
@@ -649,6 +653,10 @@ private:
   uint32_t sign_data_len;
   uint32_t sign_data_cap;   // what the malloc got: at most MAX_SIGN_DATA_LEN
   unsigned long dirty_contacts_expiry;
+  unsigned long dirty_paths_expiry = 0;   // only paths changed: written later (not pending work)
+  unsigned long _last_input_ms = 0;
+  unsigned long _last_rtc_save_ms = 0;
+  bool _path_same = false;                // onContactPathRecv(): the path heard is the one held
   unsigned long _bot_last_ch_reply_ms;
   unsigned long _bot_last_room_reply_ms;
   unsigned long _next_auto_advert_ms;

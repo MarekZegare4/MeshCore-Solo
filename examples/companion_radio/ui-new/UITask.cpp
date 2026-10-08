@@ -3663,6 +3663,7 @@ bool UITask::addWaypoint(int32_t lat, int32_t lon, const char* label) {
 }
 
 char UITask::checkDisplayOn(char c) {
+  the_mesh.noteUserInput();
   if (_display != NULL) {
     if (!_display->isOn()) {
       _display->turnOn();

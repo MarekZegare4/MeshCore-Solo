@@ -121,6 +121,9 @@
 #define DIRECT_SEND_PERHOP_FACTOR       6.0f
 #define DIRECT_SEND_PERHOP_EXTRA_MILLIS 250
 #define LAZY_CONTACTS_WRITE_DELAY       5000
+#define LAZY_PATHS_WRITE_DELAY          60000   // a path learned (a DM's ACK brings one back): no hurry
+#define USER_QUIET_MILLIS               15000   // the contacts write stalls the loop: not while the keys are in use
+#define RTC_SAVE_INTERVAL_MILLIS        (30 * 60 * 1000UL)   // the time restored at boot after a reset or a flash
 
 #define PUBLIC_GROUP_PSK                "izOH6cXN6mrJ5e26oRXNcg=="
 
@@ -546,7 +549,9 @@ void MyMesh::onContactPathUpdated(const ContactInfo &contact) {
   memcpy(&out_frame[1], contact.id.pub_key, PUB_KEY_SIZE);
   _serial->writeFrame(out_frame, 1 + PUB_KEY_SIZE); // NOTE: app may not be connected
 
-  dirty_contacts_expiry = futureMillis(LAZY_CONTACTS_WRITE_DELAY);
+  // Only the path changed: lost on a reset it costs one flood, so its write
+  // waits; the same path heard again isn't written at all.
+  if (!_path_same && !dirty_paths_expiry) dirty_paths_expiry = futureMillis(LAZY_PATHS_WRITE_DELAY);
 }
 
 ContactInfo*  MyMesh::processAck(const uint8_t *data) {
@@ -1356,7 +1361,11 @@ bool MyMesh::onContactPathRecv(ContactInfo& contact, uint8_t* in_path, uint8_t i
     }
   }
   // let base class handle received path and data
+  int path_bytes = (out_path_len & 63) * ((out_path_len >> 6) + 1);
+  _path_same = contact.out_path_len == out_path_len && path_bytes <= MAX_PATH_SIZE
+            && memcmp(contact.out_path, out_path, path_bytes) == 0;
   bool r = BaseChatMesh::onContactPathRecv(contact, in_path, in_path_len, out_path, out_path_len, extra_type, extra, extra_len);
+  _path_same = false;
   // A flood DM's ACK comes back folded into the return path, which the base
   // class matches without going through onAckRecv() -- so the UI's delivery
   // marker never heard of it and kept resending. Tell it here too; it only
@@ -3455,9 +3464,22 @@ void MyMesh::loop() {
   }
 
   // is there are pending dirty contacts write needed?
-  if (dirty_contacts_expiry && millisHasNowPassed(dirty_contacts_expiry)) {
-    saveContacts();
-    dirty_contacts_expiry = 0;
+  // Rewriting the whole file blocks for up to a second or two on the nRF52:
+  // put off while the user is pressing keys.
+  if ((dirty_contacts_expiry && millisHasNowPassed(dirty_contacts_expiry))
+      || (dirty_paths_expiry && millisHasNowPassed(dirty_paths_expiry))) {
+    if (millis() - _last_input_ms < USER_QUIET_MILLIS) {
+      if (dirty_contacts_expiry) dirty_contacts_expiry = futureMillis(LAZY_CONTACTS_WRITE_DELAY);
+      if (dirty_paths_expiry) dirty_paths_expiry = futureMillis(LAZY_CONTACTS_WRITE_DELAY);
+    } else {
+      saveContacts();
+      dirty_contacts_expiry = dirty_paths_expiry = 0;
+    }
+  }
+
+  if (millis() - _last_rtc_save_ms > RTC_SAVE_INTERVAL_MILLIS && millis() - _last_input_ms >= USER_QUIET_MILLIS) {
+    _store->saveRTCTime();
+    _last_rtc_save_ms = millis();
   }
 
   if (_prefs.advert_auto_interval_sec > 0 && millisHasNowPassed(_next_auto_advert_ms)) {
