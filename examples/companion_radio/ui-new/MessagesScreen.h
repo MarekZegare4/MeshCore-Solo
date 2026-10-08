@@ -721,7 +721,7 @@ class MessagesScreen : public UIScreen {
         ChannelDetails ch;
         if (the_mesh.getChannel(pfx[0], ch) && ch.name[0]) {
           nm[0] = '#';
-          DisplayDriver::translateUTF8Static(nm + 1, ch.name, sizeof(nm) - 1);
+          DisplayDriver::translateUTF8Static(nm + 1, chanctl::bareName(ch.name), sizeof(nm) - 1);
         }
       } else {
         for (int idx = 0; ; idx++) {

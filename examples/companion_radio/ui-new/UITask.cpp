@@ -463,7 +463,7 @@ class HomeScreen : public UIScreen {
         ChannelDetails cd;
         if (!the_mesh.getChannel(c[k].ch, cd) || !cd.name[0]) continue;
         r.ch = c[k].ch;
-        snprintf(r.name, sizeof(r.name), "#%s", cd.name[0] == '#' ? cd.name + 1 : cd.name);
+        snprintf(r.name, sizeof(r.name), "#%s", chanctl::bareName(cd.name));
         r.n = _task->getChannelUnread(r.ch);
         r.overflow = r.n > 0 && _task->getChannelUnreadOverflow(r.ch);
       } else {
@@ -1645,7 +1645,7 @@ public:
             // '#' marks a channel apart from a contact tile — the two share the
             // grid and Enter does something different on each.
             name[0] = '#';
-            display.translateUTF8ToBlocks(name + 1, ch.name, sizeof(name) - 1);
+            display.translateUTF8ToBlocks(name + 1, chanctl::bareName(ch.name), sizeof(name) - 1);
             unread   = _task->getChannelUnread(ch_idx);
             overflow = unread > 0 && _task->getChannelUnreadOverflow(ch_idx);
             resolved = true;

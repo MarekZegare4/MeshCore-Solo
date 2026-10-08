@@ -19,6 +19,10 @@ namespace chanctl {
 
 enum Result : uint8_t { OK, FULL, NO_NAME, NO_SECRET, BAD_SECRET, EXISTS, FAILED };
 
+// A channel's name without the '#' a hashtag channel's starts with -- for a
+// label that puts its own '#' in front (as ui-new's tiles do), never "##test".
+static inline const char* bareName(const char* name) { return name[0] == '#' ? name + 1 : name; }
+
 static const char* resultText(Result r) {
   switch (r) {
     case OK:         return "Saved";
