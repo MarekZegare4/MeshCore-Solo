@@ -60,10 +60,11 @@ class UITask : public UITaskBase, public UiCoreHost {
   GenericVibration vibration;
 #endif
   unsigned long _next_refresh, _auto_off;
-  bool _display_was_on = true;   // loop(): the display back on and unlocked
+  bool _display_was_on = true;   // loop(): messagesInView() last time round
   NodePrefs* _node_prefs;
   bool _locked;
   bool _tool_from_home = false;
+  bool messagesInView() const;   // Messages on a lit, unlocked display
   unsigned long _lock_wake_until;  // when to blank screen again after locked wake (5s)
   int  _lock_seq_count;            // Enter presses while Back held (lock/unlock sequence)
   unsigned long _lock_seq_ms;      // millis() of last lock-sequence press (for timeout)

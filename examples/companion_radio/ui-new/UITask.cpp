@@ -2280,13 +2280,14 @@ void UITask::pickBotRoomTarget() {
 MyMesh::Listener* UITask::meshListener() { return _core; }
 
 // On screen: a conversation left open under the lock or a dark display isn't read.
+bool UITask::messagesInView() const {
+  return curr == messages_screen && _display && _display->isOn() && !_locked;
+}
 bool UITask::isViewingChannel(uint8_t channel_idx) {
-  return curr == messages_screen && _display && _display->isOn() && !_locked
-      && ((MessagesScreen*)messages_screen)->isViewingChannel(channel_idx);
+  return messagesInView() && ((MessagesScreen*)messages_screen)->isViewingChannel(channel_idx);
 }
 bool UITask::isViewingDM(const uint8_t* pub_key) {
-  return curr == messages_screen && _display && _display->isOn() && !_locked
-      && ((MessagesScreen*)messages_screen)->isViewingDM(pub_key);
+  return messagesInView() && ((MessagesScreen*)messages_screen)->isViewingDM(pub_key);
 }
 void UITask::onViewedHistoryGrew(bool channel) {
   ((MessagesScreen*)messages_screen)->onViewedHistoryGrew(channel);
@@ -3170,8 +3171,8 @@ void UITask::loop() {
   pollConnection();   // BLE link state -> hasConnection() (see UITaskBase)
   drainCoreEvents();  // react to what the Core filed during mesh processing (alerts, wake, sounds)
   {  // a conversation in view again (display on, unlocked): on to what came in meanwhile
-    bool on = _display && _display->isOn() && !_locked;
-    if (on && !_display_was_on && curr == messages_screen) ((MessagesScreen*)messages_screen)->onDisplayOn();
+    bool on = messagesInView();
+    if (on && !_display_was_on) ((MessagesScreen*)messages_screen)->onDisplayOn();
     _display_was_on = on;
   }
   if (status_screen) ((StatusScreen*)status_screen)->sample();   // Status history lines, once a minute

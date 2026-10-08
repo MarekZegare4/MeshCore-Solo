@@ -430,6 +430,7 @@ private:
   void buildThread();
   void threadOpenAt(int first);
   void reopenThreadIfUnread();
+  bool threadInView() const;   // a thread on a lit, unlocked screen
   void refreshThread();
   void refreshThreadAges();
   uint32_t threadSignature() const;

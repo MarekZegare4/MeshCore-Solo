@@ -3469,8 +3469,9 @@ void MyMesh::loop() {
   if ((dirty_contacts_expiry && millisHasNowPassed(dirty_contacts_expiry))
       || (dirty_paths_expiry && millisHasNowPassed(dirty_paths_expiry))) {
     if (millis() - _last_input_ms < USER_QUIET_MILLIS) {
-      if (dirty_contacts_expiry) dirty_contacts_expiry = futureMillis(LAZY_CONTACTS_WRITE_DELAY);
-      if (dirty_paths_expiry) dirty_paths_expiry = futureMillis(LAZY_CONTACTS_WRITE_DELAY);
+      unsigned long later = futureMillis(LAZY_CONTACTS_WRITE_DELAY);
+      if (dirty_contacts_expiry) dirty_contacts_expiry = later;
+      if (dirty_paths_expiry) dirty_paths_expiry = later;
     } else {
       saveContacts();
       dirty_contacts_expiry = dirty_paths_expiry = 0;

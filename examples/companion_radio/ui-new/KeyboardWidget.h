@@ -546,6 +546,7 @@ struct KeyboardWidget {
     return p;
   }
 
+  // Backspace: the codepoint before the cursor.
   void deleteBeforeCursor() {
     t9_cell = -1;
     if (cursor_pos <= 0) return;
@@ -600,9 +601,7 @@ struct KeyboardWidget {
     // Compact mode only ever draws 2 short hint lines (no grid, no status line
     // -- see below), but reserves at least as much height as the smallest real
     // grid (T9's 3 rows) would need, rather than shrinking to just those 2
-    // lines: cursor_mode's own 3-line hint (drawn in this same region,
-    // regardless of Compact, for a physical-button user) already relies on
-    // that floor and would otherwise get clipped.
+    // lines, so the preview keeps the same height whichever mode is on.
     // A tall screen (the 4.2" panel: 20 lines) gives the keys half a line more each.
     const int key_lh    = display.height() >= 18 * lh ? lh * 3 / 2 : lh;
     const int kb_h      = compact_ui ? (KB_T9_ROWS + 1) * lh : (rows + 1) * key_lh;
@@ -1077,13 +1076,7 @@ struct KeyboardWidget {
     // no ambiguity to resolve at this layer -- pollCardKB() already decided.
     if (c == KEY_KB_ENTER) return DONE;
     if (c == 0x08) {
-      t9_cell = -1;   // invalidate any pending T9 cycle -- see the grid paths below
-      if (cursor_pos > 0) {
-        int n = kbUtf8LastCharBytes(buf, cursor_pos);
-        memmove(buf + cursor_pos - n, buf + cursor_pos, len - cursor_pos);
-        len -= n; cursor_pos -= n;
-        buf[len] = '\0';
-      }
+      deleteBeforeCursor();   // also ends any pending T9 cycle -- see the grid paths below
       return NONE;
     }
     if (c >= 0x20 && c <= 0x7E) {
@@ -1140,13 +1133,7 @@ struct KeyboardWidget {
         }
         // special row
         if (col == 0) {
-          t9_cell = -1;
-          if (cursor_pos > 0) {
-            int n = kbUtf8LastCharBytes(buf, cursor_pos);
-            memmove(buf + cursor_pos - n, buf + cursor_pos, len - cursor_pos);
-            len -= n; cursor_pos -= n;
-            buf[len] = '\0';
-          }
+          deleteBeforeCursor();
         } else if (col == 1) {
           pin_mode = false;   // ABC switch: the user's own layout
           row = col = 0;
@@ -1304,14 +1291,7 @@ struct KeyboardWidget {
               buf[len] = '\0';
             }
             break;
-          case 2:
-            if (cursor_pos > 0) {
-              int n = kbUtf8LastCharBytes(buf, cursor_pos);
-              memmove(buf + cursor_pos - n, buf + cursor_pos, len - cursor_pos);
-              len -= n; cursor_pos -= n;
-              buf[len] = '\0';
-            }
-            break;
+          case 2: deleteBeforeCursor(); break;
           case 3:
             openPlaceholders();
             break;

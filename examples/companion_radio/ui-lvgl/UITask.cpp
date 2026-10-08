@@ -1914,12 +1914,16 @@ void UITask::onMessageArrived(const UiEvent& ev) {
 }
 
 // On screen: a conversation left open under the lock or a dark display isn't read.
+bool UITask::threadInView() const {
+  return !_asleep && !locked() && _screen == SCR_THREAD;
+}
+
 bool UITask::isViewingChannel(uint8_t channel_idx) {
-  return !_asleep && !locked() && _screen == SCR_THREAD && _thread_is_channel && _thread_channel == channel_idx;
+  return threadInView() && _thread_is_channel && _thread_channel == channel_idx;
 }
 
 bool UITask::isViewingDM(const uint8_t* pub_key) {
-  return !_asleep && !locked() && _screen == SCR_THREAD && !_thread_is_channel && memcmp(_thread_key, pub_key, 4) == 0;
+  return threadInView() && !_thread_is_channel && memcmp(_thread_key, pub_key, 4) == 0;
 }
 
 // ── Status bar + toast (top layer, over every screen) ─────────────────────────
