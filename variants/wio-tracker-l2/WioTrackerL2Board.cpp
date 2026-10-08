@@ -77,8 +77,9 @@ bool WioTrackerL2Board::initExpander() {
   expSetOutput(EXP_PIN_GNSS_RST, HIGH);
   delay(10);
   expWritePin(EXP_PIN_GNSS_RST, LOW);
-  // user LED is driven active-low through the expander; idle level HIGH = off
-  expSetOutput(EXP_PIN_USER_LED, HIGH);
+  // user LED: lit while the pin is HIGH (it read as active-low before, and
+  // stayed lit except while transmitting); idle LOW = off
+  expSetOutput(EXP_PIN_USER_LED, LOW);
   delay(10);
   expSetOutput(EXP_PIN_GROVE_EN, HIGH);
   delay(10);
@@ -194,9 +195,8 @@ void WioTrackerL2Board::begin() {
 }
 
 void WioTrackerL2Board::setLed(bool on) {
-  // active low: HIGH = off
   if (expander_ok) {
-    expWritePin(EXP_PIN_USER_LED, !on);
+    expWritePin(EXP_PIN_USER_LED, on);
   }
 }
 

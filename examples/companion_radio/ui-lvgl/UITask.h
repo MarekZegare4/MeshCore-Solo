@@ -129,6 +129,8 @@ public:
   void setVectorMap(bool on);
   void simMapAt(const char* spec);      // Map tools > Live tiles
   void simCompose(const char* text);    // the open thread's field: this text, keyboard up
+  void simDm();                         // the first chat contact's thread
+  void simSend() { sendFromCompose(); } // the field, sent
   // Navigation map (NavMap.h)
   void navTargetsPopup();
   void navClosePopup();

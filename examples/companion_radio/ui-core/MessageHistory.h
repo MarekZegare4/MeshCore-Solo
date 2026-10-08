@@ -460,6 +460,9 @@ public:
         e.ack_tag         = expected_ack;   // each attempt has a distinct ACK CRC
         e.ack_deadline_ms = now + est_timeout + 4000;
         e.resends_left--;
+#ifdef HIST_ARCHIVE
+        if (_arc) _arc->dmUpdate(e);        // the thread is read from it: a dot per send
+#endif
       } else {
         failDm(e);                          // couldn't compose/send — give up
       }

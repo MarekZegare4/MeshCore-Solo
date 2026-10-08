@@ -3177,8 +3177,9 @@ void UITask::refreshScanPopup() {
   uint32_t sig = (uint32_t)n + (_scanning ? 0x10000u : 0);
   for (int i = 0; i < n; i++) {
     const NearbyModel::Entry& e = _scan->at(i);
-    sig = sig * 31 + e.rssi * 7 + e.snr_x4 + e.is_known;
+    sig = sig * 31 + e.rssi * 7 + e.snr_x4 + e.remote_snr_x4 * 3 + e.type * 5 + e.is_known;
     for (int k = 0; k < 4; k++) sig = sig * 31 + e.pub_key[k];
+    for (const char* p = e.name; *p; p++) sig = sig * 31 + (uint8_t)*p;
   }
   if (sig == _scan_sig || vlist::pressed(_scan_list)) return;   // held: once it's let go
   _scan_sig = sig;
@@ -3224,10 +3225,12 @@ void UITask::openScanNode(int row) {
 
 // Changes whenever a rebuild would show something different.
 uint32_t UITask::nearbySignature() const {
-  uint32_t sig = (uint32_t)_nearby->count() * 2654435761u + _nearby->sortMode() + (_scanning ? 7 : 0);
+  uint32_t sig = (uint32_t)_nearby->count() * 2654435761u + _nearby->sortMode() + (_scanning ? 7 : 0)
+               + (_prefs && _prefs->units_imperial ? 13 : 0);
   for (int i = 0; i < _nearby->count(); i++) {
     const NearbyModel::Entry& e = _nearby->at(i);
-    sig = sig * 31 + e.contact_idx + (uint32_t)e.lastmod + (uint32_t)(e.dist_km * 100) + e.rssi + e.fav;
+    sig = sig * 31 + e.contact_idx + (uint32_t)e.lastmod + (uint32_t)(e.dist_km * 100) + e.rssi + e.fav
+        + e.type * 5 + (e.is_live ? 3 : 0);
     for (const char* p = e.name; *p; p++) sig = sig * 31 + (uint8_t)*p;
   }
   // Ages are shown in minutes, so let the list re-render once a minute anyway.
@@ -3730,7 +3733,7 @@ uint32_t UITask::threadSignature() const {
     sig = n;
     for (int j = 0; j < n && j < 8; j++) {
       const DmHistEntry& e = h.dmAtPos(h.dmHistEntryForContact(_thread_key, j));
-      sig = sig * 31 + e.timestamp + h.dmEffectiveStatus(e);
+      sig = sig * 31 + e.timestamp + h.dmEffectiveStatus(e) + e.attempt * 7;   // attempt: a dot per resend
     }
   }
   return sig;
@@ -4053,7 +4056,7 @@ void UITask::refreshThread() {
   };
   auto stateOf = [&](int i) -> uint32_t {
     if (_thread_is_channel) return s_th_ch[i].relay_status | (uint32_t)s_th_ch[i].path_len << 8;
-    return s_th_dm[i].outgoing ? 0x100u | h.dmEffectiveStatus(s_th_dm[i]) : 0;
+    return s_th_dm[i].outgoing ? 0x100u | h.dmEffectiveStatus(s_th_dm[i]) | (uint32_t)s_th_dm[i].attempt << 16 : 0;
   };
   // Entry i's bubble (at the list's end) and its menu / position slots.
   auto build = [&](int i) {
@@ -4091,7 +4094,13 @@ void UITask::refreshThread() {
         switch (h.dmEffectiveStatus(e)) {
           case ACK_OK:      st = LV_SYMBOL_OK; col = theme::OK; break;
           case ACK_FAIL:    st = LV_SYMBOL_CLOSE; col = theme::FAIL; break;
-          case ACK_PENDING: st = "..."; break;
+          case ACK_PENDING: {   // a dot per send, as ui-new: grows with each auto-resend
+            static char dots[9];
+            int k = e.attempt + 1 < 8 ? e.attempt + 1 : 8;
+            memset(dots, '.', k); dots[k] = '\0';
+            st = dots;
+            break;
+          }
           default:          st = ""; break;
         }
       }
@@ -4657,6 +4666,13 @@ void UITask::simCompose(const char* text) {
   lv_textarea_set_text(_compose_ta, text);
 }
 
+void UITask::simDm() {
+  for (int i = 0; i < the_mesh.getNumContacts(); i++) {
+    ContactInfo c;
+    if (the_mesh.getContactByIdx(MAX_ANON_CONTACTS + i, c) && c.type == ADV_TYPE_CHAT) { openDM(c.id.pub_key); return; }
+  }
+}
+
 // Sim tests: straight to a screen by name.
 extern "C" EMSCRIPTEN_KEEPALIVE void sim_open(const char* name) {
   if (!s_ui) return;
@@ -4679,6 +4695,8 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_open(const char* name) {
   if (!strncmp(name, "map@", 4)) { s_ui->simMapAt(name + 4); return; }   // "map@lat,lon,z"
   if (!strncmp(name, "channel@", 8)) { s_ui->openChannel(atoi(name + 8)); return; }
   if (!strncmp(name, "compose@", 8)) { s_ui->simCompose(name + 8); return; }
+  if (!strcmp(name, "dm")) { s_ui->simDm(); return; }
+  if (!strcmp(name, "send")) { s_ui->simSend(); return; }
   if (!strcmp(name, "vector")) { s_ui->setVectorMap(true); return; }
   if (!strcmp(name, "maptools")) { s_ui->navToolsPopup(); return; }
   if (!strcmp(name, "areasel")) { s_ui->areaSelectBegin(); return; }

@@ -30,7 +30,7 @@
 #define EXP_PIN_GROVE_EN     7   // output - Grove port power
 #define EXP_PIN_TP_RST       8   // output - touch panel reset
 #define EXP_PIN_GNSS_RST     9   // output - GNSS reset (active HIGH)
-#define EXP_PIN_USER_LED    10   // output - mesh/user LED (active low)
+#define EXP_PIN_USER_LED    10   // output - mesh/user LED (active high; also GNSS wakeup)
 #define EXP_PIN_OTG_EN      11   // output - USB OTG power
 #define EXP_PIN_PA_EN       12   // output - speaker amp power
 #define EXP_PIN_GNSS_EN     13   // output - GNSS power
