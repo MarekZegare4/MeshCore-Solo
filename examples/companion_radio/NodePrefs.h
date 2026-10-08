@@ -532,6 +532,12 @@ struct NodePrefs {  // persisted to file
   // default" on load (DataStore sanitize).
   uint8_t  ch_scope_follow;
 
+  // ── New-message alert (ui-new) ─────────────────────────────────────────
+  // How a message arriving shows: the banner from the top, an envelope with
+  // a count in the corner, or nothing (the sound and the wake still happen).
+  static const uint8_t MSG_ALERT_NORMAL = 0, MSG_ALERT_COMPACT = 1, MSG_ALERT_OFF = 2;
+  uint8_t  msg_alert;
+
   // Single source of truth for the live-share option tables (shared by the Map
   // UI labels and the auto-send engine in UITask).
   static const uint8_t LOC_SHARE_MOVE_COUNT = 4;

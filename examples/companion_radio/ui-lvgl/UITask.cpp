@@ -4434,6 +4434,7 @@ void UITask::schemaSection(int i) {
   if (sec == settings::SEC_SOUND) buildSoundRows(card, true);   // On / Off / Auto
   for (int k = i; k < settings::COUNT && settings::ALL[k].section == sec; k++) {
     if (settings::ALL[k].offset == offsetof(NodePrefs, lock_compact)) continue;   // ui-new's lock look; the slide card has one
+    if (settings::ALL[k].offset == offsetof(NodePrefs, msg_alert)) continue;      // ui-new's alert; the L2 has its own
     schemaRow(card, k);
   }
 }

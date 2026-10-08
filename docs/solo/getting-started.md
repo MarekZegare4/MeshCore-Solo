@@ -72,6 +72,11 @@ the top of the screen and slide away after a moment; on e-ink they just
 appear and go. A message's lasts two seconds. Typing on the keyboard isn't
 interrupted.
 
+Settings › Display › Message alert picks how a new message shows: **Normal**
+(the banner), **Compact** (an envelope and a count in the top-right corner,
+blinking for a moment, covering nothing else) or **Off** (no alert; the sound
+and waking the screen still follow their own settings).
+
 The battery sits at the top right, as an icon, a percentage or the voltage
 (Settings › Display). A small bolt beside it means external power is
 connected over USB.

@@ -795,6 +795,16 @@ class HomeScreen : public UIScreen {
 
     int x = battLeftX;
     const int name_min = (reserve_left >= 0) ? reserve_left : display.getCharWidth() * 5;
+    // Settings > Message alert Compact: the envelope and its count, first by the
+    // battery; its place is kept through the blink so nothing beside it jumps.
+    if (const int n = _task->msgBadgeCount()) {
+      const int ix = x - mailCountWidth(display, n) - ind_gap - 2 * miniIconScale(display);   // the icons' boxes pad theirs
+      if (ix >= name_min) {
+        if (_task->msgBadgeLit()) drawMailCount(display, ix, 0, ind_h, n);
+        _task->msgBadgeInBar();
+        x = ix;
+      }
+    }
     for (const Sicon& s : icons) {
       if (!s.active) continue;
       int ix = x - ind - ind_gap;
@@ -2191,6 +2201,15 @@ void UITask::gotoMessagesScreen() {
 }
 
 #ifdef SIM_PLATFORM
+void UITask::simMessage(const char* text) {
+  UiEvent ev = {};
+  ev.type = UiEventType::MessageArrived;
+  ev.kind = UIEventType::channelMessage;
+  ev.idx = 0;
+  snprintf(ev.text, sizeof(ev.text), "%s", text);
+  onMessageArrived(ev);
+}
+
 void UITask::simCompose(const char* text) {
   gotoMessagesScreen();
   ((MessagesScreen*)messages_screen)->simCompose(text);
@@ -2301,7 +2320,8 @@ void UITask::clearAllDMUnread() { _core->clearAllDMUnread(); }
 
 void UITask::showAlert(const char* text, int duration_millis) {
   snprintf(_alert, sizeof(_alert), "%s", text);
-  if (!alertShowing()) _alert_t0 = millis();   // a banner already down only changes its text
+  if (!alertShowing() || _alert_badge) _alert_t0 = millis();   // a banner already down only changes its text
+  _alert_badge = false;
   _alert_expiry = (millis() + duration_millis) | 1;   // 0 means none
 }
 
@@ -2360,7 +2380,14 @@ void UITask::onMessageArrived(const UiEvent& ev) {
   bool in_view = curr == messages_screen && _display && _display->isOn() && !_locked &&
                  ((ev.kind == UIEventType::contactMessage && ev.flag && isViewingDM(ev.key)) ||
                   (ev.kind == UIEventType::channelMessage && ev.idx >= 0 && isViewingChannel((uint8_t)ev.idx)));
-  if (!in_view) {
+  const uint8_t style = _node_prefs ? _node_prefs->msg_alert : NodePrefs::MSG_ALERT_NORMAL;
+  if (!in_view && style == NodePrefs::MSG_ALERT_COMPACT) {
+    // The envelope counts the run: each message adds one and blinks it again.
+    _alert_count = alertShowing() && _alert_badge ? _alert_count + 1 : 1;
+    _alert_badge = true;
+    _alert_t0 = millis();
+    _alert_expiry = (millis() + BADGE_MS) | 1;
+  } else if (!in_view && style == NodePrefs::MSG_ALERT_NORMAL) {
     char alert_buf[80];
     snprintf(alert_buf, sizeof(alert_buf), "Msg: %.20s", ev.text);
     showAlert(alert_buf, 2000);
@@ -2409,6 +2436,7 @@ void UITask::userLedHandler() {
 // banner instead. Uses the shared wrap scratch (s_wrap_*) -- single-threaded
 // render path, same contract as the message views.
 void UITask::renderAlertOverlay() {
+  if (_alert_badge) { renderMsgBadge(); return; }
   _display->setTextSize(1);
   const int lh    = _display->getLineHeight();
   const int pad   = 3;
@@ -2434,6 +2462,21 @@ void UITask::renderAlertOverlay() {
   _display->drawRect(0, y, W, h);
   for (int i = 0; i < nl; i++)
     _display->drawTextCentered(W / 2, y + pad + i * lh, s_wrap_lines[i]);
+}
+
+// Settings > Message alert Compact: an envelope and how many messages came. On
+// Home it sits among the status icons (HomeScreen::renderBatteryIndicator);
+// it blinks for a while after each one (not on e-ink), then holds till it goes.
+void UITask::renderMsgBadge() {
+  if (_badge_in_bar) return;   // among the Home status icons already
+  // Elsewhere in the header's line, at its right, clear of the line under it.
+  DisplayDriver& d = *_display;
+  const int s = miniIconScale(d), h = d.headerH() - d.sepH(), w = mailCountWidth(d, _alert_count);
+  const int x = d.width() - w - 2 * s;
+  d.setColor(DisplayDriver::DARK);
+  d.fillRect(x - 2 * s, 0, w + 4 * s, h);
+  d.setColor(DisplayDriver::LIGHT);
+  if (msgBadgeLit()) drawMailCount(d, x, 0, h, _alert_count);
 }
 
 void UITask::setCurrScreen(UIScreen* c) {
@@ -2671,6 +2714,14 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_enqueue_key(char c) {
 // Sim tests: a channel post's keyboard, holding `text`.
 extern "C" EMSCRIPTEN_KEEPALIVE void sim_compose(const char* text) {
   if (g_sim_ui_task_for_js) g_sim_ui_task_for_js->simCompose(text);
+}
+
+// Sim tests: a channel message arrives, alerted in Settings > Message alert's
+// style (0 Normal, 1 Compact, 2 Off).
+extern "C" EMSCRIPTEN_KEEPALIVE void sim_message(const char* text, int style) {
+  if (!g_sim_ui_task_for_js) return;
+  if (NodePrefs* p = g_sim_ui_task_for_js->getNodePrefs()) p->msg_alert = (uint8_t)style;
+  g_sim_ui_task_for_js->simMessage(text);
 }
 
 // Long-press counterpart -- the host page's own press-and-hold timer (see
@@ -3357,6 +3408,7 @@ void UITask::loop() {
       // While the prompt is up the password keyboard replaces the lockscreen view
       PERF_T0();
       _display->startFrame();
+      _badge_in_bar = false;
       _kb.beginFrame();
       int delay_millis = _kb.render(*_display);
       if (alertShowing()) renderAlertOverlay();   // "Wrong PIN", and a ringing alarm
@@ -3364,10 +3416,11 @@ void UITask::loop() {
       _display->endFrame();
       PERF_T2();
       _next_refresh = millis() + delay_millis;
-      if (alertSliding()) _next_refresh = millis() + 25;
+      alertFrameCap();
     } else if (_locked && refreshDue() && home) {
       PERF_T0();
       _display->startFrame();
+      _badge_in_bar = false;
       if (curr && curr != home && (millis() - ui_started_at < BOOT_SCREEN_MILLIS)) {
         // Boot splash is still up on a boot-locked device
         _next_refresh = millis() + curr->render(*_display);
@@ -3379,7 +3432,7 @@ void UITask::loop() {
       // played its melody against a screen that never said what was ringing.
       if (alertShowing()) {
         renderAlertOverlay();
-        if (alertSliding()) _next_refresh = millis() + 25;
+        alertFrameCap();
       }
       PERF_T1();
       _display->endFrame();
@@ -3387,6 +3440,7 @@ void UITask::loop() {
     } else if (!_locked && refreshDue() && curr) {
       PERF_T0();
       _display->startFrame();
+      _badge_in_bar = false;
       _kb.beginFrame();
       int delay_millis = curr->render(*_display);
       // Skip the alert overlay (new-message toast) while the keyboard is the
@@ -3402,7 +3456,7 @@ void UITask::loop() {
         // history scrollbar reserve — don't stay stuck behind the alert. Unchanged
         // frames are skipped by the display CRC, so e-ink isn't thrashed.
         _next_refresh = millis() + delay_millis;
-        if (alertSliding()) _next_refresh = millis() + 25;   // the slide, a frame at a time
+        alertFrameCap();   // the slide or the blink, a frame at a time
         if ((int32_t)(_next_refresh - _alert_expiry) > 0) _next_refresh = _alert_expiry;
       } else {
         _next_refresh = millis() + delay_millis;

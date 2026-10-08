@@ -549,6 +549,15 @@ MINI_ICON(ICON_CHART, 9,   // ascending bars — Home › Status
   packRow("..#.#.#.#"),
   packRow("#.#.#.#.#"),
   packRow("#########"));
+MINI_ICON(ICON_MAIL, 11,   // envelope -- the compact new-message alert
+  packRow("###########"),
+  packRow("##.......##"),
+  packRow("#.#.....#.#"),
+  packRow("#..#...#..#"),
+  packRow("#...#.#...#"),
+  packRow("#....#....#"),
+  packRow("#.........#"),
+  packRow("###########"));
 #elif MINI_ICONS_LARGE
 MINI_ICON(ICON_MUTE, 8,   // speaker + cross (sound off)
   packRow("...#...."),
@@ -631,6 +640,14 @@ MINI_ICON(ICON_CHART, 7,   // ascending bars — Home › Status
   packRow("..#.#.#"),
   packRow("#.#.#.#"),
   packRow("#######"));
+MINI_ICON(ICON_MAIL, 9,   // envelope -- the compact new-message alert
+  packRow("#########"),
+  packRow("##.....##"),
+  packRow("#.#...#.#"),
+  packRow("#..#.#..#"),
+  packRow("#...#...#"),
+  packRow("#.......#"),
+  packRow("#########"));
 #else
 MINI_ICON(ICON_MUTE, 6,   // speaker + cross (sound off)
   packRow("..#..."),
@@ -706,7 +723,30 @@ MINI_ICON(ICON_CHART, 5,   // ascending bars — Home › Status
   packRow("#.#.#"),
   packRow("#.#.#"),
   packRow("#####"));
+MINI_ICON(ICON_MAIL, 7,   // envelope -- the compact new-message alert
+  packRow("#######"),
+  packRow("##...##"),
+  packRow("#.#.#.#"),
+  packRow("#..#..#"),
+  packRow("#######"));
 #endif
+
+// Settings > Message alert Compact: an envelope and the count beside it in
+// mini digits, centred in a box box_h tall from y -- the status icons' row,
+// or a header's line.
+inline int mailCountWidth(DisplayDriver& d, int n) {
+  const int s = miniIconScale(d);
+  return ICON_MAIL.w * s + 2 * s + miniIconNumberWidth(d, n);
+}
+inline void drawMailCount(DisplayDriver& d, int x, int y, int box_h, int n) {
+  const int s = miniIconScale(d);
+  miniIconDrawTop(d, x, y + (box_h - ICON_MAIL.h * s) / 2, ICON_MAIL);
+  x += ICON_MAIL.w * s + 2 * s;
+  const int dy = y + (box_h - ICON_DIGIT_0.h * s) / 2;
+  if (n > 99) n = 99;
+  if (n >= 10) { miniIconDrawTop(d, x, dy, *MINI_ICON_DIGITS[n / 10]); x += ICON_DIGIT_0.w * s + s; }
+  miniIconDrawTop(d, x, dy, *MINI_ICON_DIGITS[n % 10]);
+}
 
 // Home-carousel page glyphs — a uniform 5x5 set, deliberately smaller than the
 // menu/status icons above, used in place of the page-indicator dots. One per

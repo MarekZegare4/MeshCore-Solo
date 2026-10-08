@@ -333,6 +333,7 @@ static void sanitize(NodePrefs& p) {
   if (!battery::validCurve(p.batt_curve_mv)) memset(p.batt_curve_mv, 0, sizeof(p.batt_curve_mv));
   flag(p.lock_compact, 0);
   flag(p.ble_off, 0);
+  if (p.msg_alert > NodePrefs::MSG_ALERT_OFF) p.msg_alert = NodePrefs::MSG_ALERT_NORMAL;
   if (!p.ch_scope_follow) {
     for (uint8_t i = 0; i < NodePrefs::MAX_SCOPED_CHANNELS; i++)
       if (p.ch_scope_idx[i] == 0) p.ch_scope_idx[i] = NodePrefs::CH_SCOPE_DEFAULT;

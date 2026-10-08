@@ -80,6 +80,12 @@ class UITask : public UITaskBase, public UiCoreHost {
   KeyboardWidget _kb;        // shared across all screens — only one active at a time
   unsigned long _alert_expiry;
   unsigned long _alert_t0 = 0;   // when the banner began to come down
+  // Settings > Message alert Compact: the alert is an envelope and a count
+  // in the top-right corner instead of the banner (renderMsgBadge()).
+  bool _alert_badge = false;
+  int  _alert_count = 0;          // messages in this run of the envelope
+  bool _badge_in_bar = false;     // this frame's Home status bar drew it
+  static const int BADGE_BLINK_MS = 350, BADGE_BLINK_FOR = 2100, BADGE_MS = 3000;
   int _last_notif_ch_idx;
   uint8_t _last_notif_dm_prefix[4];
   bool _last_notif_dm_valid;
@@ -244,6 +250,7 @@ private:
   // Shared by the normal render path and the lock screen (so a ringing
   // alarm's label is visible while locked).
   void renderAlertOverlay();
+  void renderMsgBadge();
 
 public:
   // Lock now, from the Home Power panel (unlocking stays the gesture / PIN prompt).
@@ -276,6 +283,7 @@ public:
   void gotoMessagesScreen();
 #ifdef SIM_PLATFORM
   void simCompose(const char* text);   // sim tests: a channel post's keyboard holding `text`
+  void simMessage(const char* text);   // sim tests: a channel message arrives
 #endif
   void openContactDM(const ContactInfo& ci);
   void openChannelHistory(uint8_t channel_idx);   // Favourites dial: open a pinned channel
@@ -355,12 +363,30 @@ public:
   // Wrap-safe (millis() rolls over after ~49.7 days). _next_refresh 0 = draw
   // on the next pass; _alert_expiry 0 = no alert.
   bool refreshDue() const { return !_next_refresh || (int32_t)(millis() - _next_refresh) >= 0; }
-  // The banner is on its way in or out (not on e-ink): redraw every frame.
-  bool alertSliding() const {
-    return alertShowing() && !_display->isEink() &&
-           ((int32_t)(millis() - _alert_t0) < 150 || (int32_t)(_alert_expiry - millis()) < 150);
+  // The banner on its way in or out, or the envelope blinking (not on e-ink):
+  // the ms to the next frame it needs, 0 = none sooner than the screen's own.
+  int alertFrameMs() const {
+    if (!alertShowing() || _display->isEink()) return 0;
+    const int el = (int)(millis() - _alert_t0);
+    if (_alert_badge) return el < BADGE_BLINK_FOR ? BADGE_BLINK_MS - el % BADGE_BLINK_MS : 0;
+    return (el < 150 || (int32_t)(_alert_expiry - millis()) < 150) ? 25 : 0;
+  }
+  // Brings the next redraw forward to the alert's next frame, never later than
+  // the screen asked for (its own animation keeps its pace under the blink).
+  void alertFrameCap() {
+    const int f = alertFrameMs();
+    if (f && (int32_t)(_next_refresh - (millis() + f)) > 0) _next_refresh = millis() + f;
   }
   bool alertShowing() const { return _alert_expiry && (int32_t)(_alert_expiry - millis()) > 0; }
+  // Message alert Compact: how many messages the envelope counts (0 = none
+  // up), whether it is lit (it blinks a while after each), and the Home status
+  // bar saying it drew it among its icons, so the overlay stays out.
+  int  msgBadgeCount() const { return alertShowing() && _alert_badge ? _alert_count : 0; }
+  bool msgBadgeLit() const {
+    const int el = (int)(millis() - _alert_t0);
+    return _display->isEink() || el >= BADGE_BLINK_FOR || (el / BADGE_BLINK_MS) % 2 == 0;
+  }
+  void msgBadgeInBar() { _badge_in_bar = true; }
   // Clock tools engine API (ui-core/ClockEngine.h) — ClockToolsScreen drives
   // these; the engine runs from tickCore() so it fires regardless of the screen.
   void onAlarmChanged();

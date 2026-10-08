@@ -131,6 +131,10 @@ static void optBattDisplay(uint8_t v, char* b, int n, const NodePrefs&) {
   static const char* L[] = { "Icon", "Percent", "Voltage" };
   snprintf(b, n, "%s", L[v < 3 ? v : 0]);
 }
+static void optMsgAlert(uint8_t v, char* b, int n, const NodePrefs&) {
+  static const char* const L[] = { "Normal", "Compact", "Off" };
+  snprintf(b, n, "%s", L[v < 3 ? v : 0]);
+}
 static void optLockLook(uint8_t v, char* b, int n, const NodePrefs&) { snprintf(b, n, "%s", v ? "Compact" : "Big"); }
 static void optExpiry(uint8_t v, char* b, int n, const NodePrefs&) {
   snprintf(b, n, "%s", NodePrefs::contactExpiryLabel(v));
@@ -196,6 +200,7 @@ static const Setting ALL[] = {
   IDX("Brightness", nullptr, SEC_DISPLAY, display_brightness, 5, optBrightness, applyDisplay),
   MAP("Screen off after", "Without a touch", SEC_DISPLAY, auto_off_secs, AUTO_OFF, optAutoOff, nullptr),
   SW("Wake on message", "Screen on for new messages", SEC_DISPLAY, msg_wake, nullptr),
+  IDX("Message alert", "Banner, corner envelope or none", SEC_DISPLAY, msg_alert, 3, optMsgAlert, nullptr),
   SW("Lock screen", "Slide to unlock after sleep", SEC_DISPLAY, auto_lock, nullptr),
   IDX("Lock clock", "Big, or compact with the clock fields", SEC_DISPLAY, lock_compact, 2, optLockLook, nullptr),
   IDX("Battery display", "In the status bar", SEC_DISPLAY, batt_display_mode, 3, optBattDisplay, nullptr),
@@ -234,6 +239,7 @@ static const int COUNT = (int)(sizeof(ALL) / sizeof(ALL[0]));
 static const struct { uint16_t offset; const char* text; } SHORT_LABELS[] = {
   { NP_OFF(display_brightness), "Bright" },      { NP_OFF(auto_off_secs), "Auto off" },
   { NP_OFF(msg_wake), "Msg wake" },              { NP_OFF(auto_lock), "Auto lock" },
+  { NP_OFF(msg_alert), "Msg alert" },
   { NP_OFF(batt_display_mode), "Batt disp" },    { NP_OFF(low_batt_mv), "Low batt" },
   { NP_OFF(gps_interval), "GPS pwr" },           { NP_OFF(clock_12h), "12h clock" },
   { NP_OFF(clock_hide_seconds), "Seconds" },     { NP_OFF(units_imperial), "Imperial" },
