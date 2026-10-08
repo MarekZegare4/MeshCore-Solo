@@ -130,6 +130,7 @@ public:
   void simMapAt(const char* spec);      // Map tools > Live tiles
   void simCompose(const char* text);    // the open thread's field: this text, keyboard up
   void simDm();                         // the first chat contact's thread
+  void simUnread();                     // read and new messages to open on
   void simSend() { sendFromCompose(); } // the field, sent
   // Navigation map (NavMap.h)
   void navTargetsPopup();
@@ -425,6 +426,7 @@ private:
   void buildNode();
   void refreshNode();
   void buildThread();
+  void threadOpenAt(int first);
   void refreshThread();
   void refreshThreadAges();
   uint32_t threadSignature() const;
@@ -539,6 +541,9 @@ private:
   bool     _thread_is_channel = false;
   int      _thread_skip = 0;          // newest messages above the page shown (Older / Newer)
   bool     _thread_scroll_top = false;
+  int      _thread_new = -1;          // on opening: newest-first index of the first unread (-1: none)
+  uint32_t _thread_new_key = 0;       // and that message, marked with "New" while the thread is open
+  bool     _thread_new_on = false;
   int      loadThreadPage(int& total);
   uint8_t  _thread_channel = 0;
   uint8_t  _thread_key[PUB_KEY_SIZE] = {0};

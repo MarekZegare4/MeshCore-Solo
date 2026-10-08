@@ -3620,22 +3620,33 @@ void UITask::setKeyboardVisible(bool show) {
   }
 }
 
+static const int THREAD_MAX_SHOWN = 50;   // newest bubbles built per conversation
+
+// Opens on the first unread (newest-first index `first`, -1: none), "New"
+// above it: the page that holds it, a few read ones above.
+void UITask::threadOpenAt(int first) {
+  _thread_new = first;
+  _thread_new_on = false;
+  _thread_skip = first < THREAD_MAX_SHOWN ? 0 : first - (THREAD_MAX_SHOWN - 4);
+}
+
 void UITask::openChannel(uint8_t channel_idx) {
   _thread_is_channel = true;
   _thread_channel = channel_idx;
-  _thread_skip = 0;
-  _core->history.setChUnread(channel_idx, 0);
+  MessageHistory& h = _core->history;
+  threadOpenAt(h.firstUnreadChannel(channel_idx, h.chUnread(channel_idx)));
+  h.setChUnread(channel_idx, 0);
   _screen = SCR_THREAD;
   buildThread();
 }
 
 void UITask::openDM(const uint8_t* pub_key) {
   _thread_is_channel = false;
-  _thread_skip = 0;
   memset(_thread_key, 0, sizeof(_thread_key));
   ContactInfo c;
   if (MessageHistory::contactByPrefix(pub_key, c)) memcpy(_thread_key, c.id.pub_key, PUB_KEY_SIZE);
   else memcpy(_thread_key, pub_key, 4);
+  threadOpenAt(_core->history.firstUnreadDm(_thread_key, _core->dmUnread(_thread_key)));
   _core->clearDMUnread(_thread_key);
   _screen = SCR_THREAD;
   buildThread();
@@ -3742,7 +3753,6 @@ uint32_t UITask::threadSignature() const {
 // Positions found in the shown messages ([WAY] / [LOC] / plain "lat,lon"),
 // for the Go / Save buttons under such a bubble.
 struct MsgLoc { int32_t lat, lon; char label[WAYPOINT_LABEL_LEN * 2]; };
-static const int THREAD_MAX_SHOWN = 50;   // newest bubbles built per conversation
 static MsgLoc* s_msg_locs = psramBuf<MsgLoc>(THREAD_MAX_SHOWN);
 static int    s_msg_loc_n = 0;
 
@@ -3765,6 +3775,28 @@ struct ThreadRow { uint32_t key, state; lv_obj_t* row; lv_obj_t* age; };
 static ThreadRow* s_th_rows = psramBuf<ThreadRow>(THREAD_MAX_SHOWN);
 static lv_obj_t* s_older_lbl = nullptr;   // "Older messages (n)" on the page's top
 static bool      s_th_rows_newest = false;   // built for the newest page (the one patched)
+static lv_obj_t* s_new_div = nullptr;   // "New" above the first unread
+
+// The line with "New" over the first message unread when the thread opened.
+static lv_obj_t* newDivider(lv_obj_t* list) {
+  lv_obj_t* d = lv_obj_create(list);
+  lv_obj_remove_style_all(d);
+  lv_obj_set_size(d, LV_PCT(100), LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(d, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(d, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(d, 6, 0);
+  lv_obj_remove_flag(d, LV_OBJ_FLAG_CLICKABLE);
+  for (int i = 0; i < 3; i++) {
+    if (i == 1) { label(d, "New", THEME_FONT_SMALL, theme::ACCENT); continue; }
+    lv_obj_t* l = lv_obj_create(d);
+    lv_obj_remove_style_all(l);
+    lv_obj_set_height(l, 1);
+    lv_obj_set_flex_grow(l, 1);
+    lv_obj_set_style_bg_color(l, lv_color_hex(theme::ACCENT), 0);
+    lv_obj_set_style_bg_opa(l, LV_OPA_COVER, 0);
+  }
+  return d;
+}
 
 // The shown message a bubble (or a button in it) belongs to, or -1.
 static int threadRowOf(lv_obj_t* o) {
@@ -4134,7 +4166,11 @@ void UITask::refreshThread() {
     drop--;
   }
   if (kept > 0) {
-    for (int r = 0; r < drop; r++) lv_obj_delete(s_th_rows[r].row);
+    bool at_end = lv_obj_get_scroll_bottom(_thread_list) <= theme::PAD;   // not when reading further up
+    for (int r = 0; r < drop; r++) {
+      if (s_new_div && s_th_rows[r].key == _thread_new_key) { lv_obj_delete(s_new_div); s_new_div = nullptr; }
+      lv_obj_delete(s_th_rows[r].row);
+    }
     memmove(s_th_rows, s_th_rows + drop, kept * sizeof(ThreadRow));
     memmove(s_msg_meta, s_msg_meta + drop, kept * sizeof(MsgMeta));
     for (int r = 0; r < kept; r++) {
@@ -4155,7 +4191,7 @@ void UITask::refreshThread() {
     for (int r = kept; r < n; r++) build(r);
     if (s_older_lbl) { char t[40]; olderText(t, sizeof(t)); setText(s_older_lbl, t); }
     s_th_rows_n = s_msg_meta_n = s_msg_loc_n = n;
-    if (n > kept) {   // new messages: down to them
+    if (n > kept && at_end) {   // new messages: down to them
       layoutNow(_thread_list);
       lv_obj_scroll_to_y(_thread_list, LV_COORD_MAX, LV_ANIM_OFF);
     }
@@ -4171,13 +4207,20 @@ void UITask::refreshThread() {
     pageButton(_thread_list, t, 1);
     s_older_lbl = lv_obj_get_child(lv_obj_get_child(_thread_list, -1), 0);
   }
-  for (int i = 0; i < n; i++) build(i);   // oldest first
+  s_new_div = nullptr;
+  for (int i = 0; i < n; i++) {   // oldest first
+    if (_thread_new >= 0 && _thread_skip + n - 1 - i == _thread_new) { _thread_new_key = keyOf(i); _thread_new_on = true; }
+    if (_thread_new_on && !s_new_div && keyOf(i) == _thread_new_key && (i > 0 || s_older_lbl)) s_new_div = newDivider(_thread_list);
+    build(i);
+  }
+  _thread_new = -1;
   s_th_rows_n = s_msg_meta_n = s_msg_loc_n = n;
   s_th_rows_newest = _thread_skip == 0;   // a page back is built whole each time
   if (_thread_skip > 0) pageButton(_thread_list, LV_SYMBOL_DOWN "  Newer messages", -1);
   if (n == 0) label(_thread_list, "No messages yet", THEME_FONT_BODY, theme::TEXT_MUTED);
   layoutNow(_thread_list);
   lv_obj_scroll_to_y(_thread_list, _thread_scroll_top ? 0 : LV_COORD_MAX, LV_ANIM_OFF);
+  if (s_new_div && !_thread_scroll_top) lv_obj_scroll_to_view(s_new_div, LV_ANIM_OFF);   // from the bottom: "New" on top
   _thread_scroll_top = false;
 }
 
@@ -4673,6 +4716,11 @@ void UITask::simDm() {
   }
 }
 
+void UITask::simUnread() {
+  _core->simUnreadDemo();
+  if (_screen == SCR_CHATS) refreshChats();
+}
+
 // Sim tests: straight to a screen by name.
 extern "C" EMSCRIPTEN_KEEPALIVE void sim_open(const char* name) {
   if (!s_ui) return;
@@ -4697,6 +4745,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_open(const char* name) {
   if (!strncmp(name, "compose@", 8)) { s_ui->simCompose(name + 8); return; }
   if (!strcmp(name, "dm")) { s_ui->simDm(); return; }
   if (!strcmp(name, "send")) { s_ui->simSend(); return; }
+  if (!strcmp(name, "unread")) { s_ui->simUnread(); return; }
   if (!strcmp(name, "vector")) { s_ui->setVectorMap(true); return; }
   if (!strcmp(name, "maptools")) { s_ui->navToolsPopup(); return; }
   if (!strcmp(name, "areasel")) { s_ui->areaSelectBegin(); return; }

@@ -47,7 +47,8 @@ class MessagesScreen : public UIScreen {
   int _hist_sel, _hist_scroll;
   FullscreenMsgView _fs;
   int  _unread_at_entry;    // channel unread count when entering CHANNEL_HIST
-  int  _viewing_max_seen;  // highest _hist_sel reached in current session
+  int  _unread_base = 0;    // messages filed since: the unread are indices base.. base+count-1
+  int  _seen_lo = 0, _seen_hi = -1;   // the indices shown so far this session
 
   // KEYBOARD
   KeyboardWidget* _kb;
@@ -142,6 +143,11 @@ class MessagesScreen : public UIScreen {
   // DM_HIST view state (the ring itself is in _history).
   int _dm_hist_sel, _dm_hist_scroll;
   FullscreenMsgView _dm_fs;
+
+  // "New" over the first message unread when the conversation opened (index
+  // as _hist_sel / _dm_hist_sel, -1: none); the first render scrolls it up top.
+  int  _new_idx = -1;
+  bool _anchor_new = false;
 
   int _hist_visible = 2;  // updated in render(); for history list scroll clamping
 
@@ -681,7 +687,6 @@ class MessagesScreen : public UIScreen {
       // Filed at index 0 by sendText(): the unread index range is stale, and
       // the user is active in this channel -- fully read.
       _unread_at_entry = 0;
-      _viewing_max_seen = 0;
     } else {
       _dm_hist_sel = 0;
       _dm_hist_scroll = 0;
@@ -969,7 +974,7 @@ public:
       _sel_channel_idx(0), _sending_to_channel(false),
       _msg_sel(0), _msg_scroll(0), _active_msg_count(0),
       _hist_sel(0), _hist_scroll(0),
-      _unread_at_entry(0), _viewing_max_seen(0),
+      _unread_at_entry(0),
       _history(task->core().history),
       _dm_hist_sel(-1), _dm_hist_scroll(0),
       _ctx_dirty(false), _pin_picker_active(false), _direct_entry(false), _reply_mode(false),
@@ -1003,8 +1008,14 @@ public:
     return _phase == DM_HIST && memcmp(_sel_contact.id.pub_key, pub_key, 4) == 0;
   }
   void onViewedHistoryGrew(bool channel) {
-    if (channel) { if (_hist_sel > 0)    { _hist_sel++; _hist_scroll++; } }
-    else         { if (_dm_hist_sel > 0) { _dm_hist_sel++; _dm_hist_scroll++; } }
+    if (channel) {
+      if (_hist_sel > 0) { _hist_sel++; _hist_scroll++; }
+      _unread_base++;
+      if (_seen_hi >= 0) { _seen_lo++; _seen_hi++; }
+    } else {
+      if (_dm_hist_sel > 0) { _dm_hist_sel++; _dm_hist_scroll++; }
+    }
+    if (_new_idx >= 0) _new_idx++;
   }
 
   // Room logins (who is logged in this session, the saved passwords, the one
@@ -1037,11 +1048,56 @@ public:
   // the scroll/selection view state. Shared by the Enter-on-contact path and the
   // post-login auto-enter.
   void openDmHistory() {
-    _task->clearDMUnread(_sel_contact.id.pub_key);
-    _dm_hist_sel = -1;
+    beginDmView();
+    _phase = DM_HIST;
+  }
+
+  // Opening a conversation: on its first unread message ("New" above it), else
+  // on the compose row under the newest.
+  void beginDmView() {
+    const uint8_t* key = _sel_contact.id.pub_key;
+    _new_idx = _history.firstUnreadDm(key, _task->getDMUnread(key));
+    _anchor_new = _new_idx >= 0;
+    _task->clearDMUnread(key);
+    _dm_hist_sel = _new_idx;
     _dm_hist_scroll = 0;
     _dm_fs.active = false;
-    _phase = DM_HIST;
+  }
+  void beginChannelView(uint8_t channel_idx) {
+    _sel_channel_idx = channel_idx;
+    _unread_at_entry = (int)_history.chUnread(channel_idx);
+    _unread_base = 0;
+    _seen_lo = 0; _seen_hi = -1;
+    _new_idx = _history.firstUnreadChannel(channel_idx, _unread_at_entry);
+    _anchor_new = _new_idx >= 0;
+    _hist_scroll = 0;
+    _hist_sel = _new_idx >= 0 ? _new_idx : _history.histCountForChannel(channel_idx) > 0 ? 0 : -1;
+    _fs.active = false;
+  }
+
+  // On the first unread (sel), opening: the scroll showing it highest with
+  // "New" above it (stack(s) lays out from s, sets div_y when "New" fits).
+  template <class Stack> static int anchorScroll(Stack stack, const int& div_y, int sel, int count) {
+    int pick = -1;
+    for (int s = sel > 8 ? sel - 8 : 0; s <= sel; s++) {
+      int n = stack(s);
+      if (s + n - 1 < sel) continue;
+      if (div_y >= 0 || sel + 1 >= count) return s;
+      if (pick < 0) pick = s;
+    }
+    return pick >= 0 ? pick : sel;
+  }
+
+  // "New" between two lines, lh tall, over the first message unread on opening.
+  static void drawNewDivider(DisplayDriver& d, int y, int w, int lh) {
+    const char* t = "New";
+    int tw = d.getTextWidth(t);
+    int tx = (w - tw) / 2, mid = y + lh / 2;
+    d.setColor(DisplayDriver::LIGHT);
+    d.fillRect(1, mid, tx - 4, 1);
+    d.fillRect(tx + tw + 3, mid, w - 1 - (tx + tw + 3), 1);
+    d.setCursor(tx, y + 1);
+    d.print(t);
   }
 
 
@@ -1070,15 +1126,21 @@ public:
   // "what has the user seen on screen" logic is pure phase-machine state.
   void updateChannelUnread() {
     if (_sel_channel_idx < 0 || _sel_channel_idx >= MAX_GROUP_CHANNELS) return;
-    // histEntryForChannel is newest-first: index 0 = newest (unread), higher = older.
-    // Count everything actually rendered on screen as seen — not just the
-    // highlighted row — so a taller screen that fits more boxes at once marks
-    // more read up front, instead of requiring a press per row.
-    int seen_to = _hist_scroll + _hist_visible - 1;
-    if (_hist_sel > seen_to) seen_to = _hist_sel;
-    if (seen_to > _viewing_max_seen) _viewing_max_seen = seen_to;
-    // Each step down from 0 sees one more message; seen count = max_seen + 1.
-    int remaining = _unread_at_entry - (_viewing_max_seen + 1);
+    // histEntryForChannel is newest-first: index 0 = newest, higher = older;
+    // the unread from opening are _unread_base onwards. Count everything
+    // actually rendered on screen as seen — not just the highlighted row — so
+    // a taller screen that fits more boxes at once marks more read up front,
+    // instead of requiring a press per row. Reading starts at the first unread
+    // and goes down to the newest, so what's been shown is one stretch.
+    int lo = _hist_scroll, hi = _hist_scroll + _hist_visible - 1;
+    if (_hist_sel >= 0 && _hist_sel < lo) lo = _hist_sel;
+    if (_hist_sel > hi) hi = _hist_sel;
+    if (_seen_hi < 0 || lo < _seen_lo) _seen_lo = lo;
+    if (hi > _seen_hi) _seen_hi = hi;
+    int a = _seen_lo > _unread_base ? _seen_lo : _unread_base;
+    int b = _unread_base + _unread_at_entry - 1;
+    if (_seen_hi < b) b = _seen_hi;
+    int remaining = _unread_at_entry - (b >= a ? b - a + 1 : 0);
     _history.setChUnread(_sel_channel_idx, (uint8_t)(remaining > 0 ? remaining : 0));
   }
 
@@ -1109,7 +1171,8 @@ public:
     _pick_fav_slot = -1;
     _direct_entry = false;
     _unread_at_entry = 0;
-    _viewing_max_seen = 0;
+    _new_idx = -1;
+    _anchor_new = false;
     _ch_view.reset();
     _ch_view_pending_rebuild = false;
   }
@@ -1235,10 +1298,7 @@ public:
 
   void enterDM(const ContactInfo& ci) {
     _sel_contact = ci;
-    _task->clearDMUnread(ci.id.pub_key);
-    _dm_hist_sel = -1;
-    _dm_hist_scroll = 0;
-    _dm_fs.active = false;
+    beginDmView();
     _room_mode = false;
     _phase = DM_HIST;
     _direct_entry = true;
@@ -1249,10 +1309,7 @@ public:
   // to. Caller must have already reset() the screen.
   void enterRoom(const ContactInfo& ci) {
     _sel_contact = ci;
-    _task->clearDMUnread(ci.id.pub_key);
-    _dm_hist_sel = -1;
-    _dm_hist_scroll = 0;
-    _dm_fs.active = false;
+    beginDmView();
     _room_mode = true;
     _phase = DM_HIST;
     _direct_entry = true;
@@ -1262,12 +1319,7 @@ public:
   // Open a channel's history directly (used by the Favourites dial). Caller
   // must have already reset() the screen.
   void enterChannel(uint8_t channel_idx) {
-    _sel_channel_idx = channel_idx;
-    _unread_at_entry = (int)_history.chUnread(channel_idx);
-    _hist_scroll = 0;
-    _hist_sel = _history.histCountForChannel(channel_idx) > 0 ? 0 : -1;
-    _viewing_max_seen = _hist_sel >= 0 ? _hist_sel : 0;
-    _fs.active = false;
+    beginChannelView(channel_idx);
     _phase = CHANNEL_HIST;
     _direct_entry = true;
   }
@@ -1503,7 +1555,8 @@ public:
       // Fixed-track scrollbar metrics + a stable gutter reserve (decided by a
       // whole-list fit test, not last frame's visible count) so message boxes
       // don't reflow their width as messages arrive.
-      HistScroll hs = compact_dm
+      auto scrollMetrics = [&]() {
+        return compact_dm
           ? computeHistScrollH(display, dm_count, _dm_hist_scroll, hist_start_y, cby, 1, compactH)
           : computeHistScroll(display, expand, dm_count, _dm_hist_scroll,
           hist_start_y, cby, lh,
@@ -1514,20 +1567,24 @@ public:
             char tmp_sender[33];
             return bodyAt(idx, tmp_sender, sizeof(tmp_sender));
           });
+      };
+      HistScroll hs = scrollMetrics();
       int reserve = hs.reserve;
-      {
-        // Stack boxes upward from just above the compose row, so item 0 (the
-        // newest message) lands at the bottom of the list and older messages
-        // sit progressively higher — same anchor convention as a typical
-        // messenger, instead of newest-at-top. box_ys[i] still corresponds
-        // to item (_dm_hist_scroll + i), same as before; only its y flips.
+      int div_y = -1;   // "New", when shown
+      // Stack boxes upward from just above the compose row, so item 0 (the
+      // newest message) lands at the bottom of the list and older messages
+      // sit progressively higher — same anchor convention as a typical
+      // messenger, instead of newest-at-top. box_ys[i] still corresponds
+      // to item (s + i), same as before; only its y flips.
+      auto stack = [&](int s) {
         const int fixed_bh = 2 * lh + 1;
         const int box_gap = expand ? 2 : 1;
         int cur_y = cby - box_gap;   // reserve the same gap against compose as between boxes
-        for (int ii = 0; ii < MAX_VIS_BOXES && (_dm_hist_scroll + ii) < dm_count; ii++) {
-          int bh = compact_dm ? compactH(_dm_hist_scroll + ii, reserve) : fixed_bh;
+        n_vis = 0; div_y = -1;
+        for (int ii = 0; ii < MAX_VIS_BOXES && (s + ii) < dm_count; ii++) {
+          int bh = compact_dm ? compactH(s + ii, reserve) : fixed_bh;
           if (expand) {
-            int rp = _history.dmHistEntryForContact(_sel_contact.id.pub_key, _dm_hist_scroll + ii);
+            int rp = _history.dmHistEntryForContact(_sel_contact.id.pub_key, s + ii);
             if (rp >= 0) {
               char hsb[33];
               const char* hbody = skipReplyPrefix(dmDisplayParts(_history.dmAtPos(rp), is_room, filtered_name, hsb, sizeof(hsb)));
@@ -1538,8 +1595,20 @@ public:
           if (box_top < hist_start_y) break;
           box_ys[n_vis] = box_top; box_hs[n_vis] = bh; n_vis++;
           cur_y = box_top - box_gap;
+          if (s + ii == _new_idx && _new_idx + 1 < dm_count) {   // "New" over it, below the older ones
+            if (cur_y - lh < hist_start_y) break;
+            div_y = cur_y - lh;
+            cur_y = div_y - box_gap;
+          }
         }
+        return n_vis;
+      };
+      if (_anchor_new) {
+        _anchor_new = false;
+        _dm_hist_scroll = anchorScroll(stack, div_y, _dm_hist_sel, dm_count);
+        hs = scrollMetrics();
       }
+      stack(_dm_hist_scroll);
       _hist_visible = n_vis;
       for (int i = 0; i < n_vis && (_dm_hist_scroll + i) < dm_count; i++) {
         int item = _dm_hist_scroll + i;
@@ -1613,6 +1682,8 @@ public:
                                            : BubbleMark::hop(e.path_len & 63);
         drawHeadedBubble(display, y, bh, lh, sel, reserve, e.outgoing, sender, body, age, mark, expand, mq_delay);
       }
+
+      if (div_y >= 0) drawNewDivider(display, div_y, display.width() - reserve, lh);
 
       if (dm_count == 0) {
         display.setColor(DisplayDriver::LIGHT);
@@ -1705,7 +1776,8 @@ public:
       const int MAX_VIS_BOXES = 8;
       int box_ys[MAX_VIS_BOXES], box_hs[MAX_VIS_BOXES], n_vis = 0;
       // Fixed-track scrollbar metrics + stable gutter reserve (see DM history above).
-      HistScroll hs = computeHistScroll(display, expand, ch_hist_count, _hist_scroll,
+      auto scrollMetrics = [&]() {
+        return computeHistScroll(display, expand, ch_hist_count, _hist_scroll,
           hist_start_y, cby, lh,
           [&](int idx) -> const char* {
             int rp = _history.histEntryForChannel(_sel_channel_idx, idx);
@@ -1714,18 +1786,22 @@ public:
             const char* s = strstr(t, ": ");
             return skipReplyPrefix(s ? s + 2 : t);
           });
+      };
+      HistScroll hs = scrollMetrics();
       int reserve = hs.reserve;
-      {
-        // Stack boxes upward from just above the compose row — see the DM
-        // history block above for why (newest at the bottom, like a typical
-        // messenger). box_ys[i] still corresponds to item (_hist_scroll + i).
+      int div_y = -1;   // "New", when shown
+      // Stack boxes upward from just above the compose row — see the DM
+      // history block above for why (newest at the bottom, like a typical
+      // messenger). box_ys[i] still corresponds to item (s + i).
+      auto stack = [&](int s) {
         const int fixed_bh = 2 * lh + 1;
         const int box_gap = expand ? 2 : 1;
         int cur_y = cby - box_gap;   // reserve the same gap against compose as between boxes
-        for (int ii = 0; ii < MAX_VIS_BOXES && (_hist_scroll + ii) < ch_hist_count; ii++) {
+        n_vis = 0; div_y = -1;
+        for (int ii = 0; ii < MAX_VIS_BOXES && (s + ii) < ch_hist_count; ii++) {
           int bh = fixed_bh;
           if (expand) {
-            int rp = _history.histEntryForChannel(_sel_channel_idx, _hist_scroll + ii);
+            int rp = _history.histEntryForChannel(_sel_channel_idx, s + ii);
             if (rp >= 0) {
               const char* rtext = _history.chAtPos(rp).text;
               const char* rsep = strstr(rtext, ": ");
@@ -1737,8 +1813,20 @@ public:
           if (box_top < hist_start_y) break;
           box_ys[n_vis] = box_top; box_hs[n_vis] = bh; n_vis++;
           cur_y = box_top - box_gap;
+          if (s + ii == _new_idx && _new_idx + 1 < ch_hist_count) {   // "New" over it, below the older ones
+            if (cur_y - lh < hist_start_y) break;
+            div_y = cur_y - lh;
+            cur_y = div_y - box_gap;
+          }
         }
+        return n_vis;
+      };
+      if (_anchor_new) {
+        _anchor_new = false;
+        _hist_scroll = anchorScroll(stack, div_y, _hist_sel, ch_hist_count);
+        hs = scrollMetrics();
       }
+      stack(_hist_scroll);
       _hist_visible = n_vis;
       updateChannelUnread();  // mark everything in the just-computed visible window as seen
 
@@ -1783,6 +1871,8 @@ public:
                               : BubbleMark();
         drawHeadedBubble(display, y, bh, lh, sel, reserve, outgoing, sender, body, age, mark, expand, mq_delay);
       }
+
+      if (div_y >= 0) drawNewDivider(display, div_y, display.width() - reserve, lh);
 
       if (ch_hist_count == 0) {
         display.setColor(DisplayDriver::LIGHT);
@@ -2200,16 +2290,12 @@ public:
         if (_pick_target) { commitPickTargetChannel(_sel_channel_idx); return true; }
         if (_pick_fav_slot >= 0) { commitPickFavChannel(_sel_channel_idx); return true; }
         if (_pick_bot_channel) { commitPickBotChannel(_sel_channel_idx); return true; }
-        int hc = _history.histCountForChannel(_sel_channel_idx);
-        _unread_at_entry = (int)_history.chUnread(_sel_channel_idx);
-        _hist_scroll = 0;
-        _hist_sel = hc > 0 ? 0 : -1;
-        _viewing_max_seen = _hist_sel >= 0 ? _hist_sel : 0;
+        beginChannelView(_sel_channel_idx);
         _phase = CHANNEL_HIST;
         // Not updateChannelUnread() here: _hist_visible is still whatever this
         // channel's first render() hasn't computed yet (stale, shared with
-        // DM_HIST) — calling it now could ratchet _viewing_max_seen past what's
-        // actually about to be shown. render() calls it once that's fresh.
+        // DM_HIST) — calling it now could mark more seen than is about to be
+        // shown. render() calls it once that's fresh.
         if (_share_mode) beginShareCompose(true);
         return true;
       }

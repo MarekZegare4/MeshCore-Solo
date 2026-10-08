@@ -2210,6 +2210,17 @@ void UITask::simMessage(const char* text) {
   onMessageArrived(ev);
 }
 
+// Sim tests: read and new messages (UiCore::simUnreadDemo), then channel 0
+// (which 0) or the first chat contact (1) opened as from the list.
+void UITask::simUnread(int which) {
+  if (which < 0) { _core->simUnreadDemo(); return; }
+  if (which == 0) { openChannelHistory(0); return; }
+  for (int i = 0; i < the_mesh.getNumContacts(); i++) {
+    ContactInfo c;
+    if (the_mesh.getContactByIdx(MAX_ANON_CONTACTS + i, c) && c.type == ADV_TYPE_CHAT) { openContactDM(c); return; }
+  }
+}
+
 void UITask::simCompose(const char* text) {
   gotoMessagesScreen();
   ((MessagesScreen*)messages_screen)->simCompose(text);
@@ -2714,6 +2725,11 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_enqueue_key(char c) {
 // Sim tests: a channel post's keyboard, holding `text`.
 extern "C" EMSCRIPTEN_KEEPALIVE void sim_compose(const char* text) {
   if (g_sim_ui_task_for_js) g_sim_ui_task_for_js->simCompose(text);
+}
+
+// Sim tests: -1 files read and new messages, 0 opens channel 0, 1 the first DM.
+extern "C" EMSCRIPTEN_KEEPALIVE void sim_unread(int which) {
+  if (g_sim_ui_task_for_js) g_sim_ui_task_for_js->simUnread(which);
 }
 
 // Sim tests: a channel message arrives, alerted in Settings > Message alert's

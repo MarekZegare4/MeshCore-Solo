@@ -224,6 +224,28 @@ public:
     if (viewing && pos >= 0) _host->onViewedHistoryGrew(true);
     return pos;
   }
+#ifdef SIM_PLATFORM
+  // Sim tests: channel 0 and the first chat contact get 12 read messages, then 5 new.
+  void simUnreadDemo() {
+    uint32_t now = rtc_clock.getCurrentTime();
+    static const char* const W[] = { "Alice", "Bob", "Me", "Carol" };
+    const uint8_t* dm = nullptr;
+    ContactInfo c;
+    for (int i = 0; i < the_mesh.getNumContacts() && !dm; i++)
+      if (the_mesh.getContactByIdx(MAX_ANON_CONTACTS + i, c) && c.type == ADV_TYPE_CHAT) dm = c.id.pub_key;
+    for (int i = 0; i < 17; i++) {
+      char t[48];
+      snprintf(t, sizeof(t), "%s: message %d", i < 12 ? W[i % 4] : W[i % 2], i + 1);
+      addChannelMsg(0, t, now - (17 - i) * 120);
+      if (dm) {
+        bool out = i < 12 && i % 3 == 2;
+        if (!out) dm_unread.onIncoming(dm);
+        addDMMsg(dm, out, strstr(t, ": ") + 2, now - (17 - i) * 120);
+      }
+      if (i == 11) { history.setChUnread(0, 0); if (dm) clearDMUnread(dm); }
+    }
+  }
+#endif
   void armChannelRelay(int pos, uint32_t seq) override { history.armChannelRelay(pos, seq); }
   void onChannelRelayed(uint32_t seq, const uint8_t* repeater_hash = nullptr, uint8_t hash_size = 0) override {
     history.markChannelRelayed(seq, repeater_hash, hash_size);

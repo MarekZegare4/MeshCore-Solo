@@ -16,6 +16,10 @@ and a small hop count: on a received message, how many repeaters it came
 through; on your own, how many repeaters were heard passing it on. In
 channels and rooms it also names the sender.
 
+A conversation with unread messages opens on the first of them, under a
+**New** line, so you read down to the newest. With nothing unread it opens
+at the newest.
+
 **Enter** on a message opens it full screen; **Left / Right** there pages to the
 older and newer one.
 

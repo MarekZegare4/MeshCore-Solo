@@ -284,6 +284,7 @@ public:
 #ifdef SIM_PLATFORM
   void simCompose(const char* text);   // sim tests: a channel post's keyboard holding `text`
   void simMessage(const char* text);   // sim tests: a channel message arrives
+  void simUnread(int which);           // sim tests: read and new messages, opened
 #endif
   void openContactDM(const ContactInfo& ci);
   void openChannelHistory(uint8_t channel_idx);   // Favourites dial: open a pinned channel

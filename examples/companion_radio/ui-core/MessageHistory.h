@@ -413,6 +413,31 @@ public:
     return -1;
   }
 
+  // Where reading resumes on opening a conversation with `unread` unread: the
+  // newest-first index (as histEntryForChannel / dmHistEntryForContact) of the
+  // oldest of the `unread` newest received messages -- our own don't count --
+  // or of the oldest held when some were pushed out. -1 when none is unread.
+  int firstUnreadChannel(int ch_idx, int unread) const {
+    int j = 0, last = -1;
+    for (int i = _hist_count - 1; i >= 0 && unread > 0; i--) {
+      const ChHistEntry& e = _hist[(_hist_head + i) % CH_HIST_MAX];
+      if (e.ch_idx != (uint8_t)ch_idx) continue;
+      last = j++;
+      if (strncmp(e.text, "Me: ", 4) != 0) unread--;
+    }
+    return last;
+  }
+  int firstUnreadDm(const uint8_t* prefix, int unread) const {
+    int j = 0, last = -1;
+    for (int i = _dm_hist_count - 1; i >= 0 && unread > 0; i--) {
+      const DmHistEntry& e = _dm_hist[(_dm_hist_head + i) % DM_HIST_MAX];
+      if (memcmp(e.prefix, prefix, 4) != 0) continue;
+      last = j++;
+      if (!e.outgoing) unread--;
+    }
+    return last;
+  }
+
   // Effective status for display. A pending ACK only reads as failed once its
   // deadline has passed AND no auto-resends remain — while resends_left > 0 the
   // entry stays pending (tickDmResends() retries / finalises it). Safety net for
