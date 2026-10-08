@@ -73,7 +73,28 @@ history). Pick a quick message or **Custom message** for the keyboard.
 ### The keyboard
 
 The on-screen keyboard is a letter grid (or a phone-style T9 keypad, Settings ›
-Keyboard › Layout). Up from the top row moves the cursor through the text.
+Keyboard › Layout).
+
+#### Moving the cursor
+
+While you type, a line under the text marks where the next letter goes. To
+fix something earlier in the message, press **Up** from the top row of keys.
+The cursor turns into a block on the letter it stands before, the keys stay
+on screen without a selection, and the bottom row shows what the arrows do
+now (`<> char  ^v word`):
+
+| Key | Does |
+| --- | ---- |
+| **Left / Right** | Moves one letter |
+| **Up** | Back to the start of the word (the one before, if already there) |
+| **Down** | On to the end of the word (the next one, if already there) |
+| **Hold Enter** | Deletes the letter before the cursor |
+| **Enter**, **Back** | Back to the keys; typing carries on at the cursor |
+
+Up at the very start of the text goes to the bottom row of keys, and Down at
+the very end goes back to the top row. So if you pressed Up by mistake, one
+Down returns you where you were. The text never shifts around the cursor:
+what you see is what will be sent.
 
 Accented letters don't need a language setting: **hold Enter** on the base
 letter and pick from its variants, for example `a` → `á à â ä å ą…`, `z` →

@@ -208,11 +208,14 @@ shows Latin instead (see `KB_ACCENT_VARIANTS` below).
 Shift is one-shot by default (capitalises the next letter, including whichever
 candidate a T9 multi-tap cycle settles on) or Hold-Enter to toggle caps-lock;
 Hold-Clear erases the whole field. **UP from the top letter row** enters
-**cursor mode** (LEFT/RIGHT move the insertion point; UP/DOWN jump to
-start/end, then — pressed again once already at that boundary — continue on
+**cursor mode** (LEFT/RIGHT move the insertion point a codepoint; UP/DOWN a
+word back / on, then — pressed again once already at that end — continue on
 to the special row / letter grid, the same destinations the plain grid wrap
 used to reach directly) so edits/inserts can target any point in the typed
-text, not just the end; Enter/Cancel exit immediately from anywhere.
+text, not just the end. The grid stays drawn, unselected, with the special
+row replaced by the key hints; the cursor is an inverted cell instead of the
+typing underline. Hold-Enter deletes before the cursor without leaving;
+Enter/Cancel exit immediately from anywhere.
 Hold-Enter on a Latin-page letter cell with accented variants instead opens
 the **accent popup**: one horizontal row of `KB_ACCENT_VARIANTS[group]`
 (a UTF-8 string per base letter, same shape as a T9 group string), LEFT/RIGHT

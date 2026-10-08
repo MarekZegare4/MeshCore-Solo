@@ -532,6 +532,29 @@ struct KeyboardWidget {
     else if (key == KEY_DOWN)  { cursor_pos = len; }
   }
 
+  // Word steps for cursor mode: back to the start of the word before the
+  // cursor, on to the end of the one after it. Spaces are ASCII, so every stop
+  // is a codepoint boundary.
+  int wordStartBefore(int p) const {
+    while (p > 0 && buf[p - 1] == ' ') p--;
+    while (p > 0 && buf[p - 1] != ' ') p--;
+    return p;
+  }
+  int wordEndAfter(int p) const {
+    while (p < len && buf[p] == ' ') p++;
+    while (p < len && buf[p] != ' ') p++;
+    return p;
+  }
+
+  void deleteBeforeCursor() {
+    t9_cell = -1;
+    if (cursor_pos <= 0) return;
+    int n = kbUtf8LastCharBytes(buf, cursor_pos);
+    memmove(buf + cursor_pos - n, buf + cursor_pos, len - cursor_pos);
+    len -= n; cursor_pos -= n;
+    buf[len] = '\0';
+  }
+
   // PIN preview: what it's for, centred, and the digits below it spaced out
   // (filled soft squares when masked), with an underline on the next slot.
   void renderPinPreview(DisplayDriver& display, int sep_y) {
@@ -647,16 +670,8 @@ struct KeyboardWidget {
       // wrap boundary, where cursor_line has already moved to the next row.
       bool cursor_here = (first_line + pl == cursor_line);
       int line_end = (len < pe) ? len : pe;
-      char linebuf[KB_PREVIEW_BYTES + 2];   // cpl codepoints + cursor '_' + NUL
-      if (cursor_here) {
-        // Cursor drawn as an inserted '_' between whatever text precedes and
-        // follows it on this line -- reduces to the old "text + trailing _"
-        // when cursor_pos == len (after_n is always 0 in that case).
-        int before_n = cursor_pos - ps;        if (before_n < 0) before_n = 0;
-        if (before_n > line_end - ps) before_n = line_end - ps;
-        int after_n  = line_end - cursor_pos;  if (after_n < 0) after_n = 0;
-        snprintf(linebuf, sizeof(linebuf), "%.*s_%.*s", before_n, buf + ps, after_n, buf + ps + before_n);
-      } else if (len > ps) {
+      char linebuf[KB_PREVIEW_BYTES + 2];
+      if (len > ps) {
         snprintf(linebuf, sizeof(linebuf), "%.*s", line_end - ps, buf + ps);
       } else {
         linebuf[0] = '\0';
@@ -667,9 +682,8 @@ struct KeyboardWidget {
         int mi = 0;
         int blen = (int)strlen(linebuf);
         for (int bi = 0; bi < blen; ) {
-          int u = kbUtf8CharBytesAt(linebuf, bi, blen);
-          masked[mi++] = (u == 1 && linebuf[bi] == '_') ? '_' : '*';
-          bi += u;
+          masked[mi++] = '*';
+          bi += kbUtf8CharBytesAt(linebuf, bi, blen);
         }
         masked[mi] = '\0';
         strncpy(linebuf, masked, sizeof(linebuf));
@@ -678,6 +692,27 @@ struct KeyboardWidget {
       display.translateUTF8ToBlocks(linebuf_t, linebuf, sizeof(linebuf_t));
       display.setCursor(0, pl * lh);
       display.print(linebuf_t);
+      // The cursor marks the character it stands before, so the text never
+      // shifts around it: underlined while typing, inverted while moving it.
+      if (cursor_here) {
+        int at = 0;
+        for (int p = ps; p < cursor_pos; ) { p += kbUtf8CharBytesAt(buf, p, len); at++; }
+        const int bx = at * cw, by = pl * lh;
+        if (cursor_mode) {
+          display.fillRect(bx, by, cw, lh);
+          if (cursor_pos < len && !pin_kb_mask_enabled) {
+            char one[5], one_t[8];
+            kbUtf8CharAt(buf + cursor_pos, 0, one);
+            display.translateUTF8ToBlocks(one_t, one, sizeof(one_t));
+            display.setColor(DisplayDriver::DARK);
+            display.setCursor(bx, by);
+            display.print(one_t);
+            display.setColor(DisplayDriver::LIGHT);
+          }
+        } else {
+          display.fillRect(bx, by + lh - display.sepH(), cw - display.sepH(), display.sepH());
+        }
+      }
       ps = pe;
     }
     if (count[0]) {
@@ -712,22 +747,6 @@ struct KeyboardWidget {
       }
     }
     display.fillRect(0, sep_y, display.width(), display.sepH());
-
-    // Cursor-positioning mode: LEFT/RIGHT/UP/DOWN now drive the text cursor
-    // instead of the grid (see handleInput), so the grid would otherwise just
-    // sit there frozen with no sign anything's different. Replace it with an
-    // explicit hint instead.
-    if (cursor_mode) {
-      const int hh = lh + 2;
-      display.setColor(DisplayDriver::LIGHT);
-      display.fillRect(0, chars_y, display.width(), hh);
-      display.setColor(DisplayDriver::DARK);
-      display.drawTextCentered(display.width() / 2, chars_y + 1, "Cursor mode");
-      display.setColor(DisplayDriver::LIGHT);
-      display.drawTextCentered(display.width() / 2, chars_y + hh + 2, "L/R move");
-      display.drawTextCentered(display.width() / 2, chars_y + hh + 2 + lh, "U/D start/end");
-      return 50;
-    }
 
     // PIN mode
     if (isPin()) {
@@ -778,15 +797,19 @@ struct KeyboardWidget {
     // just won't be visible on this screen which cell is selected.
     if (compact_ui) {
       display.setColor(DisplayDriver::LIGHT);
-      display.drawTextCentered(display.width() / 2, chars_y, "Tab: placeholders");
-      display.drawTextCentered(display.width() / 2, chars_y + lh, "Fn+letter: accent");
+      if (cursor_mode) {
+        display.drawTextCentered(display.width() / 2, chars_y, "<> char  ^v word");
+      } else {
+        display.drawTextCentered(display.width() / 2, chars_y, "Tab: placeholders");
+        display.drawTextCentered(display.width() / 2, chars_y + lh, "Fn+letter: accent");
+      }
     } else {
       // character grid
       if (isT9()) {
         for (int r = 0; r < rows; r++) {
           int y = chars_y + r * cell_h;
           for (int c = 0; c < cols; c++) {
-            bool sel = (row == r && col == c);
+            bool sel = !cursor_mode && row == r && col == c;
             int cell = r * cols + c;
             // Label the cell "<digit><group>" so it reads like a phone keypad. The
             // digit is what the multi-tap cycle lands on after the letters (see
@@ -808,7 +831,7 @@ struct KeyboardWidget {
         for (int r = 0; r < rows; r++) {
           int y = chars_y + r * cell_h;
           for (int c = 0; c < cols; c++) {
-            bool sel = (row == r && col == c);
+            bool sel = !cursor_mode && row == r && col == c;
             char ch_buf[3];
             kbApplyCapsUtf8(cellStr(r, c), caps, ch_buf, sizeof(ch_buf));
             if (ch_buf[0] == ' ' && ch_buf[1] == '\0') ch_buf[0] = '_';
@@ -821,6 +844,12 @@ struct KeyboardWidget {
         }
       }
 
+      // Cursor mode: the arrows drive the text cursor (see handleKey), so the
+      // grid stays as it was, unselected, and the special row gives way to
+      // what the keys do now.
+      if (cursor_mode) {
+        display.drawTextCentered(display.width() / 2, spec_y + key_ty, "<> char  ^v word");
+      } else {
       // special row: caps ⇧ · space ⎵ · delete ⌫ · placeholders {} (text) · OK ✓
       const int s   = miniIconScale(display);
       for (int i = 0; i < KB_SPECIAL; i++) {
@@ -862,6 +891,7 @@ struct KeyboardWidget {
           if (i == 0 && caps_lock) display.fillRect(sx + 2, spec_y + cell_h - 3, spec_w - 5, 1);
         }
         display.setColor(DisplayDriver::LIGHT);
+      }
       }
     }
 
@@ -985,29 +1015,29 @@ struct KeyboardWidget {
 
     // Cursor-positioning sub-mode (see the KEY_UP block below): the grid
     // selection is parked while LEFT/RIGHT walk cursor_pos one codepoint at a
-    // time. UP/DOWN jump to the very start/end -- Home/End, in effect -- and,
-    // once already at that boundary, continue the wrap the entry trigger
-    // interrupted: UP again lands on the special row, DOWN again back on the
-    // letter grid's row 0, same destinations the plain grid wrap used to reach
-    // directly (see the entry/exit comment below). Enter/Cancel just leave the
-    // mode from anywhere; the actual edit (insert/backspace) happens back in
-    // normal typing, now targeting the repositioned cursor.
+    // time and UP/DOWN a word back / on. Once already at that end, UP and
+    // DOWN continue the wrap the entry trigger interrupted: UP again lands on
+    // the special row, DOWN again back on the letter grid's row 0 (so DOWN
+    // right after entering, the cursor still at the end, is the way back).
+    // Hold-Enter deletes before the cursor without leaving; Enter/Cancel
+    // leave the mode from anywhere, typing resuming at the cursor.
     if (cursor_mode) {
       if (c == KEY_LEFT)  { if (cursor_pos > 0)   cursor_pos -= kbUtf8LastCharBytes(buf, cursor_pos); return NONE; }
       if (c == KEY_RIGHT) { if (cursor_pos < len) cursor_pos += kbUtf8CharBytesAt(buf, cursor_pos, len); return NONE; }
       if (c == KEY_UP) {
-        if (cursor_pos > 0) { cursor_pos = 0; return NONE; }
+        if (cursor_pos > 0) { cursor_pos = wordStartBefore(cursor_pos); return NONE; }
         cursor_mode = false;
         row = gridRows();
         col = col * KB_SPECIAL / gridCols();
         return NONE;
       }
       if (c == KEY_DOWN) {
-        if (cursor_pos < len) { cursor_pos = len; return NONE; }
+        if (cursor_pos < len) { cursor_pos = wordEndAfter(cursor_pos); return NONE; }
         cursor_mode = false;
         row = 0;
         return NONE;
       }
+      if (c == KEY_CONTEXT_MENU || c == 0x08) { deleteBeforeCursor(); return NONE; }
       // KEY_KB_ENTER (external keyboard's Fn+Enter) leaves the mode too rather
       // than being silently eaten -- it's the one key an external-keyboard
       // typist would reach for here, and cursor mode is only ever entered from
