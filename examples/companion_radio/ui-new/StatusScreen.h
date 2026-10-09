@@ -7,6 +7,7 @@
 #include "PopupMenu.h"
 #include "TabBar.h"
 #include "../MyMesh.h"
+#include "../ui-core/SiteQr.h"
 #include "../ui-core/Diagnostics.h"
 #include "../ui-core/Battery.h"
 #if ENV_INCLUDE_GPS == 1 && defined(GPS_SKYVIEW)
@@ -30,6 +31,7 @@ extern MyMesh the_mesh;
 //   Mesh   -- packet counts with a traffic line, nodes heard, contacts.
 //             Hold Enter resets the counters.
 //   System -- uptime, firmware, device, memory, queue, errors, a font card.
+//             Enter shows the QR code of the Solo site; any key closes it.
 // Replaces Tools › Diagnostics and Tools › Satellites. Drawn with InfoKit.h.
 class StatusScreen : public UIScreen {
 public:
@@ -44,6 +46,7 @@ private:
   int  _scroll = 0;                // blocks scrolled off the top
   bool _more = false;              // the last frame cut blocks off at the bottom
   bool _signal = false;            // Sky: the bars instead of the plot
+  bool _qr = false;                // System: the site's QR code, full screen
   PopupMenu _reset_menu;           // Mesh, Hold Enter -> confirm
   CayenneLPP _lpp;
   unsigned long _lpp_at = 0;
@@ -293,6 +296,7 @@ private:
     row(d, f, rsv, "Firmware", a);
     row(d, f, rsv, "Built", FIRMWARE_BUILD_DATE);
     row(d, f, rsv, "Device", board.getManufacturerName());
+    row(d, f, rsv, "Manual", "Enter: QR code");
     uint32_t heap_free, heap_total;
     DeviceDiag::getHeapStats(heap_free, heap_total);
     if (heap_total) snprintf(a, sizeof(a), "%lu of %lu KB", (unsigned long)(heap_free / 1024), (unsigned long)(heap_total / 1024));
@@ -314,6 +318,42 @@ private:
     const int n = diag::fontLines(lines);
     for (int i = 0; i < n; i++)
       if (f.place(d.lineStep())) d.drawTextEllipsized(1, f.at, d.width() - rsv - 3, lines[i]);
+  }
+
+  // The site's QR code as large as the screen allows, dark modules on light
+  // (LIGHT is the ink on e-ink, the lit pixel elsewhere), with the address
+  // beside it or under it where it fits.
+  void renderQr(DisplayDriver& d) {
+    const int W = d.width(), H = d.height(), lh = d.getLineHeight();
+    const bool tall = H > W;
+    const int side = siteqr::N + 2 * siteqr::QUIET;
+    const int s = (tall ? W : H) / side;
+    const int px = side * s;
+    // The text: "Solo manual" and the address if that fits on one line.
+    const int tx = tall ? 0 : px + 2, tw = W - tx;
+    const bool url = d.getTextWidth(siteqr::URL) <= tw;
+    const int lines = url ? 2 : 3;
+    // Portrait: the code and the text under it, centred together.
+    const int x0 = tall ? (W - px) / 2 : 0;
+    const int y0 = tall ? (H - px - lh / 2 - lines * lh) / 2 : (H - px) / 2;
+    const bool eink = d.isEink();
+    if (!eink) { d.setColor(DisplayDriver::LIGHT); d.fillRect(x0, y0, px, px); }
+    d.setColor(eink ? DisplayDriver::LIGHT : DisplayDriver::DARK);
+    const int q = x0 + siteqr::QUIET * s, r = y0 + siteqr::QUIET * s;
+    for (int y = 0; y < siteqr::N; y++)
+      for (int x = 0; x < siteqr::N; x++)
+        if (siteqr::dark(x, y)) d.fillRect(q + x * s, r + y * s, s, s);
+    d.setColor(DisplayDriver::LIGHT);
+    const int mid = tx + tw / 2;
+    int ty = tall ? y0 + px + lh / 2 : (H - lines * lh) / 2;
+    if (url) {
+      d.drawTextCentered(mid, ty, "Solo manual"); ty += lh;
+      d.drawTextCentered(mid, ty, siteqr::URL);
+    } else {
+      d.drawTextCentered(mid, ty, "Scan for"); ty += lh;
+      d.drawTextCentered(mid, ty, "the Solo"); ty += lh;
+      d.drawTextCentered(mid, ty, "manual");
+    }
   }
 
   // All of a tab's blocks, drawn (or, through a measuring Flow, only counted).
@@ -346,6 +386,7 @@ public:
 
   // Open on a given tab (Status page: Radio; the GPS shortcuts: GPS / Sky).
   void showTab(uint8_t t) {
+    _qr = false;
     for (uint8_t i = 0; i < _count; i++) if (_tabs[i] == t) { _cur = i; _scroll = 0; }
   }
   // GPS stays awake while its live tabs are on screen.
@@ -380,6 +421,7 @@ public:
   int render(DisplayDriver& display) override {
     display.setTextSize(1);
     display.setColor(DisplayDriver::LIGHT);
+    if (_qr) { renderQr(display); return 1000; }
     tabbar::draw(display, _labels, _count, _cur);
     const int top = display.listStart(), bottom = display.height();
     int next = 1000;
@@ -415,6 +457,7 @@ public:
       }
       return true;
     }
+    if (_qr) { _qr = false; return true; }
     if (keyIsPrev(c)) { _cur = (_cur + _count - 1) % _count; _scroll = 0; return true; }
     if (keyIsNext(c)) { _cur = (_cur + 1) % _count;          _scroll = 0; return true; }
     if (c == KEY_UP)   { if (_scroll > 0) _scroll--; return true; }
@@ -423,6 +466,7 @@ public:
     if (c == KEY_ENTER && tab() == TAB_GPS) { _task->toggleGPS(); return true; }
 #endif
     if (c == KEY_ENTER && tab() == TAB_SKY) { _signal = !_signal; return true; }
+    if (c == KEY_ENTER && tab() == TAB_SYSTEM) { _qr = true; return true; }
     if (c == KEY_CONTEXT_MENU && tab() == TAB_MESH) {
       _reset_menu.beginConfirm("Reset counters?", "Reset");
       return true;

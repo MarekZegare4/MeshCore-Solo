@@ -87,6 +87,7 @@ static bool s_chats_stale = false;   // Messages: a refresh waits for a held row
 #include "../ui-core/SoundControl.h"
 #include "../ui-core/SoundNotifier.h"
 #include "../ui-core/MessageText.h"
+#include "../ui-core/SiteQr.h"
 #include "Theme.h"
 #include "Anim.h"
 #include "LvglPort.h"
@@ -4479,12 +4480,48 @@ void UITask::buildKeyboardPage(lv_obj_t* body) {
   groupNote(body, "Hold a letter for accents and other variants.");
 }
 
-// Settings > About: this node, the firmware, credits.
+// The Solo site's QR code (ui-core/SiteQr.h): a 1-bit image, black on white
+// with its quiet zone, built once at 5 px a module.
+static lv_obj_t* siteQr(lv_obj_t* parent) {
+  static const int S = 5, SIDE = siteqr::N + 2 * siteqr::QUIET, PX = SIDE * S, STRIDE = (PX + 7) / 8;
+  static uint8_t data[8 + STRIDE * PX];   // the palette (white, black), then the rows
+  static lv_image_dsc_t dsc;
+  if (!dsc.data) {
+    const lv_color32_t pal[2] = { lv_color32_make(0xFF, 0xFF, 0xFF, 0xFF), lv_color32_make(0, 0, 0, 0xFF) };
+    memcpy(data, pal, sizeof(pal));
+    uint8_t* px = data + 8;
+    for (int y = 0; y < PX; y++)
+      for (int x = 0; x < PX; x++) {
+        int mx = x / S - siteqr::QUIET, my = y / S - siteqr::QUIET;
+        if (mx >= 0 && my >= 0 && mx < siteqr::N && my < siteqr::N && siteqr::dark(mx, my))
+          px[y * STRIDE + x / 8] |= 0x80 >> (x % 8);
+      }
+    dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
+    dsc.header.cf = LV_COLOR_FORMAT_I1;
+    dsc.header.w = PX;
+    dsc.header.h = PX;
+    dsc.header.stride = STRIDE;
+    dsc.data_size = sizeof(data);
+    dsc.data = data;
+  }
+  lv_obj_t* img = lv_image_create(parent);
+  lv_image_set_src(img, &dsc);
+  return img;
+}
+
+// Settings > About: this node, the firmware, the manual's QR code, credits.
 void UITask::buildAboutPage(lv_obj_t* body) {
   lv_obj_t* about = infoCard(body);
   infoRow(about, "Node", the_mesh.getNodeName());
   infoRow(about, "Firmware", FIRMWARE_VERSION);
   if (!strstr(FIRMWARE_VERSION, FIRMWARE_BUILD_DATE)) infoRow(about, "Built", FIRMWARE_BUILD_DATE);
+  sectionTitle(body, "MANUAL");
+  lv_obj_t* man = infoCard(body);
+  lv_obj_set_flex_align(man, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_ver(man, theme::PAD, 0);
+  lv_obj_set_style_pad_row(man, 6, 0);
+  siteQr(man);
+  label(man, siteqr::URL, THEME_FONT_SMALL, theme::TEXT_MUTED);
   sectionTitle(body, "CREDITS");
   lv_obj_t* cr = infoCard(body);
   infoNote(cr, "Map data", creditText((lvport::mountStorage() && mapview::s_provider->available())
@@ -4691,7 +4728,7 @@ void UITask::settingsGroup(int i) {
       schemaRow(g, SETTING(units_imperial));
     }
     listRow(g, LV_SYMBOL_DOWNLOAD "  Firmware update", FIRMWARE_VERSION, onOpenOta, NULL);
-    listRow(g, LV_SYMBOL_LIST "  About", "Node, firmware, credits", onOpenSchemaPage, (void*)(uintptr_t)PG_ABOUT);
+    listRow(g, LV_SYMBOL_LIST "  About", "Node, firmware, manual, credits", onOpenSchemaPage, (void*)(uintptr_t)PG_ABOUT);
     break;
 
   case 4:
