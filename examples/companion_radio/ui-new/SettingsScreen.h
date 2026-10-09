@@ -50,6 +50,7 @@ class SettingsScreen : public UIScreen {
     SECTION_SYSTEM,
     DEVICE_NAME,
     SCHEMA_SYSTEM,    // power, units
+    ADV_LOC_PREC,     // location in adverts: Off / Exact / ~100m / ~500m / ~1km
     BATT_CURVE,
     REBOOT,
     // Keyboard section
@@ -499,6 +500,17 @@ class SettingsScreen : public UIScreen {
       sw("Lock PIN", _task->passwordLockEnabled());
     } else if (item == DEVICE_NAME) {
       val("Name", the_mesh.getNodeName());
+    } else if (item == ADV_LOC_PREC) {
+      // Location in adverts: Off (advert_loc_policy = NONE, same switch the
+      // phone app sets), else shared at the chosen precision (privacy).
+      static const char* const ADV_LOC_PREC_LABELS[MyMesh::ADV_LOC_PREC_COUNT] =
+        { "Exact", "~100m", "~500m", "~1km" };
+      if (!p || p->advert_loc_policy == ADVERT_LOC_NONE) {
+        val("Adv loc", "Off");
+      } else {
+        uint8_t v = the_mesh.getAdvertLocPrecision();
+        val("Adv loc", ADV_LOC_PREC_LABELS[v < MyMesh::ADV_LOC_PREC_COUNT ? v : 0]);
+      }
     } else if (item == BATT_CURVE) {
       val("Batt curve", p && battery::validCurve(p->batt_curve_mv) ? "Custom" : "LiPo");
     } else if (item == REBOOT) {
@@ -970,6 +982,24 @@ public:
       _scope_mgmt_active = true;
       _scope_mgmt_sel = 0;
       _scope_mgmt_scroll = 0;
+      return true;
+    }
+    if (_selected == ADV_LOC_PREC && p && (left || right || enter)) {
+      // One cycle: Off, Exact, ~100m, ~500m, ~1km. Position 0 = Off.
+      const int n = MyMesh::ADV_LOC_PREC_COUNT + 1;
+      int pos = 0;
+      if (p->advert_loc_policy != ADVERT_LOC_NONE) {
+        int prec = the_mesh.getAdvertLocPrecision();
+        pos = (prec < MyMesh::ADV_LOC_PREC_COUNT ? prec : 0) + 1;
+      }
+      pos = (pos + (left ? n - 1 : 1)) % n;
+      if (pos == 0) {
+        p->advert_loc_policy = ADVERT_LOC_NONE;   // precision left as-is for next time
+      } else {
+        p->advert_loc_policy = ADVERT_LOC_SHARE;
+        the_mesh.setAdvertLocPrecision(pos - 1);  // saved to its own file immediately
+      }
+      _dirty = true;   // advert_loc_policy lives in NodePrefs: saved on leaving Settings
       return true;
     }
     if (_selected == BATT_CURVE && enter) {

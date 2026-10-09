@@ -205,6 +205,15 @@ public:
   void loop();
   void handleCmdFrame(size_t len);
   bool advert();        // zero-hop: only nodes in direct range hear it
+  // Advert location precision (privacy). Index into ADV_LOC_PREC_STEPS:
+  // 0 = exact, 1 = ~100 m, 2 = ~500 m, 3 = ~1 km. Applied to every advert this
+  // node builds (manual, auto, phone-app and contact export). Persisted in its
+  // own /adv_loc_prec file so the NodePrefs schema is untouched.
+  static const int ADV_LOC_PREC_COUNT = 4;
+  uint8_t getAdvertLocPrecision() const { return _adv_loc_prec; }
+  void setAdvertLocPrecision(uint8_t idx);
+  // Self-advert honouring advert_loc_policy, with coordinates coarsened.
+  mesh::Packet* createOwnAdvert();
   bool advertFlood();   // flooded (default scope), as the app's "Advert" with flood
   void sendNodeDiscoverReq();
   void enterCLIRescue();
@@ -660,6 +669,8 @@ private:
   unsigned long _bot_last_ch_reply_ms;
   unsigned long _bot_last_room_reply_ms;
   unsigned long _next_auto_advert_ms;
+  uint8_t _adv_loc_prec = 0;
+  void loadAdvertLocPrecision();
 
   // Per-contact DM reply throttle: a small ring of the most recent recipients so
   // one chatty contact can't be spammed while a different sender is still served.
