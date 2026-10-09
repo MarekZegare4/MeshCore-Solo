@@ -209,8 +209,30 @@ private:
   // the last raw byte seen so a held key enqueues exactly one press instead
   // of one per poll tick.
   uint8_t  _cardkb_last_raw = 0;
+  // Keys sampled by the background poll task while the display blocks the
+  // main loop; drained (in order) by the next pollCardKB().
+  static const uint8_t CARDKB_Q_LEN = 16;
+  uint8_t  _cardkb_q[CARDKB_Q_LEN];
+  volatile uint8_t _cardkb_q_head = 0, _cardkb_q_tail = 0;   // shared with the poll task
+  bool readCardKBEdge(uint8_t& raw);   // one I2C read + debounce; true on a new keypress
+  void cardkbQueuePush(uint8_t raw);   // add a sampled key to _cardkb_q (drops if full)
+#if defined(NRF52_PLATFORM)
+  // nRF52 (FreeRTOS): a small higher-priority task samples the CardKB every
+  // 10 ms while the loop is busy drawing / sending / refreshing the e-ink
+  // frame -- the whole window, not just the panel's BUSY wait (on an 800x480
+  // panel the byte-by-byte SPI transfers alone block for the better part of a
+  // second). _cardkb_bg_active marks that window; the mutex guarantees the
+  // task and the loop never use the I2C bus at the same time. Leaves the
+  // display's busy-wait hook (setBusyPumpFn) to the radio pump.
+  void* _cardkb_mutex = nullptr;          // SemaphoreHandle_t
+  volatile bool _cardkb_bg_active = false;
+  static void cardkbTask(void* self);
+#endif
 #endif
   void pollCardKB();
+  void handleCardKBByte(uint8_t raw);
+  void setCardKBBackground(bool on);   // no-op without CardKB / the poll task
+  void startCardKBCapture();           // end of begin(): start the poll task
 
   // Optional magnetic "flip cover" lock: a Hall-effect or reed sensor wired to
   // any free GPIO, closing (pulling active) when a magnet is near. Entirely
