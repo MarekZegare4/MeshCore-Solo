@@ -2399,6 +2399,8 @@ void UITask::back() {
       if (_settings_page == settings::PG_NAV && s_opts_from_map) {
         openMap(true);
         if (s_nav_section >= 0) navToolsPopup();   // one section's options: back into Map tools
+      } else if (_settings_page == settings::PG_RADIO) {
+        showRadio();
       } else {
         showSettings();
       }
@@ -3548,6 +3550,7 @@ static lv_obj_t* switchRow(lv_obj_t* parent, const char* text, const char* sub, 
 #include "MapRegions.h"
 #include "HomeScreen.h"
 #include "ClockScreen.h"
+static void onOpenSchemaPage(lv_event_t* e);   // Radio > Advanced
 #include "RadioScreen.h"
 #include "WifiScreen.h"
 #include "ChannelScreen.h"
@@ -4536,11 +4539,13 @@ void UITask::buildAboutPage(lv_obj_t* body) {
 // (fill); a popup's list gets them all now.
 static lv_obj_t* s_schema_body = nullptr;
 static bool s_schema_one = false;   // one section: its own page, no heading
+static bool s_schema_bare = false;  // no section headings
 
 void UITask::schemaRows(lv_obj_t* body, uint8_t page) {
   for (lv_obj_t*& c : s_sec_card) c = nullptr;
   s_schema_body = body;
   s_schema_one = page == settings::PG_NAV && s_nav_section >= 0;
+  s_schema_bare = s_schema_one || page == settings::PG_RADIO;   // one section: the page title says it
   uint8_t sec = 0xFF;
   bool first = true;
   for (int i = 0; i < settings::COUNT; i++) {
@@ -4557,7 +4562,7 @@ void UITask::schemaRows(lv_obj_t* body, uint8_t page) {
 // The group of the section setting i starts, with its rows.
 void UITask::schemaSection(int i) {
   uint8_t sec = settings::ALL[i].section;
-  lv_obj_t* card = s_sec_card[sec] = group(s_schema_body, s_schema_one ? nullptr : settings::sectionTitle(sec));
+  lv_obj_t* card = s_sec_card[sec] = group(s_schema_body, s_schema_bare ? nullptr : settings::sectionTitle(sec));
   if (sec == settings::SEC_SOUND) buildSoundRows(card, true);   // On / Off / Auto
   for (int k = i; k < settings::COUNT && settings::ALL[k].section == sec; k++) {
     if (settings::ALL[k].offset == offsetof(NodePrefs, lock_compact)) continue;   // ui-new's lock look; the slide card has one
@@ -4684,7 +4689,7 @@ void UITask::settingsGroup(int i) {
       snprintf(sub, sizeof(sub), aa == ma ? "%s" : "%s + %s", SCRIPT[ma], SCRIPT[aa]);
     }
     listRow(g, LV_SYMBOL_KEYBOARD "  Keyboard", sub, onOpenSchemaPage, (void*)(uintptr_t)PG_KEYBOARD);
-    listRow(g, LV_SYMBOL_ENVELOPE "  Messages & contacts", "Resend, expiry, quick messages",
+    listRow(g, LV_SYMBOL_ENVELOPE "  Messages & contacts", "Resend, adding, expiry, quick messages",
             onOpenSchemaPage, (void*)(uintptr_t)settings::PG_MESSAGES);
     break;
 
@@ -4696,6 +4701,8 @@ void UITask::settingsGroup(int i) {
       if (pi >= 0) radioctl::presetAt(_prefs, pi, pn, f, b, sf, cr);
       snprintf(sub, sizeof(sub), "%s  -  %.3f MHz, %d dBm", pn, _prefs->freq, _prefs->tx_power_dbm);
       listRow(g, UI_SYMBOL_RADIO "  Radio", sub, onOpenRadio, NULL);
+      listRow(g, LV_SYMBOL_EYE_CLOSE "  Privacy", "Position in adverts, who can ask for telemetry",
+              onOpenSchemaPage, (void*)(uintptr_t)settings::PG_PRIVACY);
     }
     bluetoothRow(g);
     wifiRow(g);

@@ -46,6 +46,7 @@ class SettingsScreen : public UIScreen {
 #endif
     TX_APC,
     SCOPE_NAME,
+    SCHEMA_RADIO,     // the advanced radio options
     // System section
     SECTION_SYSTEM,
     DEVICE_NAME,
@@ -61,7 +62,9 @@ class SettingsScreen : public UIScreen {
     KEYBOARD_CARDKB_COMPACT,
 #endif
     // Contacts section
-    SECTION_CONTACTS, DM_FILTER, CH_FILTER, ROOM_FILTER, SCHEMA_CONTACTS, PRUNE_NOW,
+    SECTION_CONTACTS, DM_FILTER, CH_FILTER, ROOM_FILTER, SCHEMA_CONTACTS, PRUNE_NOW, SCHEMA_AUTO_ADD,
+    // Privacy section: what adverts carry, who may ask for telemetry
+    SECTION_PRIVACY, SCHEMA_PRIVACY,
     // Messages section
     SECTION_MESSAGES,
     SCHEMA_MESSAGES,
@@ -83,8 +86,8 @@ class SettingsScreen : public UIScreen {
   bool _keep_place = false;   // set when opening a screen from a row, so Back lands on it
 
   AccordionList _acc;
-  static const int NUM_SECTIONS = 8;
-  static const int MAX_PER_SEC  = 16;
+  static const int NUM_SECTIONS = 9;
+  static const int MAX_PER_SEC  = 20;
   uint8_t _sec_items[NUM_SECTIONS][MAX_PER_SEC]; // SettingItem per (section, row)
   uint8_t _sec_count[NUM_SECTIONS];
   uint8_t _sec_header[NUM_SECTIONS];             // the SECTION_* enum for each section
@@ -136,7 +139,8 @@ class SettingsScreen : public UIScreen {
            item == SECTION_HOME_PAGES ||
            item == SECTION_RADIO   || item == SECTION_SYSTEM ||
            item == SECTION_KEYBOARD ||
-           item == SECTION_CONTACTS || item == SECTION_MESSAGES;
+           item == SECTION_CONTACTS || item == SECTION_MESSAGES ||
+           item == SECTION_PRIVACY;
   }
 
   const char* sectionName(int item) const {
@@ -148,6 +152,7 @@ class SettingsScreen : public UIScreen {
     if (item == SECTION_KEYBOARD)   return "Keyboard";
     if (item == SECTION_CONTACTS)   return "Contacts";
     if (item == SECTION_MESSAGES)   return "Messages";
+    if (item == SECTION_PRIVACY)    return "Privacy";
     return "";
   }
 
@@ -178,7 +183,8 @@ class SettingsScreen : public UIScreen {
 
   static bool isSchemaGroup(int item) {
     return item == SCHEMA_DISPLAY || item == SCHEMA_SOUND || item == SCHEMA_SYSTEM ||
-           item == SCHEMA_CONTACTS || item == SCHEMA_MESSAGES;
+           item == SCHEMA_CONTACTS || item == SCHEMA_MESSAGES || item == SCHEMA_RADIO || item == SCHEMA_AUTO_ADD ||
+           item == SCHEMA_PRIVACY;
   }
   // Which schema sections a placeholder stands for.
   static bool schemaIn(int group, uint8_t sec) {
@@ -188,6 +194,9 @@ class SettingsScreen : public UIScreen {
       case SCHEMA_SOUND:    return sec == SEC_SOUND || sec == SEC_QUIET || sec == SEC_SOUND_FOR;
       case SCHEMA_SYSTEM:   return sec == SEC_POWER || sec == SEC_UNITS;
       case SCHEMA_CONTACTS: return sec == SEC_CONTACTS;
+      case SCHEMA_AUTO_ADD: return sec == SEC_AUTO_ADD;
+      case SCHEMA_RADIO:    return sec == SEC_RADIO_ADV;
+      case SCHEMA_PRIVACY:  return sec == SEC_PRIVACY || sec == SEC_TELEMETRY;
       case SCHEMA_MESSAGES: return sec == SEC_MESSAGES;
     }
     return false;

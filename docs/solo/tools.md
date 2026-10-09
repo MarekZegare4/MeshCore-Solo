@@ -64,8 +64,8 @@ room's saved login.
 
 ## Auto-advert
 
-**Tools › Auto-advert** sends an advert with your position every 30 seconds
-to 1 hour, so others see you in their Nearby list. With it on at both ends
+**Tools › Auto-advert** sends your advert every 30 seconds to 1 hour (with
+your position if Settings › Privacy › **Advert pos** is on), so others see you in their Nearby list. With it on at both ends
 and Settings › Sound › **AD sound** set, each device beeps when it hears the
 other: a hands-free "still in range".
 

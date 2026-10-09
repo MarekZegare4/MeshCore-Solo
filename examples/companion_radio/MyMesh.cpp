@@ -3484,7 +3484,8 @@ void MyMesh::loop() {
   }
 
   if (_prefs.advert_auto_interval_sec > 0 && millisHasNowPassed(_next_auto_advert_ms)) {
-    mesh::Packet* pkt = (sensors.node_lat != 0 || sensors.node_lon != 0)
+    // The position only where Privacy lets adverts carry it, and once there is one.
+    mesh::Packet* pkt = (_prefs.advert_loc_policy != ADVERT_LOC_NONE && (sensors.node_lat != 0 || sensors.node_lon != 0))
       ? createSelfAdvert(_prefs.node_name, sensors.node_lat, sensors.node_lon)
       : createSelfAdvert(_prefs.node_name);
     if (pkt) sendZeroHop(pkt);

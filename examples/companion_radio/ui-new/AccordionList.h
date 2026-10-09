@@ -22,15 +22,15 @@ public:
 
   enum Result { IGNORED, HANDLED, ACTIVATED };
 
-  static const int MAX_SECTIONS = 8;   // collapse bitmask is 8 bits
-  static const int MAX_ROWS     = 64;
+  static const int MAX_SECTIONS = 16;  // collapse bitmask is 16 bits
+  static const int MAX_ROWS     = 128;
 
   // (Re)initialise from per-section item counts. `collapsed` sets the initial
   // fold state for every section (Settings opens folded, so default true).
   void begin(const uint8_t* section_sizes, int section_count, bool collapsed = true) {
     _count = section_count > MAX_SECTIONS ? MAX_SECTIONS : section_count;
     for (int i = 0; i < _count; i++) _sizes[i] = section_sizes[i];
-    _collapsed = collapsed ? 0xFF : 0x00;
+    _collapsed = collapsed ? 0xFFFF : 0x0000;
     _sel = 0; _scroll = 0;
     rebuild();
   }
@@ -68,7 +68,7 @@ public:
   // the cursor never jumps to an unrelated row when items appear/disappear.
   void toggle(int sec) {
     if (sec < 0 || sec >= _count) return;
-    _collapsed ^= (uint8_t)(1u << sec);
+    _collapsed ^= (uint16_t)(1u << sec);
     rebuild();
     for (int i = 0; i < _vis_count; i++)
       if (_rows[i].sec == sec && _rows[i].item < 0) { _sel = i; break; }
@@ -77,7 +77,7 @@ public:
 private:
   uint8_t _sizes[MAX_SECTIONS];
   int     _count = 0;
-  uint8_t _collapsed = 0xFF;
+  uint16_t _collapsed = 0xFFFF;
   Row     _rows[MAX_ROWS];
   int     _vis_count = 0;
   int     _sel = 0, _scroll = 0;

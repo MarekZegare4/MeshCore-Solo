@@ -61,6 +61,8 @@ build flag it needs.
 | Contact details | yes | + compass rose, path hops | + compass rose, path hops | + compass rose, path hops | card with actions |
 | Contact expiry / prune | yes | yes | yes | yes | yes |
 | Remote admin | yes | yes | yes | yes | yes |
+| Adding contacts (auto-add by type, hops, replace oldest) | Settings › Contacts | same | same | same | Messages & contacts |
+| Privacy (position in adverts, telemetry requests) | Settings › Privacy | same | same | same | Settings › Privacy |
 
 ### Navigation (`ENV_INCLUDE_GPS`)
 
@@ -84,6 +86,7 @@ build flag it needs.
 | Melodies (`PIN_BUZZER`) | Ringtones tool | same | same | wide editor | Settings › Sound |
 | Status: Radio, GPS, Power, Mesh | yes, 32 min history | yes, 8 h charts | yes, 8 h charts | tiles with charts | Diagnostics app (+ noise chart) |
 | Sky view (`GPS_SKYVIEW`) | Status › Sky | same | same | + side panel | GPS app: Sky, Signal, Details |
+| Advanced radio (hash size, double ACK, CAD, interference, RX boost, RX delay, airtime) | end of Settings › Radio | same | same | same | Radio › Advanced |
 | Battery curve | Settings | same | same | same | Settings › Power, draggable chart |
 | QR code of the manual | Status › System, Enter | same | same | same | Settings › About |
 

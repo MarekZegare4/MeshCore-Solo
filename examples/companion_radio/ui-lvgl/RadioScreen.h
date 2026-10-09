@@ -96,13 +96,19 @@ void UITask::buildRadio() {
   paramRows(g, p, radioctl::currentPreset(p), p->freq, p->sf, p->bw, p->cr, onRadioDropdown, IDS, onRadioFreq,
             "Higher = longer range");
   groupNote(body, "Everyone you talk to needs the same settings.");
-  fill(&UITask::radioGroup, 1, 3);   // the rest as the loop goes
+  fill(&UITask::radioGroup, 1, 4);   // the rest as the loop goes
 }
 
 void UITask::radioGroup(int i) {
   using namespace radioview;
   NodePrefs* p = _prefs;
   if (i == 2) { buildRadioExtras(_body); return; }   // my presets, scopes (RadioExtras.h)
+  if (i == 3) {   // the schema's advanced options, a page of their own
+    lv_obj_t* g = group(_body, nullptr);
+    listRow(g, LV_SYMBOL_SETTINGS "  Advanced", "Path hash size, ACKs, listen before talk, delays",
+            onOpenSchemaPage, (void*)(uintptr_t)settings::PG_RADIO);
+    return;
+  }
   lv_obj_t* g = group(_body, "TRANSMIT");
   int o = 0;
   for (int v = TX_MIN; v <= TX_MAX; v++) o += snprintf(s_opts + o, OPTS_LEN - o, v > TX_MIN ? "\n%d dBm" : "%d dBm", v);

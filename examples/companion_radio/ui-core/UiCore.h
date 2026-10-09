@@ -152,6 +152,7 @@ public:
   }
 
   UiCoreHost* host() { return _host; }
+  NodePrefs*  prefs() { return _prefs; }
 
   // ════ MyMesh::Listener ════════════════════════════════════════════════════
 
