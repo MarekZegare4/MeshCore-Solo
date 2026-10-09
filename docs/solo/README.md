@@ -59,7 +59,7 @@ history on the SD card and updates over WiFi.
 - [Screen lock](./lock.md): locking, auto-lock, PIN
 - [Hardware](./hardware.md): external keyboards and joysticks, e-ink, SD card, WiFi
 
-For developers: [UI Core](./developer/ui-core.md), [UI framework](./developer/ui-framework.md), [build flags](./developer/build-flags.md).
+For developers: [UI Core](./developer/ui-core.md), [UI framework](./developer/ui-framework.md), [build flags](./developer/build-flags.md), [feature matrix](./developer/feature-matrix.md).
 
 ## Contributors
 
