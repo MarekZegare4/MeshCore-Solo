@@ -77,6 +77,10 @@ Settings › Display › Message alert picks how a new message shows: **Normal**
 blinking for a moment, covering nothing else) or **Off** (no alert; the sound
 and waking the screen still follow their own settings).
 
+> [!NOTE]
+> **Wio Tracker L2:** Settings › Display › **Message banner** turns the banner
+> on or off; tapping it opens the conversation.
+
 The battery sits at the top right, as an icon, a percentage or the voltage
 (Settings › Display). A small bolt beside it means external power is
 connected over USB.

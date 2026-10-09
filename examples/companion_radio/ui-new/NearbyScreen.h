@@ -21,7 +21,7 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
 
   // ── action-menu actions (matched by id, not by row index) ────────────────────
   enum Action : uint8_t { ACT_NAV, ACT_PING, ACT_WAYPOINT, ACT_LOCATOR,
-                          ACT_ADD, ACT_DELETE, ACT_FAV, ACT_PIN, ACT_ADMIN, ACT_SORT, ACT_SCAN };
+                          ACT_ADD, ACT_DELETE, ACT_FAV, ACT_PIN, ACT_ADMIN, ACT_SORT, ACT_SCAN, ACT_MAP };
 
   // Set by UITask::pickAdminTarget() (Tools > Admin, which is remote-only):
   // while true, ENTER on an eligible row (a stored repeater/room contact) hands
@@ -36,6 +36,8 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
   int     _scroll;
   bool    _detail;
   bool    _nav = false;     // full-screen navigate-to-node view (over detail)
+  bool    _map = false;     // the nodes with a position on a map (under detail)
+  int     _map_zoom = 0;    // 0: all of them in view; each step halves it, on the selected
   navview::EtaTracker _nav_eta;  // closing-speed/ETA for the navigate view
   unsigned long _detail_refresh_ms;
   unsigned long _list_refresh_ms = 0;
@@ -53,7 +55,7 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
   PopupMenu _ping_menu;       // ping (special: read-only result rows)
   PopupMenu _confirm;         // delete-contact confirmation (destructive → 2-step)
 
-  Action  _menu_actions[10];  // parallel to _menu rows — stable action ids
+  Action  _menu_actions[12];  // parallel to _menu rows — stable action ids
   int     _menu_action_count;
   char    _sort_label[16];    // dynamic label for the Sort row
 
@@ -327,6 +329,7 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
       _menu_actions[_menu_action_count++] = a;
     };
 
+    if (stored && !_map && positioned(0, 1) >= 0) add("Map", ACT_MAP);
     if (has_gps) add("Navigate",      ACT_NAV);
     if (has_key) add("Ping",          ACT_PING);
     if (has_gps) add("Save waypoint", ACT_WAYPOINT);
@@ -428,6 +431,13 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
       }
       case ACT_SORT:     break;  // value rows -- see cycleMenuValue()
       case ACT_SCAN:     enterScan();            break;
+      case ACT_MAP: {
+        _map = true; _map_zoom = 0;
+        _detail_refresh_ms = millis();
+        const Entry* e = selected();
+        if (!e || (e->lat_e6 == 0 && e->lon_e6 == 0)) { int k = positioned(_sel, 1); if (k >= 0) _sel = k; }
+        break;
+      }
     }
   }
 
@@ -523,6 +533,99 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
     info::rose(display, cx, cy, r, geo::bearingDeg(_own_lat, _own_lon, e.lat_e6, e.lon_e6));
   }
 
+  // ── map view ────────────────────────────────────────────────────────────────
+  static bool hasPos(const Entry& e) { return e.lat_e6 != 0 || e.lon_e6 != 0; }
+  // The next entry with a position from `from` on in direction `dir` (from
+  // itself included), wrapping; -1 when none has one.
+  int positioned(int from, int dir) const {
+    for (int k = 0; k < _count; k++) {
+      int i = ((from + dir * k) % _count + _count) % _count;
+      if (hasPos(_entries[i])) return i;
+    }
+    return -1;
+  }
+
+  // Every node with a position (and you) fitted in; zoomed in, centred on the
+  // selected one. Dots, the selected one boxed, live shares as diamonds;
+  // under the map its name and distance, "+n" for others under the same spot.
+  void renderMap(DisplayDriver& d) {
+    const int W = d.width(), H = d.height(), lh = d.getLineHeight(), s = miniIconScale(d);
+    const int bar_y = H - lh - 1, ax = 1, ay = 1, aw = W - 2, ah = bar_y - 3;
+    d.setColor(DisplayDriver::LIGHT);
+    int32_t tla = 0, tlo = 0;
+    const bool target = _task->activeTargetPos(tla, tlo);
+    int32_t mnla = 0, mxla = 0, mnlo = 0, mxlo = 0;
+    bool init = false;
+    auto fold = [&](int32_t la, int32_t lo) {
+      if (!init) { mnla = mxla = la; mnlo = mxlo = lo; init = true; return; }
+      if (la < mnla) mnla = la;  if (la > mxla) mxla = la;
+      if (lo < mnlo) mnlo = lo;  if (lo > mxlo) mxlo = lo;
+    };
+    for (int i = 0; i < _count; i++) if (hasPos(_entries[i])) fold(_entries[i].lat_e6, _entries[i].lon_e6);
+    if (_own_gps) fold(_own_lat, _own_lon);
+    if (!init || _sel >= _count || !hasPos(_entries[_sel])) {
+      d.drawTextCentered(W / 2, H / 2 - lh / 2, "No node positions");
+      return;
+    }
+    const Entry& sel = _entries[_sel];
+    float kx = cosf(((mnla + mxla) / 2.0e6f) * (float)M_PI / 180.0f);
+    if (kx < 0.05f) kx = 0.05f;
+    float span_la = (float)(mxla - mnla), span_lo = (float)(mxlo - mnlo) * kx;
+    if (span_la < 2000.0f) span_la = 2000.0f;   // ~200 m: one node alone still has a scale
+    if (span_lo < 2000.0f) span_lo = 2000.0f;
+    // Fitted inside a margin clear of the north mark and the scale's label.
+    const int mx = ICON_MAP_NORTH.w * s + 2, my = lh + 2;
+    const float fw = (float)(aw - 2 * mx), fh = (float)(ah - 2 * my);
+    float scale = fh / span_la < fw / span_lo ? fh / span_la : fw / span_lo;
+    float cla = (mnla + mxla) / 2.0f, clo = (mnlo + mxlo) / 2.0f;
+    if (_map_zoom > 0) { scale *= (float)(1 << _map_zoom); cla = sel.lat_e6; clo = sel.lon_e6; }
+    auto project = [&](int32_t la, int32_t lo, int& x, int& y) {
+      x = ax + aw / 2 + (int)(((float)lo - clo) * kx * scale);
+      y = ay + ah / 2 - (int)(((float)la - cla) * scale);
+    };
+    auto inside = [&](int x, int y) { return x >= ax && x < ax + aw && y >= ay && y < ay + ah; };
+
+    int sx, sy, near = 0;
+    project(sel.lat_e6, sel.lon_e6, sx, sy);
+    for (int i = 0; i < _count; i++) {
+      if (!hasPos(_entries[i])) continue;
+      int x, y; project(_entries[i].lat_e6, _entries[i].lon_e6, x, y);
+      if (i != _sel && abs(x - sx) <= 2 * s && abs(y - sy) <= 2 * s) near++;
+      if (!inside(x, y)) continue;
+      miniIconDrawCentered(d, x, y, _entries[i].is_live ? ICON_MAP_CONTACT : ICON_MAP_DOT);
+    }
+    if (_own_gps) { int x, y; project(_own_lat, _own_lon, x, y); if (inside(x, y)) miniIconDrawCentered(d, x, y, ICON_MAP_CURRENT); }
+    if (target)   { int x, y; project(tla, tlo, x, y);           if (inside(x, y)) miniIconDrawCentered(d, x, y, ICON_MAP_TARGET); }
+    const int r = 4 * s;
+    d.drawRect(sx - r, sy - r, 2 * r + 1, 2 * r + 1);
+    miniIconDrawTop(d, ax + aw - ICON_MAP_NORTH.w * s - 1, ay, ICON_MAP_NORTH);
+
+    // The scale: a round distance about a quarter of the width, bottom right.
+    const float m_px = 0.111f / scale;   // 1e-6 degree of latitude is 0.111 m
+    static const float STEPS[] = { 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000 };
+    float m = STEPS[0];
+    for (float st : STEPS) { m = st; if (st / m_px >= aw / 5) break; }
+    const int len = (int)(m / m_px);
+    char sc[12];
+    geo::fmtDist(sc, sizeof(sc), m / 1000.0f, useImperial());
+    if (len > 2 && len < aw) {
+      const int ly = ay + ah - 2, lx = ax + aw - len - 1;
+      d.fillRect(lx, ly, len, s);
+      d.setCursor(lx + len - d.getTextWidth(sc), ly - lh);
+      d.print(sc);
+    }
+
+    d.fillRect(0, bar_y - 1, W, d.sepH());
+    char right[16] = "";
+    if (sel.dist_km >= 0.0f) geo::fmtDist(right, sizeof(right), sel.dist_km, useImperial(), true);
+    char name[40];
+    if (near > 0) snprintf(name, sizeof(name), "%s +%d", sel.name, near);
+    else          snprintf(name, sizeof(name), "%s", sel.name);
+    const int rw = right[0] ? d.getTextWidth(right) + d.getCharWidth() : 0;
+    d.drawTextEllipsized(1, bar_y + 1, W - 2 - rw, name);
+    if (right[0]) { d.setCursor(W - 1 - d.getTextWidth(right), bar_y + 1); d.print(right); }
+  }
+
   void renderScanDetail(DisplayDriver& display) {
     const Entry& e = _entries[_sel];
     const int hdr = display.listStart();   // content top (gap below the header separator)
@@ -604,6 +707,7 @@ public:
     _sel = _scroll = 0;
     _detail = false;
     _nav = false;
+    _map = false;
     _source = SRC_STORED;
     // _filter / _sort persist across enter() — set once in the constructor
     _scanning = false;
@@ -653,6 +757,16 @@ public:
       else                     renderStoredDetail(display);
       renderActivePopup(display);
       return _ping_menu.active ? 50 : 2000;
+    }
+
+    // ── map view ─────────────────────────────────────────────────────────────
+    if (_map) {
+      if (millis() - _detail_refresh_ms >= DETAIL_REFRESH_MS) {
+        refreshKeepingSelection();
+        _detail_refresh_ms = millis();
+      }
+      renderMap(display);
+      return renderActivePopup(display) ? 50 : 2000;
     }
 
     // ── list view ────────────────────────────────────────────────────────────
@@ -820,6 +934,19 @@ public:
     if (_detail) {
       if (c == KEY_CANCEL)            { _detail = false; closePingMenu(); return true; }
       if (c == KEY_CONTEXT_MENU)      { openActionMenu(); return true; }
+      return true;
+    }
+
+    // ── map view: Left / Right a node, Up / Down zoom, Enter its detail ──────
+    if (_map) {
+      if (c == KEY_CANCEL)       { _map = false; return true; }
+      if (c == KEY_CONTEXT_MENU) { openActionMenu(); return true; }
+      if (_count == 0) return true;
+      if (keyIsPrev(c)) { int k = positioned(_sel - 1, -1); if (k >= 0) _sel = k; return true; }
+      if (keyIsNext(c)) { int k = positioned(_sel + 1, 1);  if (k >= 0) _sel = k; return true; }
+      if (c == KEY_UP)   { if (_map_zoom < 8) _map_zoom++; return true; }
+      if (c == KEY_DOWN) { if (_map_zoom > 0) _map_zoom--; return true; }
+      if (c == KEY_ENTER) { _detail = true; _detail_refresh_ms = millis(); return true; }
       return true;
     }
 

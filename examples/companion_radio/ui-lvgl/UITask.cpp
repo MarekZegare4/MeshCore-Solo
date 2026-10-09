@@ -1909,7 +1909,8 @@ void UITask::onMessageArrived(const UiEvent& ev) {
   bool open_here = _screen == SCR_THREAD &&
       (ev.kind == UIEventType::channelMessage ? _thread_is_channel && ev.idx == _thread_channel
                                               : !_thread_is_channel && memcmp(_thread_key, ev.key, 4) == 0);
-  if (!open_here) bannerShow(icon, ev.text, text);   // not over the very conversation it's in
+  bool banner = !_prefs || _prefs->msg_alert != NodePrefs::MSG_ALERT_OFF;
+  if (!open_here && banner) bannerShow(icon, ev.text, text);   // not over the very conversation it's in
   if (_screen == SCR_CHATS && !_nav_overlay) refreshChats();   // new unread counts (not under an open popup)
 }
 
@@ -4307,6 +4308,22 @@ static lv_obj_t* switchRow(lv_obj_t* parent, const char* text, const char* sub, 
 
 // ── Schema-driven settings (ui-core/SettingsSchema.h) ─────────────────────────
 
+// Settings > Display: ui-new's Message alert as a switch -- the banner, or
+// none (Normal / Off; the L2 has no corner for Compact's envelope).
+static void onMsgBannerSwitch(lv_event_t* e) {
+  s_ui->setMsgBanner(lv_obj_has_state((lv_obj_t*)lv_event_get_target(e), LV_STATE_CHECKED));
+}
+void UITask::msgBannerRow(lv_obj_t* card) {
+  lv_obj_t* sw = switchRow(card, "Message banner", "A new message drops in from the top", nullptr);
+  if (!_prefs || _prefs->msg_alert != NodePrefs::MSG_ALERT_OFF) lv_obj_add_state(sw, LV_STATE_CHECKED);
+  lv_obj_add_event_cb(sw, onMsgBannerSwitch, LV_EVENT_VALUE_CHANGED, NULL);
+}
+void UITask::setMsgBanner(bool on) {
+  if (!_prefs) return;
+  _prefs->msg_alert = on ? NodePrefs::MSG_ALERT_NORMAL : NodePrefs::MSG_ALERT_OFF;
+  prefsSave();
+}
+
 static void onSchemaSwitch(lv_event_t* e) {
   s_ui->setSchemaValue((int)(uintptr_t)lv_event_get_user_data(e),
                        lv_obj_has_state((lv_obj_t*)lv_event_get_target(e), LV_STATE_CHECKED) ? 1 : 0);
@@ -4507,7 +4524,7 @@ void UITask::schemaSection(int i) {
   if (sec == settings::SEC_SOUND) buildSoundRows(card, true);   // On / Off / Auto
   for (int k = i; k < settings::COUNT && settings::ALL[k].section == sec; k++) {
     if (settings::ALL[k].offset == offsetof(NodePrefs, lock_compact)) continue;   // ui-new's lock look; the slide card has one
-    if (settings::ALL[k].offset == offsetof(NodePrefs, msg_alert)) continue;      // ui-new's alert; the L2 has its own
+    if (settings::ALL[k].offset == offsetof(NodePrefs, msg_alert)) { msgBannerRow(card); continue; }   // no corner envelope here
     schemaRow(card, k);
   }
 }

@@ -90,6 +90,7 @@ public:
   void setBrightnessPct(uint8_t pct, bool save);
   void applyDisplayPrefs() override;
   void setSchemaValue(int idx, int v);
+  void setMsgBanner(bool on);   // Settings > Display > Message banner
   void showNearby();
   void showMap();                  // in its current mode
   void openMap(bool nav);          // the one map; false: from Nodes, with the nodes on it and Back to Nodes
@@ -376,6 +377,7 @@ private:
   void schemaExtras(int page);
   void showMapOptions(uint8_t section);
   void schemaRow(lv_obj_t* card, int idx);
+  void msgBannerRow(lv_obj_t* card);
   void buildKeyboardPage(lv_obj_t* body);
   void buildAboutPage(lv_obj_t* body);
   void buildAdminPick();

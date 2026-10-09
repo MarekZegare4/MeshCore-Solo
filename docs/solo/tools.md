@@ -28,6 +28,9 @@ Settings.
 - **Timer**: a countdown that rings when it reaches zero, whatever screen
   you're on.
 - **Stopwatch**.
+- **Calendar**: the month with today marked and the alarm's days
+  underlined; **Left / Right** pages through the months, **Enter** comes
+  back to this one.
 
 Any key silences the ringing; it stops by itself after a minute.
 

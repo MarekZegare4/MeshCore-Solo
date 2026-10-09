@@ -13,12 +13,20 @@ for what you can do with it:
 
 | Option | Does |
 | ------ | ---- |
+| Map | Every node with a position on a map (below) |
 | Navigate | Distance and bearing to the node; follows it if it shares its position live |
 | Ping | Sends a ping and shows the round trip time and SNR |
 | Save waypoint, Set as target | Its position as a waypoint, or as the [Locator](./navigation.md#locator) target |
 | Fav, Pin to dial | Favourite, or a place on the Favourites page |
 | Admin | Remote admin, for a repeater or room (below) |
 | Discover scan | Asks the repeaters, rooms and sensors in direct range to answer, with their signal |
+
+**Map** shows the nodes of the current filter that have a position, with you
+and the target, fitted to the screen, north up, with a scale. Nodes are dots
+(a diamond for a live share); the selected one is boxed, and the line under
+the map gives its name and distance, with **+n** when others sit on the same
+spot. **Left / Right** selects the next node, **Up / Down** zooms in on it and
+back out, **Enter** opens its details and **Hold Enter** its options.
 
 > [!NOTE]
 > **Wio Tracker L2:** the **Nodes** app. Filter chips at the top, the sort in

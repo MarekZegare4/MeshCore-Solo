@@ -1,7 +1,7 @@
 #pragma once
-// Clock tools — Alarm, Countdown timer (minutnik) and Stopwatch (stoper).
-// Entered with Enter on the home CLOCK page. A small top menu picks one of the
-// three tools; Cancel backs out a level (tool → menu → home).
+// Clock tools — Alarm, Countdown timer (minutnik), Stopwatch (stoper) and
+// Calendar. Entered with Enter on the home CLOCK page. A small top menu picks
+// one of the tools; Cancel backs out a level (tool → menu → home).
 //
 // This screen is pure UI. The time-critical machinery lives in the UI Core's
 // ClockEngine (ui-core/ClockEngine.h), which UITask drives every loop
@@ -36,10 +36,12 @@ class ClockToolsScreen : public UIScreen {
   UITask*    _task;
   NodePrefs* _prefs;
 
-  enum View : uint8_t { V_MENU, V_ALARM, V_TIMER, V_STOPWATCH };
+  enum View : uint8_t { V_MENU, V_ALARM, V_TIMER, V_STOPWATCH, V_CALENDAR };
+  static const int MENU_N = 4;
   uint8_t _view = V_MENU;
   int     _sel = 0, _scroll = 0;       // shared list cursor
   bool    _alarm_dirty = false;        // unsaved edits to alarm_* (persist on exit)
+  int     _cal_month = 0;              // Calendar: months from the current one
 
   // Countdown config (the duration to start; the running countdown lives in UITask).
   uint8_t _timer_h = 0, _timer_m = 5, _timer_s = 0;
@@ -147,9 +149,9 @@ class ClockToolsScreen : public UIScreen {
   // ── Sub-renders ───────────────────────────────────────────────────────────
   int renderMenu(DisplayDriver& d) {
     drawScreenHeader(d, "Clock tools");
-    static const char* items[3] = { "Alarm", "Timer", "Stopwatch" };
-    if (_sel > 2) _sel = 2;
-    drawList(d, 3, _sel, _scroll, [&](int i, int y, bool sel, int reserve) {
+    static const char* items[MENU_N] = { "Alarm", "Timer", "Stopwatch", "Calendar" };
+    if (_sel > MENU_N - 1) _sel = MENU_N - 1;
+    drawList(d, MENU_N, _sel, _scroll, [&](int i, int y, bool sel, int reserve) {
       drawRowSelection(d, y, sel, reserve);
       d.setCursor(4, y);
       d.print(items[i]);
@@ -256,14 +258,60 @@ class ClockToolsScreen : public UIScreen {
     return _sw_running ? liveTickMs(d, 100) : 60000;
   }
 
+  // A month `_cal_month` months from now: the alarm's days and today only on
+  // the current one. Where the grid and a title line don't fit (a 64-pixel
+  // screen), the grid goes tight and the month and year stand beside it.
+  int renderCalendar(DisplayDriver& d) {
+    struct tm t;
+    if (!localTm(rtc_clock.getCurrentTime(), _prefs ? _prefs->tz_offset_hours : 0, t) || t.tm_year < 120) {
+      drawScreenHeader(d, "Calendar");
+      d.drawTextCentered(d.width() / 2, d.height() / 2 - d.getLineHeight() / 2, "Clock not set");
+      return 60000;
+    }
+    const bool now = _cal_month == 0;
+    uint32_t marked = now && _prefs ? calmath::alarmDays(t, _prefs->alarm_on, _prefs->alarm_repeat_mask,
+                                                         _prefs->alarm_hour, _prefs->alarm_min) : 0;
+    // The 1st of the month shown, its weekday carried over from today's.
+    int wday1 = ((t.tm_wday - (t.tm_mday - 1)) % 7 + 7) % 7;
+    for (int k = 0; k < _cal_month; k++) {
+      wday1 = (wday1 + calmath::daysIn(t.tm_year, t.tm_mon)) % 7;
+      if (++t.tm_mon == 12) { t.tm_mon = 0; t.tm_year++; }
+    }
+    for (int k = 0; k > _cal_month; k--) {
+      if (--t.tm_mon < 0) { t.tm_mon = 11; t.tm_year--; }
+      wday1 = ((wday1 - calmath::daysIn(t.tm_year, t.tm_mon)) % 7 + 7) % 7;
+    }
+    if (!now) { t.tm_mday = 1; t.tm_wday = wday1; }
+    static const char* const MON[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                       "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+    char title[16];
+    snprintf(title, sizeof(title), "%s %d", MON[t.tm_mon], t.tm_year + 1900);
+    const int W = d.width(), lh = d.getLineHeight(), cw = d.getCharWidth();
+    const int top = d.listStart();
+    if (calendar::height(d, t) <= d.height() - top) {
+      drawScreenHeader(d, title);
+      const int gw = W < 28 * cw ? W : 28 * cw;   // as on the Clock page
+      calendar::draw(d, (W - gw) / 2, top, gw, t, marked, false, now);
+    } else {
+      const int side = 4 * cw + 2;   // "2026"
+      calendar::draw(d, 0, 0, W - side, t, marked, true, now);
+      char yr[6];
+      snprintf(yr, sizeof(yr), "%d", t.tm_year + 1900);
+      d.drawTextCentered(W - side / 2, d.height() / 2 - lh, MON[t.tm_mon]);
+      d.drawTextCentered(W - side / 2, d.height() / 2, yr);
+    }
+    return 60000;
+  }
+
   // ── Input per view ────────────────────────────────────────────────────────
   bool inputMenu(char c) {
     if (c == KEY_CANCEL) { _task->gotoHomeScreen(); return true; }
-    if (c == KEY_UP)   { _sel = (_sel > 0) ? _sel - 1 : 2; return true; }
-    if (c == KEY_DOWN) { _sel = (_sel < 2) ? _sel + 1 : 0; return true; }
+    if (c == KEY_UP)   { _sel = (_sel > 0) ? _sel - 1 : MENU_N - 1; return true; }
+    if (c == KEY_DOWN) { _sel = (_sel < MENU_N - 1) ? _sel + 1 : 0; return true; }
     if (c == KEY_ENTER) {
-      _view = (_sel == 0) ? V_ALARM : (_sel == 1) ? V_TIMER : V_STOPWATCH;
-      _sel = 0; _scroll = 0;
+      static const View V[MENU_N] = { V_ALARM, V_TIMER, V_STOPWATCH, V_CALENDAR };
+      _view = V[_sel];
+      _sel = 0; _scroll = 0; _cal_month = 0;
       return true;
     }
     return true;
@@ -348,6 +396,15 @@ class ClockToolsScreen : public UIScreen {
     return true;   // other keys just refresh the readout
   }
 
+  // Calendar: Left / Right (Up / Down too) a month, Enter back to this one.
+  bool inputCalendar(char c) {
+    if (c == KEY_CANCEL) { _view = V_MENU; _sel = 3; return true; }
+    if (keyIsPrev(c) || c == KEY_UP)   { if (_cal_month > -120) _cal_month--; return true; }
+    if (keyIsNext(c) || c == KEY_DOWN) { if (_cal_month < 120) _cal_month++; return true; }
+    if (c == KEY_ENTER) { _cal_month = 0; return true; }
+    return true;
+  }
+
 public:
   ClockToolsScreen(UITask* task, NodePrefs* prefs) : _task(task), _prefs(prefs) {}
 
@@ -364,6 +421,7 @@ public:
       case V_ALARM:     return renderAlarm(display);
       case V_TIMER:     return renderTimer(display);
       case V_STOPWATCH: return renderStopwatch(display);
+      case V_CALENDAR:  return renderCalendar(display);
       default:          return renderMenu(display);
     }
   }
@@ -373,6 +431,7 @@ public:
       case V_ALARM:     return inputAlarm(c);
       case V_TIMER:     return inputTimer(c);
       case V_STOPWATCH: return inputStopwatch(c);
+      case V_CALENDAR:  return inputCalendar(c);
       default:          return inputMenu(c);
     }
   }

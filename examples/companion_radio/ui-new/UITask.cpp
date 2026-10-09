@@ -196,8 +196,8 @@ static const telemetry::Style L1_INFO      = { "\xc2\xb0", true,  false, 5 };
 #include "GpioScreen.h"
 #endif
 #include "ToolsScreen.h"
-#include "ClockToolsScreen.h"   // Alarm / Timer / Stopwatch (Clock page › Enter)
-#include "CalendarView.h"       // the month under a tall clock
+#include "CalendarView.h"       // the month under a tall clock, Clock tools › Calendar
+#include "ClockToolsScreen.h"   // Alarm / Timer / Stopwatch / Calendar (Clock page › Enter)
 
 #include "../ui-core/Battery.h"
 
@@ -2221,6 +2221,29 @@ void UITask::simUnread(int which) {
   }
 }
 
+// Sim tests: a GPS fix in Kraków and eight nodes around it, then Nodes.
+void UITask::simNodes() {
+  sim_location_provider().set(50.0614f, 19.9372f);
+  static const struct { const char* name; float dla, dlo; uint8_t type; } N[] = {
+    { "Kasia-T1", 0.012f, 0.020f, ADV_TYPE_CHAT },  { "Wawel rpt", -0.006f, -0.004f, ADV_TYPE_REPEATER },
+    { "Kopiec", 0.004f, -0.045f, ADV_TYPE_REPEATER }, { "Tomek", 0.0005f, 0.0006f, ADV_TYPE_CHAT },
+    { "Nowa Huta", 0.020f, 0.110f, ADV_TYPE_REPEATER }, { "Room Rynek", 0.0008f, 0.0004f, ADV_TYPE_ROOM },
+    { "Ola", -0.030f, 0.015f, ADV_TYPE_CHAT },        { "Bielany", 0.000f, -0.080f, ADV_TYPE_REPEATER },
+  };
+  const uint32_t now = rtc_clock.getCurrentTime();
+  for (int i = 0; i < (int)(sizeof(N) / sizeof(N[0])); i++) {
+    uint8_t key[PUB_KEY_SIZE];
+    for (int k = 0; k < PUB_KEY_SIZE; k++) key[k] = (uint8_t)(0x5A ^ (i * 37 + k * 11));
+    the_mesh.addDiscoveredContact(key, N[i].name, N[i].type);
+    if (ContactInfo* c = the_mesh.lookupContactByPubKey(key, PUB_KEY_SIZE)) {
+      c->gps_lat = (int32_t)((50.0614f + N[i].dla) * 1e6f);
+      c->gps_lon = (int32_t)((19.9372f + N[i].dlo) * 1e6f);
+      c->lastmod = now - i * 600;
+    }
+  }
+  setCurrScreen(nearby_screen);
+}
+
 void UITask::simDisplay(bool on) {
   if (!_display) return;
   if (on) _display->turnOn(); else _display->turnOff();
@@ -2740,6 +2763,10 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_compose(const char* text) {
 // Sim tests: -1 files read and new messages, 0 opens channel 0, 1 the first DM.
 extern "C" EMSCRIPTEN_KEEPALIVE void sim_unread(int which) {
   if (g_sim_ui_task_for_js) g_sim_ui_task_for_js->simUnread(which);
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE void sim_nodes() {
+  if (g_sim_ui_task_for_js) g_sim_ui_task_for_js->simNodes();
 }
 
 // Sim tests: the display off (0) or on (1), as the auto-off and a key press do.

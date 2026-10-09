@@ -288,6 +288,7 @@ public:
   void simMessage(const char* text);   // sim tests: a channel message arrives
   void simUnread(int which);           // sim tests: read and new messages, opened
   void simDisplay(bool on);            // sim tests: the display off / on
+  void simNodes();                     // sim tests: you and nodes with positions, Nodes open
 #endif
   void openContactDM(const ContactInfo& ci);
   void openChannelHistory(uint8_t channel_idx);   // Favourites dial: open a pinned channel
