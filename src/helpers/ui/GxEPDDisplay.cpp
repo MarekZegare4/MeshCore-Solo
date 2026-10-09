@@ -14,8 +14,16 @@
   SPIClass SPI1 = SPIClass(FSPI);
 #endif
 
+// SPI clock for the panel. 4 MHz is the conservative default every board has
+// always used; a short FPC run can go faster (SSD16xx-family controllers are
+// rated ~20 MHz for writes). On nRF52840 the Adafruit core puts SPI1 on SPIM2,
+// which caps at 8 MHz -- higher requests are silently clamped to 8 MHz there.
+#ifndef EINK_SPI_HZ
+  #define EINK_SPI_HZ 4000000
+#endif
+
 bool GxEPDDisplay::begin() {
-  display.epd2.selectSPI(SPI1, SPISettings(4000000, MSBFIRST, SPI_MODE0));
+  display.epd2.selectSPI(SPI1, SPISettings(EINK_SPI_HZ, MSBFIRST, SPI_MODE0));
 #ifdef ESP32
   SPI1.begin(PIN_DISPLAY_SCLK, PIN_DISPLAY_MISO, PIN_DISPLAY_MOSI, PIN_DISPLAY_CS);
 #else

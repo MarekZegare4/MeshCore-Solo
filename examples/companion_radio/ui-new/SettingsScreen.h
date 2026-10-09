@@ -26,6 +26,10 @@ class SettingsScreen : public UIScreen {
 #endif
 #if FEAT_FULL_REFRESH_SETTING
     EINK_FULL_REFRESH,
+    UI_TEXT_SCALE,    // Text size: 1x..5x the 6x9 font
+#if STATUS_ICONS_SCALED
+    UI_ICON_SCALE,    // Icon size: Auto, 1x..8x
+#endif
 #endif
     // Sound section
     SECTION_SOUND,
@@ -526,6 +530,18 @@ class SettingsScreen : public UIScreen {
       uint8_t idx = p ? p->eink_full_refresh_every : 0;
       if (idx >= EINK_FULL_REFRESH_COUNT) idx = 0;
       val("Full rfsh", EINK_FULL_REFRESH_LABELS[idx]);
+    } else if (item == UI_TEXT_SCALE) {
+      char b[4];
+      snprintf(b, sizeof(b), "%ux", (unsigned)_task->getUiFontScale());
+      val("Text size", b);
+#if STATUS_ICONS_SCALED
+    } else if (item == UI_ICON_SCALE) {
+      char b[12];
+      const uint8_t v = _task->getStatusIconScale();
+      if (v == 0) snprintf(b, sizeof(b), "Auto");
+      else        snprintf(b, sizeof(b), "%ux", (unsigned)v);
+      val("Icon size", b);
+#endif
 #endif
     } else if (item == DM_FILTER) {
       val("DMs", (p && p->dm_show_all) ? "All" : "Fav");
@@ -1036,6 +1052,21 @@ public:
       _dirty = true;
       return true;
     }
+    if (_selected == UI_TEXT_SCALE && (left || right || enter)) {
+      int v = _task->getUiFontScale();             // 1..5, wrapping
+      v = left ? (v <= 1 ? 5 : v - 1) : (v >= 5 ? 1 : v + 1);
+      _task->setUiFontScale(v);                    // saved to /ui_scale immediately
+      return true;
+    }
+#if STATUS_ICONS_SCALED
+    if (_selected == UI_ICON_SCALE && (left || right || enter)) {
+      const int n = STATUS_ICON_SCALE_MAX + 1;     // Auto, 1x..8x
+      int v = _task->getStatusIconScale();
+      v = (v + (left ? n - 1 : 1)) % n;
+      _task->setStatusIconScale(v);                // saved to /ui_scale immediately
+      return true;
+    }
+#endif
 #endif
     if (_selected == DM_FILTER && p && (left || right || enter)) {
       p->dm_show_all = p->dm_show_all ? 0 : 1;

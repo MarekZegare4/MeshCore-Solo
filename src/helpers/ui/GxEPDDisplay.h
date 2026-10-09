@@ -18,6 +18,18 @@
 #include <GxEPD2_7C.h>
 
 #include "EinkGfxDisplay.h"
+#include "GxEPD2_FastWrite.h"
+
+// EINK_FAST_WRITES=1: drive the panel through its <model>_Fast subclass
+// (GxEPD2_FastWrite.h) -- the same bytes, sent a row at a time in bulk instead
+// of one SPI call per byte. Only for panels that have one.
+#define EINK_CAT_(a, b) a##b
+#define EINK_CAT(a, b) EINK_CAT_(a, b)
+#if defined(EINK_DISPLAY_MODEL) && defined(EINK_FAST_WRITES) && EINK_FAST_WRITES
+  #define EINK_PANEL_TYPE EINK_CAT(EINK_DISPLAY_MODEL, _Fast)
+#elif defined(EINK_DISPLAY_MODEL)
+  #define EINK_PANEL_TYPE EINK_DISPLAY_MODEL
+#endif
 
 // This driver calls callBusyPump() during its BUSY-pin waits; app code keys
 // its setBusyPumpFn() wiring off this so it isn't compiled for displays (or
@@ -53,8 +65,8 @@
 // The panel object, as a base so it's built before EinkGfxDisplay draws on it.
 struct GxEPDPanel {
 #if defined(EINK_DISPLAY_MODEL)
-  GxEPD2_BW<EINK_DISPLAY_MODEL, EINK_DISPLAY_MODEL::HEIGHT> display;
-  GxEPDPanel() : display(EINK_DISPLAY_MODEL(PIN_DISPLAY_CS, PIN_DISPLAY_DC, PIN_DISPLAY_RST, PIN_DISPLAY_BUSY)) {}
+  GxEPD2_BW<EINK_PANEL_TYPE, EINK_PANEL_TYPE::HEIGHT> display;
+  GxEPDPanel() : display(EINK_PANEL_TYPE(PIN_DISPLAY_CS, PIN_DISPLAY_DC, PIN_DISPLAY_RST, PIN_DISPLAY_BUSY)) {}
 #else
   GxEPD2_BW<GxEPD2_150_BN, 200> display;
   GxEPDPanel() : display(GxEPD2_150_BN(DISP_CS, DISP_DC, DISP_RST, DISP_BUSY)) {}

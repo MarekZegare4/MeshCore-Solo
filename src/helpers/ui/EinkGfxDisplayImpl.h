@@ -3,6 +3,12 @@
 // the font tables below are static arrays.
 
 #include "EinkGfxDisplay.h"
+// EINK_FONT_SCALE=<n>: pixel multiplier for the 6x9 font on a landscape panel
+// without EINK_LARGE_FONT (default 2). 4 on an 800x480 panel = 24x36 cells,
+// ~33 characters x 13 lines. Settings > Display > Text size overrides it at run time.
+#ifndef EINK_FONT_SCALE
+  #define EINK_FONT_SCALE 2
+#endif
 #include "MiscFixedRenderer.h"
 #if EINK_LARGE_FONT == 2
   #include "MiscFixed9x15Font.h"
@@ -20,7 +26,8 @@ EinkGfxDisplay::EinkGfxDisplay(int w, int h, Adafruit_GFX& gfx, uint16_t ink, ui
 void EinkGfxDisplay::updateLayout() {
   const bool landscape = width() >= height();
   _font = (EINK_LARGE_FONT && landscape) ? &EINK_LARGE_GFXFONT : &MiscFixed;
-  _px = (!EINK_LARGE_FONT && landscape) ? 2 : 1;
+  _px = (!EINK_LARGE_FONT && landscape) ? EINK_FONT_SCALE : 1;
+  if (_px_override) _px = _px_override;
   _cell_w = miscFixedCellW(*_font);
   _cell_h = _font->yAdvance;
   _vw_dirty = true;
@@ -87,7 +94,7 @@ void EinkGfxDisplay::fillRect(int x, int y, int w, int h) {
 void EinkGfxDisplay::drawRect(int x, int y, int w, int h) {
   mix<int>(x); mix<int>(y); mix<int>(w); mix<int>(h);
   _gfx.drawRect(x, y, w, h, _curr);
-  if (_px == 2 && w > 2 && h > 2) _gfx.drawRect(x + 1, y + 1, w - 2, h - 2, _curr);
+  if (_px >= 2 && w > 2 && h > 2) _gfx.drawRect(x + 1, y + 1, w - 2, h - 2, _curr);
 }
 
 void EinkGfxDisplay::drawXbm(int x, int y, const uint8_t* bits, int w, int h) {

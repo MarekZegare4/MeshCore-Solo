@@ -91,6 +91,55 @@ inline void miniIconDrawCentered(DisplayDriver& d, int cx, int cy, const MiniIco
   miniIconDrawTop(d, cx - (ic.w * s) / 2, cy - (ic.h * s) / 2, ic);
 }
 
+// Home status bar icon scale. Defining STATUS_ICON_SCALE (build flag) turns on
+// scalable status icons: the bar's icons, battery and the page-icon row below it
+// are drawn at n x their pixel grid, and the bar grows tall enough to hold them --
+// for big panels whose 1-line bar leaves them tiny. Its value is the default for
+// Settings > Display > Icon size: 0 = Auto (1.5x the text's pixel scale), else n.
+// Unset: icons follow the font, as stock.
+#ifdef STATUS_ICON_SCALE
+  #define STATUS_ICONS_SCALED 1
+#else
+  #define STATUS_ICONS_SCALED 0
+  #define STATUS_ICON_SCALE 0
+#endif
+static constexpr int STATUS_ICON_SCALE_MAX = 8;
+static constexpr int STATUS_ICON_ROWS = MINI_ICONS_LARGE == 2 ? 9 : 7;   // tallest status icon
+// The Icon size setting (0 = Auto). One instance across translation units.
+inline uint8_t& statusIconScaleSetting() {
+  static uint8_t v = (STATUS_ICON_SCALE >= 0 && STATUS_ICON_SCALE <= STATUS_ICON_SCALE_MAX) ? STATUS_ICON_SCALE : 0;
+  return v;
+}
+inline int statusIconScale(DisplayDriver& d) {
+  if (!STATUS_ICONS_SCALED) return miniIconScale(d);
+  int s = statusIconScaleSetting();
+  if (s == 0) s = (3 * d.pixelScale() + 1) / 2;   // Auto: 1.5x the text
+  return s < 1 ? 1 : s;
+}
+// Height of the home status bar: one text line, or the scaled icons if taller.
+inline int statusBarH(DisplayDriver& d) {
+  const int lh = d.getLineHeight();
+  const int ih = STATUS_ICON_ROWS * statusIconScale(d) + 4;
+  return (STATUS_ICONS_SCALED && ih > lh) ? ih : lh;
+}
+// miniIconDrawCentered at an explicit scale (the home page-icon row's).
+inline void miniIconDrawCenteredScaled(DisplayDriver& d, int cx, int cy, const MiniIcon& ic, int s) {
+  const int x = cx - (ic.w * s) / 2, y = cy - (ic.h * s) / 2;
+  for (int r = 0; r < ic.h; r++)
+    for (int c = 0; c < ic.w; c++)
+      if (ic.rows[r] & (1 << c)) d.fillRect(x + c * s, y + r * s, s, s);
+}
+// drawSlotIcon at an explicit scale (the status bar's).
+inline void drawSlotIconScaled(DisplayDriver& d, int x, int box_w, int box_h, const MiniIcon& ic, int s) {
+  int ix = x + (box_w - ic.w * s) / 2;
+  int iy = (box_h - ic.h * s) / 2;
+  if (ix < x) ix = x;
+  if (iy < 0) iy = 0;
+  for (int r = 0; r < ic.h; r++)
+    for (int c = 0; c < ic.w; c++)
+      if (ic.rows[r] & (1 << c)) d.fillRect(ix + c * s, iy + r * s, s, s);
+}
+
 // Centre a mini-icon inside the slot [x, 0, box_w, box_h] using the current ink
 // colour (no background). Centres on the box itself, not the text line, so the
 // glyph sits dead-centre regardless of font line height.
