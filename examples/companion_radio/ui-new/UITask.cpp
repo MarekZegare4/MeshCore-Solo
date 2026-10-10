@@ -8,6 +8,20 @@
 #include "../Features.h"
 #include "../GeoUtils.h"
 #include "target.h"
+
+// The CardKB background poll task (see UITask::cardkbTask) shares its I2C bus
+// with the environment sensors, and some screens query those sensors while
+// rendering -- exactly when that task is active. Holding this lock around a
+// sensor query makes the two take turns. No-op on builds without the task.
+#if defined(CARDKB_I2C) && defined(NRF52_PLATFORM)
+static void* g_cardkb_bus_mutex = nullptr;   // SemaphoreHandle_t, set by startCardKBCapture()
+struct CardKBBusLock {
+  CardKBBusLock()  { if (g_cardkb_bus_mutex) xSemaphoreTake((SemaphoreHandle_t)g_cardkb_bus_mutex, portMAX_DELAY); }
+  ~CardKBBusLock() { if (g_cardkb_bus_mutex) xSemaphoreGive((SemaphoreHandle_t)g_cardkb_bus_mutex); }
+};
+#else
+struct CardKBBusLock { };
+#endif
 #ifdef WIFI_SSID
   #include <WiFi.h>
 #endif
@@ -825,7 +839,7 @@ class HomeScreen : public UIScreen {
       sensors_lpp.reset();
       sensors_nb = 0;
       sensors_lpp.addVoltage(TELEM_CHANNEL_SELF, (float)board.getBattMilliVolts() / 1000.0f);
-      sensors.querySensors(0xFF, sensors_lpp);
+      { CardKBBusLock bus_lock; sensors.querySensors(0xFF, sensors_lpp); }
       LPPReader reader (sensors_lpp.getBuffer(), sensors_lpp.getSize());
       uint8_t channel, type;
       while(reader.readHeader(channel, type)) {
@@ -2040,6 +2054,7 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
 #if defined(PIN_GPIO1)
   gpio_screen        = new GpioScreen(this, node_prefs);
 #endif
+  startCardKBCapture();   // after every screen: an optional task must not starve one
   applyBrightness();
   applyRotation();
   applyFullRefreshInterval();
@@ -2721,7 +2736,11 @@ static void formatDashVal(uint8_t field, char* val, int val_len, uint16_t batt_m
   { NodePrefs* np = the_mesh.getNodePrefs(); in.gps_on = np && np->gps_enabled; }   // off: no stale satellite count
 #endif
   if (telemetry::isSensor(field)) {
-    if (!lpp) { static CayenneLPP s_lpp(200); s_lpp.reset(); sensors.querySensors(0xFF, s_lpp); lpp = &s_lpp; }
+    if (!lpp) {
+      static CayenneLPP s_lpp(200); s_lpp.reset();
+      { CardKBBusLock bus_lock; sensors.querySensors(0xFF, s_lpp); }
+      lpp = &s_lpp;
+    }
     in.lpp = lpp->getBuffer();
     in.lpp_len = lpp->getSize();
   }
@@ -2888,12 +2907,100 @@ void UITask::pollCardKB() {
   // Polling every loop() iteration (same as a digital button's check(), which
   // has no throttle either) just shrinks that miss window down to exactly the
   // render() duration instead of render()+30ms.
+  // First, keys the background task captured while the display blocked, in order.
+  while (_cardkb_q_tail != _cardkb_q_head) {
+    uint8_t q = _cardkb_q[_cardkb_q_tail];
+    _cardkb_q_tail = (uint8_t)((_cardkb_q_tail + 1) % CARDKB_Q_LEN);
+    handleCardKBByte(q);
+  }
+  uint8_t raw;
+  if (!readCardKBEdge(raw)) return;
+  handleCardKBByte(raw);
+#endif
+}
+
+#if defined(CARDKB_I2C)
+bool UITask::readCardKBEdge(uint8_t& raw) {
   CARDKB_I2C.requestFrom(0x5F, 1);
-  if (!CARDKB_I2C.available()) return;
-  uint8_t raw = CARDKB_I2C.read();
-  if (raw == _cardkb_last_raw) return;   // still held (or still released) -- no new edge
+  if (!CARDKB_I2C.available()) return false;
+  raw = CARDKB_I2C.read();
+  if (raw == _cardkb_last_raw) return false;   // still held (or still released) -- no new edge
   _cardkb_last_raw = raw;
-  if (raw == 0) return;   // key just released, nothing to enqueue
+  return raw != 0;   // 0 = key just released, nothing to enqueue
+}
+
+// Single producer (the poll task) / single consumer (pollCardKB() in the
+// loop) ring -- byte-sized indices, so no locking needed.
+void UITask::cardkbQueuePush(uint8_t raw) {
+  uint8_t next = (uint8_t)((_cardkb_q_head + 1) % CARDKB_Q_LEN);
+  if (next == _cardkb_q_tail) return;   // full: drop (16 keys within one refresh)
+  _cardkb_q[_cardkb_q_head] = raw;
+  _cardkb_q_head = next;
+}
+
+#if defined(NRF52_PLATFORM)
+void UITask::cardkbTask(void* self) {
+  UITask* t = (UITask*)self;
+  SemaphoreHandle_t m = (SemaphoreHandle_t)t->_cardkb_mutex;
+  for (;;) {
+    if (t->_cardkb_bg_active && xSemaphoreTake(m, portMAX_DELAY) == pdTRUE) {
+      if (t->_cardkb_bg_active) {          // re-check: loop may have just finished
+        uint8_t raw;
+        if (t->readCardKBEdge(raw)) t->cardkbQueuePush(raw);
+      }
+      xSemaphoreGive(m);
+    }
+    vTaskDelay(ms2tick(10));   // a keypress lasts ~50+ ms, so 10 ms never misses one
+  }
+}
+#endif
+#endif
+
+// Keep sampling the CardKB while the display blocks the loop, so keys typed
+// during a (long, on big panels) refresh aren't lost. Called LAST in begin():
+// the heap is tight on large-panel builds, and every screen is allocated with
+// `new` -- a failed allocation leaves that screen silently unopenable. Creating
+// the optional poll task afterwards means a short heap costs the task (the
+// CardKB is then only read between frames, as without it), never a screen.
+void UITask::startCardKBCapture() {
+#if defined(CARDKB_I2C) && defined(NRF52_PLATFORM)
+  if (!_has_cardkb) return;
+  SemaphoreHandle_t m = xSemaphoreCreateMutex();
+  if (!m) return;
+  // Publish the mutex BEFORE creating the task: at higher priority it starts
+  // running inside xTaskCreate() and reads _cardkb_mutex straight away.
+  _cardkb_mutex = (void*)m;
+  // TASK_PRIO_NORMAL (2) preempts the loop task (TASK_PRIO_LOW, 1); BLE runs higher.
+  if (xTaskCreate(&UITask::cardkbTask, "cardkb", 512, this, TASK_PRIO_NORMAL, NULL) == pdPASS) {
+    g_cardkb_bus_mutex = m;   // shared with CardKBBusLock (sensor queries)
+    return;
+  }
+  _cardkb_mutex = nullptr;    // no task -> setCardKBBackground() stays a no-op
+  vSemaphoreDelete(m);
+#endif
+}
+
+// Hand CardKB sampling to the background task (on = loop is about to block on
+// the display) or take it back (off). Taking the mutex on the way out waits for
+// any in-flight background I2C read to finish before the loop touches the bus.
+void UITask::setCardKBBackground(bool on) {
+#if defined(CARDKB_I2C) && defined(NRF52_PLATFORM)
+  if (!_cardkb_mutex) return;
+  if (on) {
+    _cardkb_bg_active = true;
+  } else {
+    SemaphoreHandle_t m = (SemaphoreHandle_t)_cardkb_mutex;
+    xSemaphoreTake(m, portMAX_DELAY);
+    _cardkb_bg_active = false;
+    xSemaphoreGive(m);
+  }
+#else
+  (void)on;
+#endif
+}
+
+void UITask::handleCardKBByte(uint8_t raw) {
+#if defined(CARDKB_I2C)
 
   // Compact mode (Settings > Keyboard's "Ext. KB" row) hides the letter grid
   // entirely, and is meant to guarantee joystick-free operation: while it's
@@ -3461,6 +3568,7 @@ void UITask::loop() {
     if (now != ext) { ext = now; _next_refresh = 0; } }
 
   if (_display != NULL && _display->isOn()) {
+    setCardKBBackground(true);   // keep sampling the keyboard while the frame blocks
     // Lock-screen password prompt
     if (_locked && _unlock_kb && (int32_t)(millis() - _lock_wake_until) >= 0) {
       cancelUnlockPrompt(); // Cancel unlock attempt on idle
@@ -3529,6 +3637,7 @@ void UITask::loop() {
       _display->endFrame();
       PERF_T2();
     }
+    setCardKBBackground(false);
 #if AUTO_OFF_MILLIS > 0
 #ifdef KEEP_DISPLAY_ON_USB
     // Opt-in: refresh the auto-off deadline while externally powered, so the

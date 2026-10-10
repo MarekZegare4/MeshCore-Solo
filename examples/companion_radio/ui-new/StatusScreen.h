@@ -233,7 +233,7 @@ private:
     // Sensors: every reading but the battery (above) and the position (GPS).
     if (!_lpp_at || millis() - _lpp_at > 5000) {   // both passes (measure, draw) read one query
       _lpp.reset();
-      sensors.querySensors(0xFF, _lpp);
+      { CardKBBusLock bus_lock; sensors.querySensors(0xFF, _lpp); }   // shares the CardKB's bus
       _lpp_at = millis() | 1;
     }
     static const struct { uint8_t type; const char* name; } NAMES[] = {
