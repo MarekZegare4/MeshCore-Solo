@@ -10,6 +10,7 @@
 #include "PopupMenu.h"   // scope list management's per-row action menu
 #include "InfoKit.h"     // value / switch rows
 #include "../ui-core/Battery.h"   // the Battery curve row
+#include "../GeoUtils.h"          // Position typed in
 
 class SettingsScreen : public UIScreen {
   UITask* _task;
@@ -53,6 +54,7 @@ class SettingsScreen : public UIScreen {
     SCHEMA_SYSTEM,    // power, units
     BATT_CURVE,
     REBOOT,
+    FACTORY_RESET,
     // Keyboard section
     SECTION_KEYBOARD,
     KEYBOARD_TYPE,
@@ -63,8 +65,11 @@ class SettingsScreen : public UIScreen {
 #endif
     // Contacts section
     SECTION_CONTACTS, DM_FILTER, CH_FILTER, ROOM_FILTER, SCHEMA_CONTACTS, PRUNE_NOW, SCHEMA_AUTO_ADD,
-    // Privacy section: what adverts carry, who may ask for telemetry
-    SECTION_PRIVACY, SCHEMA_PRIVACY,
+    // Privacy section: what adverts carry, who may ask for telemetry, the pairing PIN
+    SECTION_PRIVACY, SCHEMA_PRIVACY, OWN_POSITION, SCHEMA_TELEMETRY,
+#ifdef BLE_PIN_CODE
+    BLE_PIN,
+#endif
     // Messages section
     SECTION_MESSAGES,
     SCHEMA_MESSAGES,
@@ -184,7 +189,7 @@ class SettingsScreen : public UIScreen {
   static bool isSchemaGroup(int item) {
     return item == SCHEMA_DISPLAY || item == SCHEMA_SOUND || item == SCHEMA_SYSTEM ||
            item == SCHEMA_CONTACTS || item == SCHEMA_MESSAGES || item == SCHEMA_RADIO || item == SCHEMA_AUTO_ADD ||
-           item == SCHEMA_PRIVACY;
+           item == SCHEMA_PRIVACY || item == SCHEMA_TELEMETRY;
   }
   // Which schema sections a placeholder stands for.
   static bool schemaIn(int group, uint8_t sec) {
@@ -196,7 +201,8 @@ class SettingsScreen : public UIScreen {
       case SCHEMA_CONTACTS: return sec == SEC_CONTACTS;
       case SCHEMA_AUTO_ADD: return sec == SEC_AUTO_ADD;
       case SCHEMA_RADIO:    return sec == SEC_RADIO_ADV;
-      case SCHEMA_PRIVACY:  return sec == SEC_PRIVACY || sec == SEC_TELEMETRY;
+      case SCHEMA_PRIVACY:  return sec == SEC_PRIVACY;
+      case SCHEMA_TELEMETRY: return sec == SEC_TELEMETRY;
       case SCHEMA_MESSAGES: return sec == SEC_MESSAGES;
     }
     return false;
@@ -512,6 +518,20 @@ class SettingsScreen : public UIScreen {
       val("Batt curve", p && battery::validCurve(p->batt_curve_mv) ? "Custom" : "LiPo");
     } else if (item == REBOOT) {
       display.print("Reboot");   // action row: Enter reboots this device
+    } else if (item == FACTORY_RESET) {
+      display.print("Factory reset");   // action row: asks twice, then erases everything
+    } else if (item == OWN_POSITION) {
+      int32_t lat, lon;
+      if (_task->core().gpsEnabled()) val("Position", "GPS");
+      else if (_task->core().fixedPosition(lat, lon)) {
+        snprintf(buf, sizeof(buf), "%.4f,%.4f", lat / 1e6, lon / 1e6);
+        val("Position", buf);
+      } else val("Position", "None");
+#ifdef BLE_PIN_CODE
+    } else if (item == BLE_PIN) {
+      if (p && p->ble_pin) snprintf(buf, sizeof(buf), "%06lu", (unsigned long)p->ble_pin);
+      val("BT PIN", p && p->ble_pin ? buf : "Random");
+#endif
     } else if (item == KEYBOARD_TYPE) {
       val("Type", (p && p->keyboard_type) ? "T9" : "ABC");
     } else if (item == KEYBOARD_MAIN_ALPHABET) {
@@ -587,6 +607,16 @@ class SettingsScreen : public UIScreen {
   PopupMenu _prune_confirm;
   char      _prune_confirm_title[40];
 
+  // Privacy > Position: Type in / From waypoint / Clear, then the waypoints;
+  // the keyboard for typing one in. Privacy > BT PIN: the number pad.
+  PopupMenu _pos_menu;
+  bool      _pos_pick_wp = false;   // _pos_menu lists the waypoints
+  bool      _edit_pos = false;
+  bool      _edit_ble_pin = false;
+  // System > Factory reset: asked twice (1, 2), 0 = not asking.
+  PopupMenu _reset_confirm;
+  uint8_t   _reset_stage = 0;
+
   int renderScopeMgmt(DisplayDriver& display) {
     display.setColor(DisplayDriver::LIGHT);
     drawScreenHeader(display, "Scope", -1, 0, true, _scope_action_menu.active);
@@ -636,6 +666,10 @@ public:
     _scope_action_menu.active = false;
     _scope_delete_confirm_active = false;
     _prune_confirm.active = false;
+    _pos_menu.active = false;
+    _reset_confirm.active = false;
+    _reset_stage = 0;
+    _edit_pos = _edit_ble_pin = false;
     _edit_lock_pass = false;
     _lock_pass_first[0] = '\0';
     if (!keep) resetList();
@@ -645,7 +679,7 @@ public:
   int render(DisplayDriver& display) override {
     display.setTextSize(1);
 
-    if (_edit_slot >= 0 || _edit_name || _edit_lock_pass || _scope_rename_idx != -2 || _picker.saving) {
+    if (_edit_slot >= 0 || _edit_name || _edit_lock_pass || _edit_pos || _edit_ble_pin || _scope_rename_idx != -2 || _picker.saving) {
       return _kb->render(display);
     }
 
@@ -673,6 +707,8 @@ public:
 
     if (_picker.menu.active) _picker.menu.render(display);
     if (_prune_confirm.active) _prune_confirm.render(display);
+    if (_pos_menu.active) _pos_menu.render(display);
+    if (_reset_confirm.active) _reset_confirm.render(display);
 
     return (mq_delay > 0 && mq_delay < 2000) ? mq_delay : 2000;
   }
@@ -737,6 +773,40 @@ public:
       } else if (res == KeyboardWidget::CANCELLED) {
         _edit_lock_pass = false;
         _lock_pass_first[0] = '\0';
+      }
+      return true;
+    }
+
+    // Privacy > Position typed in: "lat, lon"
+    if (_edit_pos) {
+      auto res = _kb->handleInput(c);
+      if (res == KeyboardWidget::DONE) {
+        int32_t lat, lon;
+        if (geo::parseLatLon(_kb->buf, lat, lon) && (lat || lon)) {
+          _task->core().setFixedPosition(lat, lon);
+          _edit_pos = false;
+        } else {
+          _kb->prompt = "Lat, lon?";   // stays open to fix it
+        }
+      } else if (res == KeyboardWidget::CANCELLED) {
+        _edit_pos = false;
+      }
+      return true;
+    }
+
+    // Privacy > BT PIN: six digits, or nothing for a random one
+    if (_edit_ble_pin) {
+      auto res = _kb->handleInput(c);
+      if (res == KeyboardWidget::DONE) {
+        uint32_t pin = (uint32_t)strtoul(_kb->buf, nullptr, 10);
+        if ((_kb->buf[0] && strlen(_kb->buf) != 6) || !_task->core().setBlePin(pin)) {
+          _kb->prompt = "6 digits";
+        } else {
+          _edit_ble_pin = false;
+          _task->showAlert("From next start", 1200);
+        }
+      } else if (res == KeyboardWidget::CANCELLED) {
+        _edit_ble_pin = false;
       }
       return true;
     }
@@ -851,6 +921,52 @@ public:
         _picker.deleting = false;
         _picker.confirm_slot = -1;
       }
+      return true;
+    }
+
+    // Privacy > Position menu, and its waypoint list
+    if (_pos_menu.active) {
+      auto res = _pos_menu.handleInput(c);
+      if (res == PopupMenu::SELECTED) {
+        int sel = _pos_menu.selectedIndex();
+        const WaypointModel& wp = _task->core().waypoints;
+        if (_pos_pick_wp) {
+          if (sel < wp.count()) _task->core().setFixedPosition(wp.at(sel).lat_1e6, wp.at(sel).lon_1e6);
+          _pos_pick_wp = false;
+        } else if (sel == 0) {   // Type in
+          int32_t lat, lon;
+          char cur[32] = "";
+          if (_task->core().fixedPosition(lat, lon)) snprintf(cur, sizeof(cur), "%.5f, %.5f", lat / 1e6, lon / 1e6);
+          _edit_pos = true;
+          _kb->begin(cur, 31);
+          _kb->prompt = "Lat, lon";
+          _kb->clearPlaceholders();
+        } else if (sel == 1 && wp.count() > 0) {   // From waypoint
+          _pos_menu.begin("Waypoint", 4);
+          for (int i = 0; i < wp.count() && i < 24; i++) _pos_menu.addItem(wp.at(i).label[0] ? wp.at(i).label : "(unnamed)");
+          _pos_pick_wp = true;
+        } else {   // Clear
+          _task->core().setFixedPosition(0, 0);
+        }
+      } else if (res != PopupMenu::NONE) {
+        _pos_pick_wp = false;
+      }
+      return true;
+    }
+
+    // System > Factory reset: the second yes erases
+    if (_reset_confirm.active) {
+      auto res = _reset_confirm.handleInput(c);
+      if (res == PopupMenu::SELECTED && _reset_confirm.selectedIndex() == 0) {
+        if (_reset_stage == 1) {
+          _reset_stage = 2;
+          _reset_confirm.beginConfirm("Keys too. Sure?", "Erase");
+          return true;
+        }
+        _task->core().factoryReset();   // restarts; back here only if the erase failed
+        _task->showAlert("Erase failed", 1400);
+      }
+      if (res != PopupMenu::NONE) _reset_stage = 0;
       return true;
     }
 
@@ -992,6 +1108,31 @@ public:
       _task->shutdown(true);   // flushes prefs/RTC/contacts/trail, then reboots -- single choke point
       return true;
     }
+    if (_selected == FACTORY_RESET && enter) {
+      _reset_stage = 1;
+      _reset_confirm.beginConfirm("Erase everything?", "Erase");
+      return true;
+    }
+    if (_selected == OWN_POSITION && enter) {
+      if (_task->core().gpsEnabled()) { _task->showAlert("GPS sets it", 1200); return true; }
+      int32_t lat, lon;
+      bool have = _task->core().fixedPosition(lat, lon);
+      bool wps = _task->core().waypoints.count() > 0;
+      _pos_menu.begin("Position", 3);
+      _pos_menu.addItem("Type in");
+      if (wps) _pos_menu.addItem("From waypoint");
+      if (have) _pos_menu.addItem("Clear");
+      _pos_pick_wp = false;
+      return true;
+    }
+#ifdef BLE_PIN_CODE
+    if (_selected == BLE_PIN && enter) {
+      _edit_ble_pin = true;
+      _kb->beginPin("", 6, false, "6 digits, or none");
+      _kb->clearPlaceholders();
+      return true;
+    }
+#endif
     if (_selected == KEYBOARD_TYPE && p && (left || right || enter)) {
       p->keyboard_type ^= 1;
       _dirty = true;

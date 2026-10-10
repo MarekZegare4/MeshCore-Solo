@@ -18,6 +18,9 @@ for what you can do with it:
 | Ping | Sends a ping and shows the round trip time and SNR |
 | Save waypoint, Set as target | Its position as a waypoint, or as the [Locator](./navigation.md#locator) target |
 | Fav, Pin to dial | Favourite, or a place on the Favourites page |
+| Telem | What this contact may ask for: None, Status, Stat+loc, Stat+sens, All. Shown when a [Privacy](./settings.md#privacy) setting is **Allowed** |
+| Reset path | Forgets the learned route; the next message floods and finds a new one. Shown when there is a route |
+| Share nearby | Sends the contact's last advert to the nodes in direct range, so they can add it |
 | Admin | Remote admin, for a repeater or room (below) |
 | Discover scan | Asks the repeaters, rooms and sensors in direct range to answer, with their signal |
 
@@ -32,7 +35,14 @@ back out, **Enter** opens its details and **Hold Enter** its options.
 > **Wio Tracker L2:** the **Nodes** app. Filter chips at the top, the sort in
 > the header, and a map button that shows every node with a position. A
 > node's card has buttons for the same actions, plus **Add** for a node that
-> isn't a contact yet and **Delete**.
+> isn't a contact yet and **Delete**. The telemetry permissions are three
+> switches under **Can ask for**.
+
+## Your own contact
+
+**Status › System**, **Enter** shows your contact as a QR code: the phone
+app's scanner adds you from it, with your name and key. On the Wio Tracker L2
+it is in **Settings › About**.
 
 ## Favourites
 

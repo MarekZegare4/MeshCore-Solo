@@ -63,6 +63,10 @@ build flag it needs.
 | Remote admin | yes | yes | yes | yes | yes |
 | Adding contacts (auto-add by type, hops, replace oldest) | Settings › Contacts | same | same | same | Messages & contacts |
 | Privacy (position in adverts, telemetry requests) | Settings › Privacy | same | same | same | Settings › Privacy |
+| Per-contact actions (telemetry permissions, reset path, share nearby) | Nodes › options | same | same | same | Node card |
+| Fixed position, Bluetooth PIN | Settings › Privacy | same | same | same | Settings › Privacy |
+| Factory reset | Settings › System | same | same | same | Settings, at the bottom |
+| Console (companion CLI, upstream commands plus settings keys) | app / USB tools | same | same | same | same |
 
 ### Navigation (`ENV_INCLUDE_GPS`)
 
@@ -89,6 +93,7 @@ build flag it needs.
 | Advanced radio (hash size, double ACK, CAD, interference, RX boost, RX delay, airtime) | end of Settings › Radio | same | same | same | Radio › Advanced |
 | Battery curve | Settings | same | same | same | Settings › Power, draggable chart |
 | QR code of the manual | Status › System, Enter | same | same | same | Settings › About |
+| QR code of your contact | Status › System, Enter | same | same | same | Settings › About |
 
 ### Device
 

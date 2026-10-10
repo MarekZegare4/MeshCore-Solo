@@ -60,6 +60,7 @@ public:
   void onViewedHistoryGrew(bool channel) override { (void)channel; _thread_dirty = true; }
   void botSetGPS(bool on) override;
   void applySoundPrefs() override;
+  bool cliCommand(const char* command, char* reply, int n) override;
 
   // ── Navigation (called from LVGL event callbacks) ────────────────────────
   void showHome();
@@ -87,6 +88,14 @@ public:
   void otaAction();
   void adminPick(int row);
   void pruneContacts();
+  // Settings > Privacy: the position adverts carry with the GPS off, the
+  // Bluetooth PIN; Settings: factory reset, asked twice (stage 1, 2; 3 erases).
+  void ownPositionPopup();
+  void ownPositionPick(int code);
+  void ownPositionDone(bool ok);
+  void blePinPopup();
+  void blePinDone(bool ok);
+  void factoryResetStep(int stage);
   void setBrightnessPct(uint8_t pct, bool save);
   void applyDisplayPrefs() override;
   void setSchemaValue(int idx, int v);
@@ -595,6 +604,7 @@ private:
   lv_obj_t* _node_info = nullptr;
   lv_obj_t* _node_ping = nullptr;
   lv_obj_t* _node_delete_lbl = nullptr;
+  lv_obj_t* _node_path_lbl = nullptr;
   bool      _node_from_map = false;
 
   // Map (SCR_MAP): view centre in fractional tile coords at zoom _map_z

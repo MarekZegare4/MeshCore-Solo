@@ -72,6 +72,8 @@ static bool s_chats_stale = false;   // Messages: a refresh waits for a held row
 #include "../ui-core/NearbyModel.h"
 #include "../ui-core/EtaTracker.h"
 #include "../ui-core/SettingsSchema.h"
+#include "../ui-core/SettingsCli.h"   // the companion CLI's settings keys
+#include "../ui-core/ContactQr.h"
 #include "../ui-core/GpsAverager.h"
 #include "../ui-core/TrackBack.h"
 #include "../ui-core/TrailProfile.h"
@@ -2475,6 +2477,7 @@ static void onOpenRepeater(lv_event_t* e);  // RepeaterScreen.h
 static void onOpenAdminPick(lv_event_t* e); // AdminScreen.h
 static void onNodeName(lv_event_t* e);
 static void onPowerRow(lv_event_t* e);
+static void onFactoryReset(lv_event_t* e) { s_ui->factoryResetStep((int)(uintptr_t)lv_event_get_user_data(e)); }
 
 // Home itself (pages, clock, minimap, apps) is HomeScreen.h.
 
@@ -3059,7 +3062,8 @@ void UITask::buildContacts() {
 static NearbyModel::Entry s_node;   // the node open in SCR_NODE (a copy: the list re-sorts)
 // Its info card's values (UITask::_node_info is the card).
 static lv_obj_t *s_nd_type, *s_nd_status, *s_nd_dist, *s_nd_pos, *s_nd_heard, *s_nd_signal, *s_nd_id;
-enum : uint8_t { NODE_MSG, NODE_PING, NODE_FAV, NODE_ADD, NODE_DELETE, NODE_NAV, NODE_ADMIN, NODE_WAYPOINT, NODE_PIN };
+enum : uint8_t { NODE_MSG, NODE_PING, NODE_FAV, NODE_ADD, NODE_DELETE, NODE_NAV, NODE_ADMIN, NODE_WAYPOINT, NODE_PIN,
+                 NODE_RESET_PATH, NODE_SHARE };
 
 static void onNearbyChip(lv_event_t* e) { s_ui->setNearbyFilter((uint8_t)(uintptr_t)lv_event_get_user_data(e)); }
 static void onNearbySort(lv_event_t* e) { (void)e; s_ui->toggleNearbySort(); }
@@ -3355,12 +3359,25 @@ static void nodeFavText() {
   if (s_nd_fav) lv_label_set_text(s_nd_fav, s_node.fav ? UI_SYMBOL_STAR "  Remove from favourites" : UI_SYMBOL_STAR "  Add to favourites");
 }
 
+static lv_obj_t* switchRow(lv_obj_t* parent, const char* text, const char* sub, uint8_t* pref);   // below
+
+// One of the node's "Can ask for" switches; user data = its TELEM_PERM_* bit.
+static void onNodeTelemSwitch(lv_event_t* e) {
+  ContactInfo* ci = the_mesh.lookupContactByPubKey(s_node.pub_key, PUB_KEY_SIZE);
+  if (!ci) return;
+  uint8_t bit = (uint8_t)(uintptr_t)lv_event_get_user_data(e);
+  uint8_t perms = contactctl::telemetry(*ci);
+  if (lv_obj_has_state((lv_obj_t*)lv_event_get_target(e), LV_STATE_CHECKED)) perms |= bit; else perms &= ~bit;
+  contactctl::setTelemetry(s_node.pub_key, perms);
+}
+
 void UITask::buildNode() {
   const NearbyModel::Entry& e = s_node;
   lv_obj_t* body = newScreen(e.name[0] ? e.name : "(unknown)", true);
 
   lv_obj_t* info = scrollList(body);   // the info, scrolling above the actions at the bottom
   s_nd_fav = nullptr;
+  _node_path_lbl = nullptr;
   nodeVizBuild(info);
   nodeviz::s_bearing = nodeviz::s_hops = -2;   // nothing drawn yet: the first set fills both
   _node_info = infoCard(info);
@@ -3391,8 +3408,29 @@ void UITask::buildNode() {
     if (contact) s_nd_fav = actionRow(g, "", onNodeAction, (void*)(uintptr_t)NODE_FAV);
     nodeFavText();
     if (contact && e.has_key) actionRow(g, UI_SYMBOL_TACK "  Pin to Home", onNodeAction, (void*)(uintptr_t)NODE_PIN);
+    ContactInfo* ci = (contact && e.has_key) ? the_mesh.lookupContactByPubKey(e.pub_key, PUB_KEY_SIZE) : nullptr;
+    if (ci && contactctl::hasPath(*ci))
+      _node_path_lbl = actionRow(g, LV_SYMBOL_REFRESH "  Reset path", onNodeAction, (void*)(uintptr_t)NODE_RESET_PATH);
+    if (ci) actionRow(g, LV_SYMBOL_UPLOAD "  Share with nodes in range", onNodeAction, (void*)(uintptr_t)NODE_SHARE);
     if (contact) _node_delete_lbl = actionRow(g, LV_SYMBOL_TRASH "  Delete contact", onNodeAction,
                                               (void*)(uintptr_t)NODE_DELETE, theme::FAIL);
+  }
+
+  // Where Settings > Privacy says "Allowed", what this contact may ask for.
+  ContactInfo* ci = (contact && e.has_key) ? the_mesh.lookupContactByPubKey(e.pub_key, PUB_KEY_SIZE) : nullptr;
+  if (ci && contactctl::telemetryPerContact(_prefs)) {
+    lv_obj_t* g = group(info, "Can ask for");
+    static const struct { const char* text; const char* sub; uint8_t bit; } T[] = {
+      { "Status", "Battery; the two below need it", TELEM_PERM_BASE },
+      { "Location", nullptr, TELEM_PERM_LOCATION },
+      { "Sensors", nullptr, TELEM_PERM_ENVIRONMENT },
+    };
+    uint8_t perms = contactctl::telemetry(*ci);
+    for (const auto& t : T) {
+      lv_obj_t* sw = switchRow(g, t.text, t.sub, nullptr);
+      if (perms & t.bit) lv_obj_add_state(sw, LV_STATE_CHECKED);
+      lv_obj_add_event_cb(sw, onNodeTelemSwitch, LV_EVENT_VALUE_CHANGED, (void*)(uintptr_t)t.bit);
+    }
   }
 
   refreshNode();
@@ -3531,6 +3569,16 @@ void UITask::nodeAction(uint8_t action) {
     case NODE_PIN:   // to the favourites dial (Home), as from a chat's options
       pinPopup(false, 0, e.pub_key);
       break;
+    case NODE_RESET_PATH:   // the row goes, the chain above turns to flood
+      if (contactctl::resetPath(e.pub_key) && _node_path_lbl) {
+        lv_obj_add_flag(lv_obj_get_parent(lv_obj_get_parent(_node_path_lbl)), LV_OBJ_FLAG_HIDDEN);   // label < text box < row
+        _node_path_lbl = nullptr;
+        refreshNode();
+      }
+      break;
+    case NODE_SHARE:
+      showToast(contactctl::share(e.pub_key) ? "Sent to nodes in range" : "No advert saved to send");
+      break;
     case NODE_DELETE:
       if (!tapConfirmed(_node_delete_lbl, LV_SYMBOL_TRASH "  Tap again to delete")) break;
       if (the_mesh.deleteContactByKey(e.pub_key)) {
@@ -3541,7 +3589,6 @@ void UITask::nodeAction(uint8_t action) {
   }
 }
 
-static lv_obj_t* switchRow(lv_obj_t* parent, const char* text, const char* sub, uint8_t* pref);   // below
 #include "MapScreen.h"
 #include "Chart.h"
 #include "ProfileView.h"
@@ -4454,10 +4501,147 @@ void UITask::buildSchemaSettings() {
   schemaRows(body, _settings_page);
   if (_settings_page == settings::PG_SOUND) then(&UITask::schemaExtras, settings::PG_SOUND);   // after its groups
   if (_settings_page == settings::PG_MESSAGES) then(&UITask::schemaExtras, settings::PG_MESSAGES);
+  if (_settings_page == settings::PG_PRIVACY) then(&UITask::schemaExtras, settings::PG_PRIVACY);
+}
+
+// ── Settings > Privacy: position, Bluetooth PIN; factory reset ─────────────────
+
+static void onOwnPos(lv_event_t* e)     { (void)e; s_ui->ownPositionPopup(); }
+static void onOwnPosPick(lv_event_t* e) { s_ui->ownPositionPick((int)(uintptr_t)lv_event_get_user_data(e)); }
+static void onOwnPosKb(lv_event_t* e)   { s_ui->ownPositionDone(lv_event_get_code(e) == LV_EVENT_READY); }
+static void onBlePin(lv_event_t* e)     { (void)e; s_ui->blePinPopup(); }
+static void onBlePinKb(lv_event_t* e)   { s_ui->blePinDone(lv_event_get_code(e) == LV_EVENT_READY); }
+
+enum : int { OWNPOS_TYPE, OWNPOS_WAYPOINTS, OWNPOS_CLEAR, OWNPOS_WP0 = 100 };
+
+void UITask::ownPositionPopup() {
+  if (_core->gpsEnabled()) { showToast("The GPS sets your position while it's on", 2500); return; }
+  int32_t lat, lon;
+  bool have = _core->fixedPosition(lat, lon);
+  lv_obj_t* g = group(navPopupPanel("Fixed position", false), nullptr);
+  listRow(g, "Type coordinates", "Latitude, longitude in degrees", onOwnPosPick, (void*)(uintptr_t)OWNPOS_TYPE);
+  if (_core->waypoints.count() > 0) {
+    char sub[24];
+    snprintf(sub, sizeof(sub), "%d saved", _core->waypoints.count());
+    listRow(g, "From a waypoint", sub, onOwnPosPick, (void*)(uintptr_t)OWNPOS_WAYPOINTS);
+  }
+  if (have) actionRow(g, "Clear", onOwnPosPick, (void*)(uintptr_t)OWNPOS_CLEAR);
+}
+
+void UITask::ownPositionPick(int code) {
+  const WaypointModel& wp = _core->waypoints;
+  if (code == OWNPOS_TYPE) {
+    int32_t lat, lon;
+    char cur[32] = "";
+    if (_core->fixedPosition(lat, lon)) snprintf(cur, sizeof(cur), "%.5f, %.5f", lat / 1e6, lon / 1e6);
+    TextEntry t = { "Fixed position", onOwnPosKb };
+    t.text = cur;
+    t.hint = "50.06143, 19.93658";
+    t.max_bytes = 31;
+    t.accepted = "0123456789.,- ";
+    t.symbols = true;
+    navTextEntry(t);
+    return;
+  }
+  if (code == OWNPOS_WAYPOINTS) {
+    lv_obj_t* list = scrollList(navPopupPanel("From a waypoint", true));
+    for (int i = 0; i < wp.count(); i++) {
+      const Waypoint& w = wp.at(i);
+      char title[WAYPOINT_LABEL_LEN + 8], sub[40];
+      snprintf(title, sizeof(title), UI_SYMBOL_FLAG "  %s", w.label[0] ? w.label : "(unnamed)");
+      snprintf(sub, sizeof(sub), "%.5f, %.5f", w.lat_1e6 / 1e6, w.lon_1e6 / 1e6);
+      listRow(list, title, sub, onOwnPosPick, (void*)(uintptr_t)(OWNPOS_WP0 + i));
+    }
+    return;
+  }
+  if (code == OWNPOS_CLEAR) _core->setFixedPosition(0, 0);
+  else if (code >= OWNPOS_WP0 && code - OWNPOS_WP0 < wp.count())
+    _core->setFixedPosition(wp.at(code - OWNPOS_WP0).lat_1e6, wp.at(code - OWNPOS_WP0).lon_1e6);
+  navClosePopup();
+  if (_screen == SCR_SETTINGS_NAV) rebuildSchemaSettings();
+}
+
+void UITask::ownPositionDone(bool ok) {
+  if (ok && _nav_ta) {
+    int32_t lat, lon;
+    if (!geo::parseLatLon(lv_textarea_get_text(_nav_ta), lat, lon) || (!lat && !lon)) {
+      showToast("Type it as latitude, longitude");
+      return;   // the field stays, to fix it
+    }
+    _core->setFixedPosition(lat, lon);
+  }
+  navClosePopup();
+  if (ok && _screen == SCR_SETTINGS_NAV) rebuildSchemaSettings();
+}
+
+void UITask::blePinPopup() {
+  if (!_prefs) return;
+  char cur[8] = "";
+  if (_prefs->ble_pin) snprintf(cur, sizeof(cur), "%06lu", (unsigned long)_prefs->ble_pin);
+  TextEntry t = { "Bluetooth PIN", onBlePinKb };
+  t.text = cur;
+  t.hint = "6 digits, empty for a random one";
+  t.max_bytes = 6;
+  t.accepted = "0123456789";
+  t.symbols = true;
+  navTextEntry(t);
+}
+
+void UITask::blePinDone(bool ok) {
+  if (ok && _nav_ta) {
+    const char* t = lv_textarea_get_text(_nav_ta);
+    if ((t[0] && strlen(t) != 6) || !_core->setBlePin((uint32_t)strtoul(t, nullptr, 10))) {
+      showToast("Six digits, not starting with 0");
+      return;
+    }
+    showToast("Used from the next start", 2000);
+  }
+  navClosePopup();
+  if (ok && _screen == SCR_SETTINGS_NAV) rebuildSchemaSettings();
+}
+
+void UITask::factoryResetStep(int stage) {
+  if (stage == 1)
+    confirmBody(navPopupPanel("Factory reset?", false),
+                "Erases contacts, channels, messages, settings and this node's keys. The SD card is left as it is.",
+                "Continue", onFactoryReset, 2);
+  else if (stage == 2)
+    confirmBody(navPopupPanel("Erase everything?", false),
+                "This can't be undone. The device restarts as a new node.",
+                LV_SYMBOL_TRASH "  Erase", onFactoryReset, 3);
+  else {
+    navClosePopup();
+    _core->factoryReset();   // restarts; back here only if the erase failed
+    showToast("Erase failed");
+  }
+}
+
+// The companion CLI's settings keys (ui-core/SettingsCli.h); a Settings page
+// open on the screen is built again with the new value.
+bool UITask::cliCommand(const char* command, char* reply, int n) {
+  if (!settingscli::handle(*_core, command, reply, n)) return false;
+  if (_screen == SCR_SETTINGS_NAV) rebuildSchemaSettings();
+  return true;
 }
 
 // What a page adds to its schema groups, once they are there.
 void UITask::schemaExtras(int page) {
+  if (page == settings::PG_PRIVACY) {
+    if (lv_obj_t* c = s_sec_card[settings::SEC_PRIVACY]) {   // with "Position in adverts"
+      char sub[40];
+      int32_t lat, lon;
+      if (_core->gpsEnabled()) snprintf(sub, sizeof(sub), "From the GPS while it's on");
+      else if (_core->fixedPosition(lat, lon)) snprintf(sub, sizeof(sub), "%.5f, %.5f", lat / 1e6, lon / 1e6);
+      else snprintf(sub, sizeof(sub), "Not set");
+      listRow(c, "Fixed position", sub, onOwnPos, NULL);
+    }
+#ifdef BLE_PIN_CODE
+    char pin[40];
+    if (_prefs && _prefs->ble_pin) snprintf(pin, sizeof(pin), "%06lu", (unsigned long)_prefs->ble_pin);
+    else snprintf(pin, sizeof(pin), "Random each start, shown on screen");
+    listRow(group(_body, "BLUETOOTH"), "Pairing PIN", pin, onBlePin, NULL);
+#endif
+  }
   if (page == settings::PG_SOUND) buildSoundRows(_body, false);   // the melodies
   if (page == settings::PG_MESSAGES) {
     lv_obj_t* c = s_sec_card[settings::SEC_CONTACTS];   // the action that goes with "Contact expiry"
@@ -4483,30 +4667,51 @@ void UITask::buildKeyboardPage(lv_obj_t* body) {
   groupNote(body, "Hold a letter for accents and other variants.");
 }
 
-// The Solo site's QR code (ui-core/SiteQr.h): a 1-bit image, black on white
-// with its quiet zone, built once at 5 px a module.
+// A QR code as a 1-bit image into dsc / data (the palette, then the rows):
+// black on white with its quiet zone, s px a module. The image cache forgets
+// an older picture at the same place.
+template <class Dark>
+static void qrImage(lv_image_dsc_t& dsc, uint8_t* data, size_t size, int n, int s, Dark dark) {
+  const int side = n + 2 * siteqr::QUIET, px = side * s, stride = (px + 7) / 8;
+  memset(data, 0, size);
+  const lv_color32_t pal[2] = { lv_color32_make(0xFF, 0xFF, 0xFF, 0xFF), lv_color32_make(0, 0, 0, 0xFF) };
+  memcpy(data, pal, sizeof(pal));
+  uint8_t* rows = data + 8;
+  for (int y = 0; y < px; y++)
+    for (int x = 0; x < px; x++) {
+      int mx = x / s - siteqr::QUIET, my = y / s - siteqr::QUIET;
+      if (mx >= 0 && my >= 0 && mx < n && my < n && dark(mx, my)) rows[y * stride + x / 8] |= 0x80 >> (x % 8);
+    }
+  lv_image_cache_drop(&dsc);
+  dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
+  dsc.header.cf = LV_COLOR_FORMAT_I1;
+  dsc.header.w = px;
+  dsc.header.h = px;
+  dsc.header.stride = stride;
+  dsc.data_size = 8 + stride * px;
+  dsc.data = data;
+}
+
+// The Solo site's QR code (ui-core/SiteQr.h), built once at 5 px a module.
 static lv_obj_t* siteQr(lv_obj_t* parent) {
-  static const int S = 5, SIDE = siteqr::N + 2 * siteqr::QUIET, PX = SIDE * S, STRIDE = (PX + 7) / 8;
-  static uint8_t data[8 + STRIDE * PX];   // the palette (white, black), then the rows
+  static const int S = 5, PX = (siteqr::N + 2 * siteqr::QUIET) * S;
+  static uint8_t data[8 + (PX + 7) / 8 * PX];
   static lv_image_dsc_t dsc;
-  if (!dsc.data) {
-    const lv_color32_t pal[2] = { lv_color32_make(0xFF, 0xFF, 0xFF, 0xFF), lv_color32_make(0, 0, 0, 0xFF) };
-    memcpy(data, pal, sizeof(pal));
-    uint8_t* px = data + 8;
-    for (int y = 0; y < PX; y++)
-      for (int x = 0; x < PX; x++) {
-        int mx = x / S - siteqr::QUIET, my = y / S - siteqr::QUIET;
-        if (mx >= 0 && my >= 0 && mx < siteqr::N && my < siteqr::N && siteqr::dark(mx, my))
-          px[y * STRIDE + x / 8] |= 0x80 >> (x % 8);
-      }
-    dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
-    dsc.header.cf = LV_COLOR_FORMAT_I1;
-    dsc.header.w = PX;
-    dsc.header.h = PX;
-    dsc.header.stride = STRIDE;
-    dsc.data_size = sizeof(data);
-    dsc.data = data;
-  }
+  if (!dsc.data) qrImage(dsc, data, sizeof(data), siteqr::N, S, siteqr::dark);
+  lv_obj_t* img = lv_image_create(parent);
+  lv_image_set_src(img, &dsc);
+  return img;
+}
+
+// Your own contact's QR code (ui-core/ContactQr.h), made each time it is
+// shown (the name can change), 3 px a module; null when it doesn't fit.
+static lv_obj_t* contactQr(lv_obj_t* parent) {
+  static const int S = 3, PX = (contactqr::MAX_VERSION * 4 + 17 + 2 * siteqr::QUIET) * S;
+  static uint8_t data[8 + (PX + 7) / 8 * PX];
+  static lv_image_dsc_t dsc;
+  static contactqr::Code code;
+  if (!contactqr::make(code)) return nullptr;
+  qrImage(dsc, data, sizeof(data), code.n, S, [](int x, int y) { return code.dark(x, y); });
   lv_obj_t* img = lv_image_create(parent);
   lv_image_set_src(img, &dsc);
   return img;
@@ -4518,6 +4723,13 @@ void UITask::buildAboutPage(lv_obj_t* body) {
   infoRow(about, "Node", the_mesh.getNodeName());
   infoRow(about, "Firmware", FIRMWARE_VERSION);
   if (!strstr(FIRMWARE_VERSION, FIRMWARE_BUILD_DATE)) infoRow(about, "Built", FIRMWARE_BUILD_DATE);
+  sectionTitle(body, "MY CONTACT");   // the phone app scans it to add you
+  lv_obj_t* me = infoCard(body);
+  lv_obj_set_flex_align(me, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_ver(me, theme::PAD, 0);
+  lv_obj_set_style_pad_row(me, 6, 0);
+  contactQr(me);
+  label(me, "Scan with the MeshCore app to add this node", THEME_FONT_SMALL, theme::TEXT_MUTED);
   sectionTitle(body, "MANUAL");
   lv_obj_t* man = infoCard(body);
   lv_obj_set_flex_align(man, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -4701,7 +4913,7 @@ void UITask::settingsGroup(int i) {
       if (pi >= 0) radioctl::presetAt(_prefs, pi, pn, f, b, sf, cr);
       snprintf(sub, sizeof(sub), "%s  -  %.3f MHz, %d dBm", pn, _prefs->freq, _prefs->tx_power_dbm);
       listRow(g, UI_SYMBOL_RADIO "  Radio", sub, onOpenRadio, NULL);
-      listRow(g, LV_SYMBOL_EYE_CLOSE "  Privacy", "Position in adverts, who can ask for telemetry",
+      listRow(g, LV_SYMBOL_EYE_CLOSE "  Privacy", "Position, who can ask for telemetry, Bluetooth PIN",
               onOpenSchemaPage, (void*)(uintptr_t)settings::PG_PRIVACY);
     }
     bluetoothRow(g);
@@ -4735,13 +4947,14 @@ void UITask::settingsGroup(int i) {
       schemaRow(g, SETTING(units_imperial));
     }
     listRow(g, LV_SYMBOL_DOWNLOAD "  Firmware update", FIRMWARE_VERSION, onOpenOta, NULL);
-    listRow(g, LV_SYMBOL_LIST "  About", "Node, firmware, manual, credits", onOpenSchemaPage, (void*)(uintptr_t)PG_ABOUT);
+    listRow(g, LV_SYMBOL_LIST "  About", "Node, your contact QR, manual, credits", onOpenSchemaPage, (void*)(uintptr_t)PG_ABOUT);
     break;
 
   case 4:
     g = group(body, nullptr);
     actionRow(g, LV_SYMBOL_REFRESH "  Reboot", onPowerRow, (void*)(uintptr_t)1);
     actionRow(g, LV_SYMBOL_POWER "  Power off", onPowerRow, (void*)(uintptr_t)0, theme::FAIL);
+    actionRow(g, LV_SYMBOL_TRASH "  Factory reset", onFactoryReset, (void*)(uintptr_t)1, theme::FAIL);
     break;
   }
 }

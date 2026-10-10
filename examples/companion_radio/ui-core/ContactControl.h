@@ -47,6 +47,23 @@ inline void setMelody(NodePrefs* p, const uint8_t* pub_key, uint8_t slot) {
 inline bool favourite(const ContactInfo& ci) { return (ci.flags & 0x01) != 0; }
 inline bool setFavourite(const uint8_t* pub_key, bool on) { return the_mesh.setContactFavourite(pub_key, on); }
 
+// ContactInfo::flags bits 1-3: what this contact may ask for (TELEM_PERM_*)
+// where Settings > Privacy says "Allowed" -- only then do they matter.
+inline uint8_t telemetry(const ContactInfo& ci) { return (ci.flags >> 1) & 0x07; }
+inline bool setTelemetry(const uint8_t* pub_key, uint8_t perms) { return the_mesh.setContactTelemetry(pub_key, perms); }
+inline bool telemetryPerContact(const NodePrefs* p) {
+  return p && (p->telemetry_mode_base == TELEM_MODE_ALLOW_FLAGS || p->telemetry_mode_loc == TELEM_MODE_ALLOW_FLAGS
+               || p->telemetry_mode_env == TELEM_MODE_ALLOW_FLAGS);
+}
+// A path to forget: the contact has a learned one.
+inline bool hasPath(const ContactInfo& ci) { return ci.out_path_len != OUT_PATH_UNKNOWN; }
+inline bool resetPath(const uint8_t* pub_key) { return the_mesh.resetContactPath(pub_key); }
+// Its last advert, sent again zero-hop so the nodes in range can add it.
+inline bool share(const uint8_t* pub_key) {
+  ContactInfo* c = the_mesh.lookupContactByPubKey(pub_key, PUB_KEY_SIZE);
+  return c && the_mesh.shareContactZeroHop(*c);
+}
+
 // "@[nick] " -- how a reply names who it answers (raw UTF-8, over the air as is).
 inline void replyPrefix(const char* nick, char* out, size_t n) { snprintf(out, n, "@[%.31s] ", nick); }
 

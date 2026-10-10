@@ -173,6 +173,7 @@ static const telemetry::Style L1_INFO      = { "\xc2\xb0", true,  false, 5 };
 #include "SensorPlaceholders.h"
 #include "../ui-core/UiCore.h"   // shared UI Core: history rings + unread models (MessagesScreen views them)
 #include "../ui-core/SettingsSchema.h"   // the settings both frontends share (SettingsScreen.h)
+#include "../ui-core/SettingsCli.h"      // and their companion CLI keys
 #include "SettingsScreen.h"
 #include "MessagesScreen.h"
 
@@ -4051,6 +4052,13 @@ void UITask::applySoundPrefs() {
 #ifdef PIN_BUZZER
   if (_node_prefs) setBuzzerVolumeLevel(_node_prefs->buzzer_volume);   // with a sample at the new level
 #endif
+}
+
+// The companion CLI's settings keys (ui-core/SettingsCli.h).
+bool UITask::cliCommand(const char* command, char* reply, int n) {
+  if (!settingscli::handle(*_core, command, reply, n)) return false;
+  _next_refresh = 0;   // a screen showing the value draws it anew
+  return true;
 }
 
 void UITask::setBuzzerVolumeLevel(uint8_t level) {

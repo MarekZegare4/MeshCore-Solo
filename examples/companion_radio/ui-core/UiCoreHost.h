@@ -41,6 +41,8 @@ public:
   // A sound pref changed through the schema (the volume): push it to the
   // speaker / buzzer.
   virtual void applySoundPrefs() {}
+  // A companion CLI command MyMesh left over (its settings keys).
+  virtual bool cliCommand(const char* command, char* reply, int n) { return false; }
 
   // Controlled power-down / restart (flush state first). See
   // AbstractUITask::shutdown().

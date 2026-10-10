@@ -71,8 +71,9 @@
 #define CMD_SET_DEFAULT_FLOOD_SCOPE   63
 #define CMD_GET_DEFAULT_FLOOD_SCOPE   64
 #define CMD_SEND_RAW_PACKET           65
+#define CMD_RUN_CLI_COMMAND           66  // v14+
 #ifdef ENABLE_SCREENSHOT
-#define CMD_GET_SCREENSHOT             66   // Request screenshot from display
+#define CMD_GET_SCREENSHOT             0x7E   // Request screenshot from display (Solo; 66 is upstream's CLI)
 #endif
 
 // Stats sub-types for CMD_GET_STATS
@@ -109,8 +110,9 @@
 #define RESP_ALLOWED_REPEAT_FREQ      26
 #define RESP_CODE_CHANNEL_DATA_RECV   27
 #define RESP_CODE_DEFAULT_FLOOD_SCOPE 28
+#define RESP_CODE_CLI_REPLY           29  // v14+, a reply to CMD_RUN_CLI_COMMAND
 #ifdef ENABLE_SCREENSHOT
-#define RESP_CODE_SCREENSHOT           29   // Response with screenshot data
+#define RESP_CODE_SCREENSHOT          0x7E  // reply to CMD_GET_SCREENSHOT (Solo; 29 is upstream's CLI reply)
 #define SCREENSHOT_TYPE_RGB565          2   // display_type of a colour screen's frame
 #endif
 
@@ -288,9 +290,8 @@ bool MyMesh::getCADEnabled() const {
   // RSSI-threshold interference detection relies on _noise_floor, which is only
   // kept fresh by continuous RX — stale during RX duty-cycle sleep. Auto-enable
   // hardware CAD (a fresh explicit scan) whenever power-save is actually active.
-  // _prefs.cad_enabled itself has no UI/CLI exposure yet on companion_radio
-  // (unlike simple_repeater's CommonCLI `cad` command) — it's wired and
-  // persisted for a future manual override, but always 0 today.
+  // _prefs.cad_enabled is the manual override: Settings > Radio's advanced
+  // options and the companion CLI's `cad` (MyMeshCli.h) set it.
   // rx_powersave is never actually applied to the radio while FEAT_RX_POWERSAVE
   // is 0 (see Features.h) -- don't let a stale persisted byte from before that
   // still auto-enable CAD here for a duty-cycle mode that isn't running.
@@ -482,6 +483,37 @@ bool MyMesh::setContactFavourite(const uint8_t* pub_key, bool fav) {
   ContactInfo* c = lookupContactByPubKey(pub_key, PUB_KEY_SIZE);
   if (!c) return false;
   if (fav) c->flags |= 0x01; else c->flags &= ~0x01;
+  c->lastmod = getRTCClock()->getCurrentTime();
+  dirty_contacts_expiry = futureMillis(LAZY_CONTACTS_WRITE_DELAY);
+  return true;
+}
+
+bool MyMesh::setContactTelemetry(const uint8_t* pub_key, uint8_t perms) {
+  ContactInfo* c = lookupContactByPubKey(pub_key, PUB_KEY_SIZE);
+  if (!c) return false;
+  c->flags = (c->flags & ~0x0E) | ((perms & 0x07) << 1);
+  c->lastmod = getRTCClock()->getCurrentTime();
+  dirty_contacts_expiry = futureMillis(LAZY_CONTACTS_WRITE_DELAY);
+  return true;
+}
+
+bool MyMesh::factoryReset() {
+  bool was_on = _serial && _serial->isEnabled();
+  if (_serial) {
+    MESH_DEBUG_PRINTLN("Factory reset: disabling serial interface to prevent reconnects (BLE/WiFi)");
+    _serial->disable();
+  }
+  if (_store->formatFileSystem()) return true;
+  if (was_on) _serial->enable();   // nothing erased: the link as it was
+  return false;
+}
+
+// lastmod bumped (unlike CMD_RESET_PATH, which the app sent itself) so the
+// app's copy of the contact drops the old path too.
+bool MyMesh::resetContactPath(const uint8_t* pub_key) {
+  ContactInfo* c = lookupContactByPubKey(pub_key, PUB_KEY_SIZE);
+  if (!c) return false;
+  c->out_path_len = OUT_PATH_UNKNOWN;
   c->lastmod = getRTCClock()->getCurrentTime();
   dirty_contacts_expiry = futureMillis(LAZY_CONTACTS_WRITE_DELAY);
   return true;
@@ -3017,11 +3049,7 @@ void MyMesh::handleCmdFrame(size_t len) {
       writeErrFrame(ERR_CODE_ILLEGAL_ARG); // invalid stats sub-type
     }
   } else if (cmd_frame[0] == CMD_FACTORY_RESET && memcmp(&cmd_frame[1], "reset", 5) == 0) {
-    if (_serial) {
-      MESH_DEBUG_PRINTLN("Factory reset: disabling serial interface to prevent reconnects (BLE/WiFi)");
-      _serial->disable(); // Phone app disconnects before we can send OK frame so it's safe here
-    }
-    bool success = _store->formatFileSystem();
+    bool success = factoryReset();   // phone app disconnects before we can send OK frame so it's safe here
     if (success) {
       writeOKFrame();
 #ifdef SIM_PLATFORM
@@ -3116,6 +3144,19 @@ void MyMesh::handleCmdFrame(size_t len) {
       memcpy(&out_frame[i], &r->upper_freq, 4); i += 4;
     }
     _serial->writeFrame(out_frame, i);
+  } else if (cmd_frame[0] == CMD_RUN_CLI_COMMAND && len >= 3) {   // v14+, MyMeshCli.h
+    char text[MAX_FRAME_SIZE + 1];
+    memcpy(text, &cmd_frame[1], len - 1);
+    text[len - 1] = 0;
+    char* reply = (char*)&out_frame[1];
+    const int n = MAX_FRAME_SIZE - 1;
+    reply[0] = 0;
+    if (!handleCliCommand(text, reply, n)) {
+      size_t at = strlen(reply);   // after an "xx|" prefix, if it had one
+      snprintf(reply + at, n - at, "Unknown command");
+    }
+    out_frame[0] = RESP_CODE_CLI_REPLY;
+    _serial->writeFrame(out_frame, 1 + strlen(reply));
   } else if (cmd_frame[0] == CMD_SEND_RAW_PACKET && len >= 4) {
     auto pkt = obtainNewPacket();
     if (pkt) {
@@ -3534,3 +3575,4 @@ bool MyMesh::hasPendingWork() const {
 }
 
 #include "MyMeshBot.h"
+#include "MyMeshCli.h"

@@ -23,8 +23,12 @@ import os
 # Mesh protocol constants
 FRAME_START_OUT = 0x3C  # '<' - used when sending TO device
 FRAME_START_IN = 0x3E  # '>' - used when receiving FROM device
-CMD_GET_SCREENSHOT = 66
-RESP_CODE_SCREENSHOT = 29
+CMD_GET_SCREENSHOT = 0x7E
+RESP_CODE_SCREENSHOT = 0x7E
+# Firmware before v2.0 used 66 / 29, which upstream gave to its CLI since:
+# asked with the new code, such firmware answers an error, and we ask again.
+CMD_GET_SCREENSHOT_OLD = 66
+RESP_CODE_SCREENSHOT_OLD = 29
 RESP_CODE_ERR = 1
 
 # display_type values (byte [5] in response frame)
@@ -129,7 +133,7 @@ def _expected_buffer_size(width, height, display_type):
     return (width * height) // 8
 
 
-def receive_screenshot(ser, timeout=5):
+def receive_screenshot(ser, timeout=5, code=RESP_CODE_SCREENSHOT):
     """Receive a multi-chunk screenshot response. Returns (buf, w, h, type, rot) or None."""
     start_time      = time.time()
     buffer_data     = bytearray()
@@ -154,7 +158,7 @@ def receive_screenshot(ser, timeout=5):
             print(f"Error: Device returned error code 0x{err:02x}")
             return None
 
-        if resp_code != RESP_CODE_SCREENSHOT:
+        if resp_code != code:   # 29 is now the CLI reply: only the code asked for
             continue
 
         if len(frame) < HEADER_SIZE:
@@ -365,6 +369,11 @@ def main():
                 time.sleep(0.1)
 
                 result = receive_screenshot(ser)
+                if result is None:   # older firmware: the old code
+                    ser.reset_input_buffer()
+                    send_command(ser, CMD_GET_SCREENSHOT_OLD)
+                    time.sleep(0.1)
+                    result = receive_screenshot(ser, code=RESP_CODE_SCREENSHOT_OLD)
                 if result:
                     buffer_data, width, height, display_type, disp_rotation = result
                     type_str = {DISPLAY_TYPE_EINK: "e-ink", DISPLAY_TYPE_RGB565: "colour"}.get(display_type, "OLED")

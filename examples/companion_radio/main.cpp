@@ -694,4 +694,17 @@ extern "C" EMSCRIPTEN_KEEPALIVE int sim_test_login_first_repeater(const char* pa
   uint32_t est_timeout;
   return the_mesh.sendRoomLogin(ci, password, est_timeout) ? 1 : 0;
 }
+
+// The companion CLI (CMD_RUN_CLI_COMMAND) without a transport: the text in,
+// the reply out, as the app's console gets it.
+extern "C" EMSCRIPTEN_KEEPALIVE const char* sim_cli(const char* command) {
+  static char reply[MAX_FRAME_SIZE];
+  reply[0] = 0;
+  if (!g_sim_ready) return reply;
+  if (!the_mesh.handleCliCommand(command, reply, sizeof(reply))) {
+    size_t at = strlen(reply);
+    snprintf(reply + at, sizeof(reply) - at, "Unknown command");
+  }
+  return reply;
+}
 #endif

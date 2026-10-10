@@ -21,7 +21,8 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
 
   // ── action-menu actions (matched by id, not by row index) ────────────────────
   enum Action : uint8_t { ACT_NAV, ACT_PING, ACT_WAYPOINT, ACT_LOCATOR,
-                          ACT_ADD, ACT_DELETE, ACT_FAV, ACT_PIN, ACT_ADMIN, ACT_SORT, ACT_SCAN, ACT_MAP };
+                          ACT_ADD, ACT_DELETE, ACT_FAV, ACT_PIN, ACT_ADMIN, ACT_SORT, ACT_SCAN, ACT_MAP,
+                          ACT_TELEM, ACT_RESET_PATH, ACT_SHARE };
 
   // Set by UITask::pickAdminTarget() (Tools > Admin, which is remote-only):
   // while true, ENTER on an eligible row (a stored repeater/room contact) hands
@@ -55,7 +56,7 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
   PopupMenu _ping_menu;       // ping (special: read-only result rows)
   PopupMenu _confirm;         // delete-contact confirmation (destructive → 2-step)
 
-  Action  _menu_actions[12];  // parallel to _menu rows — stable action ids
+  Action  _menu_actions[16];  // parallel to _menu rows — stable action ids
   int     _menu_action_count;
   char    _sort_label[16];    // dynamic label for the Sort row
 
@@ -303,6 +304,24 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
 
   char _fav_label[12];   // "Fav: ON" / "Fav: OFF" -- rewritten in place by L/R
   char _pin_label[24];   // "Pin to dial" / "Unpin (slot N)" -- _menu stores the pointer
+  char _telem_label[20]; // "Telem: ..." -- rewritten in place by L/R
+
+  // What a contact may ask for, as one cycled value: status first, since
+  // location and sensors go unanswered without it (MyMesh::onContactRequest).
+  static uint8_t telemPerms(int step) {
+    static const uint8_t STEPS[5] = {
+      0, TELEM_PERM_BASE, TELEM_PERM_BASE | TELEM_PERM_LOCATION, TELEM_PERM_BASE | TELEM_PERM_ENVIRONMENT,
+      TELEM_PERM_BASE | TELEM_PERM_LOCATION | TELEM_PERM_ENVIRONMENT };
+    return STEPS[step];
+  }
+  static int telemStep(uint8_t perms) {
+    for (int i = 4; i > 0; i--) if (perms == telemPerms(i)) return i;
+    return 0;
+  }
+  void buildTelemLabel(uint8_t perms) {
+    static const char* const NAMES[5] = { "None", "Status", "Stat+loc", "Stat+sens", "All" };
+    snprintf(_telem_label, sizeof(_telem_label), "Telem: %s", NAMES[telemStep(perms)]);
+  }
 
   void openActionMenu() {
     const Entry* e = selected();
@@ -347,6 +366,15 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
       else           snprintf(_pin_label, sizeof(_pin_label), "Pin to dial");
       add(_pin_label, ACT_PIN);
     }
+    // A saved contact (not a scan row): its telemetry permissions -- only where
+    // Privacy says "Allowed" do they count -- its path and its advert.
+    ContactInfo* ci = (is_contact && has_key) ? the_mesh.lookupContactByPubKey(e->pub_key, PUB_KEY_SIZE) : nullptr;
+    if (ci && contactctl::telemetryPerContact(_task->getNodePrefs())) {
+      buildTelemLabel(contactctl::telemetry(*ci));
+      addValue(_telem_label, ACT_TELEM);
+    }
+    if (ci && contactctl::hasPath(*ci)) add("Reset path", ACT_RESET_PATH);
+    if (ci) add("Share nearby", ACT_SHARE);
     if (is_admin_target)       add("Admin", ACT_ADMIN);
     if (is_contact && has_key) add("Delete contact", ACT_DELETE);
     if (stored) addValue(_sort_label, ACT_SORT);   // sort is meaningless for live-scan rows
@@ -365,9 +393,9 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
     refreshKeepingSelection();
   }
 
-  // Advance the value on the menu's value rows (Sort, Fav). Both are two-state,
-  // so LEFT and RIGHT do the same thing here and Enter joins them.
-  void cycleMenuValue(int i) {
+  // Advance the value on the menu's value rows (Sort, Fav, Telem). Sort and Fav
+  // are two-state, so LEFT and RIGHT do the same there; Telem steps by `dir`.
+  void cycleMenuValue(int i, int dir = 1) {
     if (i < 0 || i >= _menu_action_count) return;
     if (_menu_actions[i] == ACT_SORT) {
       _sort = (_sort == SORT_DIST) ? SORT_TIME : SORT_DIST;
@@ -375,6 +403,12 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
       refresh();
     } else if (_menu_actions[i] == ACT_FAV) {
       toggleFavSelected();
+    } else if (_menu_actions[i] == ACT_TELEM) {
+      const Entry* e = selected();
+      ContactInfo* ci = e ? the_mesh.lookupContactByPubKey(e->pub_key, PUB_KEY_SIZE) : nullptr;
+      if (!ci) return;
+      uint8_t next = telemPerms((telemStep(contactctl::telemetry(*ci)) + dir + 5) % 5);
+      if (contactctl::setTelemetry(e->pub_key, next)) buildTelemLabel(next);
     }
   }
 
@@ -416,6 +450,17 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
         break;
       }
       case ACT_FAV:      break;  // value rows -- see cycleMenuValue()
+      case ACT_TELEM:    break;
+      case ACT_RESET_PATH: {
+        const Entry* e = selected();
+        if (e && contactctl::resetPath(e->pub_key)) _task->showAlert("Path reset", 800);
+        break;
+      }
+      case ACT_SHARE: {
+        const Entry* e = selected();
+        _task->showAlert(e && contactctl::share(e->pub_key) ? "Shared nearby" : "No advert saved", 1000);
+        break;
+      }
       case ACT_PIN: {
         const Entry* e = selected();
         if (e && e->has_key) togglePinToDial(e->pub_key);
@@ -914,10 +959,10 @@ public:
     if (_ping_menu.active)   { handlePingMenuInput(c); return true; }
     if (_menu.active) {
       // LEFT/RIGHT -- and Enter, which PopupMenu reports as VALUE_NEXT on a
-      // value row -- cycle Sort and Fav in place; the popup stays open so the
-      // user can keep tapping, and only Back closes it. Other rows swallow L/R.
+      // value row -- cycle Sort, Fav and Telem in place; the popup stays open so
+      // the user can keep tapping, and only Back closes it. Other rows swallow L/R.
       if (keyIsPrev(c) || keyIsNext(c)) {
-        cycleMenuValue(_menu.selectedIndex());
+        cycleMenuValue(_menu.selectedIndex(), keyIsNext(c) ? 1 : -1);
         return true;
       }
       auto res = _menu.handleInput(c);

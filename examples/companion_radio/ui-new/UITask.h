@@ -508,6 +508,7 @@ public:
   // Settings changed through the schema (ui-core/SettingsSchema.h).
   void applyDisplayPrefs() override { applyBrightness(); _next_refresh = 0; }
   void applySoundPrefs() override;
+  bool cliCommand(const char* command, char* reply, int n) override;
   void setBuzzerVolumeLevel(uint8_t level);
   void applyTxPower();
   void applyPowerSave();   // hardware duty-cycle RX on/off from prefs

@@ -143,6 +143,38 @@ public:
     return true;
   }
 
+  // Settings > Privacy > Position: where adverts say you are while the GPS is
+  // off -- the sensor manager's node_lat / node_lon, saved with the prefs as
+  // the app's CMD_SET_ADVERT_LATLON does. With the GPS on, each fix overwrites it.
+  bool fixedPosition(int32_t& lat, int32_t& lon) const {
+    lat = (int32_t)lround(_sensors->node_lat * 1e6);
+    lon = (int32_t)lround(_sensors->node_lon * 1e6);
+    return lat != 0 || lon != 0;
+  }
+  void setFixedPosition(int32_t lat, int32_t lon) {   // 0, 0: none
+    _sensors->node_lat = lat / 1e6;
+    _sensors->node_lon = lon / 1e6;
+    the_mesh.savePrefs();
+  }
+
+  // Settings > Privacy > Bluetooth PIN: NodePrefs::ble_pin, six digits, or 0
+  // for a new random one each start (shown on screen). Used from the next
+  // start, like the app's CMD_SET_DEVICE_PIN.
+  static bool validBlePin(uint32_t pin) { return pin == 0 || (pin >= 100000 && pin <= 999999); }
+  bool setBlePin(uint32_t pin) {
+    if (!_prefs || !validBlePin(pin)) return false;
+    _prefs->ble_pin = pin;
+    the_mesh.savePrefs();
+    return true;
+  }
+
+  // Settings > System > Factory reset: everything erased, then a restart
+  // straight away -- no shutdown flush, which would write the prefs back.
+  // Returns only when the erase failed.
+  void factoryReset() {
+    if (the_mesh.factoryReset()) board.reboot();
+  }
+
   // GPS duty cycle (NodePrefs::gps_interval, seconds; 0 = always on) to the sensor layer.
   void applyGpsInterval() {
     if (!_sensors || !_prefs) return;
@@ -274,6 +306,11 @@ public:
       _host->onRoomLoginResult(pub_key, success, permissions);
     }
     _host->onAdminStateChanged();
+  }
+  // The companion CLI's settings keys: the frontend answers them from the
+  // schema (ui-core/SettingsCli.h, included where the schema is).
+  bool onCliCommand(const char* command, char* reply, int n) override {
+    return _host->cliCommand(command, reply, n);
   }
   void onAdminReply(const uint8_t* pub_key, const char* text) override {
     admin.onReply(pub_key, text);

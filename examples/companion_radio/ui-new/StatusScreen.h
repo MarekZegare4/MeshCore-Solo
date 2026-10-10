@@ -8,6 +8,7 @@
 #include "TabBar.h"
 #include "../MyMesh.h"
 #include "../ui-core/SiteQr.h"
+#include "../ui-core/ContactQr.h"
 #include "../ui-core/Diagnostics.h"
 #include "../ui-core/Battery.h"
 #if ENV_INCLUDE_GPS == 1 && defined(GPS_SKYVIEW)
@@ -46,7 +47,10 @@ private:
   int  _scroll = 0;                // blocks scrolled off the top
   bool _more = false;              // the last frame cut blocks off at the bottom
   bool _signal = false;            // Sky: the bars instead of the plot
-  bool _qr = false;                // System: the site's QR code, full screen
+  // System: a QR code full screen -- your contact, then (Enter) the manual.
+  enum : uint8_t { QR_NONE, QR_CONTACT, QR_MANUAL };
+  uint8_t _qr = QR_NONE;
+  contactqr::Code _contact_qr;
   PopupMenu _reset_menu;           // Mesh, Hold Enter -> confirm
   CayenneLPP _lpp;
   unsigned long _lpp_at = 0;
@@ -296,7 +300,7 @@ private:
     row(d, f, rsv, "Firmware", a);
     row(d, f, rsv, "Built", FIRMWARE_BUILD_DATE);
     row(d, f, rsv, "Device", board.getManufacturerName());
-    row(d, f, rsv, "Manual", "Enter: QR code");
+    row(d, f, rsv, "QR codes", "Enter: you, manual");
     uint32_t heap_free, heap_total;
     DeviceDiag::getHeapStats(heap_free, heap_total);
     if (heap_total) snprintf(a, sizeof(a), "%lu of %lu KB", (unsigned long)(heap_free / 1024), (unsigned long)(heap_total / 1024));
@@ -320,19 +324,33 @@ private:
       if (f.place(d.lineStep())) d.drawTextEllipsized(1, f.at, d.width() - rsv - 3, lines[i]);
   }
 
-  // The site's QR code as large as the screen allows, dark modules on light
-  // (LIGHT is the ink on e-ink, the lit pixel elsewhere), with the address
-  // beside it or under it where it fits.
+  // A QR code as large as the screen allows, dark modules on light (LIGHT is
+  // the ink on e-ink, the lit pixel elsewhere), with its caption beside it or
+  // under it: your contact, or the site's manual.
   void renderQr(DisplayDriver& d) {
+    static const char* const MANUAL[] = { "Solo manual", siteqr::URL, nullptr };
+    static const char* const MANUAL_NARROW[] = { "Scan for", "the Solo", "manual" };
+    if (_qr == QR_CONTACT && _contact_qr.n) {
+      const char* const you[] = { "Scan to add", the_mesh.getNodeName(), nullptr };
+      renderQr(d, _contact_qr.n, [&](int x, int y) { return _contact_qr.dark(x, y); }, you, you);
+    } else {
+      renderQr(d, siteqr::N, siteqr::dark, MANUAL, MANUAL_NARROW);
+    }
+  }
+  // Caption: up to three lines, `wide` when every line fits beside / under
+  // the code, else `narrow` (lines cut to fit).
+  template <class Dark>
+  void renderQr(DisplayDriver& d, int n, Dark dark, const char* const* wide, const char* const* narrow) {
     const int W = d.width(), H = d.height(), lh = d.getLineHeight();
     const bool tall = H > W;
-    const int side = siteqr::N + 2 * siteqr::QUIET;
-    const int s = (tall ? W : H) / side;
+    const int side = n + 2 * siteqr::QUIET;
+    const int s = (tall ? W : H) / side > 0 ? (tall ? W : H) / side : 1;
     const int px = side * s;
-    // The text: "Solo manual" and the address if that fits on one line.
     const int tx = tall ? 0 : px + 2, tw = W - tx;
-    const bool url = d.getTextWidth(siteqr::URL) <= tw;
-    const int lines = url ? 2 : 3;
+    const char* const* cap = wide;
+    for (int i = 0; i < 3 && wide[i]; i++) if (d.getTextWidth(wide[i]) > tw) cap = narrow;
+    int lines = 0;
+    while (lines < 3 && cap[lines]) lines++;
     // Portrait: the code and the text under it, centred together.
     const int x0 = tall ? (W - px) / 2 : 0;
     const int y0 = tall ? (H - px - lh / 2 - lines * lh) / 2 : (H - px) / 2;
@@ -340,19 +358,15 @@ private:
     if (!eink) { d.setColor(DisplayDriver::LIGHT); d.fillRect(x0, y0, px, px); }
     d.setColor(eink ? DisplayDriver::LIGHT : DisplayDriver::DARK);
     const int q = x0 + siteqr::QUIET * s, r = y0 + siteqr::QUIET * s;
-    for (int y = 0; y < siteqr::N; y++)
-      for (int x = 0; x < siteqr::N; x++)
-        if (siteqr::dark(x, y)) d.fillRect(q + x * s, r + y * s, s, s);
+    for (int y = 0; y < n; y++)
+      for (int x = 0; x < n; x++)
+        if (dark(x, y)) d.fillRect(q + x * s, r + y * s, s, s);
     d.setColor(DisplayDriver::LIGHT);
-    const int mid = tx + tw / 2;
     int ty = tall ? y0 + px + lh / 2 : (H - lines * lh) / 2;
-    if (url) {
-      d.drawTextCentered(mid, ty, "Solo manual"); ty += lh;
-      d.drawTextCentered(mid, ty, siteqr::URL);
-    } else {
-      d.drawTextCentered(mid, ty, "Scan for"); ty += lh;
-      d.drawTextCentered(mid, ty, "the Solo"); ty += lh;
-      d.drawTextCentered(mid, ty, "manual");
+    for (int i = 0; i < lines; i++) {
+      int w = d.getTextWidth(cap[i]);
+      d.drawTextEllipsized(w < tw ? tx + (tw - w) / 2 : tx, ty, tw, cap[i]);
+      ty += lh;
     }
   }
 
@@ -386,7 +400,7 @@ public:
 
   // Open on a given tab (Status page: Radio; the GPS shortcuts: GPS / Sky).
   void showTab(uint8_t t) {
-    _qr = false;
+    _qr = QR_NONE;
     for (uint8_t i = 0; i < _count; i++) if (_tabs[i] == t) { _cur = i; _scroll = 0; }
   }
   // GPS stays awake while its live tabs are on screen.
@@ -457,7 +471,10 @@ public:
       }
       return true;
     }
-    if (_qr) { _qr = false; return true; }
+    if (_qr) {   // Enter: the other code; anything else closes
+      _qr = c == KEY_ENTER && _qr == QR_CONTACT ? QR_MANUAL : c == KEY_ENTER && _qr == QR_MANUAL ? QR_CONTACT : QR_NONE;
+      return true;
+    }
     if (keyIsPrev(c)) { _cur = (_cur + _count - 1) % _count; _scroll = 0; return true; }
     if (keyIsNext(c)) { _cur = (_cur + 1) % _count;          _scroll = 0; return true; }
     if (c == KEY_UP)   { if (_scroll > 0) _scroll--; return true; }
@@ -466,7 +483,10 @@ public:
     if (c == KEY_ENTER && tab() == TAB_GPS) { _task->toggleGPS(); return true; }
 #endif
     if (c == KEY_ENTER && tab() == TAB_SKY) { _signal = !_signal; return true; }
-    if (c == KEY_ENTER && tab() == TAB_SYSTEM) { _qr = true; return true; }
+    if (c == KEY_ENTER && tab() == TAB_SYSTEM) {
+      _qr = contactqr::make(_contact_qr) ? QR_CONTACT : QR_MANUAL;
+      return true;
+    }
     if (c == KEY_CONTEXT_MENU && tab() == TAB_MESH) {
       _reset_menu.beginConfirm("Reset counters?", "Reset");
       return true;

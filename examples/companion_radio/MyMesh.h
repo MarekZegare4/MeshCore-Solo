@@ -9,7 +9,7 @@
 class UITask;
 
 /*------------ Frame Protocol --------------*/
-#define FIRMWARE_VER_CODE 13
+#define FIRMWARE_VER_CODE 14   // 14: CMD_RUN_CLI_COMMAND, as upstream
 
 // Fallback only -- every real build (local or CI) goes through build.sh, which
 // always injects its own FIRMWARE_BUILD_DATE (today's date at build time).
@@ -188,6 +188,9 @@ public:
       // its state and restarts. Returns false if it doesn't handle it, and
       // MyMesh then flushes and reboots by itself.
       virtual bool requestShutdown(bool restart) { return false; }
+      // A companion CLI command MyMesh has no answer for (its settings keys):
+      // the reply into `reply` (n bytes), false when unknown.
+      virtual bool onCliCommand(const char* command, char* reply, int n) { return false; }
   };
 
   MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMeshTables &tables, DataStore& store);
@@ -402,6 +405,22 @@ public:
   // "fav" list filters no longer depend on the app having starred anything.
   bool setContactFavourite(const uint8_t* pub_key, bool fav);
 
+  // On-device per-contact telemetry permissions (Nodes): ContactInfo::flags
+  // bits 1-3 = status / location / sensors, read where Settings > Privacy says
+  // "Allowed" (onContactRequest). The same bits the app's per-contact toggles write.
+  bool setContactTelemetry(const uint8_t* pub_key, uint8_t perms);
+
+  // On-device path reset (Nodes): forget the learned route; the next message
+  // floods and learns a new one, as CMD_RESET_PATH does.
+  bool resetContactPath(const uint8_t* pub_key);
+
+  // Factory reset (CMD_FACTORY_RESET, Settings on the device): the serial link
+  // off, then every file and setting erased, keys too. The caller reboots.
+  bool factoryReset();
+
+  // Companion CLI (MyMeshCli.h): CMD_RUN_CLI_COMMAND's text in, the reply out.
+  bool handleCliCommand(const char* command, char* reply, int n);
+
   // On-device "remote admin" (Tools > Admin): send a CLI command to a node
   // you're logged into with admin permission (see ClientACL::isAdmin()). The
   // reply is a text frame (TXT_TYPE_CLI_DATA) delivered via onCommandDataRecv();
@@ -592,6 +611,7 @@ private:
   }
 
   void checkCLIRescueCmd();
+  bool cliRadioCommand(const char* command, char* reply, int n);
   void checkSerialInterface();
   bool isValidClientRepeatFreq(uint32_t f) const;
 #ifdef ENABLE_SCREENSHOT

@@ -103,7 +103,7 @@ Right** between them, **Up / Down** scrolls):
 | **Sky** | The satellites on a sky plot, or each one's signal as bars (**Enter** swaps them); Wio Tracker L1 |
 | **Power** | Battery level, voltage, source and trend, then the readings of any sensors |
 | **Mesh** | Packets received and sent with a traffic line, forwarded, nodes heard, contacts; **hold Enter** resets the counters |
-| **System** | Uptime, firmware, device, memory, the send queue, errors, and a sample of every script the font covers; **Enter** shows a QR code that opens this manual on a phone |
+| **System** | Uptime, firmware, device, memory, the send queue, errors, and a sample of every script the font covers; **Enter** shows your contact as a QR code, which the phone app scans to add you, and **Enter** again a QR code that opens this manual; any other key closes it |
 
 **GPS pwr** in Settings › System turns the GPS off between fixes to save
 battery; anything that needs your position (the trail, live share, the
@@ -116,7 +116,7 @@ locator) keeps it on.
 > of the satellites and the fix), **Signal** (a bar per satellite with its
 > strength, and the constellations) and **Details** (position, precision,
 > time to first fix and what the receiver reports).
-> The manual's QR code is in Settings › About.
+> Your contact's QR code and the manual's are in Settings › About.
 
 ## GPIO
 
