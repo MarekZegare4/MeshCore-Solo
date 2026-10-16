@@ -530,10 +530,10 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
     if (pingRowCount() != _ping_menu.count()) rebuildPingMenu();
   }
 
-  // Ping popup input. Result rows are read-only, so UP/DOWN are swallowed to keep
-  // the highlight on "Send".
+  // Ping popup input. UP/DOWN scroll: on the OLED the popup fits 3 rows, so a
+  // full result (Send + RTT + 2 SNR) needs scrolling to show the last one.
+  // Result rows are read-only, so Enter on any row sends.
   void handlePingMenuInput(char c) {
-    if (c == KEY_UP || c == KEY_DOWN) return;
     auto res = _ping_menu.handleInput(c);
     if (res == PopupMenu::SELECTED) {
       const Entry* e = selected();
