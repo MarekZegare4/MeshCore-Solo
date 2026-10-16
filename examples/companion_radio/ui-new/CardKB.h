@@ -125,6 +125,11 @@ void UITask::cardkbTask(void* self) {
 void UITask::startCardKBCapture() {
 #if defined(CARDKB_I2C) && defined(NRF52_PLATFORM)
   if (!_has_cardkb) return;
+  // A CardKB on the primary bus (ProMicro: CARDKB_I2C=Wire) shares it with an
+  // I2C display. The task would then read the keyboard in the middle of a frame
+  // going out to the OLED -- a garbled bus, a frozen screen and a reboot. An
+  // OLED frame takes milliseconds anyway, so the loop's own poll is enough.
+  if (&CARDKB_I2C == &Wire) return;
   SemaphoreHandle_t m = xSemaphoreCreateMutex();
   if (!m) return;
   // Publish the mutex BEFORE creating the task: at higher priority it starts
