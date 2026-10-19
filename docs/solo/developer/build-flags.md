@@ -56,6 +56,7 @@ existing `solo/<board>/platformio.ini` for what's already claimed).
 | `UI_HAS_JOYSTICK=1` + `UI_HAS_JOYSTICK_UPDOWN=1` (optional) + `JOYSTICK_UP` / `JOYSTICK_DOWN` / `JOYSTICK_LEFT` / `JOYSTICK_RIGHT` + `PIN_USER_BTN` + `PIN_BACK_BTN` | A wired joystick (four direction contacts + a press contact for Enter). Replaces single-button navigation entirely once enabled. See [External Keyboard & Joystick](../hardware.md#external-keyboard-and-joystick). |
 | `PIN_GPIO1` .. `PIN_GPIO4` | Up to four general-purpose pins, each independently switchable between Off / Input / Output (GPIO1/GPIO2 also get an Analog step, if wired to an ADC-capable pin) from Tools › GPIO, and via the `!gpio1`..`!gpio4` bot commands. Not restricted to any particular board — works anywhere the pins are actually free. See [Tools › GPIO](../tools.md#gpio). |
 | `PIN_HALL_SENSOR` + `HALL_ACTIVE_HIGH=1` (optional) | A Hall-effect or reed sensor for a magnetic flip cover: closing locks and blanks the screen instantly, opening unlocks and wakes it, no combo either way. `HALL_ACTIVE_HIGH` is only for a module wired to pull the pin high (rather than low) when the magnet is near. See [Screen lock › Magnetic cover](../lock.md#magnetic-cover). |
+| `UI_ENTER_DOUBLE_BACK=1` | Double-click Enter goes back, for a joystick whose Back button is hard to reach. Delays a single Enter by ~280 ms; in text entry a double is two Enters. Only the GAT562 30S target wires it up; off by default. |
 
 ---
 

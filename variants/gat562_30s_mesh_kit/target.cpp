@@ -11,7 +11,11 @@ GAT56230SMeshKitBoard board;
 
 #ifdef DISPLAY_CLASS
   DISPLAY_CLASS display;
-  MomentaryButton user_btn(PIN_USER_BTN, 1000, true, false, false);
+  #ifdef UI_ENTER_DOUBLE_BACK
+    MomentaryButton user_btn(PIN_USER_BTN, 1000, true, false, true);   // multi-click: double Enter = Back
+  #else
+    MomentaryButton user_btn(PIN_USER_BTN, 1000, true, false, false);
+  #endif
   MomentaryButton joystick_left(JOYSTICK_LEFT, 1000, true, false, false);
   MomentaryButton joystick_right(JOYSTICK_RIGHT, 1000, true, false, false);
   MomentaryButton back_btn(PIN_BACK_BTN, 1000, true, false, true);
