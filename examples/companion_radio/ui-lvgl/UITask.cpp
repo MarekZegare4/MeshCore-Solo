@@ -113,6 +113,7 @@ static const char* waypointsFull() {
 // piece of state it shows comes from the UI Core; this file only draws it.
 
 static UITask* s_ui = nullptr;   // for LVGL's C callbacks
+static bool s_hdr_fit;           // the title bar's contents changed: fitHeader() before the next frame
 
 #if defined(SIM_PLATFORM) && defined(__EMSCRIPTEN__)
 #include <emscripten.h>
@@ -179,7 +180,10 @@ void UITask::begin(DisplayDriver* display_drv, SensorManager* sensors, NodePrefs
   theme::setAccent(lvport::loadAccent());
   theme::setLight(lvport::loadLight());
   theme::install(lv_display_get_default());
-  lv_display_add_event_cb(lv_display_get_default(), [](lv_event_t*) { rowsFitPending(); }, LV_EVENT_REFR_START, NULL);
+  lv_display_add_event_cb(lv_display_get_default(), [](lv_event_t*) {
+    rowsFitPending();
+    if (s_hdr_fit && s_ui) { s_hdr_fit = false; s_ui->fitHeader(); }
+  }, LV_EVENT_REFR_START, NULL);
 
   buildStatusBar();
   quickPanelBuild();   // QuickPanel.h: ready before the first pull
@@ -699,6 +703,64 @@ static void placeLeftOf(lv_obj_t* o, lv_obj_t* base, int32_t dx) {
     lv_obj_align_to(o, base, LV_ALIGN_OUT_LEFT_MID, dx, 0);
 }
 
+// Whether the title fits its bar. The bar is a row where the title takes what
+// the rest leave, so the rest gives way, in this order: the battery's level
+// (the icon stays), then the words of the screen's buttons (their icons stay,
+// last button first). Only when that is not enough is the title cut with "...".
+// A label with a space after its icon is collapsible: clipped to the icon's
+// width, its text untouched, so a screen may rewrite it later.
+static void collapseLabel(lv_obj_t* l, const lv_font_t* font, bool on) {
+  const char* t = lv_label_get_text(l);
+  const char* sp = strchr(t, ' ');
+  if (!on || !sp) {
+    lv_label_set_long_mode(l, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(l, LV_SIZE_CONTENT);
+    return;
+  }
+  char icon[8];
+  size_t n = (size_t)(sp - t) < sizeof(icon) - 1 ? (size_t)(sp - t) : sizeof(icon) - 1;
+  memcpy(icon, t, n);
+  icon[n] = '\0';
+  lv_point_t sz;
+  lv_text_get_size(&sz, icon, font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+  lv_label_set_long_mode(l, LV_LABEL_LONG_CLIP);
+  lv_obj_set_width(l, sz.x);
+}
+
+void UITask::fitHeader() {
+  if (!_header || !_hdr_clock || !_hdr_title) return;
+  lv_obj_t* lbl[8];   // the collapsible labels, in the row's order, the battery's apart
+  int n = 0;
+  const int cnt = (int)lv_obj_get_child_count(_header);
+  for (int i = 0; i < cnt && n < 8; i++) {
+    lv_obj_t* b = lv_obj_get_child(_header, i);
+    if (!lv_obj_check_type(b, &lv_button_class) || lv_obj_get_child_count(b) == 0) continue;
+    lv_obj_t* l = lv_obj_get_child(b, 0);
+    if (lv_obj_check_type(l, &lv_label_class)) lbl[n++] = l;
+  }
+  lv_point_t tsz;
+  lv_text_get_size(&tsz, lv_label_get_text(_hdr_title), THEME_FONT_TITLE, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+  auto place = [&]() {   // the row stops short of the clock pill
+    layoutNow(_hdr_clock);
+    const int32_t w = lv_obj_get_width(_hdr_clock);
+    if (lv_obj_get_style_pad_right(_header, LV_PART_MAIN) != w) {
+      lv_obj_set_style_pad_right(_header, w, 0);
+      lv_obj_align(_hdr_clock, LV_ALIGN_RIGHT_MID, w, 0);   // aligned inside the padding: out into it
+    }
+    layoutNow(_header);
+    return lv_obj_get_width(_hdr_title) >= tsz.x;
+  };
+  collapseLabel(_hdr_batt, THEME_FONT_ICONS, false);
+  for (int i = 0; i < n; i++) collapseLabel(lbl[i], THEME_FONT_SMALL, false);
+  if (place()) return;
+  collapseLabel(_hdr_batt, THEME_FONT_ICONS, true);
+  if (place()) return;
+  for (int i = n - 1; i >= 0; i--) {
+    collapseLabel(lbl[i], THEME_FONT_SMALL, true);
+    if (place()) return;
+  }
+}
+
 void UITask::refreshStatusBar() {
   if (!_status_time) return;
   struct tm ti;
@@ -725,15 +787,13 @@ void UITask::refreshStatusBar() {
   setTextFmt(_status_batt, "%s%s", batt, level);
   const bool chg = _board->isExternalPowered();
   if (_hdr_clock) {   // the title bar's: the time over the battery, green on the charger
+    char hb[40];
+    snprintf(hb, sizeof(hb), "%s%s", batt, level);
+    // the pill's width changes with these: fitHeader() before the next frame
+    if (!labelShows(_hdr_time, lv_label_get_text(_status_time)) || !labelShows(_hdr_batt, hb)) s_hdr_fit = true;
     setText(_hdr_time, lv_label_get_text(_status_time));
-    setTextFmt(_hdr_batt, "%s%s", batt, level);
+    setText(_hdr_batt, hb);
     setTextColor(_hdr_batt, chg ? theme::OK : theme::TEXT_MUTED);
-    layoutNow(_hdr_clock);
-    const int32_t w = lv_obj_get_width(_hdr_clock);   // the row stops short of it
-    if (lv_obj_get_style_pad_right(_header, LV_PART_MAIN) != w) {
-      lv_obj_set_style_pad_right(_header, w, 0);
-      lv_obj_align(_hdr_clock, LV_ALIGN_RIGHT_MID, w, 0);   // aligned inside the padding: out into it
-    }
   }
   lv_obj_t* left_of = _status_batt;   // the icons pack up to this
   if (chg) {
@@ -1047,7 +1107,7 @@ lv_obj_t* UITask::newScreen(const char* title, bool with_back) {
   // and at the right end the time and battery. A drag down on it brings the
   // quick panel, as on the status bar.
   int top = theme::STATUS_H;
-  _hdr_clock = _hdr_time = _hdr_batt = nullptr;
+  _hdr_clock = _hdr_time = _hdr_batt = _hdr_title = nullptr;
   if (title) {
     lv_obj_t* hdr = lv_obj_create(scr);
     styleSurface(hdr, theme::BG);
@@ -1075,6 +1135,8 @@ lv_obj_t* UITask::newScreen(const char* title, bool with_back) {
     lv_label_set_long_mode(t, LV_LABEL_LONG_DOT);
     lv_obj_set_width(t, 1);
     lv_obj_set_flex_grow(t, 1);   // what the actions leave
+    _hdr_title = t;
+    s_hdr_fit = true;
     // The time and battery on a pill as the bar's buttons are, out of the
     // row: the row stops short of it (the bar's right padding, refreshStatusBar()).
     lv_obj_t* c = lv_obj_create(hdr);

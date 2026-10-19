@@ -172,9 +172,8 @@ void UITask::buildChats() {
   lv_obj_t* body = newScreen("Messages", true);
   s_chats_read_all = unreadTotal() > 0;
   if (_header) {   // a new message last, at the edge, whatever the lists below hold
-    // Icons alone: with "Read all" spelled out the title was squeezed to "Me..."
-    if (s_chats_read_all) headerButton(_header, LV_SYMBOL_OK, onMarkAllRead, 0, NULL);
-    stylePrimary(headerButton(_header, LV_SYMBOL_EDIT, onNewChat, 0, NULL));   // the pencil alone: the title fits
+    if (s_chats_read_all) headerButton(_header, LV_SYMBOL_OK " Read all", onMarkAllRead, 0, NULL);
+    stylePrimary(headerButton(_header, LV_SYMBOL_EDIT, onNewChat, 0, NULL));
   }
   vlist::attach(body);
   fillChats();

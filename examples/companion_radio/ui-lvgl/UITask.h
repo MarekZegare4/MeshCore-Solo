@@ -387,6 +387,7 @@ private:
 
   void buildStatusBar();
   void refreshStatusBar();
+  void fitHeader();
   lv_obj_t* newScreen(const char* title, bool with_back);
   void showSplash();   // Splash.h
   // The screen being shown: newScreen()'s, already while it slides in (popups
@@ -621,6 +622,7 @@ private:
   lv_obj_t* _home_unread = nullptr;
   lv_obj_t* _header = nullptr;    // current screen's title bar (nullptr on Home)
   lv_obj_t* _hdr_clock = nullptr;   // its time and battery, at the right end
+  lv_obj_t* _hdr_title = nullptr;   // its title, which the battery's level gives way to
   lv_obj_t* _hdr_time = nullptr;
   lv_obj_t* _hdr_batt = nullptr;
   lv_obj_t* _body = nullptr;
