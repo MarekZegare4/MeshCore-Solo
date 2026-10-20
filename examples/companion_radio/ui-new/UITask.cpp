@@ -1128,7 +1128,7 @@ void UITask::handleSimpsonKeypadKey(uint8_t key) {
       enqueueKey(KEY_RIGHT);
       break;
     case SIMPSON_KEY_ENTER:
-      enqueueKey(_unlock_kb ? KEY_KB_ENTER : KEY_ENTER);
+      enqueueKey((_unlock_kb || _kb.isVisible()) ? KEY_KB_ENTER : KEY_ENTER); //enqueueKey(_unlock_kb ? KEY_KB_ENTER : KEY_ENTER);
       break;
     case SIMPSON_KEY_BLUETOOTH:
       if (!_unlock_kb) gotoBluetoothHomePage();
