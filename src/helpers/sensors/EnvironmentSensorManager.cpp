@@ -950,6 +950,11 @@ void EnvironmentSensorManager::gpsDutyCycleLoop() {
   // awake -- back to sleep once we have a fix, or once we've waited long
   // enough that one isn't coming this cycle
   if (_location->isValid() || (int32_t)(now - _gps_duty_phase_until) >= 0) {
+    if (_location->isValid()) {
+      node_lat = ((double)_location->getLatitude()) / 1000000.0;
+      node_lon = ((double)_location->getLongitude()) / 1000000.0;
+      node_altitude = ((double)_location->getAltitude()) / 1000.0;
+    }
     stop_gps();
     _gps_duty_phase_until = now + gps_duty_sleep_sec * 1000UL;
   }
