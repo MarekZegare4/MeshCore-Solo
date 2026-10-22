@@ -30,13 +30,16 @@ enum SimpsonKeypadKey : uint8_t {
   SIMPSON_KEY_FN,
   SIMPSON_KEY_GPS,
   SIMPSON_KEY_BACKSPACE,
-  SIMPSON_KEY_MODE_CHANGED
+  SIMPSON_KEY_MODE_CHANGED,
+  SIMPSON_KEY_ENTER_LONG
 };
 
 class SimpsonKeypad {
   I2CKeyPad _keypad;
   SimpsonKeypadMode _mode = SIMPSON_KEYPAD_CONTROL;
   uint8_t _last_key = SIMPSON_KEY_NONE;
+  uint32_t _enter_pressed_at = 0;
+  bool _enter_long_sent = false;
   bool _ready = false;
 
   void loadModeMap();

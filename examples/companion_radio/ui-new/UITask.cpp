@@ -1097,6 +1097,12 @@ void UITask::pollSimpsonKeypad() {
 }
 
 void UITask::handleSimpsonKeypadKey(uint8_t key) {
+  if (key == SIMPSON_KEY_ENTER_LONG) {
+    if (_locked && !_unlock_kb) return;
+    enqueueKey(handleLongPress(KEY_ENTER));
+    return;
+  }
+
   if (checkDisplayOn(KEY_ENTER) == 0 || (_locked && !_unlock_kb)) return;
 
   const uint32_t auto_off = autoOffMillis();
@@ -1128,7 +1134,7 @@ void UITask::handleSimpsonKeypadKey(uint8_t key) {
       enqueueKey(KEY_RIGHT);
       break;
     case SIMPSON_KEY_ENTER:
-      enqueueKey((_unlock_kb || _kb.isVisible()) ? KEY_KB_ENTER : KEY_ENTER); //enqueueKey(_unlock_kb ? KEY_KB_ENTER : KEY_ENTER);
+      enqueueKey((_unlock_kb || _kb.isVisible()) ? KEY_KB_ENTER : KEY_ENTER);
       break;
     case SIMPSON_KEY_BLUETOOTH:
       if (!_unlock_kb) gotoBluetoothHomePage();
