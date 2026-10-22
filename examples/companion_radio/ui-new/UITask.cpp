@@ -1291,26 +1291,26 @@ void UITask::loop() {
         _lock_seq_ms = 0;
       }
       enqueueKey(checkDisplayOn(KEY_ENTER));
-    };
-    int ev = user_btn.check();
-  #ifdef UI_ENTER_DOUBLE_BACK
-    // For a joystick without a reachable Back button: a double click on Enter goes
-    // back. Multi-click delays a single Enter by the click window. Where text is
-    // typed (on-screen keyboard, PIN pad) or the lock sequence is counting, a
-    // double is just two Enters, so a repeated letter still works.
-    if (ev == BUTTON_EVENT_DOUBLE_CLICK || ev == BUTTON_EVENT_TRIPLE_CLICK) {
-      int n = (ev == BUTTON_EVENT_DOUBLE_CLICK) ? 2 : 3;
-      if (_unlock_kb || _kb.isVisible() || back_btn.isPressed()) {
-        for (int i = 0; i < n; i++) enterClick();
-      } else {
-        enqueueKey(checkDisplayOn(KEY_CANCEL));
-      }
-      ev = BUTTON_EVENT_NONE;
     }
-  #endif
-    if (ev == BUTTON_EVENT_CLICK) {
-      enterClick();
+  };
+  int ev = user_btn.check();
+#ifdef UI_ENTER_DOUBLE_BACK
+  // For a joystick without a reachable Back button: a double click on Enter goes
+  // back. Multi-click delays a single Enter by the click window. Where text is
+  // typed (on-screen keyboard, PIN pad) or the lock sequence is counting, a
+  // double is just two Enters, so a repeated letter still works.
+  if (ev == BUTTON_EVENT_DOUBLE_CLICK || ev == BUTTON_EVENT_TRIPLE_CLICK) {
+    int n = (ev == BUTTON_EVENT_DOUBLE_CLICK) ? 2 : 3;
+    if (_unlock_kb || _kb.isVisible() || back_btn.isPressed()) {
+      for (int i = 0; i < n; i++) enterClick();
+    } else {
+      enqueueKey(checkDisplayOn(KEY_CANCEL));
     }
+    ev = BUTTON_EVENT_NONE;
+  }
+#endif
+  if (ev == BUTTON_EVENT_CLICK) {
+    enterClick();
   } else if (ev == BUTTON_EVENT_LONG_PRESS) {
     enqueueKey(handleLongPress(KEY_ENTER));  // REVISIT: could be mapped to different key code
   }
