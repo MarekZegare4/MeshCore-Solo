@@ -2,6 +2,7 @@
 #include <helpers/ui/DisplayDriver.h>
 #include <helpers/ui/UIScreen.h>
 #include <Arduino.h>
+#include <math.h>
 #include "icons.h"
 #include "InfoKit.h"
 #include "PopupMenu.h"
@@ -167,8 +168,9 @@ private:
 #endif
     if (!loc) { row(d, f, rsv, "Receiver", "none"); return; }
     const bool fix = loc->isValid();
+    const bool sleeping = sensors.isGpsDutySleeping();
     if (f.place(lh + 5)) {   // the fix as a chip, satellites used / in view
-      const char* st = !on ? "OFF" : !fix ? "NO FIX" : (g && g->fix_mode == 2) ? "2D FIX" : "3D FIX";
+      const char* st = !on ? "OFF" : sleeping ? "SLEEP" : !fix ? "NO FIX" : (g && g->fix_mode == 2) ? "2D FIX" : "3D FIX";
       info::chip(d, 1, f.at, st, on && fix);
 #ifdef STATUS_HAS_SKY
       if (g) snprintf(a, sizeof(a), "%d/%d sats", skyview::usedCount(*g), g->count);
@@ -177,15 +179,17 @@ private:
       snprintf(a, sizeof(a), "%ld sats", loc->satellitesCount());
       d.drawTextRightAlign(d.width() - rsv - 2, f.at + 1, a);
     }
-    const long lat = loc->getLatitude(), lon = loc->getLongitude();
+    const long lat = fix ? loc->getLatitude() : lround(sensors.node_lat * 1000000.0);
+    const long lon = fix ? loc->getLongitude() : lround(sensors.node_lon * 1000000.0);
     // The driver reports 999 deg before a first fix (0,0 in the simulator).
     const bool known = labs(lat) <= 90000000L && (lat || lon);
     if (known) snprintf(a, sizeof(a), "%.5f\xc2\xb0%c", labs(lat) / 1e6, lat < 0 ? 'S' : 'N'); else strcpy(a, "-");
     row(d, f, rsv, fix ? "Lat" : "Lat (last)", a);
     if (known) snprintf(a, sizeof(a), "%.5f\xc2\xb0%c", labs(lon) / 1e6, lon < 0 ? 'W' : 'E'); else strcpy(a, "-");
     row(d, f, rsv, fix ? "Lon" : "Lon (last)", a);
-    if (fix) {
-      telemetry::altText(loc->getAltitude() / 1000.0f, imperial(), L1_INFO, a, sizeof(a));
+    if (fix || (sensors.node_lat != 0.0 || sensors.node_lon != 0.0)) {
+      const double altitude = fix ? loc->getAltitude() / 1000.0 : sensors.node_altitude;
+      telemetry::altText(altitude, imperial(), L1_INFO, a, sizeof(a));
       row(d, f, rsv, "Altitude", a);
     }
     if (g && fix) {

@@ -1097,6 +1097,12 @@ void UITask::pollSimpsonKeypad() {
 }
 
 void UITask::handleSimpsonKeypadKey(uint8_t key) {
+  if (key == SIMPSON_KEY_ENTER_LONG) {
+    if (_locked && !_unlock_kb) return;
+    enqueueKey(handleLongPress(KEY_ENTER));
+    return;
+  }
+
   if (checkDisplayOn(KEY_ENTER) == 0 || (_locked && !_unlock_kb)) return;
 
   const uint32_t auto_off = autoOffMillis();
@@ -1128,7 +1134,7 @@ void UITask::handleSimpsonKeypadKey(uint8_t key) {
       enqueueKey(KEY_RIGHT);
       break;
     case SIMPSON_KEY_ENTER:
-      enqueueKey((_unlock_kb || _kb.isVisible()) ? KEY_KB_ENTER : KEY_ENTER); //enqueueKey(_unlock_kb ? KEY_KB_ENTER : KEY_ENTER);
+      enqueueKey((_unlock_kb || _kb.isVisible()) ? KEY_KB_ENTER : KEY_ENTER);
       break;
     case SIMPSON_KEY_BLUETOOTH:
       if (!_unlock_kb) gotoBluetoothHomePage();
@@ -1261,7 +1267,8 @@ void UITask::loop() {
 #if FEAT_DISPLAY_ROTATION_SETTING && defined(JOYSTICK_UPRIGHT_ROTATION)
   if (_node_prefs) joy_rot += (JOYSTICK_UPRIGHT_ROTATION - _node_prefs->display_rotation) & 3;
 #endif
-  auto enterClick = [&]() {
+  int ev = user_btn.check();
+  if (ev == BUTTON_EVENT_CLICK) {
     if (back_btn.isPressed() && !_unlock_kb) {
       // Enter clicked while Back is held — lock/unlock sequence
       if (_display && !_display->isOn()) {
@@ -1286,25 +1293,6 @@ void UITask::loop() {
       }
       enqueueKey(checkDisplayOn(KEY_ENTER));
     }
-  };
-  int ev = user_btn.check();
-#ifdef UI_ENTER_DOUBLE_BACK
-  // For a joystick without a reachable Back button: a double click on Enter goes
-  // back. Multi-click delays a single Enter by the click window. Where text is
-  // typed (on-screen keyboard, PIN pad) or the lock sequence is counting, a
-  // double is just two Enters, so a repeated letter still works.
-  if (ev == BUTTON_EVENT_DOUBLE_CLICK || ev == BUTTON_EVENT_TRIPLE_CLICK) {
-    int n = (ev == BUTTON_EVENT_DOUBLE_CLICK) ? 2 : 3;
-    if (_unlock_kb || _kb.isVisible() || back_btn.isPressed()) {
-      for (int i = 0; i < n; i++) enterClick();
-    } else {
-      enqueueKey(checkDisplayOn(KEY_CANCEL));
-    }
-    ev = BUTTON_EVENT_NONE;
-  }
-#endif
-  if (ev == BUTTON_EVENT_CLICK) {
-    enterClick();
   } else if (ev == BUTTON_EVENT_LONG_PRESS) {
     enqueueKey(handleLongPress(KEY_ENTER));  // REVISIT: could be mapped to different key code
   }
