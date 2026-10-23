@@ -143,7 +143,7 @@ void MyMesh::tryBotReplyDM(const ContactInfo& from, const char* text, uint8_t ho
             sensors.node_lat != 0.0 || sensors.node_lon != 0.0,
             ts, _prefs.tz_offset_hours,
             &sensors, (float)board.getBattMilliVolts() / 1000.0f,
-            from.name, hops);
+            from.name, hops, board.getMCUTemperature());
   uint32_t expected_ack, est_timeout;
   if (sendMessage(from, ts, 0, expanded, expected_ack, est_timeout) != MSG_SEND_FAILED) {
     botDmRecord(from.id.pub_key);
@@ -184,7 +184,7 @@ void MyMesh::tryBotReplyChannel(uint8_t channel_idx, const char* text, uint8_t h
             sensors.node_lat != 0.0 || sensors.node_lon != 0.0,
             ts, _prefs.tz_offset_hours,
             &sensors, (float)board.getBattMilliVolts() / 1000.0f,
-            sender_name, hops);
+            sender_name, hops, board.getMCUTemperature());
   // Anti-loop: don't echo a message identical to our own reply (e.g. another bot
   // on the channel sending the same text), which would ping-pong forever. The
   // per-channel cooldown caps any residual back-and-forth between mismatched bots.
@@ -228,7 +228,7 @@ void MyMesh::tryBotReplyRoom(const ContactInfo& from, const uint8_t* sender_pref
             sensors.node_lat != 0.0 || sensors.node_lon != 0.0,
             ts, _prefs.tz_offset_hours,
             &sensors, (float)board.getBattMilliVolts() / 1000.0f,
-            sender_name, hops);
+            sender_name, hops, board.getMCUTemperature());
   // Anti-loop, mirrors the channel path: don't echo a message identical to
   // our own reply (e.g. re-synced back from the room server).
   if (strcmp(text, expanded) == 0) return;
@@ -367,7 +367,7 @@ bool MyMesh::botCommandReply(const char* cmd, const char* arg, const char* arg2,
             sensors.node_lat != 0.0 || sensors.node_lon != 0.0,
             ts, _prefs.tz_offset_hours,
             &sensors, (float)board.getBattMilliVolts() / 1000.0f,
-            sender_name, hops);
+            sender_name, hops, board.getMCUTemperature());
   if (strchr(out, '{')) strcpy(out, "n/a");      // requested sensor not present
   return true;
 }

@@ -175,7 +175,7 @@ void UITask::botRow(int row) {
       lv_obj_set_scrollbar_mode(chips, LV_SCROLLBAR_MODE_OFF);
       s_chip_ta = _nav_ta;
       for (int i = 0; i < botcfg::REPLY_PLACEHOLDER_COUNT; i++) botChip(botcfg::REPLY_PLACEHOLDERS[i], chips);
-      msgtext::sensorPlaceholders(&sensors, [](const char* ph, void* c) {
+      msgtext::sensorPlaceholders(&sensors, board.getMCUTemperature(), [](const char* ph, void* c) {
         if (strcmp(ph, "{batt}") != 0) botChip(ph, c);   // already there
       }, chips);
     }

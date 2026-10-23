@@ -12,7 +12,7 @@ static int s_edit = -1;            // quick message being edited
 
 static void collect() {
   s_ph_n = 0;
-  msgtext::placeholders(&sensors, [](const char* ph, void*) { if (s_ph_n < PH_MAX) s_ph[s_ph_n++] = ph; }, nullptr);
+  msgtext::placeholders(&sensors, board.getMCUTemperature(), [](const char* ph, void*) { if (s_ph_n < PH_MAX) s_ph[s_ph_n++] = ph; }, nullptr);
 }
 
 // The placeholders as small buttons; `cb` gets the index as user data.

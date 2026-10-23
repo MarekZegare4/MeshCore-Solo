@@ -102,7 +102,7 @@ static void formatDashVal(uint8_t field, char* val, int val_len, uint16_t batt_m
   if (telemetry::isSensor(field)) {
     if (!lpp) {
       static CayenneLPP s_lpp(200); s_lpp.reset();
-      { CardKBBusLock bus_lock; telemetry::querySensors(sensors, board.getMCUTemperature(), s_lpp); }
+      { CardKBBusLock bus_lock; queryLocalSensors(sensors, board.getMCUTemperature(), s_lpp); }
       lpp = &s_lpp;
     }
     in.lpp = lpp->getBuffer();
@@ -652,7 +652,7 @@ class HomeScreen : public UIScreen {
       sensors_lpp.reset();
       sensors_nb = 0;
       sensors_lpp.addVoltage(TELEM_CHANNEL_SELF, (float)board.getBattMilliVolts() / 1000.0f);
-      { CardKBBusLock bus_lock; telemetry::querySensors(sensors, board.getMCUTemperature(), sensors_lpp); }
+      { CardKBBusLock bus_lock; queryLocalSensors(sensors, board.getMCUTemperature(), sensors_lpp); }
       LPPReader reader (sensors_lpp.getBuffer(), sensors_lpp.getSize());
       uint8_t channel, type;
       while(reader.readHeader(channel, type)) {

@@ -7,8 +7,6 @@
 
 #include <stdint.h>
 #include <stdio.h>
-#include <math.h>
-#include <helpers/SensorManager.h>
 #include <helpers/sensors/LPPDataHelpers.h>
 #include <helpers/sensors/LocationProvider.h>
 #include "Battery.h"
@@ -65,21 +63,6 @@ static uint8_t lppType(uint8_t f) {
 }
 // Read from the sensors, not the radio or GPS.
 static bool isSensor(uint8_t f) { return lppType(f) != 0; }
-
-// The sensors' readings, plus the chip's own temperature (NaN where a board has
-// none) when no sensor reads one: the telemetry reply sends it too, so a board
-// without a temperature sensor shows on screen what the app shows.
-static void querySensors(SensorManager& sm, float mcu_temp, CayenneLPP& lpp) {
-  sm.querySensors(0xFF, lpp);
-  if (isnan(mcu_temp)) return;
-  LPPReader r(lpp.getBuffer(), lpp.getSize());
-  uint8_t ch, type;
-  while (r.readHeader(ch, type)) {
-    if (type == LPP_TEMPERATURE) return;
-    r.skipData(type);
-  }
-  lpp.addTemperature(TELEM_CHANNEL_SELF, mcu_temp);
-}
 
 // Altitude always in the small unit (never km / mi).
 static void altText(float m, bool imperial, const Style& st, char* v, int n) {

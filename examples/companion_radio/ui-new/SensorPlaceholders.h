@@ -8,5 +8,5 @@
 #include <helpers/sensors/LPPDataHelpers.h>
 
 inline void kbAddSensorPlaceholders(KeyboardWidget& kb, SensorManager* sm) {   // list: ui-core/MessageText.h
-  msgtext::sensorPlaceholders(sm, [](const char* ph, void* k) { ((KeyboardWidget*)k)->addPlaceholder(ph); }, &kb);
+  msgtext::sensorPlaceholders(sm, board.getMCUTemperature(), [](const char* ph, void* k) { ((KeyboardWidget*)k)->addPlaceholder(ph); }, &kb);
 }

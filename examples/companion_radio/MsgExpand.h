@@ -6,6 +6,7 @@
 #include <helpers/SensorManager.h>
 #include "NodePrefs.h"   // localTm()
 #include <helpers/sensors/LPPDataHelpers.h>
+#include "LocalSensors.h"
 
 // Expands placeholders in tmpl into out (out_len bytes).
 //   {loc}   — GPS coordinates (lat/lon) or "no GPS"
@@ -26,14 +27,15 @@ inline void expandMsg(const char* tmpl, char* out, int out_len,
                       SensorManager* sm = nullptr,
                       float batt_volts  = -1.0f,
                       const char* sender_name = nullptr,
-                      int hops = -1) {
+                      int hops = -1,
+                      float mcu_temp = NAN) {   // the chip's, for {temp} without a sensor
   // sv indices: 0=temp 1=hum 2=pres 3=batt 4=alt 5=lux 6=dist 7=co2
   float sv[8]    = {};
   bool  sv_ok[8] = {};
 
   if (sm) {
     CayenneLPP lpp(100);
-    sm->querySensors(0xFF, lpp);
+    queryLocalSensors(*sm, mcu_temp, lpp);
     LPPReader r(lpp.getBuffer(), lpp.getSize());
     uint8_t ch, type;
     while (r.readHeader(ch, type)) {

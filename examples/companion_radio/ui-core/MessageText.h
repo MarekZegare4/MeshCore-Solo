@@ -35,11 +35,11 @@ static void seedQuick(NodePrefs* p) {
 // ── Placeholders ──────────────────────────────────────────────────────────────
 
 // The sensor readings this device has right now, as placeholders ({temp},
-// {hum}, ...; {batt} only from a voltage sensor).
-static void sensorPlaceholders(SensorManager* sm, void (*add)(const char* ph, void* ctx), void* ctx) {
+// {hum}, ...; {batt} only from a voltage sensor; {temp} also from the chip, mcu_temp).
+static void sensorPlaceholders(SensorManager* sm, float mcu_temp, void (*add)(const char* ph, void* ctx), void* ctx) {
   if (!sm) return;
   CayenneLPP lpp(100);
-  sm->querySensors(0xFF, lpp);
+  queryLocalSensors(*sm, mcu_temp, lpp);
   uint8_t present[16];
   int pc = 0;
   LPPReader r(lpp.getBuffer(), lpp.getSize());
@@ -62,12 +62,12 @@ static void sensorPlaceholders(SensorManager* sm, void (*add)(const char* ph, vo
 
 // Everything a message can carry here: {loc}, {time}, {batt} (the board's
 // voltage), then the sensors'.
-static void placeholders(SensorManager* sm, void (*add)(const char* ph, void* ctx), void* ctx) {
+static void placeholders(SensorManager* sm, float mcu_temp, void (*add)(const char* ph, void* ctx), void* ctx) {
   add("{loc}", ctx);
   add("{time}", ctx);
   add("{batt}", ctx);
   struct Skip { void (*add)(const char*, void*); void* ctx; } skip = { add, ctx };
-  sensorPlaceholders(sm, [](const char* ph, void* c) {
+  sensorPlaceholders(sm, mcu_temp, [](const char* ph, void* c) {
     Skip* s = (Skip*)c;
     if (strcmp(ph, "{batt}") != 0) s->add(ph, s->ctx);   // already there
   }, &skip);
@@ -89,7 +89,7 @@ static void expand(const char* tmpl, char* out, int n, const NodePrefs* p) {
 #endif
   float batt = (float)board.getBattMilliVolts() / 1000.0f;
   ::expandMsg(tmpl, out, n, lat, lon, gps_valid, rtc_clock.getCurrentTime(),
-              p ? p->tz_offset_hours : 0, &sensors, batt);
+              p ? p->tz_offset_hours : 0, &sensors, batt, nullptr, -1, board.getMCUTemperature());
 }
 
 // A typed message: a reply's leading "@[nick] " stays as it is (a nick may

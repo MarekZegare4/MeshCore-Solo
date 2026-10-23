@@ -237,7 +237,7 @@ private:
     // Sensors: every reading but the battery (above) and the position (GPS).
     if (!_lpp_at || millis() - _lpp_at > 5000) {   // both passes (measure, draw) read one query
       _lpp.reset();
-      { CardKBBusLock bus_lock; telemetry::querySensors(sensors, board.getMCUTemperature(), _lpp); }   // shares the CardKB's bus
+      { CardKBBusLock bus_lock; queryLocalSensors(sensors, board.getMCUTemperature(), _lpp); }   // shares the CardKB's bus
       _lpp_at = millis() | 1;
     }
     static const struct { uint8_t type; const char* name; } NAMES[] = {
