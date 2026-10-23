@@ -1,5 +1,7 @@
 #include "SimpsonKeypad.h"
 
+static const uint32_t SIMPSON_LONG_PRESS_MS = 1200;
+
 #include <Wire.h>
 
 namespace {
@@ -55,11 +57,31 @@ uint8_t SimpsonKeypad::poll() {
   uint8_t key = _keypad.getChar();
   if (key == I2C_KEYPAD_THRESHOLD) return SIMPSON_KEY_NONE;
   if (key == SIMPSON_KEY_NONE) {
+    if (_last_key == SIMPSON_KEY_ENTER && !_enter_long_sent) {
+      _last_key = SIMPSON_KEY_NONE;
+      _enter_pressed_at = 0;
+      return SIMPSON_KEY_ENTER;
+    }
     _last_key = SIMPSON_KEY_NONE;
+    _enter_pressed_at = 0;
+    _enter_long_sent = false;
+    return SIMPSON_KEY_NONE;
+  }
+  if (key == SIMPSON_KEY_ENTER && _last_key == SIMPSON_KEY_ENTER) {
+    if (!_enter_long_sent && millis() - _enter_pressed_at >= SIMPSON_LONG_PRESS_MS) {
+      _enter_long_sent = true;
+      return SIMPSON_KEY_ENTER_LONG;
+    }
     return SIMPSON_KEY_NONE;
   }
   if (key == _last_key) return SIMPSON_KEY_NONE;
   _last_key = key;
+
+  if (key == SIMPSON_KEY_ENTER) {
+    _enter_pressed_at = millis();
+    _enter_long_sent = false;
+    return SIMPSON_KEY_NONE;
+  }
 
   if (key == SIMPSON_KEY_FN) {
     _mode = static_cast<SimpsonKeypadMode>((_mode + 1) % 4);
