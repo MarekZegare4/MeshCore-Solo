@@ -40,7 +40,7 @@ order:
 | **Map** | Your position, the trail, people sharing theirs and the target ([Navigation](./navigation.md#map)) |
 | **Tools** | All tools, then the two you used last with their state |
 | **Messages** | All messages, then the two latest conversations with their unread counts |
-| **Shutdown** | Lock the screen, or hibernate (with the battery level) |
+| **Shutdown** | Lock the screen, or hibernate (with the battery level). The Wio Tracker L1 (OLED) has a power switch instead, so it has no Hibernate row |
 
 Most pages are **quick panels**: a few rows, the first of which opens the
 full screen, the rest shortcuts. **Up / Down** picks a row and **Enter** acts

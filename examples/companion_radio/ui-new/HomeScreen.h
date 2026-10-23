@@ -359,12 +359,14 @@ class HomeScreen : public UIScreen {
       }
     } else if (page == SHUTDOWN) {
       add("Lock screen", Q_VALUE, QA_LOCK, 0);
+#ifndef UI_NO_HIBERNATE   // a board with a power switch (the L1): a pocket can't hibernate it by mistake
       add("Hibernate", Q_VALUE, QA_HIBERNATE, 0);
       // The charge left, which is what you weigh before switching off.
       const int mv = _task->getBattMilliVolts();
       snprintf(rows[n - 1].value, sizeof(rows[0].value), "%d%%%s",
                battery::percent(mv, _node_prefs ? (int)_node_prefs->low_batt_mv : 0),
                board.isExternalPowered() ? " USB" : "");
+#endif
     }
     return n;
   }
