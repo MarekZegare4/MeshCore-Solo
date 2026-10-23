@@ -704,9 +704,9 @@ static void placeLeftOf(lv_obj_t* o, lv_obj_t* base, int32_t dx) {
 }
 
 // Whether the title fits its bar. The bar is a row where the title takes what
-// the rest leave, so the rest gives way, in this order: the battery's level
-// (the icon stays), then the words of the screen's buttons (their icons stay,
-// last button first). Only when that is not enough is the title cut with "...".
+// the rest leave, so the rest gives way: the words of the screen's buttons
+// (their icons stay, last button first). Only when that is not enough is the
+// title cut with "...".
 // A label with a space after its icon is collapsible: clipped to the icon's
 // width, its text untouched, so a screen may rewrite it later.
 static void collapseLabel(lv_obj_t* l, const lv_font_t* font, bool on) {
@@ -729,7 +729,7 @@ static void collapseLabel(lv_obj_t* l, const lv_font_t* font, bool on) {
 
 void UITask::fitHeader() {
   if (!_header || !_hdr_clock || !_hdr_title) return;
-  lv_obj_t* lbl[8];   // the collapsible labels, in the row's order, the battery's apart
+  lv_obj_t* lbl[8];   // the collapsible labels, in the row's order
   int n = 0;
   const int cnt = (int)lv_obj_get_child_count(_header);
   for (int i = 0; i < cnt && n < 8; i++) {
@@ -750,10 +750,7 @@ void UITask::fitHeader() {
     layoutNow(_header);
     return lv_obj_get_width(_hdr_title) >= tsz.x;
   };
-  collapseLabel(_hdr_batt, THEME_FONT_ICONS, false);
   for (int i = 0; i < n; i++) collapseLabel(lbl[i], THEME_FONT_SMALL, false);
-  if (place()) return;
-  collapseLabel(_hdr_batt, THEME_FONT_ICONS, true);
   if (place()) return;
   for (int i = n - 1; i >= 0; i--) {
     collapseLabel(lbl[i], THEME_FONT_SMALL, true);
@@ -772,27 +769,26 @@ void UITask::refreshStatusBar() {
     setText(_status_time, "--:--");
   }
 
-  // Battery: the icon, then % or volts per Settings > Power > Battery display. The
+  // Battery: an icon, % or volts per Settings > Power > Battery display. The
   // smoothed reading (checkLowBattery): an ADC read blocks the loop for 10 ms.
   uint16_t mv = _batt_mv ? _batt_mv : getBattMilliVolts();
   int pct = battery::percent(mv, _prefs ? _prefs->low_batt_mv : 0);
-  const char* batt = pct > 80 ? LV_SYMBOL_BATTERY_FULL : pct > 55 ? LV_SYMBOL_BATTERY_3
-                   : pct > 30 ? LV_SYMBOL_BATTERY_2 : pct > 10 ? LV_SYMBOL_BATTERY_1 : LV_SYMBOL_BATTERY_EMPTY;
-  char level[12] = "";
+  char batt[12];
   switch (battery::mode(_prefs ? _prefs->batt_display_mode : 0)) {
-    case battery::PERCENT: snprintf(level, sizeof(level), " %d%%", pct); break;
-    case battery::VOLTAGE: snprintf(level, sizeof(level), " %u.%02u V", mv / 1000, (mv % 1000) / 10); break;
-    default: break;
+    case battery::PERCENT: snprintf(batt, sizeof(batt), "%d%%", pct); break;
+    case battery::VOLTAGE: snprintf(batt, sizeof(batt), "%u.%02uV", mv / 1000, (mv % 1000) / 10); break;
+    default:
+      snprintf(batt, sizeof(batt), "%s", pct > 80 ? LV_SYMBOL_BATTERY_FULL : pct > 55 ? LV_SYMBOL_BATTERY_3
+                                       : pct > 30 ? LV_SYMBOL_BATTERY_2 : pct > 10 ? LV_SYMBOL_BATTERY_1
+                                       : LV_SYMBOL_BATTERY_EMPTY);
   }
-  setTextFmt(_status_batt, "%s%s", batt, level);
+  setText(_status_batt, batt);
   const bool chg = _board->isExternalPowered();
   if (_hdr_clock) {   // the title bar's: the time over the battery, green on the charger
-    char hb[40];
-    snprintf(hb, sizeof(hb), "%s%s", batt, level);
     // the pill's width changes with these: fitHeader() before the next frame
-    if (!labelShows(_hdr_time, lv_label_get_text(_status_time)) || !labelShows(_hdr_batt, hb)) s_hdr_fit = true;
+    if (!labelShows(_hdr_time, lv_label_get_text(_status_time)) || !labelShows(_hdr_batt, batt)) s_hdr_fit = true;
     setText(_hdr_time, lv_label_get_text(_status_time));
-    setText(_hdr_batt, hb);
+    setText(_hdr_batt, batt);
     setTextColor(_hdr_batt, chg ? theme::OK : theme::TEXT_MUTED);
   }
   lv_obj_t* left_of = _status_batt;   // the icons pack up to this
