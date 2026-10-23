@@ -55,6 +55,14 @@ static void stopWalk() {
   s_walking = false;
 }
 
+// Before the card is unmounted: let the tile task finish the tile it may still
+// be reading off it (from a map left open, or a prefetch), then close the map
+// pack it reads from.
+static void releaseMapFiles() {
+  while (mapview::s_cache.busy()) { delay(5); mapview::pollTiles(); }
+  mapview::s_vpacks.closeOpen();
+}
+
 static void startWalk() {
   stopWalk();
   memset(s_bytes, 0, sizeof(s_bytes));
@@ -414,7 +422,7 @@ void UITask::storageFormatTap(bool go) {
   lv_refr_now(NULL);   // shown before the loop blocks
   stopWalk();
   if (mapview::s_dl.active()) mapDownloadStop();
-  mapview::s_vpacks.closeOpen();
+  storeview::releaseMapFiles();
   bool ok = lvport::formatCard();
   if (!ok) {
     if (s_fmt_overlay) lv_obj_delete_async(s_fmt_overlay);
@@ -505,7 +513,7 @@ void UITask::usbTap(bool drive) {
   if (!drive || locked()) return;
   storeview::stopWalk();
   if (mapview::s_dl.active()) mapDownloadStop();
-  mapview::s_vpacks.closeOpen();   // a pack file kept open between reads: not across the unmount
+  storeview::releaseMapFiles();   // the tile being read and the pack kept open: not across the unmount
   if (!lvport::usbDriveStart()) { showToast("No SD card to share", 3000); return; }
   usbPanel("USB drive",
            "The computer has the SD card now. Eject it there (or unplug the cable) when you're done - "
