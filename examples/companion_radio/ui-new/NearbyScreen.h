@@ -1367,9 +1367,8 @@ public:
     // and shows the highlighted node's detail beside it.
     const bool split = _source == SRC_STORED && _count > 0 && display.width() >= 40 * display.getCharWidth();
     const int lw = split ? display.width() * 11 / 20 : display.width();   // the list's right edge
-    // An arrow towards the node before its distance: one more cell.
+    // An arrow towards the node before its distance.
     const bool arrows = _source == SRC_STORED && _sort != SORT_TIME;
-    int dist_col = lw - display.getCharWidth() * (arrows ? 9 : 7);
 
     display.setColor(UIColor::primary_txt);
     const char* flt = (_filter != F_ALL) ? filterLabel(_filter) : nullptr;
@@ -1432,32 +1431,43 @@ public:
           miniIconDrawCentered(display, tx + iw / 2, y + display.getLineHeight() / 2 - 1, ICON_PG_STAR);
           tx += iw + 2;
         }
+        // The right-hand value first: the name takes whatever it leaves.
+        char right[10];
+        const MiniIcon* arrow = nullptr;
+        int rw;
+        if (_source == SRC_SCAN) {   // live scan: how well we hear it, as bars
+          right[0] = '\0';
+          rw = signalBarsWidth(display);
+        } else {
+          if (_sort == SORT_TIME) {
+            geo::fmtAgeShort(right, sizeof(right), rtc_clock.getCurrentTime(), e.lastmod);
+            if (!right[0]) snprintf(right, sizeof(right), "?");   // unknown / RTC not synced
+          } else {
+            if (e.dist_km >= 0.0f) geo::fmtDist(right, sizeof(right), e.dist_km, useImperial());
+            else                   strcpy(right, "-");   // no fix of ours or theirs
+          }
+          rw = display.getTextWidth(right);
+          if (arrows && e.dist_km >= 0.0f) {
+            const int deg = geo::bearingDeg(_own_lat, _own_lon, e.lat_e6, e.lon_e6);
+            arrow = ICON_ARROWS[((deg + 22) % 360) / 45];
+            rw += 3 + arrow->w * miniIconScale(display);
+          }
+        }
+
         display.translateUTF8ToBlocks(filt, e.name, sizeof(filt));
         if (_source == SRC_SCAN && !e.name[0]) {  // unknown node → "[Type]"
           snprintf(filt, sizeof(filt), "[%s]", typeName(e.type));
         }
-        int mqr = display.drawTextEllipsized(tx, y, dist_col - tx - 2, filt, sel);
+        const int name_right = lw - reserve - 2 - rw - display.getCharWidth();
+        int mqr = display.drawTextEllipsized(tx, y, name_right - tx, filt, sel);
         if (sel && mqr > 0) mq_delay = mqr;
 
         display.setColor(sel ? UIColor::window_bkg : UIColor::primary_txt);
-        char right[10];
-        if (_source == SRC_SCAN) {   // live scan: how well we hear it, as bars
-          drawSignalBars(display, lw - reserve - 2, y, e.snr_x4);
-          right[0] = '\0';
-        } else if (_sort == SORT_TIME) {
-          geo::fmtAgeShort(right, sizeof(right), rtc_clock.getCurrentTime(), e.lastmod);
-          if (!right[0]) snprintf(right, sizeof(right), "?");   // unknown / RTC not synced
-        } else {
-          if (e.dist_km >= 0.0f) geo::fmtDist(right, sizeof(right), e.dist_km, useImperial());
-          else                   strcpy(right, "-");   // no fix of ours or theirs
-        }
+        if (_source == SRC_SCAN) drawSignalBars(display, lw - reserve - 2, y, e.snr_x4);
         if (right[0]) display.drawTextRightAlign(lw - reserve - 2, y, right);
-        if (arrows && e.dist_km >= 0.0f) {
-          const int deg = geo::bearingDeg(_own_lat, _own_lon, e.lat_e6, e.lon_e6);
-          const MiniIcon& ic = *ICON_ARROWS[((deg + 22) % 360) / 45];
+        if (arrow)
           miniIconDraw(display, lw - reserve - 2 - display.getTextWidth(right) - 3
-                                - ic.w * miniIconScale(display), y, ic);
-        }
+                                - arrow->w * miniIconScale(display), y, *arrow);
       }, lw);
       if (split && _sel < _count) {
         const int top = display.listStart();
