@@ -1097,16 +1097,16 @@ void UITask::pollSimpsonKeypad() {
 }
 
 void UITask::handleSimpsonKeypadKey(uint8_t key) {
-  if (key == SIMPSON_KEY_ENTER_LONG) {
-    if (_locked && !_unlock_kb) return;
-    enqueueKey(handleLongPress(KEY_ENTER));
-    return;
-  }
-
+  // A key that only woke the display does nothing else, a long Enter too.
   if (checkDisplayOn(KEY_ENTER) == 0 || (_locked && !_unlock_kb)) return;
 
   const uint32_t auto_off = autoOffMillis();
   if (auto_off > 0) _auto_off = millis() + auto_off;
+
+  if (key == SIMPSON_KEY_ENTER_LONG) {
+    enqueueKey(handleLongPress(KEY_ENTER));
+    return;
+  }
 
   if (key == SIMPSON_KEY_MODE_CHANGED) {
     static const char* const modes[] = { "Ctl", "abc", "ABC", "123" };
