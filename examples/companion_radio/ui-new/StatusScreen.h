@@ -130,6 +130,10 @@ private:
     }
     snprintf(a, sizeof(a), "%d dBm", (int)radio_driver.getTxPower());
     row(d, f, rsv, "TX power", a);
+    // Bytes per repeater in a path we send (Settings > Radio > Advanced).
+    const unsigned hb = p ? p->path_hash_mode + 1u : 1u;
+    snprintf(a, sizeof(a), "%u byte%s", hb, hb > 1 ? "s" : "");
+    row(d, f, rsv, "Path hash", a);
     const int nf = (int)radio_driver.getNoiseFloor();
     if (nf) snprintf(a, sizeof(a), "%d dBm", nf); else strcpy(a, "-");
     if (Features::IS_EINK) {

@@ -433,6 +433,8 @@ void UITask::buildDiag() {
     infoRow(card, "Coding rate", v);
     snprintf(v, sizeof(v), "%d dBm", (int)p->tx_power_dbm);
     infoRow(card, "TX power", v);
+    snprintf(v, sizeof(v), "%u byte%s", p->path_hash_mode + 1u, p->path_hash_mode ? "s" : "");
+    infoRow(card, "Path hash", v);   // bytes per repeater in a path we send
   }
 }
 
