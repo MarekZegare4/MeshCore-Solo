@@ -621,7 +621,7 @@ void UITask::homeFieldText(uint8_t f, char* v, int n) {
     if (_sensors && (s_lpp_ms == 0 || millis() - s_lpp_ms > 5000)) {
       s_lpp_ms = millis() | 1;
       s_lpp.reset();
-      _sensors->querySensors(0xFF, s_lpp);
+      telemetry::querySensors(*_sensors, board.getMCUTemperature(), s_lpp);
     }
     in.lpp = s_lpp.getBuffer();
     in.lpp_len = s_lpp.getSize();
