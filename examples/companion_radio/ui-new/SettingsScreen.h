@@ -326,17 +326,36 @@ class SettingsScreen : public UIScreen {
     return -1;
   }
 
-  // Returns 1-based position of item in page_order, or 0 if no custom order / not found.
-  int homePagePosition(int item, const NodePrefs* p) const {
-    if (!p || p->page_order_set != NodePrefs::PAGE_ORDER_MAGIC) return 0;
-    int bit = homePageBitIndex(item);
-    if (bit < 0) return 0;
-    for (int i = 0; i < NodePrefs::PAGE_ORDER_LEN; i++) {
-      uint8_t v = p->page_order[i];
-      if (v < 1 || v > NodePrefs::HPB_COUNT) break;
-      if ((int)(v - 1) == bit) return i + 1;
+  // The rows HOME_CLOCK..HOME_MAP list the pages in the order Home shows them
+  // (page_order), so a page's number is its row. page_order also keeps slots
+  // for retired pages (Recent; GPS and Sensors, now in Status) that have no
+  // row: they are skipped when numbering and when moving a page.
+  static const int HOME_ROWS = HOME_MAP - HOME_CLOCK + 1;
+
+  int homeItemForBit(int bit) const {
+    for (int it = HOME_CLOCK; it <= HOME_MAP; it++)
+      if (homePageBitIndex(it) == bit) return it;
+    return -1;
+  }
+
+  // The page item shown on home row `row`.
+  int homePageAtRow(int row, const NodePrefs* p) const {
+    int order[HOME_ROWS];
+    int n = 0;
+    if (p && p->page_order_set == NodePrefs::PAGE_ORDER_MAGIC) {
+      for (int i = 0; i < NodePrefs::PAGE_ORDER_LEN && n < HOME_ROWS; i++) {
+        uint8_t v = p->page_order[i];
+        if (v < 1 || v > NodePrefs::HPB_COUNT) break;
+        int it = homeItemForBit(v - 1);
+        if (it >= 0) order[n++] = it;
+      }
     }
-    return 0;
+    for (int it = HOME_CLOCK; it <= HOME_MAP && n < HOME_ROWS; it++) {   // any page the order lacks
+      bool have = false;
+      for (int k = 0; k < n; k++) if (order[k] == it) { have = true; break; }
+      if (!have) order[n++] = it;
+    }
+    return order[row - HOME_CLOCK];
   }
 
   // Initialises page_order to the default display sequence if not already set.
@@ -417,11 +436,12 @@ class SettingsScreen : public UIScreen {
     p->page_order_set = NodePrefs::PAGE_ORDER_MAGIC;
   }
 
-  // Swaps item's page_order slot with its neighbour in the given direction (-1=earlier, +1=later).
-  void movePageInOrder(int item, int delta, NodePrefs* p) {
+  // Swaps item's page_order slot with the nearest page that has a row in the
+  // given direction (-1=earlier, +1=later); false when it is already at the end.
+  bool movePageInOrder(int item, int delta, NodePrefs* p) {
     ensurePageOrderInit(p);
     int bit = homePageBitIndex(item);
-    if (bit < 0) return;
+    if (bit < 0) return false;
     int cur = -1, total = 0;
     for (int i = 0; i < NodePrefs::PAGE_ORDER_LEN; i++) {
       uint8_t v = p->page_order[i];
@@ -429,12 +449,14 @@ class SettingsScreen : public UIScreen {
       if ((int)(v - 1) == bit) cur = i;
       total++;
     }
-    if (cur < 0) return;
+    if (cur < 0) return false;
     int next = cur + delta;
-    if (next < 0 || next >= total) return;
+    while (next >= 0 && next < total && homeItemForBit(p->page_order[next] - 1) < 0) next += delta;
+    if (next < 0 || next >= total) return false;
     uint8_t tmp = p->page_order[cur];
     p->page_order[cur] = p->page_order[next];
     p->page_order[next] = tmp;
+    return true;
   }
 
   bool isMsgSlot(int item) const {
@@ -469,12 +491,11 @@ class SettingsScreen : public UIScreen {
 #endif
     } else if (isHomePage(item)) {
       if (p) ensurePageOrderInit(p);
-      int pos = homePagePosition(item, p);
+      const int page = homePageAtRow(item, p);
       char label[24];
-      if (pos > 0) snprintf(label, sizeof(label), "%2d %s", pos, homePageLabel(item));
-      else         snprintf(label, sizeof(label), "%s", homePageLabel(item));
-      if (!homePageToggleable(item)) val(label, "always");
-      else                           sw(label, homePageVisible(item, p));
+      snprintf(label, sizeof(label), "%2d %s", item - HOME_CLOCK + 1, homePageLabel(page));
+      if (!homePageToggleable(page)) val(label, "always");
+      else                           sw(label, homePageVisible(page, p));
     } else if (item == TX_POWER) {
       snprintf(buf, sizeof(buf), "%d dBm", p ? p->tx_power_dbm : 0);
       val("TX Pwr", buf);
@@ -1020,16 +1041,19 @@ public:
       return true;
     }
     if (isHomePage(_selected) && p) {
+      ensurePageOrderInit(p);
+      const int page = homePageAtRow(_selected, p);
       if (left || right) {
-        movePageInOrder(_selected, left ? -1 : 1, p);
+        // The page moves to the next row; the highlight goes with it.
+        if (movePageInOrder(page, left ? -1 : 1, p)) _selected += left ? -1 : 1;
         _dirty = true;
         return true;
       }
-      if (enter && homePageToggleable(_selected)) {
+      if (enter && homePageToggleable(page)) {
         if (!p->home_pages_mask) p->home_pages_mask = NodePrefs::HP_ALL;
         // Set or clear the page's bits together (Status has three).
-        if (homePageVisible(_selected, p)) p->home_pages_mask &= ~homePageBit(_selected);
-        else                               p->home_pages_mask |= homePageBit(_selected);
+        if (homePageVisible(page, p)) p->home_pages_mask &= ~homePageBit(page);
+        else                          p->home_pages_mask |= homePageBit(page);
         _dirty = true;
         return true;
       }
