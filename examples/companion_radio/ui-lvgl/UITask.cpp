@@ -425,11 +425,19 @@ uint32_t UITask::autoOffMillis() const {
   return (uint32_t)_prefs->auto_off_secs * 1000UL;
 }
 
+static void bannerDismiss();   // below, with the banner
+
 void UITask::sleep() {
   if (_asleep) return;
   _asleep = true;
   quickPanelClose(false);
   flashlightClose();
+  bannerDismiss();
+  if (_toast) {   // same: the toast's timer won't run while asleep
+    if (_toast_timer) lv_timer_pause(_toast_timer);
+    lv_anim_delete(_toast, NULL);
+    lv_obj_add_flag(_toast, LV_OBJ_FLAG_HIDDEN);
+  }
   if (_display) _display->turnOff();
   prefsSaveSoon(0);   // nothing to stall now
   lvport::powerSave(true, _tap_wake);
@@ -512,6 +520,14 @@ static void bannerHide() {
   anim::run(s_banner, anim::setTy, lv_obj_get_style_translate_y(s_banner, LV_PART_MAIN), off, anim::OUT_MS, bannerHidden);
 }
 static void bannerTimerCb(lv_timer_t* t) { (void)t; bannerHide(); }
+// Gone at once, no slide: LVGL's timers and animations stand still while the
+// screen sleeps, so a banner left up would still be there on waking.
+static void bannerDismiss() {
+  if (!s_banner) return;
+  if (s_banner_timer) lv_timer_pause(s_banner_timer);
+  lv_anim_delete(s_banner, NULL);
+  lv_obj_add_flag(s_banner, LV_OBJ_FLAG_HIDDEN);
+}
 static void onBanner(lv_event_t* e) {
   if (lv_event_get_code(e) == LV_EVENT_GESTURE) {
     if (lv_indev_get_gesture_dir(lv_indev_active()) == LV_DIR_TOP) bannerHide();
@@ -621,7 +637,7 @@ void UITask::onMessageArrived(const UiEvent& ev) {
       (ev.kind == UIEventType::channelMessage ? _thread_is_channel && ev.idx == _thread_channel
                                               : !_thread_is_channel && memcmp(_thread_key, ev.key, 4) == 0);
   bool banner = !_prefs || _prefs->msg_alert != NodePrefs::MSG_ALERT_OFF;
-  if (!open_here && banner) bannerShow(icon, ev.text, text);   // not over the very conversation it's in
+  if (!open_here && banner && !_asleep) bannerShow(icon, ev.text, text);   // not over the very conversation it's in
   if (_screen == SCR_CHATS && !_nav_overlay) refreshChats();   // new unread counts (not under an open popup)
 }
 
