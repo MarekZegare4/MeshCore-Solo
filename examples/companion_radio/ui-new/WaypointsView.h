@@ -284,6 +284,7 @@ public:
 
   // Entry points called from TrailScreen's action menu.
   void openList() { _mode = LIST; _sel = 0; _scroll = 0; }
+  void simNav(int row) { _mode = NAV; _sel = row; _scroll = 0; _wp_eta.reset(); }   // sim tests: its navigate view
   void markHere() {
     int32_t lat, lon;
     if (!ownPos(lat, lon))         { _task->showAlert("No GPS fix", 1000); return; }

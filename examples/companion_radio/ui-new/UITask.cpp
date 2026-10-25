@@ -472,6 +472,11 @@ void UITask::simNodes() {
 
 // Sim tests: a walked trail ending at the GPS fix of simNodes(), and two
 // waypoints beside it, for the maps.
+void UITask::simNavWaypoint(int row) {
+  setCurrScreen(trail_screen);
+  ((TrailScreen*)trail_screen)->simWaypointNav(row);
+}
+
 void UITask::simTrail() {
   TrailStore& tr = _core->trail.store();
   const uint32_t now = rtc_clock.getCurrentTime();
@@ -964,6 +969,10 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_unread(int which) {
 
 extern "C" EMSCRIPTEN_KEEPALIVE void sim_nodes() {
   if (g_sim_ui_task_for_js) g_sim_ui_task_for_js->simNodes();
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE void sim_nav_waypoint(int row) {
+  if (g_sim_ui_task_for_js) g_sim_ui_task_for_js->simNavWaypoint(row);
 }
 
 extern "C" EMSCRIPTEN_KEEPALIVE void sim_trail() {

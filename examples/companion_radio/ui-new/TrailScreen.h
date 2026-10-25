@@ -117,6 +117,7 @@ public:
 
   // Forwarded to UITask's GPS duty-cycle hold — see WaypointsView::needsLiveGps().
   bool wpNeedsLiveGps() const { return _wp.needsLiveGps(); }
+  void simWaypointNav(int row) { _wp.simNav(row); }   // sim tests
 
   int render(DisplayDriver& display) override {
     display.setTextSize(1);

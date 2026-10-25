@@ -138,6 +138,18 @@ inline void arrow(DisplayDriver& d, int cx, int cy, int r, int deg) {
   }
 }
 
+// A turn dial of radius r round (cx, cy): the way you're heading is the top
+// (the mark in from the ring), and an arrow points at where to go from there
+// (`deg` clockwise from the top, 0 = straight on) -- turn until it points up.
+// `ahead` doubles the ring: you're on course.
+inline void turnDial(DisplayDriver& d, int cx, int cy, int r, int deg, bool ahead) {
+  const int s = miniIconScale(d);
+  circle(d, cx, cy, r);
+  if (ahead) circle(d, cx, cy, r - d.sepH() - 1);
+  d.fillRect(cx - s, cy - r + d.sepH() + 1, 2 * s, 3 * s + 1);   // the top mark
+  arrow(d, cx, cy + s, r - 4 * s - 2, deg);                       // a touch low: clear of the mark
+}
+
 // A compass rose of radius r round (cx, cy), north up: the ring, a tick in at
 // each cardinal point, N in a gap at the top, and -- for deg >= 0 -- a needle
 // from the centre to the ring, towards deg.

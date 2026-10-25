@@ -326,6 +326,7 @@ public:
   void simUnread(int which);           // sim tests: read and new messages, opened
   void simDisplay(bool on);            // sim tests: the display off / on
   void simNodes();                     // sim tests: you and nodes with positions, Nodes open
+  void simNavWaypoint(int row);        // sim tests: the navigate view of a waypoint (after simTrail)
   void simTrail();                     // sim tests: a trail and two waypoints for the maps
 #endif
   void openContactDM(const ContactInfo& ci);
