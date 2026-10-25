@@ -1410,10 +1410,17 @@ void UITask::simDm() {
   }
 }
 
+void UITask::simNavTarget(int32_t lat_1e6, int32_t lon_1e6) {
+  _core->locator.setTarget(0, nullptr, lat_1e6, lon_1e6, "Rynek");
+  if (_nav_bar) refreshNavBar();
+}
+
 void UITask::simUnread() {
   _core->simUnreadDemo();
   if (_screen == SCR_CHATS) refreshChats();
 }
+
+extern "C" EMSCRIPTEN_KEEPALIVE void sim_nav_target(int lat_1e6, int lon_1e6) { if (s_ui) s_ui->simNavTarget(lat_1e6, lon_1e6); }
 
 // Sim tests: straight to a screen by name.
 extern "C" EMSCRIPTEN_KEEPALIVE void sim_open(const char* name) {

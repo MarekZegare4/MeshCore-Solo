@@ -92,6 +92,84 @@ static void onTrailDraw(lv_event_t* e) {
   lv_draw_line(d.base.layer, &d);
 }
 
+
+// The turn dial in the target bar: an arrow at the target, the dial's top
+// being the way you're heading -- turn until the arrow is straight up. With no
+// course (standing still) the top is north instead and the arrow greys out.
+// The arrow eases round the short way on each update.
+static lv_obj_t* s_dial = nullptr;
+static int32_t s_dial_ang = 0;          // shown: degrees clockwise from the dial's top
+static bool    s_dial_course = false;   // a course is known: the top is ahead, else north
+static bool    s_dial_ahead = false;    // within AHEAD_DEG of straight on
+static const int DIAL = 38;
+static const int AHEAD_DEG = 12;
+static const uint32_t DIAL_MS = 300;
+
+static void setDialAng(void* o, int32_t v) {
+  s_dial_ang = ((v % 360) + 360) % 360;
+  lv_obj_invalidate((lv_obj_t*)o);
+}
+
+static void onDialDraw(lv_event_t* e) {
+  lv_obj_t* o = (lv_obj_t*)lv_event_get_target(e);
+  lv_layer_t* layer = lv_event_get_layer(e);
+  lv_area_t a;
+  lv_obj_get_coords(o, &a);
+  // The area's x2 / y2 are inclusive: the middle of the pixels is one more, over two.
+  const float cx = (a.x1 + a.x2 + 1) / 2.0f, cy = (a.y1 + a.y2 + 1) / 2.0f, r = DIAL / 2.0f;
+  // The top mark: where you're heading; north's red tick when there's no course.
+  lv_draw_line_dsc_t ld;
+  lv_draw_line_dsc_init(&ld);
+  ld.width = 2;
+  ld.color = lv_color_hex(s_dial_course ? theme::TEXT_MUTED : theme::FAIL);
+  ld.p1.x = cx; ld.p1.y = cy - r + 3;
+  ld.p2.x = cx; ld.p2.y = cy - r + 8;
+  lv_draw_line(layer, &ld);
+
+  const float ang = s_dial_ang * (float)M_PI / 180.0f;
+  auto pt = [&](float off, float len, lv_point_precise_t& q) {   // len along the arrow, off turned from it
+    q.x = cx + len * sinf(ang + off);
+    q.y = cy - len * cosf(ang + off);
+  };
+  lv_point_precise_t tip, left, right, notch;
+  // 19 long, +10 at the tip (a gap under the top mark) to -9 at the wings (they
+  // trail 11.3 at ~143 degrees): centred on the dial whichever way it turns.
+  pt(0, r - 9, tip);
+  pt(2.5f, r - 7.7f, left);     // a navigator's arrowhead
+  pt(-2.5f, r - 7.7f, right);
+  pt((float)M_PI, 4, notch);
+  lv_draw_triangle_dsc_t tri;
+  lv_draw_triangle_dsc_init(&tri);
+  tri.color = lv_color_hex(!s_dial_course ? theme::TEXT_MUTED : s_dial_ahead ? theme::OK : theme::ACCENT);
+  tri.opa = LV_OPA_COVER;
+  tri.p[0] = tip; tri.p[1] = left; tri.p[2] = notch;
+  lv_draw_triangle(layer, &tri);
+  tri.p[0] = tip; tri.p[1] = notch; tri.p[2] = right;
+  lv_draw_triangle(layer, &tri);
+  // The two halves meet on a line the anti-aliasing leaves dark: painted over.
+  ld.width = 2;
+  ld.color = tri.color;
+  ld.p1 = tip; ld.p2 = notch;
+  lv_draw_line(layer, &ld);
+}
+
+// `deg`: where the target lies, from the top (the course already taken off).
+static void setDial(int deg, bool course) {
+  if (!s_dial) return;
+  deg = ((deg % 360) + 360) % 360;
+  const bool snap = course != s_dial_course || lv_obj_has_flag(s_dial, LV_OBJ_FLAG_HIDDEN);
+  s_dial_course = course;
+  s_dial_ahead = course && (deg <= AHEAD_DEG || deg >= 360 - AHEAD_DEG);
+  lv_obj_remove_flag(s_dial, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_style_border_color(s_dial, lv_color_hex(s_dial_ahead ? theme::OK : theme::SURFACE_2), 0);
+  lv_anim_delete(s_dial, setDialAng);
+  if (snap) { setDialAng(s_dial, deg); return; }
+  int d = deg - (int)s_dial_ang;
+  d = ((d + 540) % 360) - 180;   // the short way round
+  if (d == 0) return;
+  anim::run(s_dial, setDialAng, s_dial_ang, s_dial_ang + d, DIAL_MS);
+}
+
 }  // namespace navmap
 
 static void onNavList(lv_event_t* e)    { (void)e; s_ui->navTargetsPopup(); }
@@ -169,12 +247,24 @@ void UITask::buildNavControls(lv_obj_t* body) {
   lv_obj_add_flag(_nav_bar, LV_OBJ_FLAG_HIDDEN);   // until there is a target (refreshNavBar)
   _nav_title = label(_nav_bar, "", THEME_FONT_BODY, theme::ACCENT);
   lv_label_set_long_mode(_nav_title, LV_LABEL_LONG_DOT);
-  lv_obj_set_size(_nav_title, 260, 19);   // fixed height: LONG_DOT cuts instead of wrapping
+  lv_obj_set_size(_nav_title, 226, 19);   // fixed height: LONG_DOT cuts instead of wrapping
   lv_obj_align(_nav_title, LV_ALIGN_TOP_LEFT, 0, 0);
   _nav_info = label(_nav_bar, "", THEME_FONT_SMALL, theme::TEXT);
   lv_label_set_long_mode(_nav_info, LV_LABEL_LONG_DOT);
-  lv_obj_set_size(_nav_info, 270, 16);
+  lv_obj_set_size(_nav_info, 226, 16);
   lv_obj_align(_nav_info, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+  navmap::s_dial = lv_obj_create(_nav_bar);   // which way to turn
+  lv_obj_remove_style_all(navmap::s_dial);
+  lv_obj_remove_flag(navmap::s_dial, LV_OBJ_FLAG_CLICKABLE);   // a tap on it is the bar's: the target list
+  lv_obj_set_size(navmap::s_dial, navmap::DIAL, navmap::DIAL);
+  lv_obj_align(navmap::s_dial, LV_ALIGN_RIGHT_MID, -34, 0);
+  lv_obj_set_style_radius(navmap::s_dial, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_bg_color(navmap::s_dial, lv_color_hex(theme::SURFACE), 0);
+  lv_obj_set_style_bg_opa(navmap::s_dial, LV_OPA_COVER, 0);
+  lv_obj_set_style_border_width(navmap::s_dial, 2, 0);
+  lv_obj_set_style_border_color(navmap::s_dial, lv_color_hex(theme::SURFACE_2), 0);
+  lv_obj_add_event_cb(navmap::s_dial, navmap::onDialDraw, LV_EVENT_DRAW_MAIN_END, NULL);
+  lv_obj_add_flag(navmap::s_dial, LV_OBJ_FLAG_HIDDEN);   // until there is a bearing
   _nav_clear = lv_button_create(_nav_bar);
   lv_obj_set_size(_nav_clear, 34, 34);
   lv_obj_align(_nav_clear, LV_ALIGN_RIGHT_MID, 4, 0);
@@ -404,6 +494,7 @@ void UITask::refreshNavBar() {
   if (!set) return;
   setTextFmt(_nav_title, "%s %s", navmap::s_tb.active() ? LV_SYMBOL_LOOP : person ? UI_SYMBOL_USERS : UI_SYMBOL_FLAG,
                         name);
+  if (navmap::s_dial) lv_obj_add_flag(navmap::s_dial, LV_OBJ_FLAG_HIDDEN);   // setDial() below shows it again
   if (!pos) {
     setText(_nav_info, "Position unknown (not shared recently)");
     return;
@@ -417,15 +508,24 @@ void UITask::refreshNavBar() {
   bool imperial = _prefs->units_imperial;
   float km = geo::haversineKm(lat, lon, tlat, tlon);
   navmap::s_eta.update(km, millis());
-  char dist[12], eta[12], hdg[16] = "";
+  char dist[12], eta[12], what[20];
   geo::fmtDist(dist, sizeof(dist), km, imperial);
   int to = geo::bearingDeg(lat, lon, tlat, tlon);
   int cog;
-  if (_core->course.currentCourse(cog)) snprintf(hdg, sizeof(hdg), "  -  you %d\xC2\xB0", cog);
+  const bool course = _core->course.currentCourse(cog);
+  navmap::setDial(course ? to - cog : to, course);
+  // Walking: how far to turn (the dial shows it); standing: where the target lies.
+  if (course) {
+    int turn = ((to - cog + 540) % 360) - 180;   // -180..179, right is positive
+    if (navmap::s_dial_ahead) snprintf(what, sizeof(what), "straight ahead");
+    else snprintf(what, sizeof(what), "turn %s %d\xC2\xB0", turn > 0 ? "right" : "left", turn > 0 ? turn : -turn);
+  } else {
+    snprintf(what, sizeof(what), "%d\xC2\xB0 %s", to, geo::bearingCardinal(to));
+  }
   if (navmap::s_eta.eta(km, eta, sizeof(eta)))
-    setTextFmt(_nav_info, "%s  %d\xC2\xB0 %s%s  -  ETA %s", dist, to, geo::bearingCardinal(to), hdg, eta);
+    setTextFmt(_nav_info, "%s  %s  -  ETA %s", dist, what, eta);
   else
-    setTextFmt(_nav_info, "%s  %d\xC2\xB0 %s%s", dist, to, geo::bearingCardinal(to), hdg);
+    setTextFmt(_nav_info, "%s  %s", dist, what);
 }
 
 // ── Target selection ──────────────────────────────────────────────────────────

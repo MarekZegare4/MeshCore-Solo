@@ -172,6 +172,7 @@ public:
   void setMapLayer(int i);
   void simMapAt(const char* spec);      // Map tools > Live tiles
   void simCompose(const char* text);    // the open thread's field: this text, keyboard up
+  void simNavTarget(int32_t lat_1e6, int32_t lon_1e6);   // a waypoint as the navigation target
   void simDm();                         // the first chat contact's thread
   void simUnread();                     // read and new messages to open on
   void simSleep(bool on) { if (on) sleep(); else wake(); }
