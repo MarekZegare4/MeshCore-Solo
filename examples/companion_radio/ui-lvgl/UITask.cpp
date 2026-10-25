@@ -220,10 +220,12 @@ void UITask::loop() {
   sampleHistory();
 
   // USER (BOOT, side) button: Home's clock page; held and let go, mutes / unmutes, also with the
-  // screen off, which it doesn't wake. WAKE (top) button: screen off / on.
+  // screen off, which it doesn't wake. WAKE (top) button: screen on at once, off on letting
+  // go (a press that silenced the alarm, took a screenshot or woke the screen doesn't
+  // also switch it off when let go).
   // Either one silences a ringing alarm first. Held in the first 8 s (once the
   // screen is up -- held at power-on it's the ESP32's download mode): CLI rescue.
-  bool btn_click = false, btn_hold = false, wake_press = false;
+  bool btn_click = false, btn_hold = false, wake_press = false, wake_release = false;
 #ifdef PIN_USER_BTN
   int ev = user_btn.check();
   btn_click = ev == BUTTON_EVENT_CLICK;
@@ -231,7 +233,7 @@ void UITask::loop() {
 #elif defined(SIM_PLATFORM) && defined(__EMSCRIPTEN__)
   btn_click = s_sim_btn_click;
   btn_hold = s_sim_btn_hold;
-  wake_press = s_sim_wake;
+  wake_press = wake_release = s_sim_wake;   // the page's button is a click
   s_sim_btn_click = s_sim_btn_hold = s_sim_wake = false;
 #endif
 #if defined(SEEED_WIO_TRACKER_L2)
@@ -239,6 +241,7 @@ void UITask::loop() {
     _next_wake_poll_ms = millis() + 50;
     bool down = board.readWakeButton();
     wake_press = down && !_wake_down;
+    wake_release = !down && _wake_down;
     _wake_down = down;
   }
 #endif
@@ -246,19 +249,26 @@ void UITask::loop() {
   // A long hold only arms the mute, which happens on letting go -- so holding
   // the side button a bit long before the top one doesn't mute as well.
   static bool mute_armed = false;
+  static bool wake_used = false;   // this press of the top button did something already
   bool shot = false, mute = false;
 #ifdef PIN_USER_BTN
   bool side_down = user_btn.isPressed();
-  if (wake_press && side_down) { user_btn.cancelClick(); shot = true; mute_armed = false; }
+  if (wake_press && side_down) { user_btn.cancelClick(); shot = true; mute_armed = false; wake_used = true; }
   if (mute_armed && !side_down) { mute_armed = false; mute = true; }
 #elif defined(SIM_PLATFORM) && defined(__EMSCRIPTEN__)
   shot = s_sim_shot;
   s_sim_shot = false;
   if (mute_armed) { mute_armed = false; mute = true; }   // the page sends the hold on release
 #endif
+  if (wake_press && _core->clock.isRinging()) wake_used = true;
+  const bool wake_now = wake_press && _asleep && !wake_used;
+  if (wake_now) wake_used = true;   // its release must not put it back to sleep
+  const bool sleep_now = wake_release && !wake_used && !_asleep;
+  if (wake_release) wake_used = false;
   if (shot) { if (!_asleep) takeScreenshot(); }
   else if ((btn_click || btn_hold || wake_press) && _core->clock.isRinging()) dismissRing();
-  else if (wake_press) { if (_asleep) wake(); else sleep(); }
+  else if (wake_now) wake();
+  else if (sleep_now) sleep();
   else if (btn_hold && millis() - _ui_started_ms < 8000) {   // held in the first 8 s: CLI rescue, as on the L1
     the_mesh.enterCLIRescue();
     showToast("CLI rescue on the USB serial", 4000);
