@@ -113,8 +113,11 @@ class LGFX_WioTrackerL2 : public lgfx::LGFX_Device {
 public:
   Panel_WioTrackerL2& panelL2() { return _panel_instance; }
   bool init_impl(bool use_reset, bool use_clear) override {
-    // bring up backlight controller while the I2C bus is still clean
-    _light_instance.init(_light_instance.getBrightness());
+    // Bring up the backlight controller while the I2C bus is still clean -- but
+    // dark: the panel's memory holds noise until it's initialised and cleared
+    // (a white bar across the screen), and a chip left lit by a restart would
+    // show it too. begin() switches the light on after the clear.
+    _light_instance.init(0);
 
     bool result = LGFX_Device::init_impl(use_reset, use_clear);
 
@@ -202,6 +205,8 @@ class WioTrackerL2Display : public LGFXDisplay {
     }
   }
 
+  bool _lit = false;   // the light has come on with the first frame
+
 public:
   WioTrackerL2Display() : LGFXDisplay(320, 240, disp) {}
 
@@ -230,6 +235,14 @@ public:
     _isOn = true;
   }
   void fadeIn() { fade(0, display->getBrightness()); }
+
+  // The first frame goes out with the light still off, then the light comes on:
+  // lit any sooner, the panel shows what it holds in memory for as long as the
+  // frame takes.
+  void endFrame() override {
+    LGFXDisplay::endFrame();
+    if (!_lit) { _lit = true; display->setBrightness(153); }
+  }
 
   // direct access to the LGFX device (LVGL flush/touch glue)
   lgfx::LGFX_Device* lgfxDevice() { return &disp; }
@@ -260,8 +273,7 @@ public:
     // pixels keep whatever the panel powered up with (they showed as coloured
     // lines down the right side and along the bottom). Clear the panel once.
     display->fillScreen(TFT_BLACK);
-    display->setBrightness(153);
-    display->setTextColor(TFT_WHITE);
+    display->setTextColor(TFT_WHITE);   // the light comes on with the first frame (endFrame())
 
     buffer.setColorDepth(8);
     buffer.setPsram(true);

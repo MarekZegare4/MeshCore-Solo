@@ -224,6 +224,13 @@ void setup() {
   DisplayDriver* disp = NULL;
   if (display.begin()) {
     disp = &display;
+  #if defined(SEEED_WIO_TRACKER_L2)
+    // L2: a plain black frame -- the panel's backlight comes on with it (WioTrackerL2Display
+    // ::endFrame()). The default colours here (white background, black dots) came out as a
+    // bright bar across the middle of the dark screen. LVGL's splash follows within a second.
+    disp->startFrame(0x0000);
+    disp->endFrame();
+  #else
     disp->startFrame();
   #ifdef ST7789
     disp->setTextSize(2);
@@ -234,6 +241,7 @@ void setup() {
     for (int i = -1; i <= 1; i++)
       disp->fillRect(disp->width() / 2 + i * 3 * dot - dot / 2, disp->height() / 2 - dot / 2, dot, dot);
     disp->endFrame();
+  #endif
   }
 #endif
 

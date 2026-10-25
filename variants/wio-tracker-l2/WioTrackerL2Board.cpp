@@ -59,6 +59,15 @@ bool WioTrackerL2Board::initExpander() {
     return false;  // expander not responding
   }
 
+  // The backlight (the LP5814 at 0x2C) dark before the panel is powered and
+  // reset below: until it's initialised the panel shows what's in its memory (a
+  // white bar over the ~0.5 s settle), and the LP5814 keeps its state across a
+  // restart. Standby: CHIP_EN off; the display driver brings it up again.
+  Wire.beginTransmission(0x2C);
+  Wire.write((uint8_t)0x00);
+  Wire.write((uint8_t)0x00);
+  Wire.endTransmission();
+
   expSetInput(EXP_PIN_WAKE_BTN);
   expSetInput(EXP_PIN_I2C_IRQ);
   expSetInput(EXP_PIN_SD_DETECT);
