@@ -689,13 +689,13 @@ static lv_obj_t* settingRow(lv_obj_t* parent, const char* text, const char* hint
   lv_obj_set_size(row, LV_PCT(100), theme::ROW_H);
   lv_obj_set_style_radius(row, theme::RADIUS, 0);
   lv_obj_t* t = label(row, text, THEME_FONT_BODY, theme::TEXT);
-  lv_obj_align(t, LV_ALIGN_TOP_LEFT, theme::PAD, hint ? 5 : 13);
+  lv_obj_align(t, LV_ALIGN_TOP_LEFT, theme::PAD, hint ? 4 : 13);
   lv_obj_set_user_data(row, t);
   if (hint) {
     lv_obj_t* h = label(row, hint, THEME_FONT_SMALL, theme::TEXT_MUTED);
     lv_label_set_long_mode(h, LV_LABEL_LONG_DOT);
-    lv_obj_set_size(h, hint_w, 15);   // fixed height: cut, don't wrap onto the label
-    lv_obj_align(h, LV_ALIGN_BOTTOM_LEFT, theme::PAD, -5);
+    lv_obj_set_size(h, hint_w, 18);   // fixed height: cut, don't wrap onto the label -- the font's whole line, or the tails of y and g are cut
+    lv_obj_align(h, LV_ALIGN_BOTTOM_LEFT, theme::PAD, -4);
   }
   return row;
 }

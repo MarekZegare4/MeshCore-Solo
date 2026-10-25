@@ -63,13 +63,13 @@ static lv_obj_t* listRow(lv_obj_t* parent, const char* title, const char* sub,
   lv_obj_t* t = label(row, title, THEME_FONT_BODY, theme::TEXT);
   lv_label_set_long_mode(t, LV_LABEL_LONG_DOT);
   lv_obj_set_width(t, 230);
-  lv_obj_align(t, LV_ALIGN_TOP_LEFT, theme::PAD, sub ? 5 : 13);
+  lv_obj_align(t, LV_ALIGN_TOP_LEFT, theme::PAD, sub ? 4 : 13);
   lv_obj_set_user_data(row, t);
   if (sub) {
     lv_obj_t* s = label(row, sub, THEME_FONT_SMALL, theme::TEXT_MUTED);
     lv_label_set_long_mode(s, LV_LABEL_LONG_DOT);
-    lv_obj_set_size(s, 230, 15);   // fixed height: LONG_DOT cuts instead of wrapping over the title
-    lv_obj_align(s, LV_ALIGN_BOTTOM_LEFT, theme::PAD, -5);
+    lv_obj_set_size(s, 230, 18);   // fixed height: LONG_DOT cuts instead of wrapping over the title -- the font's whole line (18), or the tails of y and g and emoji are cut
+    lv_obj_align(s, LV_ALIGN_BOTTOM_LEFT, theme::PAD, -4);
   }
   return row;
 }
@@ -86,7 +86,7 @@ static void rowSet(lv_obj_t* row, const char* title, const char* sub, uint32_t t
   lv_obj_t* s = lv_obj_get_child(row, 1);
   setText(t, title);
   setTextColor(t, title_col);
-  int32_t y = sub ? 5 : 13;   // as listRow() puts it
+  int32_t y = sub ? 4 : 13;   // as listRow() puts it
   if (lv_obj_get_style_y(t, LV_PART_MAIN) != y) lv_obj_set_y(t, y);
   if (sub) setText(s, sub);
   if (!sub != lv_obj_has_flag(s, LV_OBJ_FLAG_HIDDEN)) lv_obj_set_flag(s, LV_OBJ_FLAG_HIDDEN, !sub);
