@@ -43,6 +43,7 @@ class UITask;
 #include "DataStore.h"
 #include "NodePrefs.h"
 #include "ScopeList.h"
+#include "BotLog.h"
 
 #include <RTClib.h>
 #include <helpers/ArduinoHelpers.h>
@@ -587,6 +588,7 @@ public:
 
   // Number of auto-replies sent since boot (DM + channel + room). Shown on BotScreen.
   uint16_t botReplyCount() const { return _bot_reply_count; }
+  const BotLog& botLog() const { return _bot_log; }   // the recent replies (ESP32)
 
   // Whether a "!gps fix" request is acquiring/averaging right now -- used by
   // UITask's GPS duty-cycle "is anything live using GPS right now" check, so
@@ -726,6 +728,7 @@ private:
   static const int BOT_DM_LOG_SIZE = 8;
   BotReplyLog _bot_dm_log[BOT_DM_LOG_SIZE];
   uint16_t    _bot_reply_count;   // total auto-replies sent since boot
+  BotLog      _bot_log;
 
   // !gps fix state -- one global slot (one physical GPS): botCommandReply()
   // rejects a second request outright while one is active, so this never

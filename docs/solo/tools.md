@@ -62,6 +62,9 @@ channel and one room, each switched on separately:
   Fav** (Other tab) lets only your favourites run them; on a channel the
   sender is just a name, so there it's a weak check.
 
+On ESP32 boards (L2, Heltec, ...) the **Log** tab lists the bot's last 32
+replies: when, who, what they asked and what it answered. Kept until a restart.
+
 **DM allow = Fav** limits the DM bot to your favourites, and **quiet hours**
 stop trigger replies at night (commands still answer). Replies are rate
 limited so two bots can't answer each other forever. The room bot uses the

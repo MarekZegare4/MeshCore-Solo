@@ -93,6 +93,31 @@ void UITask::buildBot() {
   lv_obj_t* list = scrollList(body);
   lv_obj_t* g = group(list, nullptr);
 
+  if (botcfg::isLog(s_tab)) {   // the replies, newest first: when and who, then what was asked and answered
+    const BotLog& log = the_mesh.botLog();
+    lv_obj_set_style_pad_hor(g, theme::PAD, 0);
+    lv_obj_set_style_pad_ver(g, 6, 0);
+    if (log.count() == 0) label(g, "No replies yet", THEME_FONT_BODY, theme::TEXT_MUTED);
+    for (int i = 0; i < log.count(); i++) {
+      const BotLogEntry& e = log.at(i);
+      const uint32_t t = e.ts + (int32_t)p->tz_offset_hours * 3600;
+      static const char* const WHERE[] = { "DM", "channel", "room" };
+      char hd[64];
+      snprintf(hd, sizeof(hd), "%02u:%02u  %s  (%s)", (unsigned)(t / 3600 % 24), (unsigned)(t / 60 % 60),
+               e.who[0] ? e.who : "?", WHERE[e.where < 3 ? e.where : 0]);
+      label(g, hd, THEME_FONT_SMALL, theme::TEXT_MUTED);
+      lv_obj_t* q = label(g, e.req, THEME_FONT_SMALL, theme::TEXT);
+      lv_label_set_long_mode(q, LV_LABEL_LONG_WRAP);
+      lv_obj_set_width(q, lv_pct(100));
+      lv_obj_t* a = label(g, "", THEME_FONT_BODY, theme::ACCENT);
+      lv_label_set_text_fmt(a, LV_SYMBOL_RIGHT " %s", e.reply);
+      lv_label_set_long_mode(a, LV_LABEL_LONG_WRAP);
+      lv_obj_set_width(a, lv_pct(100));
+      if (i + 1 < log.count()) lv_obj_set_style_pad_bottom(a, 8, 0);
+    }
+    return;
+  }
+
   for (int i = 0; i < botcfg::rowCount(s_tab); i++) {
     const botcfg::Row& r = botcfg::row(s_tab, i);
     uint8_t* fl = botcfg::flag(p, r.kind);

@@ -106,6 +106,8 @@ public:
       display.setColor(UIColor::primary_txt);
     }
 
+    if (botcfg::isLog(_tab)) return renderLog(display);
+
     int n = botcfg::rowCount(_tab);
     int mq_delay = 0;
     drawList(display, n, _sel, _scroll, [&](int i, int y, bool sel, int reserve) {
@@ -141,6 +143,29 @@ public:
       display.setColor(UIColor::primary_txt);
     });
     return 2000;
+  }
+
+  // Log tab: the bot's replies, newest first, one line each (the selected
+  // one scrolls to show the rest).
+  int renderLog(DisplayDriver& display) {
+    const BotLog& log = the_mesh.botLog();
+    if (log.count() == 0) {
+      display.drawTextCentered(display.width() / 2, display.height() / 2, "No replies yet");
+      return 2000;
+    }
+    const int8_t tz = _prefs ? _prefs->tz_offset_hours : 0;
+    int mq_delay = 0;
+    drawList(display, log.count(), _sel, _scroll, [&](int i, int y, bool sel, int reserve) {
+      drawRowSelection(display, y, sel, reserve);
+      char line[200];
+      botcfg::logLine(log.at(i), tz, line, sizeof(line));
+      char filt[200];
+      display.translateUTF8ToBlocks(filt, line, sizeof(filt));
+      int r = display.drawTextEllipsized(2, y, display.width() - 2 - reserve, filt, sel);
+      if (sel && r > 0) mq_delay = r;
+      display.setColor(UIColor::primary_txt);
+    });
+    return mq_delay > 0 ? mq_delay : 2000;
   }
 
   bool handleInput(char c) override {
@@ -180,12 +205,14 @@ public:
     if (keyIsPrev(c)) { tabbar::turn(_task->getDisplay(), botcfg::TAB_LABELS, _tab, -1); _tab = (_tab + botcfg::TAB_COUNT - 1) % botcfg::TAB_COUNT; _sel = _scroll = 0; return true; }
     if (keyIsNext(c)) { tabbar::turn(_task->getDisplay(), botcfg::TAB_LABELS, _tab, +1); _tab = (_tab + 1) % botcfg::TAB_COUNT;             _sel = _scroll = 0; return true; }
 
-    int n = botcfg::rowCount(_tab);
+    int n = botcfg::isLog(_tab) ? the_mesh.botLog().count() : botcfg::rowCount(_tab);
+    if (n == 0) return up || down || enter;
     // drawList() reclamps _scroll from _sel every render.
     if (up)   { _sel = (_sel > 0) ? _sel - 1 : n - 1; return true; }
     if (down) { _sel = (_sel < n - 1) ? _sel + 1 : 0; return true; }
 
     if (!enter) return false;
+    if (botcfg::isLog(_tab)) return true;   // only read
     Kind k = tabRow(_tab, _sel).kind;
 
     if (uint8_t* fl = botcfg::flag(_prefs, k)) { *fl ^= 1; _dirty = true; return true; }

@@ -10,8 +10,17 @@
 
 namespace botcfg {
 
+// Log: the bot's recent replies (the_mesh.botLog()), where there's the
+// memory for them (BOT_LOG, BotLog.h). A tab of its own, no setting rows.
+#ifdef BOT_LOG
+enum Tab : uint8_t { TAB_CHANNEL, TAB_ROOM, TAB_DIRECT, TAB_OTHER, TAB_LOG, TAB_COUNT };
+static const char* const TAB_LABELS[TAB_COUNT] = { "Channel", "Room", "Direct", "Other", "Log" };
+static bool isLog(int tab) { return tab == TAB_LOG; }
+#else
 enum Tab : uint8_t { TAB_CHANNEL, TAB_ROOM, TAB_DIRECT, TAB_OTHER, TAB_COUNT };
 static const char* const TAB_LABELS[TAB_COUNT] = { "Channel", "Room", "Direct", "Other" };
+static bool isLog(int) { return false; }
+#endif
 
 enum Kind : uint8_t { ENABLE_DM, DM_SCOPE, COMMANDS_DM, ACTIONS_DM, TRIGGER_DM, REPLY_DM,
                       ENABLE_CH, CHANNEL, COMMANDS_CH, ACTIONS_CH, TRIGGER_CH, REPLY_CH,
@@ -56,7 +65,8 @@ static int rowCount(int tab) {
     case TAB_CHANNEL: return sizeof(CHANNEL_ROWS) / sizeof(Row);
     case TAB_ROOM:    return sizeof(ROOM_ROWS) / sizeof(Row);
     case TAB_DIRECT:  return sizeof(DIRECT_ROWS) / sizeof(Row);
-    default:          return sizeof(OTHER_ROWS) / sizeof(Row);
+    case TAB_OTHER:   return sizeof(OTHER_ROWS) / sizeof(Row);
+    default:          return 0;   // Log
   }
 }
 
@@ -111,6 +121,15 @@ static bool quietOff(const NodePrefs* p) { return p->bot_quiet_start == p->bot_q
 // Placeholders a reply can use: the bot fills {name} / {hops} / {path} from the
 // message it answers; {loc} / {time} and the sensor ones come from here.
 // Most useful first (a frontend short of room shows a prefix).
+// A log entry's one-line form: "14:30 Bob: !snr > SNR 6.5dB ...", the time
+// local (tz hours); a room / channel entry marked with # / @.
+static void logLine(const BotLogEntry& e, int8_t tz, char* out, size_t n) {
+  uint32_t t = e.ts + (int32_t)tz * 3600;
+  const char* mark = e.where == BotLog::CHANNEL ? "#" : e.where == BotLog::ROOM ? "@" : "";
+  snprintf(out, n, "%02u:%02u %s%s: %s > %s", (unsigned)(t / 3600 % 24), (unsigned)(t / 60 % 60), mark,
+           e.who[0] ? e.who : "?", e.req, e.reply);
+}
+
 static const char* const REPLY_PLACEHOLDERS[] = { "{name}", "{hops}", "{path}", "{snr}", "{loc}", "{time}", "{batt}" };
 static const int REPLY_PLACEHOLDER_COUNT = sizeof(REPLY_PLACEHOLDERS) / sizeof(REPLY_PLACEHOLDERS[0]);
 

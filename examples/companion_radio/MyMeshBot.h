@@ -188,6 +188,7 @@ void MyMesh::tryBotReplyDM(const ContactInfo& from, const char* text, uint8_t ho
   if (sendMessage(from, ts, 0, expanded, expected_ack, est_timeout) != MSG_SEND_FAILED) {
     botDmRecord(from.id.pub_key);
     _bot_reply_count++;
+    _bot_log.add(ts, BotLog::DM, from.name, text, expanded);
 #ifdef DISPLAY_CLASS
     if (_listener) _listener->addDMMsg(from.id.pub_key, true, expanded);
 #endif
@@ -233,6 +234,7 @@ void MyMesh::tryBotReplyChannel(uint8_t channel_idx, const char* text, uint8_t h
   if (sendGroupMessage(ts, ch.channel, _prefs.node_name, expanded, rlen)) {
     _bot_last_ch_reply_ms = millis();
     _bot_reply_count++;
+    _bot_log.add(ts, BotLog::CHANNEL, sender_name, msg, expanded);
 #ifdef DISPLAY_CLASS
     mirrorOwnChannelMsg(channel_idx, expanded);
 #endif
@@ -277,6 +279,7 @@ void MyMesh::tryBotReplyRoom(const ContactInfo& from, const uint8_t* sender_pref
   if (sendMessage(from, ts, 0, expanded, expected_ack, est_timeout) != MSG_SEND_FAILED) {
     _bot_last_room_reply_ms = millis();
     _bot_reply_count++;
+    _bot_log.add(ts, BotLog::ROOM, sender_name, text, expanded);
 #ifdef DISPLAY_CLASS
     if (_listener) _listener->addDMMsg(from.id.pub_key, true, expanded);
 #endif
@@ -512,6 +515,7 @@ bool MyMesh::tryBotCommand(const ContactInfo& from, const char* text, uint8_t ho
   if (sendMessage(from, ts, 0, out, expected_ack, est_timeout) != MSG_SEND_FAILED) {
     botDmRecord(from.id.pub_key);
     _bot_reply_count++;
+    _bot_log.add(ts, BotLog::DM, from.name, text, out);
 #ifdef DISPLAY_CLASS
     if (_listener) _listener->addDMMsg(from.id.pub_key, true, out);
 #endif
@@ -547,6 +551,7 @@ bool MyMesh::tryBotChannelCommand(uint8_t channel_idx, const char* text, uint8_t
   if (sendGroupMessage(ts, ch.channel, _prefs.node_name, out, rlen)) {
     _bot_last_ch_reply_ms = millis();
     _bot_reply_count++;
+    _bot_log.add(ts, BotLog::CHANNEL, sender_name, msg, out);
 #ifdef DISPLAY_CLASS
     mirrorOwnChannelMsg(channel_idx, out);
 #endif
@@ -580,6 +585,7 @@ bool MyMesh::tryBotRoomCommand(const ContactInfo& from, const uint8_t* sender_pr
   if (sendMessage(from, ts, 0, out, expected_ack, est_timeout) != MSG_SEND_FAILED) {
     _bot_last_room_reply_ms = millis();
     _bot_reply_count++;
+    _bot_log.add(ts, BotLog::ROOM, sender_name, text, out);
 #ifdef DISPLAY_CLASS
     if (_listener) _listener->addDMMsg(from.id.pub_key, true, out);
 #endif
@@ -703,6 +709,7 @@ void MyMesh::sendLocFixResult(const char* msg) {
     if (sendGroupMessage(ts, ch.channel, _prefs.node_name, msg, mlen)) {
       _bot_last_ch_reply_ms = millis();
       _bot_reply_count++;
+      _bot_log.add(ts, BotLog::CHANNEL, "", "!gps fix", msg);
 #ifdef DISPLAY_CLASS
       mirrorOwnChannelMsg(_loc_fix.channel_idx, msg);
 #endif
@@ -715,6 +722,7 @@ void MyMesh::sendLocFixResult(const char* msg) {
       if (c->type == ADV_TYPE_ROOM) _bot_last_room_reply_ms = millis();
       else botDmRecord(c->id.pub_key);
       _bot_reply_count++;
+      _bot_log.add(ts, c->type == ADV_TYPE_ROOM ? BotLog::ROOM : BotLog::DM, c->name, "!gps fix", msg);
 #ifdef DISPLAY_CLASS
       if (_listener) _listener->addDMMsg(c->id.pub_key, true, msg);
 #endif
