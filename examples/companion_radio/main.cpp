@@ -646,6 +646,35 @@ extern "C" EMSCRIPTEN_KEEPALIVE int sim_test_set_node_name(const char* name) {
   return 1;
 }
 
+// The first contact of `type`'s one-byte hash as hex ("e9"), "" if none --
+// how a hop to it reads in a route ({path}).
+extern "C" EMSCRIPTEN_KEEPALIVE const char* sim_test_contact_hash(int type) {
+  static char hex[3];
+  hex[0] = 0;
+  if (!g_sim_ready) return hex;
+  for (int i = 0; i < the_mesh.getNumContacts(); i++) {
+    ContactInfo ci;
+    if (the_mesh.getContactByIdx(MAX_ANON_CONTACTS + i, ci) && ci.type == type) {
+      snprintf(hex, sizeof(hex), "%02x", ci.id.pub_key[0]);
+      break;
+    }
+  }
+  return hex;
+}
+
+// Turns on the DM bot's commands (Tools > Bot > Direct > Commands), with its
+// actions and who may run them (Other > Actions by: 0 all, 1 favourites), so
+// a host page can test the bot from a peer. In memory only.
+extern "C" EMSCRIPTEN_KEEPALIVE int sim_test_bot(int actions, int actions_scope) {
+  if (!g_sim_ready) return 0;
+  NodePrefs* prefs = the_mesh.getNodePrefs();
+  if (!prefs) return 0;
+  prefs->bot_commands_enabled = 1;
+  prefs->bot_actions_dm = actions ? 1 : 0;
+  prefs->bot_actions_scope = actions_scope ? 1 : 0;
+  return 1;
+}
+
 // Whether adverts carry this node's position (ADVERT_LOC_NONE / _SHARE /
 // _PREFS, src/helpers/CommonCLI.h) -- off by default, so peers in a test
 // mesh have no distance or direction to one another until it's on.
