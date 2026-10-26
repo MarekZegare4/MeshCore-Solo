@@ -12,6 +12,9 @@
 //                        ... repeater, to find the link where it stops
 //   poll()            -- advance a running trace (call every UI pass)
 //   save()            -- the list becomes the contact's out_path
+//   discover(tries)   -- asks the node by flood which way it's reached (path
+//                        discovery), `tries` times with a pause between; the
+//                        routes found, useFound() puts one in the list
 //
 // A TRACE is answered only by the node that hears the last retransmission, so
 // a route is traced there and back (A B dest B A): every node of it has to
@@ -52,6 +55,9 @@ public:
     ContactInfo* c = the_mesh.lookupContactByPubKey(pub_key, PUB_KEY_SIZE);
     if (!c) return false;
     cancelTrace();
+    stopDiscover();
+    _found_n = 0;
+    _disc_done = _disc_answered = 0;
     memcpy(_target_key, c->id.pub_key, PUB_KEY_SIZE);
     snprintf(_target_name, sizeof(_target_name), "%s", c->name);
     _target_repeats = c->type == ADV_TYPE_REPEATER;
@@ -195,6 +201,7 @@ public:
 
   // Call every UI pass while a trace may be running.
   void poll() {
+    pollDiscover();
     if (_state != RUNNING || !_ping) return;
     if (!_ping->isActive()) {   // the reply came (the engine released its slot), or it was dropped
       if (_ping->hopCount() > 0) {
@@ -245,6 +252,83 @@ public:
     return _links > 0;
   }
 
+  // ── discover ────────────────────────────────────────────────────────────────
+  // The node is asked by flood (MyMesh::sendPathDiscovery()); its reply says
+  // which repeaters the flood went through to reach it, and which the reply
+  // took back -- learned from the mesh, not from anyone's position. A flood
+  // goes everywhere, so several tries wait for each other's reply (or its
+  // timeout) and then DISCOVER_GAP_MS more. Each different route is kept
+  // with how many times it came; the fastest is not always the best, so the
+  // user picks one (useFound()) and can trace it.
+  static const int FOUND_MAX = 4;
+  static const int FOUND_HOPS = 8;   // hops kept of a route (one longer than the list holds: "too long")
+  static const uint32_t DISCOVER_GAP_MS = 20000;
+  struct Found {
+    uint8_t out_len, back_len;   // encoded path lengths (hop count | (hash size - 1) << 6)
+    uint8_t out[FOUND_HOPS * 3], back[FOUND_HOPS * 3];
+    uint8_t times;
+  };
+
+  bool discover(int tries) {
+    if (tries < 1) tries = 1;
+    stopDiscover();
+    _found_n = 0;
+    _disc_tries = (uint8_t)tries;
+    _disc_done = _disc_answered = 0;
+    return discoverSend();
+  }
+  void stopDiscover() {
+    if (_disc_waiting) the_mesh.cancelPathDiscovery();
+    _disc_waiting = false;
+    _disc_tries = 0;
+  }
+  bool discovering() const { return _disc_tries > 0 && _disc_done < _disc_tries; }
+  bool discoverWaiting() const { return _disc_waiting; }   // a try is out, its reply awaited
+  int discoverTry() const { return _disc_done + (_disc_waiting ? 1 : 0); }   // 1-based while waiting
+  int discoverTries() const { return _disc_tries; }
+  int discoverDone() const { return _disc_done; }
+  int discoverAnswered() const { return _disc_answered; }
+  bool discoverFailed() const { return _disc_failed; }
+  // Seconds to the next try, between tries.
+  int discoverNextIn() const {
+    if (!discovering() || _disc_waiting) return 0;
+    int32_t ms = (int32_t)(_disc_at - millis());
+    return ms > 0 ? (ms + 999) / 1000 : 0;
+  }
+
+  int foundCount() const { return _found_n; }
+  const Found& found(int i) const { return _found[i]; }
+  static int hopsOf(uint8_t len) { return len & 63; }
+  // Route i's hops, "Name > Name" (hash "?3F" for one not a contact), cut to fit.
+  void foundText(int i, bool back, char* out, size_t n) const {
+    const Found& f = _found[i];
+    const uint8_t len = back ? f.back_len : f.out_len;
+    const uint8_t* p = back ? f.back : f.out;
+    const int hops = hopsOf(len), size = (len >> 6) + 1;
+    size_t o = 0;
+    out[0] = '\0';
+    if (hops == 0) { snprintf(out, n, "direct"); return; }
+    for (int h = 0; h < hops && h < FOUND_HOPS && o + 4 < n; h++) {
+      char nm[NAME_LEN];
+      hashName(&p[h * size], size, nm, sizeof(nm));
+      o += snprintf(out + o, n - o, "%s%s", h ? " > " : "", nm);
+    }
+    if (hops > FOUND_HOPS && o + 4 < n) snprintf(out + o, n - o, " ...");
+  }
+  // Route i as the list (its repeaters by key where they're contacts).
+  bool useFound(int i) {
+    if (i < 0 || i >= _found_n) return false;
+    const Found& f = _found[i];
+    const int hops = hopsOf(f.out_len), size = (f.out_len >> 6) + 1;
+    cancelTrace();
+    _n = 0;
+    for (int h = 0; h < hops && h < MAX_HOPS; h++) loadHash(&f.out[h * size], size);
+    _too_long = hops > MAX_HOPS;
+    _edited = true;
+    invalidate();
+    return true;
+  }
+
   // ── save ────────────────────────────────────────────────────────────────────
   // The list as the contact's stored route; an empty list stores "direct"
   // (no repeaters, sent straight to the node). False when the hops share no
@@ -265,6 +349,86 @@ public:
   }
 
 private:
+  // The editor a discovery reply goes to (one editor, one discovery at a time).
+  static PathEditor*& discOwner() { static PathEditor* p = nullptr; return p; }
+
+  bool discoverSend() {
+    uint32_t est = 0;
+    discOwner() = this;
+    _disc_failed = false;
+    if (!the_mesh.sendPathDiscovery(_target_key, onDiscovered, &est)) {
+      _disc_failed = true;
+      _disc_tries = 0;
+      return false;
+    }
+    _disc_waiting = true;
+    uint32_t wait = est + 4000;   // the flood there and the reply's flood back
+    if (wait < 8000) wait = 8000;
+    _disc_at = millis() + wait;
+    return true;
+  }
+
+  void pollDiscover() {
+    if (_disc_tries == 0) return;
+    if (_disc_waiting) {
+      if ((int32_t)(millis() - _disc_at) < 0) return;
+      the_mesh.cancelPathDiscovery();   // no reply in time
+      tryOver();
+    } else if (_disc_done < _disc_tries && (int32_t)(millis() - _disc_at) >= 0) {
+      discoverSend();
+    }
+  }
+
+  // A try answered or timed out: the next one after the pause.
+  void tryOver() {
+    _disc_waiting = false;
+    _disc_done++;
+    _disc_at = millis() + DISCOVER_GAP_MS;
+  }
+
+  static void onDiscovered(const uint8_t* key, const uint8_t* out, uint8_t out_len, const uint8_t* back, uint8_t back_len) {
+    PathEditor* e = discOwner();
+    if (!e || !e->_disc_waiting || memcmp(key, e->_target_key, PUB_KEY_SIZE) != 0) return;
+    e->record(out, out_len, back, back_len);
+    e->_disc_answered++;
+    e->tryOver();
+  }
+
+  // A route found: another time for one already found (the latest way back
+  // with it), else a new one while there's room.
+  void record(const uint8_t* out, uint8_t out_len, const uint8_t* back, uint8_t back_len) {
+    const int osize = (out_len >> 6) + 1, bsize = (back_len >> 6) + 1;
+    if (osize > 3 || bsize > 3) return;
+    const int obytes = (hopsOf(out_len) < FOUND_HOPS ? hopsOf(out_len) : FOUND_HOPS) * osize;
+    const int bbytes = (hopsOf(back_len) < FOUND_HOPS ? hopsOf(back_len) : FOUND_HOPS) * bsize;
+    Found* f = nullptr;
+    for (int i = 0; i < _found_n && !f; i++)
+      if (_found[i].out_len == out_len && memcmp(_found[i].out, out, obytes) == 0) f = &_found[i];
+    if (f) {
+      if (f->times < 255) f->times++;
+    } else {
+      if (_found_n >= FOUND_MAX) return;
+      f = &_found[_found_n++];
+      f->out_len = out_len;
+      memcpy(f->out, out, obytes);
+      f->times = 1;
+    }
+    f->back_len = back_len;
+    memcpy(f->back, back, bbytes);
+  }
+
+  // A hash's repeater by name, else "?3F".
+  static void hashName(const uint8_t* hash, uint8_t size, char* out, size_t n) {
+    for (int idx = MAX_ANON_CONTACTS; ; idx++) {
+      ContactInfo c;
+      if (!the_mesh.getContactByIdx(idx, c)) break;
+      if (c.type == ADV_TYPE_REPEATER && c.id.isHashMatch(hash, size)) { snprintf(out, n, "%s", c.name); return; }
+    }
+    char hex[9] = {0};
+    for (uint8_t k = 0; k < size && k < 4; k++) snprintf(hex + k * 2, 3, "%02X", hash[k]);
+    snprintf(out, n, "?%s", hex);
+  }
+
   uint8_t saveWidth() const {   // 1..3 bytes of a stored path, the hash mode narrowed to what every hop has
     uint8_t want = _prefs ? _prefs->path_hash_mode + 1 : 1;
     if (want > 3) want = 3;
@@ -386,4 +550,9 @@ private:
   int      _links = 0;
   int16_t  _out_x4[MAX_NODES];
   int16_t  _back_x4[MAX_NODES];
+  Found    _found[FOUND_MAX];
+  int      _found_n = 0;
+  uint8_t  _disc_tries = 0, _disc_done = 0, _disc_answered = 0;
+  bool     _disc_waiting = false, _disc_failed = false;
+  uint32_t _disc_at = 0;   // waiting: the reply's deadline; between tries: the next one's time
 };

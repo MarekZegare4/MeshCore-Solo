@@ -21,12 +21,16 @@ class RouteView {
   int  _menu_hop = 0;
   uint8_t _seen_state = PathEditor::IDLE;   // a result's alert, once
   uint8_t _sel_kind = 0xFF;                 // the action row under the cursor, kept as rows come and go
+  bool _seen_disc = false;                  // a discovery running at the last pass: its end said once
+  uint8_t _tries = 1;                       // Discover: triesOf(_tries) tries
 
-  enum Row : uint8_t { R_HOP, R_NODE, R_ADD, R_TRACE, R_PROBE, R_TO_NODE, R_SAVE, R_KEEP };
+  // R_FOUND before R_NODE: like the hops, not an action the cursor follows.
+  enum Row : uint8_t { R_HOP, R_FOUND, R_NODE, R_ADD, R_TRACE, R_PROBE, R_TO_NODE, R_SAVE, R_KEEP, R_DISCOVER };
+  static int triesOf(int i) { return i == 0 ? 1 : i == 1 ? 3 : 5; }
 
   PathEditor& R() { return _task->core().route; }
   // The rows: the hops, the node, then the actions (Find break only after a
-  // trace with no reply).
+  // trace with no reply), Discover and the routes it found.
   int rows(Row* out) {
     PathEditor& r = R();
     int k = 0;
@@ -38,9 +42,17 @@ class RouteView {
     if (r.count() > 0) out[k++] = R_TO_NODE;   // with no repeaters the trace is to the node
     out[k++] = R_SAVE;
     out[k++] = R_KEEP;
+    out[k++] = R_DISCOVER;
+    for (int i = 0; i < r.foundCount(); i++) out[k++] = R_FOUND;
     return k;
   }
-  static const int ROWS_MAX = PathEditor::MAX_HOPS + 7;
+  static const int ROWS_MAX = PathEditor::MAX_HOPS + 8 + PathEditor::FOUND_MAX;
+  // Which found route row `idx` is.
+  static int foundIndex(const Row* kind, int idx) {
+    int f = 0;
+    for (int i = 0; i < idx; i++) if (kind[i] == R_FOUND) f++;
+    return f;
+  }
 
   void openHopMenu(int i) {
     _menu_hop = i;
@@ -58,6 +70,13 @@ class RouteView {
   // What a result means, said once when it comes.
   void announce() {
     PathEditor& r = R();
+    if (_seen_disc && !r.discovering() && r.discoverTries() > 0) {   // a discovery just ended
+      char t[32];
+      if (r.discoverAnswered()) snprintf(t, sizeof(t), "%d/%d answered", r.discoverAnswered(), r.discoverDone());
+      else snprintf(t, sizeof(t), "No answer");
+      _task->showAlert(t, 1500);
+    }
+    _seen_disc = r.discovering();
     if (r.state() == _seen_state) return;
     _seen_state = r.state();
     char t[48];
@@ -99,6 +118,7 @@ public:
     _menu.active = false;
     _seen_state = PathEditor::IDLE;
     _sel_kind = 0xFF;
+    _seen_disc = false;
     return true;
   }
   // Back from picking a repeater: the cursor on Add, for the next one.
@@ -108,7 +128,7 @@ public:
     _sel_kind = R_ADD;
   }
   void close() {
-    if (_task) R().cancelTrace();
+    if (_task) { R().cancelTrace(); R().stopDiscover(); }
     _active = false;
     _menu.active = false;
   }
@@ -158,6 +178,20 @@ public:
         case R_TO_NODE: snprintf(left, sizeof(left), "To node"); snprintf(right, sizeof(right), "%s", r.toNode() ? "ON" : "OFF"); break;
         case R_SAVE:    snprintf(left, sizeof(left), "%s", n ? "Save path" : "Save direct"); break;
         case R_KEEP:    snprintf(left, sizeof(left), "Keep path"); snprintf(right, sizeof(right), "%s", r.pinned() ? "ON" : "OFF"); break;
+        case R_DISCOVER:
+          if (r.discoverWaiting()) snprintf(left, sizeof(left), "Discover %d/%d...", r.discoverTry(), r.discoverTries());
+          else if (r.discovering()) snprintf(left, sizeof(left), "Next try %ds", r.discoverNextIn());
+          else snprintf(left, sizeof(left), "Discover");
+          snprintf(right, sizeof(right), "%s", r.discovering() ? "Stop" : _tries == 0 ? "1 try" : _tries == 1 ? "3 tries" : "5 tries");
+          break;
+        case R_FOUND: {
+          const int f = foundIndex(kind, idx);
+          char route[40];
+          r.foundText(f, false, route, sizeof(route));
+          snprintf(left, sizeof(left), "Use %s", route);
+          snprintf(right, sizeof(right), "%ux", (unsigned)r.found(f).times);
+          break;
+        }
       }
       const int rw = right[0] ? display.getTextWidth(right) + display.getCharWidth() : 0;
       display.drawTextEllipsized(2, y, display.width() - reserve - 4 - rw, left, sel);
@@ -167,7 +201,7 @@ public:
       }
     });
     if (_menu.active) _menu.render(display);
-    return r.state() == PathEditor::RUNNING ? 100 : 2000;
+    return r.state() == PathEditor::RUNNING ? 100 : r.discovering() ? 500 : 2000;
   }
 
   // Returns true: the key was used (the view is modal).
@@ -196,6 +230,7 @@ public:
       if (k == R_HOP) { if (r.move(_sel, dir)) _sel += dir; }   // reorder in place
       else if (k == R_TO_NODE) r.setToNode(!r.toNode());
       else if (k == R_KEEP) toggleKeep();
+      else if (k == R_DISCOVER && !r.discovering()) _tries = (uint8_t)((_tries + 3 + dir) % 3);
       return true;
     }
     if (c != KEY_ENTER && c != KEY_CONTEXT_MENU) return true;
@@ -220,6 +255,17 @@ public:
         else _task->showAlert(r.count() ? "Path saved" : "Saved: direct", 1000);
         break;
       case R_KEEP: toggleKeep(); break;
+      case R_DISCOVER:
+        if (r.discovering()) r.stopDiscover();
+        else if (!r.discover(triesOf(_tries))) _task->showAlert("Send failed", 1000);
+        else _seen_disc = true;
+        break;
+      case R_FOUND: {
+        const int f = foundIndex(kind, _sel);
+        if (PathEditor::hopsOf(r.found(f).out_len) > PathEditor::MAX_HOPS) { _task->showAlert("Too long", 1000); break; }
+        if (r.useFound(f)) { _task->showAlert("In list: Trace, Save", 1200); _sel = 0; }
+        break;
+      }
     }
     return true;
   }

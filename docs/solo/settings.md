@@ -68,7 +68,10 @@ nodes aren't added until you make room.
   **Allowed** (the contacts you gave that permission: **Telem** in a node's
   options in [Nodes](./contacts.md#nearby-nodes), or the phone app) or
   **Everyone**. Status is the battery; a request for location or
-  sensors is answered only where status is allowed too.
+  sensors is answered only where status is allowed too. Status also lets
+  others find a route to you (**Discover** in
+  [Path and trace](./contacts.md#path-and-trace), or the phone app's path
+  discovery).
 - **BT PIN**: the six-digit Bluetooth pairing PIN. Leave it empty for a new
   random one at each start, shown on screen. A new PIN is used from the next
   start; the phone pairs again after that.

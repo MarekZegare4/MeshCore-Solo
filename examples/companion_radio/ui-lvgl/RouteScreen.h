@@ -39,6 +39,11 @@ static void linkText(char* out, size_t n, int16_t out_x4, int16_t back_x4) {
 static int s_sel = -1;            // the hop showing its move / remove buttons
 static const int ROW_TARGET = 0xFE;   // a row's tap code: the node (trace to it or not)
 
+// Discover: how many tries (TRIES[s_tries]), kept while the device runs.
+static const char* TRIES_MAP[] = { "1", "3", "5", "" };
+static const int TRIES[] = { 1, 3, 5 };
+static int s_tries = 1;
+
 }  // namespace routeview
 
 static void onRouteAct(lv_event_t* e)     { s_ui->routeAct((uint8_t)(uintptr_t)lv_event_get_user_data(e)); }
@@ -47,6 +52,11 @@ static void onRoutePickRow(lv_event_t* e) { s_ui->routePick((int)vlist::arg(e));
 
 static void onRouteRow(lv_event_t* e)     { s_ui->routeOp(routeview::OP_SEL << 8 | (int)(uintptr_t)lv_event_get_user_data(e)); }
 static void onRouteKeep(lv_event_t* e)    { (void)e; s_ui->routeAct(routeview::RT_PIN); }
+static void onRouteDiscover(lv_event_t* e) { (void)e; s_ui->routeDiscover(); }
+static void onRouteFound(lv_event_t* e)   { s_ui->routeUseFound((int)(uintptr_t)lv_event_get_user_data(e)); }
+static void onRouteTries(lv_event_t* e) {
+  s_ui->routeDiscTries((int)lv_buttonmatrix_get_selected_button((lv_obj_t*)lv_event_get_target(e)));
+}
 
 // A small square button on a hop's row: user data = op << 8 | hop index.
 static lv_obj_t* routeSquare(lv_obj_t* row, const char* sym, int code) {
@@ -134,6 +144,9 @@ void UITask::buildRoute() {
   lv_obj_set_style_pad_row(_route_list, 4, 0);
 
   _route_note = noteLabel(scroll, "", THEME_FONT_SMALL, theme::TEXT_MUTED);
+  _route_disc = flexBox(scroll, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_width(_route_disc, LV_PCT(100));
+  _route_disc_shown = 0xFFFFFFFF;
 
   lv_obj_t* bar = buttonBar(body);
   barButton(bar, LV_SYMBOL_PLUS " Add", onRouteAct, routeview::RT_ADD);
@@ -141,6 +154,7 @@ void UITask::buildRoute() {
   _route_trace_btn = barButton(bar, LV_SYMBOL_LOOP " Trace", onRouteAct, routeview::RT_TRACE, true);
   _route_save_btn = barButton(bar, LV_SYMBOL_SAVE " Save", onRouteAct, routeview::RT_SAVE);
   routeRebuild();
+  routeDiscRebuild();
 }
 
 // What the chain shows: the state, the links with a result, a probe's step.
@@ -265,6 +279,83 @@ void UITask::routeStatus() {
 void UITask::routePoll() {
   _core->route.poll();
   if (routeSig() != _route_shown) routeRebuild();
+  if (routeDiscSig() != _route_disc_shown) routeDiscRebuild();
+}
+
+// ── Discover ──────────────────────────────────────────────────────────────────
+
+uint32_t UITask::routeDiscSig() {
+  PathEditor& R = _core->route;
+  return (uint32_t)R.discovering() | (uint32_t)R.discoverWaiting() << 1 | (uint32_t)R.discoverDone() << 2 |
+         (uint32_t)R.discoverAnswered() << 6 | (uint32_t)R.foundCount() << 10 | (uint32_t)R.discoverNextIn() << 13 |
+         (uint32_t)R.discoverFailed() << 20 | (uint32_t)routeview::s_tries << 21 | (uint32_t)(R.discoverTries() > 0) << 23;
+}
+
+// Under the chain: how many tries and Discover (Stop while it runs), where
+// it is, then each route found -- its repeaters, how often it came, the way
+// back -- a tap putting it in the list above.
+void UITask::routeDiscRebuild() {
+  if (!_route_disc) return;
+  using namespace routeview;
+  PathEditor& R = _core->route;
+  lv_obj_clean(_route_disc);
+  lv_obj_t* g = group(_route_disc, "FIND THE ROUTE");
+  lv_obj_t* row = groupLine(g, false);
+  groupText(row, "Discover", "Ask the node which way it's reached: a flood each try, 20 s apart");
+  lv_obj_t* seg = segmented(row, TRIES_MAP, s_tries, 84, 30);
+  lv_obj_add_event_cb(seg, onRouteTries, LV_EVENT_VALUE_CHANGED, NULL);
+
+  char t[160];
+  t[0] = '\0';
+  if (R.discoverFailed()) snprintf(t, sizeof(t), "Couldn't send the request");
+  else if (R.discoverWaiting())
+    snprintf(t, sizeof(t), "Try %d of %d: waiting for the reply...", R.discoverTry(), R.discoverTries());
+  else if (R.discovering())
+    snprintf(t, sizeof(t), "%d of %d answered, next try in %d s", R.discoverAnswered(), R.discoverDone(), R.discoverNextIn());
+  else if (R.discoverTries() > 0 && R.discoverAnswered())
+    snprintf(t, sizeof(t), "%d of %d answered", R.discoverAnswered(), R.discoverDone());
+  else if (R.discoverTries() > 0)
+    snprintf(t, sizeof(t), "No answer to %d tr%s. A companion answers only if its Settings > Privacy > Status lets you, a repeater after a login",
+             R.discoverDone(), R.discoverDone() == 1 ? "y" : "ies");
+  if (t[0]) {
+    lv_obj_t* l = groupLine(g, false);
+    noteLabel(l, t, THEME_FONT_SMALL, R.discoverFailed() ? theme::FAIL : theme::TEXT_MUTED);
+  }
+  for (int i = 0; i < R.foundCount(); i++) {
+    const PathEditor::Found& f = R.found(i);
+    char route[96], back[64], sub[96];
+    R.foundText(i, false, route, sizeof(route));
+    R.foundText(i, true, back, sizeof(back));
+    const int hops = PathEditor::hopsOf(f.out_len);
+    snprintf(sub, sizeof(sub), "%d hop%s%s, found %u time%s. Back: %s", hops, hops == 1 ? "" : "s",
+             hops > PathEditor::MAX_HOPS ? " (too long to use)" : "", (unsigned)f.times, f.times == 1 ? "" : "s", back);
+    lv_obj_t* r = groupLine(g, true);
+    groupText(r, route, sub);
+    label(r, "Use", THEME_FONT_SMALL, theme::ACCENT);
+    lv_obj_add_event_cb(r, onRouteFound, LV_EVENT_CLICKED, (void*)(uintptr_t)i);
+  }
+  lv_obj_t* bar = buttonBar(_route_disc);
+  barButton(bar, R.discovering() ? LV_SYMBOL_CLOSE " Stop" : LV_SYMBOL_REFRESH " Discover", onRouteDiscover, 0, !R.discovering());
+  _route_disc_shown = routeDiscSig();
+}
+
+void UITask::routeDiscover() {
+  PathEditor& R = _core->route;
+  if (R.discovering()) R.stopDiscover();
+  else R.discover(routeview::TRIES[routeview::s_tries]);
+  routeDiscRebuild();
+}
+
+void UITask::routeDiscTries(int sel) {
+  if (sel >= 0 && sel < 3) routeview::s_tries = sel;
+}
+
+void UITask::routeUseFound(int i) {
+  PathEditor& R = _core->route;
+  if (PathEditor::hopsOf(R.found(i).out_len) > PathEditor::MAX_HOPS) { showToast("Too long: up to 7 repeaters"); return; }
+  if (!R.useFound(i)) return;
+  showToast("In the list: Trace to check it, Save to use it");
+  routeRebuild();
 }
 
 void UITask::routeAct(uint8_t act) {

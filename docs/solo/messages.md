@@ -30,10 +30,20 @@ older and newer one.
   contains a location (see [Navigation](./navigation.md)).
 - **Path** on a received message: the repeaters it came through.
   **Relayed by** on your own channel post: the repeaters heard repeating it.
+- **Show route**: when the message has a route written in it, such as a
+  bot's `!path` reply (`3f:a1:c8`, see [Remote bot](./tools.md#remote-bot)).
+  It draws the route on a small map: you, each repeater numbered in order,
+  and the sender, with how many of the hops could be placed (a repeater
+  needs a position). In a direct message the route starts from you, because
+  it's the way your message went; on a channel it's someone else's, so it
+  doesn't. **Back** closes it.
 
 > [!NOTE]
 > **Wio Tracker L2:** hold a bubble. The card shows when it was sent, the hop
-> count, the path as a diagram, and **Reply** / **Set target**.
+> count, the path as a diagram, and **Reply** / **Set target**, plus **Route**
+> when the message has a route in it: the nodes map opens with the route drawn
+> and its hops numbered, and the names along the bottom; **Done** goes back to
+> the conversation.
 
 ### How much is kept
 

@@ -277,6 +277,15 @@ public:
   bool setContactPinned(const uint8_t* pub_key, bool pin);   // keep / release the stored route
   bool setContactPath(const uint8_t* pub_key, const uint8_t* path, uint8_t hash_size, uint8_t hops, bool pin = false);
   void setPingCallback(PingCallback cb, void* arg);
+  // Path discovery from this device's UI (PathEditor::discover()): the node is
+  // asked by flood, and its reply brings the way the flood reached it (out)
+  // and the way the reply came back (in), as encoded path lengths and hashes,
+  // to the callback. The tag, 0 when not sent. One at a time; the app's own
+  // discovery (CMD_SEND_PATH_DISCOVERY_REQ) is answered to the app as before.
+  typedef void (*DiscoverCallback)(const uint8_t* pub_key, const uint8_t* out_path, uint8_t out_path_len,
+                                   const uint8_t* in_path, uint8_t in_path_len);
+  uint32_t sendPathDiscovery(const uint8_t* pub_key, DiscoverCallback cb, uint32_t* est_timeout = nullptr);
+  void cancelPathDiscovery() { _ui_discovery = 0; }
   void clearPingResult(uint32_t tag);
   PingResult* getPingResult(uint32_t tag);
   PingCallback getPingCallback() const { return _ping_callback; }
@@ -669,6 +678,9 @@ private:
   uint32_t ui_pending_admin_reply;  // pub_key prefix of the contact AdminScreen's sendAdminCommand() is awaiting a CLI reply from
   uint32_t pending_status;
   uint32_t pending_telemetry, pending_discovery;   // pending _TELEMETRY_REQ
+  uint32_t _ui_discovery = 0;                       // sendPathDiscovery()'s, answered to _discover_cb
+  DiscoverCallback _discover_cb = nullptr;
+  int sendDiscoveryReq(ContactInfo& recipient, uint32_t& tag, uint32_t& est_timeout);
   uint32_t pending_req;   // pending _BINARY_REQ
   BaseSerialInterface *_serial;
   Listener* _listener;

@@ -87,6 +87,23 @@ With no reply, **Find break** traces to the first repeater, then the second,
 and so on, and shows where it stops. If every repeater answers, the node
 itself didn't.
 
+**Discover** finds the route for you. It asks the node by flood, and the
+reply says which repeaters the flood went through to reach it, and which the
+reply took back. These come from the mesh itself, not from anyone's position
+on the map. On the **Discover** row, **Left / Right** sets 1, 3 or 5 tries
+and **Enter** starts it (or stops it). Each try waits for its reply or its
+timeout, then 20 seconds more, so the floods don't come all at once. Each
+route found is listed under it with how many times it came; **Enter** on one
+puts it in the list, ready to **Trace** and save. A repeater you don't have
+as a contact shows as its hash (`?8D`). Nothing is saved until you save it.
+
+Only a node that answers requests can be asked: a companion whose
+Settings › Privacy › **Ask status** lets you (**Everyone**, or **Allowed**
+with Telem given to you), or a repeater or room you're logged in to (a guest
+login is enough). Your own Ask status decides the same for others finding a
+route to you. Not to be confused with **Discover scan** in the node options,
+which looks for nodes in direct range.
+
 **Save path** makes the list the contact's route; saved empty, messages go
 straight to the node. The route a node sends back usually replaces it again;
 **Keep path** stops that, and keeps the route after failed sends too.
@@ -99,6 +116,10 @@ straight to the node. The route a node sends back usually replaces it again;
 > the node to trace to it or stop at the last repeater. **Keep** is in the
 > header, **Find where** appears next to a "No reply". The repeaters can also
 > be tapped on the map, in order (**Map**); **Undo** takes the last one out.
+> **Discover** is under the route, in **Find the route**, with the number of
+> tries beside it and where it is (the try waiting for its reply, or the
+> seconds to the next one). Tap a route found to use it; the way back is under
+> it.
 
 ## Your own contact
 

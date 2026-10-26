@@ -1058,10 +1058,43 @@ namespace {
   };
 }
 
+// 'Path Discovery' is just a special case of flood + Telemetry req: the
+// reply comes back as a path return carrying both ways (onContactPathRecv()).
+int MyMesh::sendDiscoveryReq(ContactInfo& recipient, uint32_t& tag, uint32_t& est_timeout) {
+  uint8_t req_data[9];
+  req_data[0] = REQ_TYPE_GET_TELEMETRY_DATA;
+  req_data[1] = ~(TELEM_PERM_BASE);  // NEW: inverse permissions mask (ie. we only want BASE telemetry)
+  memset(&req_data[2], 0, 3);  // reserved
+  getRNG()->random(&req_data[5], 4);   // random blob to help make packet-hash unique
+  auto save = recipient.out_path_len;    // temporarily force sendRequest() to flood
+  recipient.out_path_len = OUT_PATH_UNKNOWN;
+  int result = sendRequest(recipient, req_data, sizeof(req_data), tag, est_timeout);
+  recipient.out_path_len = save;
+  return result;
+}
+
+uint32_t MyMesh::sendPathDiscovery(const uint8_t* pub_key, DiscoverCallback cb, uint32_t* est_timeout) {
+  ContactInfo* recipient = lookupContactByPubKey(pub_key, PUB_KEY_SIZE);
+  if (!recipient) return 0;
+  uint32_t tag, est;
+  if (sendDiscoveryReq(*recipient, tag, est) == MSG_SEND_FAILED) return 0;
+  _ui_discovery = tag;
+  _discover_cb = cb;
+  if (est_timeout) *est_timeout = est;
+  return tag;
+}
+
 bool MyMesh::onContactPathRecv(ContactInfo& contact, uint8_t* in_path, uint8_t in_path_len, uint8_t* out_path, uint8_t out_path_len, uint8_t extra_type, uint8_t* extra, uint8_t extra_len) {
   if (extra_type == PAYLOAD_TYPE_RESPONSE && extra_len > 4) {
     uint32_t tag;
     memcpy(&tag, extra, 4);
+
+    if (_ui_discovery && tag == _ui_discovery) {   // this device's own (sendPathDiscovery())
+      _ui_discovery = 0;
+      if (_discover_cb && mesh::Packet::isValidPathLen(in_path_len) && mesh::Packet::isValidPathLen(out_path_len))
+        _discover_cb(contact.id.pub_key, out_path, out_path_len, in_path, in_path_len);
+      return false;  // DON'T send reciprocal path, nor take it: the user picks
+    }
 
     if (tag == pending_discovery) {  // check for matching response tag)
       pending_discovery = 0;
@@ -2244,16 +2277,7 @@ void MyMesh::handleCmdFrame(size_t len) {
     ContactInfo *recipient = lookupContactByPubKey(pub_key, PUB_KEY_SIZE);
     if (recipient) {
       uint32_t tag, est_timeout;
-      // 'Path Discovery' is just a special case of flood + Telemetry req
-      uint8_t req_data[9];
-      req_data[0] = REQ_TYPE_GET_TELEMETRY_DATA;
-      req_data[1] = ~(TELEM_PERM_BASE);  // NEW: inverse permissions mask (ie. we only want BASE telemetry)
-      memset(&req_data[2], 0, 3);  // reserved
-      getRNG()->random(&req_data[5], 4);   // random blob to help make packet-hash unique
-      auto save = recipient->out_path_len;    // temporarily force sendRequest() to flood
-      recipient->out_path_len = OUT_PATH_UNKNOWN;
-      int result = sendRequest(*recipient, req_data, sizeof(req_data), tag, est_timeout);
-      recipient->out_path_len = save;
+      int result = sendDiscoveryReq(*recipient, tag, est_timeout);
       if (result == MSG_SEND_FAILED) {
         writeErrFrame(ERR_CODE_TABLE_FULL);
       } else {

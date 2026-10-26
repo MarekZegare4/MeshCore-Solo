@@ -127,6 +127,11 @@ public:
   void routeStatus();
   uint32_t routeSig();
   void routePoll();
+  void routeDiscRebuild();
+  uint32_t routeDiscSig();
+  void routeDiscover();
+  void routeDiscTries(int sel);
+  void routeUseFound(int i);
   void routeAct(uint8_t act);
   void routeOp(int code);
   void routeKeep();
@@ -664,6 +669,8 @@ private:
   lv_obj_t* _route_save_btn = nullptr;
   lv_obj_t* _route_probe_row = nullptr;   // "Find where it stops", after a trace with no reply
   lv_obj_t* _route_note = nullptr;
+  lv_obj_t* _route_disc = nullptr;        // Discover: the tries, its progress, the routes found
+  uint32_t  _route_disc_shown = 0xFFFFFFFF;   // what routeDiscRebuild() drew (routeDiscSig())
   lv_obj_t* _route_keep_btn = nullptr;    // header: Keep (accent while kept)
   uint32_t  _route_shown = 0xFFFFFFFF;     // what routeRebuild() drew (routeSig())
   uint32_t  _next_route_ms = 0;
