@@ -553,7 +553,7 @@ static void drawMarks(lv_event_t* e) {
     const Mark& m = s_marks[k];
     if (!m.vis) continue;
     dot.bg_color = lv_color_hex(m.col);
-    lv_area_t da = { a.x1 + m.x - half, a.y1 + m.y - half, a.x1 + m.x + half - 1, a.y1 + m.y + half - 1 };
+    lv_area_t da = { a.x1 + m.x - half, a.y1 + m.y - half, a.x1 + m.x + half, a.y1 + m.y + half };   // odd: centred on (x, y), as the lines are
     lv_draw_rect(layer, &dot, &da);
   }
   // Hop numbers of the route being picked: a badge at the dot's top right.
@@ -811,7 +811,7 @@ void UITask::buildMap() {
 
   _map_me = lv_obj_create(_map_marks);
   lv_obj_remove_style_all(_map_me);
-  lv_obj_set_size(_map_me, 16, 16);
+  lv_obj_set_size(_map_me, 17, 17);   // odd: its middle on the pixel a route line starts from
   lv_obj_set_style_radius(_map_me, LV_RADIUS_CIRCLE, 0);
   lv_obj_set_style_bg_color(_map_me, lv_color_hex(theme::ACCENT), 0);
   lv_obj_set_style_bg_opa(_map_me, LV_OPA_COVER, 0);
@@ -992,7 +992,7 @@ void UITask::layoutMap() {
   if (_core->course.currentLocation(lat, lon)) {
     double x = mapview::lonToTileX(lon / 1e6, _map_z) * mapview::TILE_PX - left;
     double y = mapview::latToTileY(lat / 1e6, _map_z) * mapview::TILE_PX - top;
-    lv_obj_set_pos(_map_me, (int)x - 8, (int)y - 8);
+    lv_obj_set_pos(_map_me, (int)lround(x) - 8, (int)lround(y) - 8);
     lv_obj_remove_flag(_map_me, LV_OBJ_FLAG_HIDDEN);
   } else {
     lv_obj_add_flag(_map_me, LV_OBJ_FLAG_HIDDEN);
