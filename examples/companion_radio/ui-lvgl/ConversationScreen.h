@@ -17,7 +17,7 @@
 namespace convview {
 
 enum : uint8_t { A_FAV, A_READ, A_LOGIN, A_LOGOUT, A_PIN };
-enum : uint8_t { M_REPLY, M_TARGET };
+enum : uint8_t { M_REPLY, M_TARGET, M_ROUTE };
 
 static uint8_t s_key[PUB_KEY_SIZE];     // the conversation the popup is about
 static uint8_t s_login_key[PUB_KEY_SIZE];
@@ -368,10 +368,12 @@ void UITask::messageMenu(int idx) {
   }
 
   bool can_reply = !m.own && m.from[0] && _compose_ta;
-  if (!can_reply && m.loc < 0) return;
+  const bool route = HopRoute::has(body);   // a bot's {path} reply: the route on the map
+  if (!can_reply && m.loc < 0 && !route) return;
   lv_obj_t* acts = buttonBar(panel);
   if (can_reply) barButton(acts, LV_SYMBOL_EDIT " Reply", onMsgAction, M_REPLY, false);
   if (m.loc >= 0) barButton(acts, UI_SYMBOL_COMPASS " Set target", onMsgAction, M_TARGET, false);
+  if (route) barButton(acts, UI_SYMBOL_MAP " Route", onMsgAction, M_ROUTE, false);
 }
 
 // The open message popup, every half second on a conversation: the age in
@@ -419,6 +421,18 @@ void UITask::messageAction(uint8_t act) {
     char msg[48];
     snprintf(msg, sizeof(msg), "Target: %s", l.label);
     showToast(msg);
+  } else if (act == M_ROUTE && m.pos >= 0) {
+    // The way our message went to whoever wrote this: from here, to them.
+    const char* text = m.channel ? s_th_ch[m.pos].text : s_th_dm[m.pos].text;
+    int32_t lat, lon;
+    const bool own = _core->course.currentLocation(lat, lon) || _core->fixedPosition(lat, lon);
+    if (!_core->hop_route.show(text, own, lat, lon, m.channel ? nullptr : _thread_key, m.from)) return;
+    if (_core->hop_route.points() == 0) { showToast("None of its hops has a position"); _core->hop_route.close(); return; }
+    _map_nav = true;   // the nodes map (openMap(false)), with the route's bar
+    _map_nodes = true;
+    _route_show = true;
+    showMap(false);
+    routeMapFrame();
   }
 }
 

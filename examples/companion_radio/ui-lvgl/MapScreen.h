@@ -200,10 +200,12 @@ static int  s_sig_n = 0;
 static lv_obj_t* s_mark_layer = nullptr;
 // The route being picked (Route > Map): its points as lat/lon, and in layer px
 // from the last layout, drawn as a line under the markers.
-static const int ROUTE_PTS = 10;
+static const int ROUTE_PTS = HopRoute::MAX_PTS;   // a picked route has 10 at most
 static int32_t s_route_lat[ROUTE_PTS], s_route_lon[ROUTE_PTS];
 static int s_route_n = 0;
 static lv_point_precise_t s_route_px[ROUTE_PTS];
+static int8_t  s_route_hop[ROUTE_PTS];      // a shown message route's: each point's hop (-1 none)
+static uint8_t s_route_key[ROUTE_PTS][4];   // and its repeater's key prefix
 static bool s_route_on = false;
 static int  s_mark_count = 0;
 static int  s_mark_prev = 0;   // during a rebuild: how many the last one left, reused where unchanged
@@ -693,7 +695,7 @@ double UITask::mapCenterBias() const {
 // The bar along the map's bottom edge: the target's (Navigation map, while
 // there is one) or the route pick's.
 int UITask::mapBottomH() const {
-  if (_route_pick) return navmap::BAR_H;
+  if (_route_pick || _route_show) return navmap::BAR_H;
   return _map_nav && _nav_bar && !lv_obj_has_flag(_nav_bar, LV_OBJ_FLAG_HIDDEN) ? navmap::BAR_H : 0;
 }
 
@@ -736,6 +738,8 @@ void UITask::openMap(bool nav) {
   // One map everywhere (trail, target, tools); from Nodes it adds the nodes.
   _map_nav = true;
   _map_nodes = !nav;
+  _route_show = false;   // a message's route is shown by its own way in (messageAction)
+  _core->hop_route.close();
   showMap();
 }
 
@@ -903,7 +907,7 @@ void UITask::buildMap() {
   lv_obj_add_flag(_map_hint, LV_OBJ_FLAG_HIDDEN);
   if (_map_nav) buildNavControls(body);
   _route_bar = _route_lbl = nullptr;
-  if (_route_pick) buildRouteBar(body);
+  if (_route_pick || _route_show) buildRouteBar(body);
   mapPlaceBottom();
 
   layoutNow(body);
@@ -1177,6 +1181,11 @@ void UITask::layoutMapMarks(double left, double top, int w, int h) {
       int at = ne.has_key ? _core->route.indexOf(ne.pub_key) : -1;
       if (at >= 0) m.order = (uint8_t)(at + 1);
     }
+    if (_route_show && m.vis && m.kind == MK_NODE && m.idx < _nearby->count()) {   // a message's route: its hops numbered
+      const NearbyModel::Entry& ne = _nearby->at(m.idx);
+      for (int i = 0; ne.has_key && i < s_route_n; i++)
+        if (s_route_hop[i] >= 0 && memcmp(s_route_key[i], ne.pub_key, 4) == 0) { m.order = (uint8_t)(s_route_hop[i] + 1); break; }
+    }
     if (!m.vis) continue;
     m.x = (int16_t)lround(x);
     m.y = (int16_t)lround(y);
@@ -1213,8 +1222,8 @@ void UITask::layoutMapMarks(double left, double top, int w, int h) {
     if (lw) { x1 = min(x1, lx); y1 = min(y1, ly); x2 = max(x2, lx + lw); y2 = max(y2, ly + lh); }
     a = { la.x1 + x1 - 1, la.y1 + y1 - 1, la.x1 + x2 + 1, la.y1 + y2 + 1 };
   };
-  s_route_on = _route_pick;
-  if (_route_pick) {   // the route's points, in px (any distance away: the line is clipped by the layer)
+  s_route_on = _route_pick || _route_show;
+  if (s_route_on) {   // the route's points, in px (any distance away: the line is clipped by the layer)
     for (int i = 0; i < s_route_n; i++) {
       double rx = lonToTileX(s_route_lon[i] / 1e6, _map_z) * TILE_PX - left;
       double ry = latToTileY(s_route_lat[i] / 1e6, _map_z) * TILE_PX - top;
@@ -1339,7 +1348,7 @@ void UITask::mapFlowTick() {
 // ── Picking a route (Route > Map) ─────────────────────────────────────────────
 
 static void onRouteUndo(lv_event_t* e) { (void)e; s_ui->routeMapUndo(); }
-static void onRouteDone(lv_event_t* e) { (void)e; s_ui->routeMapDone(); }
+static void onRouteDone(lv_event_t* e) { (void)e; if (s_ui->routeShowing()) s_ui->routeShowDone(); else s_ui->routeMapDone(); }
 
 // A bar over the nav bar: the route so far, Undo (last hop out) and Done.
 void UITask::buildRouteBar(lv_obj_t* body) {
@@ -1366,6 +1375,12 @@ void UITask::buildRouteBar(lv_obj_t* body) {
   lv_obj_add_event_cb(done, onRouteDone, LV_EVENT_CLICKED, NULL);
   lv_obj_center(label(done, LV_SYMBOL_OK " Done", THEME_FONT_SMALL, theme::TEXT));
   stylePrimary(done);
+  if (_route_show) {   // only looked at: the label has the room Undo would take
+    lv_obj_set_width(_route_lbl, lv_pct(75));
+    lv_label_set_long_mode(_route_lbl, LV_LABEL_LONG_DOT);
+    routeMapRefresh();
+    return;
+  }
   lv_obj_t* undo = lv_button_create(_route_bar);
   lv_obj_set_size(undo, 64, 34);
   lv_obj_align(undo, LV_ALIGN_RIGHT_MID, -76, 0);
@@ -1377,6 +1392,16 @@ void UITask::buildRouteBar(lv_obj_t* body) {
   routeMapRefresh();
 }
 
+// Done (or Back) on a message's route: back to the conversation.
+void UITask::routeShowDone() {
+  _route_show = false;
+  _core->hop_route.close();
+  _screen = SCR_THREAD;
+  _nav_back = true;
+  buildThread();
+  _nav_back = false;
+}
+
 void UITask::routeMapUndo() {
   _core->route.removeLast();
   routeMapRefresh();
@@ -1385,8 +1410,33 @@ void UITask::routeMapUndo() {
 // The route changed: its points for the line, the text, the markers.
 void UITask::routeMapRefresh() {
   using namespace mapview;
-  PathEditor& R = _core->route;
   s_route_n = 0;
+  if (_route_show) {   // a message's route: here, its hops placed, the sender
+    const HopRoute& H = _core->hop_route;
+    for (int i = 0; i < H.points() && s_route_n < ROUTE_PTS; i++) {
+      const HopRoute::Pt& p = H.point(i);
+      s_route_lat[s_route_n] = p.lat; s_route_lon[s_route_n] = p.lon;
+      s_route_hop[s_route_n] = p.hop;
+      ContactInfo c;
+      if (p.node >= 0 && the_mesh.getContactByIdx(p.node, c)) memcpy(s_route_key[s_route_n], c.id.pub_key, 4);
+      else s_route_hop[s_route_n] = -1;
+      s_route_n++;
+    }
+    if (_route_lbl) {
+      char t[128], nm[33];
+      int o = 0;
+      H.summary(t, sizeof(t));
+      o = strlen(t);
+      for (int i = 0; i < H.hops() && o < (int)sizeof(t) - 8; i++) {
+        H.hopName(i, nm, sizeof(nm));
+        o += snprintf(t + o, sizeof(t) - o, "%s%.10s", i ? " > " : ": ", nm);
+      }
+      lv_label_set_text(_route_lbl, t);
+    }
+    if (_map_area) layoutMap();
+    return;
+  }
+  PathEditor& R = _core->route;
   auto add = [&](int32_t lat, int32_t lon) {
     if ((lat != 0 || lon != 0) && s_route_n < ROUTE_PTS) { s_route_lat[s_route_n] = lat; s_route_lon[s_route_n] = lon; s_route_n++; }
   };

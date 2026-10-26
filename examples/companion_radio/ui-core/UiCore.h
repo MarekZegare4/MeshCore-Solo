@@ -30,6 +30,7 @@
 #include "AdminSession.h"
 #include "RoomSessions.h"
 #include "ContactControl.h"
+#include "HopRoute.h"   // after ContactControl (hopName)
 
 class UiCore : public MyMesh::Listener {
 public:
@@ -71,6 +72,7 @@ public:
   PathEditor  route;        // route to a node: edit, trace out and back, save
   CourseEngine course;      // GPS position + course-over-ground ring
   PacketFlow  flow;         // packets heard, as lines between nodes for the map
+  HopRoute    hop_route;    // a route written in a message ({path}), placed for the map
   LiveShareEngine live_share; // [LOC] auto-share session + peers' shared positions
   LocatorEngine locator;    // active target, geofence crossings, proximity beeper
   TrailEngine  trail;       // GPS trail store, sampling, auto-pause, shutdown save

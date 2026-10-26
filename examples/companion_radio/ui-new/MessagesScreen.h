@@ -91,7 +91,7 @@ class MessagesScreen : public UIScreen {
   // location (a {loc} string or a [WAY] share), plus Path/Relayed by when the
   // entry has hop data recorded. _fs_act maps each visible row back to an
   // action so the index math survives the conditional layout.
-  enum FsAct : uint8_t { FS_REPLY, FS_NAV, FS_SAVE, FS_TARGET, FS_PATH };
+  enum FsAct : uint8_t { FS_REPLY, FS_NAV, FS_SAVE, FS_TARGET, FS_PATH, FS_ROUTE };
   uint8_t   _fs_act[5];
   int       _fs_act_n = 0;
   // Which history entry the currently-open Options menu (and, after FS_PATH is
@@ -366,8 +366,9 @@ class MessagesScreen : public UIScreen {
       if (is_channel) path_is_relay = (_history.chAtPos(ring_pos).relay_seq != 0);
     }
     bool has_path_item = hop_count > 0;
+    const bool has_route = HopRoute::has(body);   // a bot's {path} reply: the route on a map
 
-    int n = (reply_allowed ? 1 : 0) + (has_loc ? 3 : 0) + (has_path_item ? 1 : 0);
+    int n = (reply_allowed ? 1 : 0) + (has_loc ? 3 : 0) + (has_path_item ? 1 : 0) + (has_route ? 1 : 0);
     if (n == 0) return;
     _fs_act_n = 0;
     _ctx_menu.begin("Options", n);
@@ -381,6 +382,82 @@ class MessagesScreen : public UIScreen {
       _ctx_menu.addItem(_fs_path_item);
       _fs_act[_fs_act_n++] = FS_PATH;
     }
+    if (has_route) { _ctx_menu.addItem("Show route"); _fs_act[_fs_act_n++] = FS_ROUTE; }
+  }
+
+  // The route in the message stashed by buildFsMenu(), placed: the way our
+  // message went to whoever wrote this, so from here to them.
+  void showRoute() {
+    if (_fs_menu_pos < 0) return;
+    const char* text;
+    const uint8_t* key = nullptr;
+    char name[32] = "";
+    if (_fs_menu_is_channel) {   // "Name: text"
+      text = _history.chAtPos(_fs_menu_pos).text;
+      const char* sep = strstr(text, ": ");
+      if (sep && sep - text < (int)sizeof(name)) { memcpy(name, text, sep - text); name[sep - text] = '\0'; }
+    } else {
+      text = _history.dmAtPos(_fs_menu_pos).text;
+      key = _history.dmAtPos(_fs_menu_pos).prefix;
+    }
+    int32_t lat, lon;
+    const bool own = _task->currentLocation(lat, lon) || _task->core().fixedPosition(lat, lon);
+    HopRoute& R = _task->core().hop_route;
+    if (!R.show(text, own, lat, lon, key, name)) return;
+    if (R.points() == 0) { R.close(); _task->showAlert("No hop has a position", 1200); }
+  }
+
+  // The route shown (showRoute()): the points fitted to the screen, joined;
+  // you, each hop's number, the sender; under it how many hops are placed.
+  void renderRoute(DisplayDriver& d) {
+    const HopRoute& R = _task->core().hop_route;
+    drawScreenHeader(d, "Route");
+    const int W = d.width(), H = d.height(), lh = d.getLineHeight(), s = miniIconScale(d);
+    const int top = d.listStart(), bar_y = H - lh - 1;
+    const int ax = 1, ay = top, aw = W - 2, ah = bar_y - top - 2;
+    d.setColor(UIColor::primary_txt);
+    int32_t mnla = 0, mxla = 0, mnlo = 0, mxlo = 0;
+    for (int i = 0; i < R.points(); i++) {
+      const HopRoute::Pt& p = R.point(i);
+      if (i == 0 || p.lat < mnla) mnla = p.lat;  if (i == 0 || p.lat > mxla) mxla = p.lat;
+      if (i == 0 || p.lon < mnlo) mnlo = p.lon;  if (i == 0 || p.lon > mxlo) mxlo = p.lon;
+    }
+    float kx = cosf(((mnla + mxla) / 2.0e6f) * (float)M_PI / 180.0f);
+    if (kx < 0.05f) kx = 0.05f;
+    float span_la = (float)(mxla - mnla), span_lo = (float)(mxlo - mnlo) * kx;
+    if (span_la < 2000.0f) span_la = 2000.0f;
+    if (span_lo < 2000.0f) span_lo = 2000.0f;
+    const int m = 4 * s + d.getCharWidth();   // the marks and a hop's number clear of the edge
+    const float fw = (float)(aw - 2 * m), fh = (float)(ah - 2 * m);
+    const float scale = fh / span_la < fw / span_lo ? fh / span_la : fw / span_lo;
+    const float cla = (mnla + mxla) / 2.0f, clo = (mnlo + mxlo) / 2.0f;
+    auto proj = [&](const HopRoute::Pt& p, float& x, float& y) {
+      x = ax + aw / 2 + ((float)p.lon - clo) * kx * scale;
+      y = ay + ah / 2 - ((float)p.lat - cla) * scale;
+    };
+    float x0 = 0, y0 = 0;
+    for (int i = 0; i < R.points(); i++) {
+      float x, y; proj(R.point(i), x, y);
+      if (i > 0) gfx::drawLineClipped(d, x0, y0, x, y, ax, ay, aw, ah);
+      x0 = x; y0 = y;
+    }
+    for (int i = 0; i < R.points(); i++) {
+      const HopRoute::Pt& p = R.point(i);
+      float fx, fy; proj(p, fx, fy);
+      const int x = (int)lroundf(fx), y = (int)lroundf(fy);
+      if (p.hop == -1)      miniIconDrawCentered(d, x, y, ICON_MAP_CURRENT);
+      else if (p.hop == -2) miniIconDrawCentered(d, x, y, ICON_MAP_CONTACT);
+      else {
+        miniIconDrawCentered(d, x, y, ICON_MAP_DOT);
+        char t[4];
+        snprintf(t, sizeof(t), "%d", p.hop + 1);
+        d.setCursor(x + 2 * s + 1, y - lh / 2);
+        d.print(t);
+      }
+    }
+    char t[40];
+    R.summary(t, sizeof(t));
+    d.drawTextCentered(W / 2, bar_y, t);
   }
 
   // Opens the path/relay detail popup for the entry stashed by buildFsMenu().
@@ -433,6 +510,8 @@ class MessagesScreen : public UIScreen {
                           _nav_label[0] ? _nav_label : "Msg loc");
     } else if (a == FS_PATH) {
       showPathDetail();
+    } else if (a == FS_ROUTE) {
+      showRoute();
     }
   }
 
@@ -1143,6 +1222,7 @@ public:
     _ctx_menu.active = false;
     _ctx_dirty = false;
     _nav_active = false;
+    _task->core().hop_route.close();
     _share_mode = false;
     _pick_target = false;
     _pick_bot_channel = false;
@@ -1329,6 +1409,7 @@ public:
 
     // Navigate-to-location view sits over everything else while active.
     if (_nav_active) { renderNav(display); return 1000; }
+    if (_task->core().hop_route.active()) { renderRoute(display); return 5000; }
 
     int lh      = display.getLineHeight();
     int item_h  = display.lineStep();
@@ -1932,6 +2013,11 @@ public:
     // Navigate view: Back returns to the message it was opened from.
     if (_nav_active) {
       if (c == KEY_CANCEL) _nav_active = false;
+      return true;
+    }
+    // A message's route on the map: Back returns to the message.
+    if (_task->core().hop_route.active()) {
+      if (c == KEY_CANCEL) _task->core().hop_route.close();
       return true;
     }
     if (_phase == MODE_SELECT) {

@@ -1313,6 +1313,7 @@ void UITask::back() {
       break;
     case SCR_MAP:
       if (_route_pick) { routeMapDone(); break; }
+      if (_route_show) { routeShowDone(); break; }
       if (_nav_overlay) navClosePopup();
       else if (areaSelecting()) areaSelectEnd();
       else if (_dl_overlay) mapDownloadClose();

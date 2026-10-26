@@ -135,6 +135,8 @@ public:
   void routePick(int row);
   void routeMapTap(const uint8_t* pub_key, uint8_t type);
   void routeMapDone();
+  void routeShowDone();
+  bool routeShowing() const { return _route_show; }
   void routeMapRefresh();
   void routeMapUndo();
   void routeMapFrame();
@@ -665,6 +667,7 @@ private:
   uint32_t  _next_flow_ms = 0;            // the map's packet flow repaint
   uint8_t   _flow_legend_tick = 0;        // its legend, every 10th repaint
   bool      _route_pick = false;         // the nodes map taps repeaters into the route
+  bool      _route_show = false;         // the nodes map shows a message's route (_core->hop_route)
   lv_obj_t* _route_bar = nullptr;
   lv_obj_t* _route_lbl = nullptr;
 

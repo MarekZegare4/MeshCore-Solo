@@ -248,6 +248,7 @@ private:
     return false;
   }
 
+public:   // HopRoute places a route's hops the same way
   // A contact with a position whose key starts with `hash` (`size` bytes):
   // repeaters only when `repeaters`; with several, the nearest to (nlat, nlon)
   // when `near`, else the first.
@@ -268,6 +269,7 @@ private:
     return found;
   }
 
+private:
   // The contact's index (getContactByIdx) by its key; -1 none.
   static int16_t indexOf(const uint8_t* key) {
     for (int idx = MAX_ANON_CONTACTS; ; idx++) {
