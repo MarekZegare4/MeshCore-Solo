@@ -71,7 +71,7 @@ inline void draw(DisplayDriver& d,
   int dial_r = 0, dial_x = 0, dial_y = 0;
   if (!wide) {
     const int top = d.listStart();
-    const int tw = (dw > 9 * cw ? dw : 9 * cw) + 4;   // the widest of the lines at the left
+    const int tw = (dw > 12 * cw ? dw : 12 * cw) + 4;   // the widest of the lines at the left
     int r_side = (d.height() - top) / 2 - lh / 2 - 1;   // room over the ring for the rose's N
     if (r_side > (d.width() - tw) / 2 - 1) r_side = (d.width() - tw) / 2 - 1;
     const int text_bottom = y + dist_h + dist_gap + lines * step;

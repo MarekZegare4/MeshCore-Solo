@@ -67,6 +67,12 @@ uint8_t SimpsonKeypad::poll() {
     _enter_long_sent = false;
     return SIMPSON_KEY_NONE;
   }
+  if (key != SIMPSON_KEY_ENTER && _last_key == SIMPSON_KEY_ENTER && !_enter_long_sent) {
+    // Another key arrived with Enter still down: the Enter counts now, the key on the next poll.
+    _last_key = SIMPSON_KEY_NONE;
+    _enter_pressed_at = 0;
+    return SIMPSON_KEY_ENTER;
+  }
   if (key == SIMPSON_KEY_ENTER && _last_key == SIMPSON_KEY_ENTER) {
     if (!_enter_long_sent && millis() - _enter_pressed_at >= SIMPSON_LONG_PRESS_MS) {
       _enter_long_sent = true;

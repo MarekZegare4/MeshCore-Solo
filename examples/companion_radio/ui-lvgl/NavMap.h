@@ -494,13 +494,14 @@ void UITask::refreshNavBar() {
   if (!set) return;
   setTextFmt(_nav_title, "%s %s", navmap::s_tb.active() ? LV_SYMBOL_LOOP : person ? UI_SYMBOL_USERS : UI_SYMBOL_FLAG,
                         name);
-  if (navmap::s_dial) lv_obj_add_flag(navmap::s_dial, LV_OBJ_FLAG_HIDDEN);   // setDial() below shows it again
   if (!pos) {
+    if (navmap::s_dial) lv_obj_add_flag(navmap::s_dial, LV_OBJ_FLAG_HIDDEN);
     setText(_nav_info, "Position unknown (not shared recently)");
     return;
   }
   int32_t lat, lon;
   if (!_core->course.currentLocation(lat, lon)) {
+    if (navmap::s_dial) lv_obj_add_flag(navmap::s_dial, LV_OBJ_FLAG_HIDDEN);
     setText(_nav_info, _core->gpsEnabled() || !_core->gpsAvailable()
                                  ? "Waiting for a GPS fix..." : "GPS is off  -  tap the crosshair to turn it on");
     return;

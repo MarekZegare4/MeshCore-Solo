@@ -1459,7 +1459,7 @@ public:
           snprintf(filt, sizeof(filt), "[%s]", typeName(e.type));
         }
         const int name_right = lw - reserve - 2 - rw - display.getCharWidth();
-        int mqr = display.drawTextEllipsized(tx, y, name_right - tx, filt, sel);
+        int mqr = display.drawTextEllipsized(tx, y, name_right > tx ? name_right - tx : 0, filt, sel);
         if (sel && mqr > 0) mq_delay = mqr;
 
         display.setColor(sel ? UIColor::window_bkg : UIColor::primary_txt);

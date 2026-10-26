@@ -59,7 +59,8 @@ static void stopWalk() {
 // be reading off it (from a map left open, or a prefetch), then close the map
 // pack it reads from.
 static void releaseMapFiles() {
-  while (mapview::s_cache.busy()) { delay(5); mapview::pollTiles(); }
+  const uint32_t t0 = millis();   // a task stuck on a failing card mustn't hang the UI
+  while (mapview::s_cache.busy() && millis() - t0 < 3000) { delay(5); mapview::pollTiles(); }
   mapview::s_vpacks.closeOpen();
 }
 

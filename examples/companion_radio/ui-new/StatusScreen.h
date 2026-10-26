@@ -175,7 +175,7 @@ private:
     const bool sleeping = sensors.isGpsDutySleeping();
     if (f.place(lh + 5)) {   // the fix as a chip, satellites used / in view
       const char* st = !on ? "OFF" : sleeping ? "SLEEP" : !fix ? "NO FIX" : (g && g->fix_mode == 2) ? "2D FIX" : "3D FIX";
-      info::chip(d, 1, f.at, st, on && fix);
+      info::chip(d, 1, f.at, st, on && fix && !sleeping);
 #ifdef STATUS_HAS_SKY
       if (g) snprintf(a, sizeof(a), "%d/%d sats", skyview::usedCount(*g), g->count);
       else
