@@ -1421,7 +1421,10 @@ public:
       drawList(display, total, _channel_sel, _channel_scroll, [&](int list_idx, int y, bool sel, int reserve) {
         drawRowSelection(display, y, sel, reserve);
         if (list_idx == _num_channels) {                 // the synthetic "Add" row
-          display.setCursor(2, y); display.print("+ Add channel");
+          display.setCursor(2, y);
+          // Settings > Channels = Fav hides all but the favourites; say so when that leaves nothing.
+          const NodePrefs* np = _task->getNodePrefs();
+          display.print(_num_channels == 0 && np && np->ch_fav_only ? "+ Add (Fav only)" : "+ Add channel");
           display.setColor(UIColor::primary_txt);
           return;
         }
