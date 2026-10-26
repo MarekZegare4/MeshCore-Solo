@@ -825,7 +825,7 @@ void MyMesh::onChannelMessageRecv(const mesh::GroupChannel &channel, mesh::Packe
 
   // hop count for !hops (see onMessageRecv); not the wire path_len above.
   uint8_t ch_hops = pkt->getPathHashCount();
-  {
+  if (_prefs.bot_channel_enabled && channel_idx == _prefs.bot_channel_idx) {   // the bot's channel: who's asking
     char sender[32];
     const char* msg;
     botChannelSenderSplit(text, sender, sizeof(sender), &msg);

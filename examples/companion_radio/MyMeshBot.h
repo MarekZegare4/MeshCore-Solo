@@ -135,6 +135,7 @@ bool MyMesh::botInQuietHours() const {
 // contact's, when it has one (on a channel, the contact of that name).
 static char       s_bot_path[MAX_PATH_SIZE * 3 + 8];
 static BotInbound s_bot_in = { s_bot_path, 0, 0 };
+static const ContactInfo* s_bot_sender = nullptr;   // the asker's contact, if known (Actions by)
 static bool       s_bot_from_pos = false;
 static int32_t    s_bot_from_lat = 0, s_bot_from_lon = 0;
 
@@ -142,8 +143,12 @@ void MyMesh::setBotInbound(const mesh::Packet* pkt, const ContactInfo* sender) {
   const uint8_t n = pkt ? pkt->getPathHashCount() : 0, w = pkt ? pkt->getPathHashSize() : 1;
   s_bot_in.snr = pkt ? pkt->getSNR() : 0;
   s_bot_in.rssi = _radio->getLastRSSI();
+  s_bot_sender = sender;
   s_bot_from_pos = sender && (sender->gps_lat || sender->gps_lon);
   if (s_bot_from_pos) { s_bot_from_lat = sender->gps_lat; s_bot_from_lon = sender->gps_lon; }
+  // A direct-routed packet's path is used up on the way (each repeater takes
+  // its own hash off), so it says nothing about the hops it went through.
+  if (pkt && pkt->isRouteDirect()) { strcpy(s_bot_path, "known route"); return; }
   if (n == 0) { strcpy(s_bot_path, "direct"); return; }
   char* o = s_bot_path;
   for (uint8_t h = 0; h < n; h++) {
@@ -152,9 +157,10 @@ void MyMesh::setBotInbound(const mesh::Packet* pkt, const ContactInfo* sender) {
   }
 }
 
-// The contact named `name` (a channel sender: only a name, unverified).
+// The contact named `name` (a channel sender: only a name, unverified). From
+// MAX_ANON_CONTACTS: the slots before it are anonymous requesters.
 const ContactInfo* MyMesh::botContactByName(const char* name) {
-  for (int idx = 0; ; idx++) {
+  for (int idx = MAX_ANON_CONTACTS; ; idx++) {
     ContactInfo c;
     if (!getContactByIdx(idx, c)) return nullptr;
     if (c.name[0] && strcmp(c.name, name) == 0) return lookupContactByPubKey(c.id.pub_key, PUB_KEY_SIZE);
@@ -541,7 +547,7 @@ bool MyMesh::tryBotChannelCommand(uint8_t channel_idx, const char* text, uint8_t
 
   uint32_t ts = getRTCClock()->getCurrentTime();
   char out[BOT_SCRATCH];
-  if (botScanCommands(msg, hops, ts, out, sizeof(out), sender_name, _prefs.bot_actions_ch != 0 && botActionsFrom(botContactByName(sender_name))) == 0) return false;  // no commands
+  if (botScanCommands(msg, hops, ts, out, sizeof(out), sender_name, _prefs.bot_actions_ch != 0 && botActionsFrom(s_bot_sender)) == 0) return false;  // no commands
   if (botInQuietHours()) { resetPendingBotActions(); return true; }                                       // quiet hours
   if (millis() - _bot_last_ch_reply_ms <= BOT_REPLY_COOLDOWN_MS) { resetPendingBotActions(); return true; }  // throttled
 
@@ -576,8 +582,7 @@ bool MyMesh::tryBotRoomCommand(const ContactInfo& from, const uint8_t* sender_pr
 
   uint32_t ts = getRTCClock()->getCurrentTime();
   char out[BOT_SCRATCH];
-  if (botScanCommands(text, hops, ts, out, sizeof(out), sender_name, _prefs.bot_actions_room != 0 &&
-                      botActionsFrom(sender_prefix ? lookupContactByPubKey(sender_prefix, 4) : nullptr)) == 0) return false;  // no commands
+  if (botScanCommands(text, hops, ts, out, sizeof(out), sender_name, _prefs.bot_actions_room != 0 && botActionsFrom(s_bot_sender)) == 0) return false;  // no commands
   if (botInQuietHours()) { resetPendingBotActions(); return true; }                          // quiet hours
   if (millis() - _bot_last_room_reply_ms <= BOT_REPLY_COOLDOWN_MS) { resetPendingBotActions(); return true; }   // throttled
 

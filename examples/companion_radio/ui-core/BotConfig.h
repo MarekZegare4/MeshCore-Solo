@@ -57,7 +57,7 @@ static const Row DIRECT_ROWS[] = {
 static const Row OTHER_ROWS[] = {
   { QUIET_FROM, "Quiet from", "No replies in these hours" },
   { QUIET_TO,   "Quiet to",   "Same hour = always on" },
-  { ACTIONS_SCOPE, "Actions by", "Everyone, or favourites only" },
+  { ACTIONS_SCOPE, "Actions by", "Fav: favourites only (a channel name can be faked)" },
 };
 
 static int rowCount(int tab) {

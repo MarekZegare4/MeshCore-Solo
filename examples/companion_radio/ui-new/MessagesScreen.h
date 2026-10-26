@@ -92,7 +92,7 @@ class MessagesScreen : public UIScreen {
   // entry has hop data recorded. _fs_act maps each visible row back to an
   // action so the index math survives the conditional layout.
   enum FsAct : uint8_t { FS_REPLY, FS_NAV, FS_SAVE, FS_TARGET, FS_PATH, FS_ROUTE };
-  uint8_t   _fs_act[5];
+  uint8_t   _fs_act[6];   // Reply, Navigate / Save / Target, Path, Show route
   int       _fs_act_n = 0;
   // Which history entry the currently-open Options menu (and, after FS_PATH is
   // chosen, the path/relay detail popup) refers to -- set by buildFsMenu().
@@ -401,7 +401,7 @@ class MessagesScreen : public UIScreen {
       key = _history.dmAtPos(_fs_menu_pos).prefix;
     }
     int32_t lat, lon;
-    const bool own = _task->currentLocation(lat, lon) || _task->core().fixedPosition(lat, lon);
+    const bool own = !_fs_menu_is_channel && (_task->currentLocation(lat, lon) || _task->core().fixedPosition(lat, lon));   // a channel's: someone else's way
     HopRoute& R = _task->core().hop_route;
     if (!R.show(text, own, lat, lon, key, name)) return;
     if (R.points() == 0) { R.close(); _task->showAlert("No hop has a position", 1200); }

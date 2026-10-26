@@ -425,7 +425,7 @@ void UITask::messageAction(uint8_t act) {
     // The way our message went to whoever wrote this: from here, to them.
     const char* text = m.channel ? s_th_ch[m.pos].text : s_th_dm[m.pos].text;
     int32_t lat, lon;
-    const bool own = _core->course.currentLocation(lat, lon) || _core->fixedPosition(lat, lon);
+    const bool own = !m.channel && (_core->course.currentLocation(lat, lon) || _core->fixedPosition(lat, lon));   // a channel's: someone else's way
     if (!_core->hop_route.show(text, own, lat, lon, m.channel ? nullptr : _thread_key, m.from)) return;
     if (_core->hop_route.points() == 0) { showToast("None of its hops has a position"); _core->hop_route.close(); return; }
     _map_nav = true;   // the nodes map (openMap(false)), with the route's bar

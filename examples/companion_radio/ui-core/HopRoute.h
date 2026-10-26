@@ -2,13 +2,13 @@
 // A route written in a message -- a bot's {path} / !path reply ("3f:a1:c8",
 // "3fa1:c802") -- placed on the map: this device, then each hop's repeater,
 // then the node the message came from when it has a position. The route a
-// reply carries is the way our own message went to the bot, so it starts
-// here.
+// DM reply carries is the way our own message went to the bot, so it starts
+// here; on a channel it's whoever asked's, so the caller leaves `own` out.
 //
-// Finding one: two or more hex groups of one width (2 or 4 characters, i.e.
-// 1- or 2-byte hashes) joined by ':', standing alone. A clock time (12:30,
-// 12:30:45) reads the same, so all-decimal groups that make a time aren't
-// one. A single hop ("3f") is too like an ordinary word to tell.
+// Finding one: two or more hex groups of one width (2, 4 or 6 characters,
+// i.e. 1- to 3-byte hashes) joined by ':', standing alone. A clock time or a
+// score (12:30, 45:30:10) reads the same, so two or three all-decimal 2-digit
+// groups aren't one. A single hop ("3f") is too like an ordinary word to tell.
 //
 // Placing a hop: a repeater with a position whose key starts with the hash
 // (PacketFlow::placeHash); of several, the nearest the point before it. A hop
@@ -27,17 +27,16 @@ public:
     int8_t  hop;    // its hop (0-based), -1 here, -2 the sender
   };
 
-  // The first route in `text`: its hashes (w bytes each) into `hashes`, the
-  // count into `n`.
+  // The first route in `text`: its hashes (w bytes each) into `hashes`
+  // (MAX_HOPS * 3 bytes), the count into `n`.
   static bool find(const char* text, uint8_t* hashes, uint8_t& n, uint8_t& w) {
     for (const char* p = text; p && *p; p++) {
       if (p != text && (isalnum((unsigned char)p[-1]) || p[-1] == ':')) continue;
       int gw = 0;
       while (isxdigit((unsigned char)p[gw])) gw++;
-      if (gw != 2 && gw != 4) continue;
+      if (gw != 2 && gw != 4 && gw != 6) continue;
       uint8_t k = 0;
       bool decimal = true, ok = true;
-      int vals[3] = {0, 0, 0};
       const char* q = p;
       for (;;) {
         for (int i = 0; i < gw; i++) if (!isxdigit((unsigned char)q[i])) { ok = false; break; }
@@ -46,14 +45,13 @@ public:
           for (int b = 0; b < gw / 2; b++) hashes[k * (gw / 2) + b] = (uint8_t)((hexv(q[2 * b]) << 4) | hexv(q[2 * b + 1]));
         }
         for (int i = 0; i < gw; i++) if (!isdigit((unsigned char)q[i])) decimal = false;
-        if (k < 3 && gw == 2) vals[k] = (q[0] - '0') * 10 + (q[1] - '0');
         k++;
         q += gw;
         if (*q != ':') break;
         q++;
       }
       if (!ok || k < 2) continue;
-      if (decimal && gw == 2 && k <= 3 && vals[0] <= 23 && vals[1] <= 59 && (k < 3 || vals[2] <= 59)) continue;   // a time
+      if (decimal && gw == 2 && k <= 3) continue;   // a time, a score
       n = k > MAX_HOPS ? MAX_HOPS : k;
       w = (uint8_t)(gw / 2);
       return true;
@@ -61,7 +59,7 @@ public:
     return false;
   }
   static bool has(const char* text) {
-    uint8_t h[MAX_HOPS * 2], n, w;
+    uint8_t h[MAX_HOPS * 3], n, w;
     return find(text, h, n, w);
   }
 
@@ -124,7 +122,7 @@ private:
     }
   }
 
-  uint8_t _hash[MAX_HOPS * 2];
+  uint8_t _hash[MAX_HOPS * 3];
   uint8_t _n = 0, _w = 1, _placed = 0;
   Pt      _pt[MAX_PTS];
   int     _pts = 0;
