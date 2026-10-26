@@ -134,7 +134,7 @@ bool MyMesh::botInQuietHours() const {
 // "3fa1:c802"); "direct" if heard directly. The sender's position: its
 // contact's, when it has one (on a channel, the contact of that name).
 static char       s_bot_path[MAX_PATH_SIZE * 3 + 8];
-static BotInbound s_bot_in = { s_bot_path, 0, 0 };
+static BotInbound s_bot_in = { s_bot_path, 0, 0, false };
 static const ContactInfo* s_bot_sender = nullptr;   // the asker's contact, if known (Actions by)
 static bool       s_bot_from_pos = false;
 static int32_t    s_bot_from_lat = 0, s_bot_from_lon = 0;
@@ -148,7 +148,8 @@ void MyMesh::setBotInbound(const mesh::Packet* pkt, const ContactInfo* sender) {
   if (s_bot_from_pos) { s_bot_from_lat = sender->gps_lat; s_bot_from_lon = sender->gps_lon; }
   // A direct-routed packet's path is used up on the way (each repeater takes
   // its own hash off), so it says nothing about the hops it went through.
-  if (pkt && pkt->isRouteDirect()) { strcpy(s_bot_path, "known route"); return; }
+  s_bot_in.routed = pkt && pkt->isRouteDirect();
+  if (s_bot_in.routed) { strcpy(s_bot_path, "known route"); return; }
   if (n == 0) { strcpy(s_bot_path, "direct"); return; }
   char* o = s_bot_path;
   for (uint8_t h = 0; h < n; h++) {
@@ -322,8 +323,9 @@ bool MyMesh::botCommandReply(const char* cmd, const char* arg, const char* arg2,
     return true;
   }
   if (!strcmp(cmd, "hops")) {
-    if (hops == 0) strncpy(out, "direct", out_len);     // heard directly (0 repeaters)
-    else           snprintf(out, out_len, "%u hops", (unsigned)hops);
+    if (s_bot_in.routed) strncpy(out, "known route", out_len);   // a saved path's hops aren't carried (see !path)
+    else if (hops == 0)  strncpy(out, "direct", out_len);        // heard directly (0 repeaters)
+    else                 snprintf(out, out_len, "%u hops", (unsigned)hops);
     out[out_len - 1] = '\0';
     return true;
   }

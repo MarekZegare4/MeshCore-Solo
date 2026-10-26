@@ -20,7 +20,7 @@
 //   {dist}  — distance m               (requires sm)
 //   {co2}   — CO2 concentration ppm    (requires sm)
 //   {name}  — sender's name (bot replies only; requires sender_name, else left literal)
-//   {hops}  — hop count: "direct" or "N hops" (bot replies only; requires hops>=0, else left literal)
+//   {hops}  — hop count: "direct" or "N hops", "known route" when it came over a saved path (bot replies only; requires hops>=0, else left literal)
 //   {path}  — inbound route as hop hashes, oldest first: "3f:a1:c8" (bot replies only; requires `in`, else left literal)
 //   {snr}   — the message's last hop's SNR, "6.5dB" (bot replies only)
 //   {rssi}  — and its RSSI, "-92dBm" (bot replies only)
@@ -28,6 +28,7 @@
 struct BotInbound {
   const char* path;   // "direct" or the hop hashes
   float snr, rssi;    // the last hop's
+  bool routed;        // came over a saved path, whose hops aren't carried: no hop count
 };
 
 inline void expandMsg(const char* tmpl, char* out, int out_len,
@@ -143,8 +144,9 @@ inline void expandMsg(const char* tmpl, char* out, int out_len,
       p += 6;
     } else if (strncmp(p, "{hops}", 6) == 0) {
       if (hops >= 0) {
-        char b[10];
-        if (hops == 0) strcpy(b, "direct");
+        char b[12];
+        if (in && in->routed) strcpy(b, "known route");
+        else if (hops == 0)   strcpy(b, "direct");
         else           snprintf(b, sizeof(b), "%u hops", (unsigned)hops);
         APPEND(b, strlen(b));
       } else { APPEND("{hops}", 6); }

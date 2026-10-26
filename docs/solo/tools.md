@@ -48,7 +48,7 @@ channel and one room, each switched on separately:
   | ------- | ----- |
   | `!ping` | `pong` |
   | `!batt`, `!temp`, `!time`, `!loc` | battery, temperature, time, position |
-  | `!hops` | how many hops the command took |
+  | `!hops` | how many hops the command took (`known route` as for `!path`) |
   | `!path` | which way it came: the hop hashes, oldest first (`3f:a1:c8`; 2-byte mode `3fa1:c802`), `direct`, or `known route` when it came over a saved path (whose hops aren't carried) |
   | `!snr` | how its last hop was heard here: SNR and RSSI |
   | `!dist` | how far away and which way the sender is (both need a position) |

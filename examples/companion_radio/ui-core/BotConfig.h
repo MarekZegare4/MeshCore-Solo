@@ -130,7 +130,7 @@ static void logLine(const BotLogEntry& e, int8_t tz, char* out, size_t n) {
            e.who[0] ? e.who : "?", e.req, e.reply);
 }
 
-static const char* const REPLY_PLACEHOLDERS[] = { "{name}", "{hops}", "{path}", "{snr}", "{loc}", "{time}", "{batt}" };
+static const char* const REPLY_PLACEHOLDERS[] = { "{name}", "{hops}", "{path}", "{snr}", "{loc}", "{time}", "{batt}", "{rssi}" };
 static const int REPLY_PLACEHOLDER_COUNT = sizeof(REPLY_PLACEHOLDERS) / sizeof(REPLY_PLACEHOLDERS[0]);
 
 // Shown value of a text row ("(none)", "(any msg)" for the "*" trigger).

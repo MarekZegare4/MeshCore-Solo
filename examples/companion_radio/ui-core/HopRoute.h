@@ -47,7 +47,7 @@ public:
         for (int i = 0; i < gw; i++) if (!isdigit((unsigned char)q[i])) decimal = false;
         k++;
         q += gw;
-        if (*q != ':') break;
+        if (*q != ':' || !isxdigit((unsigned char)q[1])) break;   // "3f:a1: 2 hops": that ':' is the sentence's
         q++;
       }
       if (!ok || k < 2) continue;
