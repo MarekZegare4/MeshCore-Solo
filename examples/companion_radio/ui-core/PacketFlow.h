@@ -159,6 +159,7 @@ public:
       add(f, ola, olo);
       f.here = true;
     }
+    if (!f.here) remember(f, hc);
     push(f);
   }
 
@@ -178,9 +179,107 @@ public:
     push(f);
   }
 
-  void clear() { _n = 0; _head = 0; _seq++; memset(_cnt, 0, sizeof(_cnt)); }
+  void clear() { _n = 0; _head = 0; _seq++; memset(_cnt, 0, sizeof(_cnt)); _hist_n = 0; _hist_head = 0; _rp_next = -1; }
+
+  // ── Recent packets ──
+  // The last HIST packets heard that made a line, each with the ways it came
+  // (a copy per repeater that relayed it), for a list to play again. Kept
+  // only once a frontend asks (keepHistory(): the L2's map), so the others
+  // spend no memory on it.
+  static const int HIST = 10;
+  static const int HIST_WAYS = 3;
+  static const uint32_t REPLAY_GAP_MS = 1200;   // replayAll(): one packet after another
+  struct Heard {
+    uint32_t id;      // the packet (Flow::id)
+    uint32_t ts;      // RTC time it was first heard
+    uint8_t  kind;
+    uint8_t  hops;    // repeaters on its first copy
+    uint8_t  heard;   // copies heard
+    uint8_t  ways;    // distinct lines kept in `way`
+    Flow     way[HIST_WAYS];
+    uint8_t  key[HIST_WAYS][MAX_PTS][4];   // each point's contact (key prefix): its index may change meanwhile
+  };
+
+  void keepHistory() {
+    if (_hist) return;
+#if defined(ESP32)
+    _hist = (Heard*)heap_caps_calloc(HIST, sizeof(Heard), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+#endif
+    if (!_hist) _hist = (Heard*)calloc(HIST, sizeof(Heard));
+  }
+  int historyCount() const { return _hist ? _hist_n : 0; }
+  // i = 0 is the newest.
+  const Heard& history(int i) const { return _hist[(_hist_head + HIST - 1 - i) % HIST]; }
+  // Way w of a kept packet with its contacts' indices as they are now (a
+  // contact deleted since: -1, the point stays where it was).
+  Flow wayNow(const Heard& h, int w) const {
+    Flow f = h.way[w];
+    for (int k = 0; k < f.n; k++)
+      if (f.node[k] >= 0) f.node[k] = indexOfPrefix(h.key[w][k]);
+    return f;
+  }
+
+  // Packet i of the history on the map again, every way it came, as if heard now.
+  void replay(int i) {
+    if (i < 0 || i >= historyCount()) return;
+    const Heard& h = history(i);
+    for (int w = 0; w < h.ways; w++) {
+      Flow f = wayNow(h, w);
+      f.t_ms = millis();
+      push(f);
+    }
+  }
+  // All of them, oldest first, one every REPLAY_GAP_MS (tick() plays them).
+  void replayAll() { _rp_next = historyCount() - 1; _rp_at = millis(); }
+  void replayStop() { _rp_next = -1; }
+  void tick() {
+    if (_rp_next < 0 || (int32_t)(millis() - _rp_at) < 0) return;
+    replay(_rp_next--);
+    _rp_at = millis() + REPLAY_GAP_MS;
+  }
 
 private:
+  void remember(const Flow& f, uint8_t hops) {
+    if (!_hist) return;
+    for (int i = 0; i < _hist_n; i++) {   // another copy of one kept: its way, if new
+      Heard& h = _hist[(_hist_head + HIST - 1 - i) % HIST];
+      if (h.id != f.id) continue;
+      if (h.heard < 255) h.heard++;
+      bool known = false;
+      for (int w = 0; w < h.ways && !known; w++) known = sameLine(h.way[w], f);
+      if (!known && h.ways < HIST_WAYS) keepWay(h, h.ways++, f);
+      return;
+    }
+    Heard& h = _hist[_hist_head];
+    h.id = f.id;
+    h.ts = the_mesh.getRTCClock()->getCurrentTime();
+    h.kind = f.kind;
+    h.hops = hops;
+    h.heard = 1;
+    h.ways = 1;
+    keepWay(h, 0, f);
+    _hist_head = (_hist_head + 1) % HIST;
+    if (_hist_n < HIST) _hist_n++;
+    // A replayAll() running: the one it plays next is a place older now (gone,
+    // when it was the oldest: then the one after it).
+    if (_rp_next >= 0 && ++_rp_next >= _hist_n) _rp_next = _hist_n - 1;
+  }
+
+  static void keepWay(Heard& h, int w, const Flow& f) {
+    h.way[w] = f;
+    for (int k = 0; k < f.n; k++) {
+      ContactInfo c;
+      if (f.node[k] >= 0 && the_mesh.getContactByIdx(f.node[k], c)) memcpy(h.key[w][k], c.id.pub_key, 4);
+      else h.way[w].node[k] = -1;
+    }
+  }
+
+  static bool sameLine(const Flow& a, const Flow& b) {
+    if (a.n != b.n) return false;
+    for (int k = 0; k < a.n; k++)
+      if (a.node[k] != b.node[k] || a.lat[k] != b.lat[k] || a.lon[k] != b.lon[k]) return false;
+    return true;
+  }
   static const int BUCKETS = 6;               // the minute, in 10 s steps
   static const uint32_t BUCKET_MS = 10000;
 
@@ -278,6 +377,13 @@ private:
       if (memcmp(c.id.pub_key, key, PUB_KEY_SIZE) == 0) return (int16_t)idx;
     }
   }
+  static int16_t indexOfPrefix(const uint8_t* prefix) {   // by its first 4 bytes
+    for (int idx = MAX_ANON_CONTACTS; ; idx++) {
+      ContactInfo c;
+      if (!the_mesh.getContactByIdx(idx, c)) return -1;
+      if (memcmp(c.id.pub_key, prefix, 4) == 0) return (int16_t)idx;
+    }
+  }
 
   NodePrefs*     _prefs = nullptr;
   CourseEngine*  _course = nullptr;
@@ -287,4 +393,8 @@ private:
   uint32_t _seq = 0;
   uint16_t _cnt[BUCKETS][K_COUNT] = {};
   uint32_t _bucket_at[BUCKETS] = {};
+  Heard*   _hist = nullptr;
+  int      _hist_head = 0, _hist_n = 0;
+  int      _rp_next = -1;   // replayAll(): the history index played next, -1 none
+  uint32_t _rp_at = 0;
 };

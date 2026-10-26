@@ -145,6 +145,7 @@ void UITask::begin(DisplayDriver* display_drv, SensorManager* sensors, NodePrefs
 
   _core = new UiCore();
   _core->begin(node_prefs, sensors, this);
+  _core->flow.keepHistory();   // the map's recent packets, to play again
   {  // history kept on the SD card: back into the ring, then every new entry to it
     int hk = lvport::loadHistKeep();
     s_archive.setKeep(histstore::KEEP[hk >= 0 && hk < histstore::KEEP_COUNT ? hk : histstore::KEEP_DEFAULT]);
@@ -1312,10 +1313,10 @@ void UITask::back() {
       if (_node_from_scan) showScanPopup();
       break;
     case SCR_MAP:
+      if (_nav_overlay) { navClosePopup(); break; }   // a popup over the map first
       if (_route_pick) { routeMapDone(); break; }
       if (_route_show) { routeShowDone(); break; }
-      if (_nav_overlay) navClosePopup();
-      else if (areaSelecting()) areaSelectEnd();
+      if (areaSelecting()) areaSelectEnd();
       else if (_dl_overlay) mapDownloadClose();
       else if (_map_nodes || !_map_nav) showNearby();   // opened from Nodes
       else showHome();

@@ -142,6 +142,9 @@ public:
   void routeMapFrame();
   void buildRouteBar(lv_obj_t* body);
   void mapFlowTick();
+  void flowHistoryPopup();
+  void flowReplay(int i);   // a history index, -1 all
+  void mapFit(int32_t la0, int32_t la1, int32_t lo0, int32_t lo1);
   void mapDownloadPopup();
   // Map areas (MapAreas.h)
   void areaBuildLayer(lv_obj_t* body);

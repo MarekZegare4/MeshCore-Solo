@@ -304,9 +304,11 @@ static uint32_t flowColour(uint8_t kind) {
   }
 }
 static const char* const FLOW_NAMES[PacketFlow::K_COUNT] = { "Adv", "DM", "Ch", "Req", "Ack", "Other", "Sent" };
-static lv_obj_t* s_flow_legend = nullptr;   // top centre: each kind's count over the last minute
+static const char* const FLOW_KINDS[PacketFlow::K_COUNT] = { "Advert", "Direct message", "Channel", "Request", "Ack", "Other", "Sent" };
+static lv_obj_t* s_flow_legend = nullptr;   // top centre: each kind's count over the last minute; a tap: the recent packets
 
-// "Adv 3  Ch 5 ...", each in its colour; hidden with nothing to count.
+// "Adv 3  Ch 5 ...", each in its colour; with nothing to count, the way to
+// the recent packets when there are some, else hidden.
 static void flowLegendRefresh() {
   if (!s_flow_legend) return;
   char t[160];
@@ -317,6 +319,7 @@ static void flowLegendRefresh() {
       o += snprintf(t + o, sizeof(t) - o, "%s#%06lX %s %d#", o ? "  " : "", (unsigned long)flowColour(k), FLOW_NAMES[k], n);
   }
   t[o] = '\0';
+  if (!o && s_flow && s_flow->enabled() && s_flow->historyCount() > 0) o = snprintf(t, sizeof(t), LV_SYMBOL_LIST " Recent packets");
   if (!o) { lv_obj_add_flag(s_flow_legend, LV_OBJ_FLAG_HIDDEN); return; }
   setText(s_flow_legend, t);
   lv_obj_remove_flag(s_flow_legend, LV_OBJ_FLAG_HIDDEN);
@@ -740,6 +743,7 @@ void UITask::openMap(bool nav) {
   _map_nodes = !nav;
   _route_show = false;   // a message's route is shown by its own way in (messageAction)
   _core->hop_route.close();
+  _core->flow.replayStop();   // a Play all left running last time
   showMap();
 }
 
@@ -867,6 +871,9 @@ void UITask::buildMap() {
   lv_obj_set_style_text_align(mapview::s_flow_legend, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_style_radius(mapview::s_flow_legend, 8, 0);
   lv_obj_add_flag(mapview::s_flow_legend, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_add_flag(mapview::s_flow_legend, LV_OBJ_FLAG_CLICKABLE);   // tap: the recent packets
+  lv_obj_set_ext_click_area(mapview::s_flow_legend, 6);
+  lv_obj_add_event_cb(mapview::s_flow_legend, [](lv_event_t*) { s_ui->flowHistoryPopup(); }, LV_EVENT_CLICKED, NULL);
   lv_obj_add_event_cb(mapview::s_flow_legend, [](lv_event_t*) { mapview::s_flow_legend = nullptr; }, LV_EVENT_DELETE, NULL);
   mapview::flowLegendRefresh();
   // Bottom left, one pill about the map itself: the map data credit (the
@@ -1329,6 +1336,7 @@ void UITask::mapFlowTick() {
   using namespace mapview;
   if (!s_mark_layer || (int32_t)(millis() - _next_flow_ms) < 0) return;
   _next_flow_ms = millis() + 50;
+  _core->flow.tick();   // Play all: the next one when it's due
   if (++_flow_legend_tick >= 10) { _flow_legend_tick = 0; flowLegendRefresh(); }   // twice a second
   lv_area_t r;
   bool now_on = flowArea(r);
@@ -1343,6 +1351,82 @@ void UITask::mapFlowTick() {
   if (now_on) inval(r);
   s_flow_area = r;
   s_flow_area_on = now_on;
+}
+
+// ── Recent packets (PacketFlow history) ──────────────────────────────────────
+
+static void onFlowReplay(lv_event_t* e) { s_ui->flowReplay((int)(intptr_t)lv_event_get_user_data(e)); }
+static void onFlowReplayAll(lv_event_t* e) { (void)e; s_ui->flowReplay(-1); }
+
+// The flow legend's tap: the last packets heard with a line, newest first --
+// what, from whom, when, how far it came; a tap plays one again on the map.
+void UITask::flowHistoryPopup() {
+  using namespace mapview;
+  const PacketFlow& F = _core->flow;
+  lv_obj_t* panel = navPopupPanel("Recent packets", true);
+  lv_obj_t* list = scrollList(panel);
+  if (F.historyCount() == 0) {
+    noteLabel(list, "None yet: a packet is kept when its sender or a repeater on its way has a position.");
+    return;
+  }
+  lv_obj_t* g = group(list, nullptr);
+  for (int i = 0; i < F.historyCount(); i++) {
+    const PacketFlow::Heard& h = F.history(i);
+    const PacketFlow::Flow f = F.wayNow(h, 0);
+    char title[64], sub[64];
+    ContactInfo c;
+    const bool named = f.node[0] >= 0 && the_mesh.getContactByIdx(f.node[0], c) && c.name[0];
+    snprintf(title, sizeof(title), "%s%s%s%.24s", FLOW_KINDS[h.kind < PacketFlow::K_COUNT ? h.kind : PacketFlow::K_OTHER],
+             named ? "  " : "", named && !f.origin ? "via " : "", named ? c.name : "");
+    const uint32_t t = h.ts + (int32_t)_prefs->tz_offset_hours * 3600;
+    int o = snprintf(sub, sizeof(sub), "%02u:%02u:%02u  ", (unsigned)(t / 3600 % 24), (unsigned)(t / 60 % 60), (unsigned)(t % 60));
+    if (h.hops == 0) o += snprintf(sub + o, sizeof(sub) - o, "direct");
+    else             o += snprintf(sub + o, sizeof(sub) - o, "%u hop%s", (unsigned)h.hops, h.hops == 1 ? "" : "s");
+    if (h.heard > 1) snprintf(sub + o, sizeof(sub) - o, ", heard %u times", (unsigned)h.heard);
+    lv_obj_t* row = groupLine(g, true);
+    lv_obj_t* dot = lv_obj_create(row);   // its line's colour on the map
+    lv_obj_remove_style_all(dot);
+    lv_obj_set_size(dot, 11, 11);
+    lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(dot, lv_color_hex(flowColour(h.kind)), 0);
+    lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
+    lv_obj_remove_flag(dot, LV_OBJ_FLAG_CLICKABLE);
+    groupText(row, title, sub);
+    label(row, LV_SYMBOL_PLAY, THEME_FONT_SMALL, theme::TEXT_MUTED);
+    lv_obj_add_event_cb(row, onFlowReplay, LV_EVENT_CLICKED, (void*)(intptr_t)i);
+  }
+  lv_obj_t* acts = buttonBar(list);
+  barButton(acts, LV_SYMBOL_PLAY " Play all", onFlowReplayAll, 0, true);
+}
+
+// Packet i of the history (-1: all, one after another) on the map again; the
+// map moves to take it in when part of it is off screen.
+void UITask::flowReplay(int i) {
+  using namespace mapview;
+  PacketFlow& F = _core->flow;
+  navClosePopup();
+  if (i >= F.historyCount()) return;
+  bool any = false, off = false;
+  int32_t la0 = 0, la1 = 0, lo0 = 0, lo1 = 0;
+  const int w = _map_area ? lv_obj_get_width(_map_area) : 0, h = _map_area ? lv_obj_get_height(_map_area) - mapBottomH() : 0;
+  for (int j = i < 0 ? 0 : i; j < (i < 0 ? F.historyCount() : i + 1); j++) {
+    const PacketFlow::Heard& p = F.history(j);
+    for (int wy = 0; wy < p.ways; wy++) {
+      const PacketFlow::Flow f = F.wayNow(p, wy);
+      for (int k = 0; k < f.n; k++) {
+        int32_t lat, lon;
+        F.pointNow(f, k, lat, lon);
+        if (!any) { la0 = la1 = lat; lo0 = lo1 = lon; any = true; }
+        la0 = min(la0, lat); la1 = max(la1, lat); lo0 = min(lo0, lon); lo1 = max(lo1, lon);
+        int32_t x, y;
+        flowPx(lat, lon, x, y);
+        if (!s_view_ok || x < 12 || x > w - 12 || y < 12 || y > h - 12) off = true;
+      }
+    }
+  }
+  if (any && off) mapFit(la0, la1, lo0, lo1);
+  if (i < 0) F.replayAll();
+  else       F.replay(i);
 }
 
 // ── Picking a route (Route > Map) ─────────────────────────────────────────────
@@ -1470,7 +1554,15 @@ void UITask::routeMapFrame() {
     la0 = min(la0, s_route_lat[i]); la1 = max(la1, s_route_lat[i]);
     lo0 = min(lo0, s_route_lon[i]); lo1 = max(lo1, s_route_lon[i]);
   }
-  int w = lv_obj_get_width(_map_area), h = lv_obj_get_height(_map_area) - navmap::BAR_H;
+  mapFit(la0, la1, lo0, lo1);
+}
+
+// The map on a box (lat la0..la1, lon lo0..lo1): the closest zoom it fits in
+// with a margin, above the bottom bar.
+void UITask::mapFit(int32_t la0, int32_t la1, int32_t lo0, int32_t lo1) {
+  using namespace mapview;
+  if (!_map_area) return;
+  int w = lv_obj_get_width(_map_area), h = lv_obj_get_height(_map_area) - mapBottomH();
   int z = MAX_Z;
   for (; z > MIN_Z; z--) {
     double dx = fabs(lonToTileX(lo1 / 1e6, z) - lonToTileX(lo0 / 1e6, z)) * TILE_PX;
