@@ -97,7 +97,7 @@ void UITask::buildBot() {
     const botcfg::Row& r = botcfg::row(s_tab, i);
     uint8_t* fl = botcfg::flag(p, r.kind);
     lv_obj_t* row = settingRow(g, r.label, fl || botcfg::isHour(r.kind) ? r.hint : nullptr);
-    if (fl && r.kind == botcfg::DM_SCOPE) {
+    if (fl && botcfg::isScope(r.kind)) {
       static const char* SCOPE[] = { "All", "Fav", "" };
       lv_obj_t* seg = segmented(row, SCOPE, *fl ? 1 : 0, 110, 32);
       lv_obj_align(seg, LV_ALIGN_RIGHT_MID, -4, 0);

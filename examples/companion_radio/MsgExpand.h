@@ -21,6 +21,15 @@
 //   {co2}   — CO2 concentration ppm    (requires sm)
 //   {name}  — sender's name (bot replies only; requires sender_name, else left literal)
 //   {hops}  — hop count: "direct" or "N hops" (bot replies only; requires hops>=0, else left literal)
+//   {path}  — inbound route as hop hashes, oldest first: "3f:a1:c8" (bot replies only; requires `in`, else left literal)
+//   {snr}   — the message's last hop's SNR, "6.5dB" (bot replies only)
+//   {rssi}  — and its RSSI, "-92dBm" (bot replies only)
+// How the message a bot reply answers came in (MyMesh::setBotInbound()).
+struct BotInbound {
+  const char* path;   // "direct" or the hop hashes
+  float snr, rssi;    // the last hop's
+};
+
 inline void expandMsg(const char* tmpl, char* out, int out_len,
                       double lat, double lon, bool gps_valid,
                       uint32_t utc_ts, int8_t tz_hours,
@@ -28,7 +37,8 @@ inline void expandMsg(const char* tmpl, char* out, int out_len,
                       float batt_volts  = -1.0f,
                       const char* sender_name = nullptr,
                       int hops = -1,
-                      float mcu_temp = NAN) {   // the chip's, for {temp} without a sensor
+                      float mcu_temp = NAN,
+                      const BotInbound* in = nullptr) {   // the chip's, for {temp} without a sensor
   // sv indices: 0=temp 1=hum 2=pres 3=batt 4=alt 5=lux 6=dist 7=co2
   float sv[8]    = {};
   bool  sv_ok[8] = {};
@@ -138,6 +148,18 @@ inline void expandMsg(const char* tmpl, char* out, int out_len,
         else           snprintf(b, sizeof(b), "%u hops", (unsigned)hops);
         APPEND(b, strlen(b));
       } else { APPEND("{hops}", 6); }
+      p += 6;
+    } else if (strncmp(p, "{path}", 6) == 0) {
+      if (in && in->path) { APPEND(in->path, strlen(in->path)); }
+      else                { APPEND("{path}", 6); }
+      p += 6;
+    } else if (strncmp(p, "{snr}", 5) == 0) {
+      if (in) { char b[12]; snprintf(b, sizeof(b), "%.1fdB", in->snr); APPEND(b, strlen(b)); }
+      else    { APPEND("{snr}", 5); }
+      p += 5;
+    } else if (strncmp(p, "{rssi}", 6) == 0) {
+      if (in) { char b[12]; snprintf(b, sizeof(b), "%.0fdBm", in->rssi); APPEND(b, strlen(b)); }
+      else    { APPEND("{rssi}", 6); }
       p += 6;
     } else {
       out[oi++] = *p++;

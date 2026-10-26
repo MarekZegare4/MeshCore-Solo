@@ -404,6 +404,7 @@ struct NodePrefsFields {
   uint8_t  bot_actions_room;
   uint8_t  bot_quiet_start;     // quiet-hours start hour, local 0-23 (start==end → disabled)
   uint8_t  bot_quiet_end;       // quiet-hours end hour, local 0-23
+  uint8_t  bot_actions_scope;   // who may run the bot's actions (!gps !buzz !gpio ...): 0 = all, 1 = favourites
 
   // ── GPS, trail & location sharing ─────────────────────────────────────
   uint8_t  gps_enabled;      // GPS enabled flag (0=disabled, 1=enabled)
@@ -858,7 +859,7 @@ class NodePrefs : public NodePrefsFields, public ConfigSerializer {
     s.def("rm_trig", bot_trigger_room, sizeof(bot_trigger_room));
     s.def("rm_reply", bot_reply_room, sizeof(bot_reply_room));
     s.def("rm_cmd", bot_commands_room); s.def("rm_act", bot_actions_room);
-    s.def("q_start", bot_quiet_start); s.def("q_end", bot_quiet_end);
+    s.def("q_start", bot_quiet_start); s.def("q_end", bot_quiet_end); s.def("act_scope", bot_actions_scope);
   }
   void gpsSolo(Section& s) {
     s.def("imperial", units_imperial);

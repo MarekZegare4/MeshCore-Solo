@@ -594,6 +594,9 @@ public:
   bool isGpsFixPending() const { return _loc_fix.active; }
 
 private:
+  void setBotInbound(const mesh::Packet* pkt, const ContactInfo* sender);   // for {path} {snr} !path !snr !dist
+  const ContactInfo* botContactByName(const char* name);
+  bool botActionsFrom(const ContactInfo* c) const;   // bot_actions_scope
   void tryBotReplyDM(const ContactInfo& from, const char* text, uint8_t hops);
   void tryBotReplyChannel(uint8_t channel_idx, const char* text, uint8_t hops);
   void tryBotReplyRoom(const ContactInfo& from, const uint8_t* sender_prefix, const char* text, uint8_t hops);

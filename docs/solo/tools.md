@@ -41,7 +41,7 @@ channel and one room, each switched on separately:
 
 - **Trigger and reply**: when a message contains the trigger (several can be
   separated by commas, `*` matches any message), the bot sends the reply. The
-  reply can use placeholders, plus `{name}` (the sender) and `{hops}`.
+  reply can use placeholders, plus `{name}` (the sender), `{hops}`, `{path}` (the route in, as hop hashes oldest first: `3f:a1:c8`, or `direct`), `{snr}` and `{rssi}` (how its last hop was heard).
 - **Commands**: messages starting with `!` get live data back:
 
   | Command | Reply |
@@ -49,13 +49,18 @@ channel and one room, each switched on separately:
   | `!ping` | `pong` |
   | `!batt`, `!temp`, `!time`, `!loc` | battery, temperature, time, position |
   | `!hops` | how many hops the command took |
+  | `!path` | which way it came: the hop hashes, oldest first (`3f:a1:c8`; 2-byte mode `3fa1:c802`), or `direct` |
+  | `!snr` | how its last hop was heard here: SNR and RSSI |
+  | `!dist` | how far away and which way the sender is (both need a position) |
   | `!status` | battery, position and time |
   | `!help` | the list of commands |
 
   Several in one message get one reply: `!batt !time` → `4.10V | 14:30`.
 - **Actions** (off by default) let the command change the device: `!buzz`
   (sounds the buzzer to find it), `!gps on` / `!gps off`, `!gps fix` (turns
-  the GPS on, waits for a good fix and sends it), `!advert`.
+  the GPS on, waits for a good fix and sends it), `!advert`. **Actions by =
+  Fav** (Other tab) lets only your favourites run them; on a channel the
+  sender is just a name, so there it's a weak check.
 
 **DM allow = Fav** limits the DM bot to your favourites, and **quiet hours**
 stop trigger replies at night (commands still answer). Replies are rate

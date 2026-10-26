@@ -118,7 +118,7 @@ public:
       char name[32];
       const char* shown = "";
       if (fl) {
-        shown = r.kind == botcfg::DM_SCOPE ? (*fl ? "Fav" : "All") : (*fl ? "ON" : "OFF");
+        shown = botcfg::isScope(r.kind) ? (*fl ? "Fav" : "All") : (*fl ? "ON" : "OFF");
       } else if (txt) {
         shown = botcfg::shownText(txt, botcfg::isTrigger(r.kind));
       } else if (r.kind == botcfg::CHANNEL || r.kind == botcfg::ROOM) {
@@ -203,6 +203,9 @@ public:
         // compose keyboard's own placeholder list.
         _kb->addPlaceholder("{name}");
         _kb->addPlaceholder("{hops}");
+        _kb->addPlaceholder("{path}");
+        _kb->addPlaceholder("{snr}");
+        _kb->addPlaceholder("{rssi}");
       }
       return true;
     }

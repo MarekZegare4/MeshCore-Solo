@@ -694,6 +694,7 @@ void MyMesh::onMessageRecv(const ContactInfo &from, mesh::Packet *pkt, uint32_t 
   // retransmit priority. 0 = heard directly. (Raw path_len is a size/count
   // bitfield for transport packets, so it must not be used directly.)
   uint8_t hops = pkt ? pkt->getPathHashCount() : 0;
+  setBotInbound(pkt, &from);
   if (!tryBotCommand(from, text, hops))  // commands take priority; fall through to trigger reply
     tryBotReplyDM(from, text, hops);
 }
@@ -753,6 +754,7 @@ void MyMesh::onSignedMessageRecv(const ContactInfo &from, mesh::Packet *pkt, uin
   bool replayed = now > sender_timestamp && now - sender_timestamp > BOT_ROOM_MAX_AGE_SECS;
   if (from.type == ADV_TYPE_ROOM && !replayed) {
     uint8_t hops = pkt ? pkt->getPathHashCount() : 0;
+    setBotInbound(pkt, sender_prefix ? lookupContactByPubKey(sender_prefix, 4) : nullptr);
     if (!tryBotRoomCommand(from, sender_prefix, text, hops))  // commands take priority
       tryBotReplyRoom(from, sender_prefix, text, hops);
   }
@@ -823,6 +825,12 @@ void MyMesh::onChannelMessageRecv(const mesh::GroupChannel &channel, mesh::Packe
 
   // hop count for !hops (see onMessageRecv); not the wire path_len above.
   uint8_t ch_hops = pkt->getPathHashCount();
+  {
+    char sender[32];
+    const char* msg;
+    botChannelSenderSplit(text, sender, sizeof(sender), &msg);
+    setBotInbound(pkt, botContactByName(sender));
+  }
   if (!tryBotChannelCommand(channel_idx, text, ch_hops))  // commands take priority
     tryBotReplyChannel(channel_idx, text, ch_hops);
 }
@@ -1416,6 +1424,7 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   _prefs.bot_commands_enabled = 0;
   _prefs.bot_quiet_start = 0;
   _prefs.bot_quiet_end = 0;       // start==end → quiet hours disabled
+  _prefs.bot_actions_scope = 0;   // actions by everyone
   _prefs.dm_show_all = 1;        // show all contacts by default
   _prefs.fav_sort = 1;           // favourites first in lists
   _prefs.msg_wake = 1;           // a new message turns the screen on

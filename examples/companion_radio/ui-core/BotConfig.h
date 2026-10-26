@@ -16,7 +16,7 @@ static const char* const TAB_LABELS[TAB_COUNT] = { "Channel", "Room", "Direct", 
 enum Kind : uint8_t { ENABLE_DM, DM_SCOPE, COMMANDS_DM, ACTIONS_DM, TRIGGER_DM, REPLY_DM,
                       ENABLE_CH, CHANNEL, COMMANDS_CH, ACTIONS_CH, TRIGGER_CH, REPLY_CH,
                       ENABLE_ROOM, ROOM, COMMANDS_ROOM, ACTIONS_ROOM, TRIGGER_ROOM, REPLY_ROOM,
-                      QUIET_FROM, QUIET_TO };
+                      QUIET_FROM, QUIET_TO, ACTIONS_SCOPE };
 
 // hint: a one-line explanation for frontends with room for it.
 struct Row { Kind kind; const char* label; const char* hint; };
@@ -48,6 +48,7 @@ static const Row DIRECT_ROWS[] = {
 static const Row OTHER_ROWS[] = {
   { QUIET_FROM, "Quiet from", "No replies in these hours" },
   { QUIET_TO,   "Quiet to",   "Same hour = always on" },
+  { ACTIONS_SCOPE, "Actions by", "Everyone, or favourites only" },
 };
 
 static int rowCount(int tab) {
@@ -81,6 +82,7 @@ static uint8_t* flag(NodePrefs* p, Kind k) {
     case ACTIONS_DM:    return &p->bot_actions_dm;
     case ACTIONS_CH:    return &p->bot_actions_ch;
     case ACTIONS_ROOM:  return &p->bot_actions_room;
+    case ACTIONS_SCOPE: return &p->bot_actions_scope;     // 1 = favourites only
     default:            return nullptr;
   }
 }
@@ -98,16 +100,18 @@ static char* text(NodePrefs* p, Kind k, int& cap) {
   }
 }
 
+// All / Fav rows (a flag shown as who, not on / off).
+static bool isScope(Kind k)   { return k == DM_SCOPE || k == ACTIONS_SCOPE; }
 static bool isTrigger(Kind k) { return k == TRIGGER_DM || k == TRIGGER_CH || k == TRIGGER_ROOM; }
 static bool isHour(Kind k)    { return k == QUIET_FROM || k == QUIET_TO; }
 
 static uint8_t& hour(NodePrefs* p, Kind k) { return k == QUIET_FROM ? p->bot_quiet_start : p->bot_quiet_end; }
 static bool quietOff(const NodePrefs* p) { return p->bot_quiet_start == p->bot_quiet_end; }
 
-// Placeholders a reply can use: the bot fills {name} / {hops} from the
+// Placeholders a reply can use: the bot fills {name} / {hops} / {path} from the
 // message it answers; {loc} / {time} and the sensor ones come from here.
 // Most useful first (a frontend short of room shows a prefix).
-static const char* const REPLY_PLACEHOLDERS[] = { "{name}", "{hops}", "{loc}", "{time}", "{batt}" };
+static const char* const REPLY_PLACEHOLDERS[] = { "{name}", "{hops}", "{path}", "{snr}", "{loc}", "{time}", "{batt}" };
 static const int REPLY_PLACEHOLDER_COUNT = sizeof(REPLY_PLACEHOLDERS) / sizeof(REPLY_PLACEHOLDERS[0]);
 
 // Shown value of a text row ("(none)", "(any msg)" for the "*" trigger).
