@@ -119,7 +119,9 @@ correctly whatever the keyboard is set to.
 
 > [!NOTE]
 > **Wio Tracker L2:** a phone-style keyboard. Hold a key for its accents; the
-> globe key switches between the two alphabets.
+> globe key switches between the two alphabets. **1#** opens digits and
+> symbols; **#+=** there opens a second page with brackets `[ ] { } < >`,
+> `` \ | ~ ^ ` $ `` and a few more (`£ ¥ § ° ± × ÷ • … « » –`).
 
 ## Channels
 

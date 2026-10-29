@@ -7,7 +7,8 @@
 //  - hold a key for its variants (ą ć ę … / ё є ї … / ά έ … / punctuation
 //    behind '.'), from the shared table in ui-core/KeyboardData.h. The popup
 //    opens above the key; tap a variant to type it, tap elsewhere to close.
-//  - one-shot shift; digits / symbols page behind "1#"; the keyboard key
+//  - one-shot shift; digits / symbols page behind "1#", the rest of ASCII
+//    (brackets, \ | ~ ^ ` $ …) on a second page behind "#+="; the keyboard key
 //    closes it (LV_EVENT_CANCEL: the compose bar keeps its text, a dialog
 //    is left without saving).
 // Letters type on release (popover keys), so a long press never types the
@@ -24,6 +25,8 @@ namespace kb {
 
 static const char* const K_SYM   = "1#";
 static const char* const K_BACK  = "abc";
+static const char* const K_SYM2  = "#+=";   // symbols page 1 -> 2
+static const char* const K_SYM1  = "123";   // symbols page 2 -> 1
 static const char* const K_GLOBE = "\xEF\x82\xAC";   // FontAwesome globe (U+F0AC) -- see fonts/generate.sh
 
 static const char* const LAT[] = {
@@ -61,12 +64,17 @@ static const char* const SYM[] = {
   "-","/",":",";","(",")","€","&","@","\"","\n",
   ".",",","?","!","'","#","%","+","=","_",KB_BS,"\n",
   nullptr };
+static const char* const SYM2[] = {
+  "[","]","{","}","<",">","^","~","`","|","\n",
+  "\\","$","£","¥","§","°","±","×","÷","•","\n",
+  ".",",","?","!","'","\"","…","«","»","–",KB_BS,"\n",
+  nullptr };
 
 // Layout ids; letter layouts in (lower, upper) pairs, in NodePrefs
 // KB_ALPHABET_* order (Latin, Cyrillic, Greek) so script * 2 = its lower layout.
 enum : uint8_t { L_LAT, L_LAT_UP, L_CYR, L_CYR_UP, L_GRK, L_GRK_UP, L_PAIRED_END = L_GRK_UP,
-                 L_SYM, L_COUNT };
-static const char* const* const ROWS[L_COUNT] = { LAT, LAT_UP, CYR, CYR_UP, GRK, GRK_UP, SYM };
+                 L_SYM, L_SYM2, L_COUNT };
+static const char* const* const ROWS[L_COUNT] = { LAT, LAT_UP, CYR, CYR_UP, GRK, GRK_UP, SYM, SYM2 };
 
 // Full lv_keyboard maps: the rows above + a bottom row assembled in
 // buildMaps() (globe only when a second script is enabled).
@@ -91,7 +99,7 @@ static uint8_t altScript() {
 static bool hasAlt() { return altScript() != mainScript(); }
 
 static bool isSpecial(const char* t) {
-  static const char* const SP[] = { KB_SH, KB_BS, KB_OK, KB_HIDE, K_SYM, K_BACK, K_GLOBE };
+  static const char* const SP[] = { KB_SH, KB_BS, KB_OK, KB_HIDE, K_SYM, K_BACK, K_GLOBE, K_SYM2, K_SYM1 };
   for (const char* s : SP) if (strcmp(t, s) == 0) return true;
   return false;
 }
@@ -104,8 +112,9 @@ static void buildMaps() {
   for (int l = 0; l < L_COUNT; l++) {
     int m = 0;
     for (const char* const* p = ROWS[l]; *p; p++) s_maps[l][m++] = *p;
-    if (l == L_SYM) {
-      s_maps[l][m++] = KB_HIDE; s_maps[l][m++] = K_BACK; s_maps[l][m++] = " ";
+    if (l >= L_SYM) {
+      s_maps[l][m++] = KB_HIDE; s_maps[l][m++] = K_BACK;
+      s_maps[l][m++] = l == L_SYM ? K_SYM2 : K_SYM1; s_maps[l][m++] = " ";
       s_maps[l][m++] = "*";    s_maps[l][m++] = KB_OK;
     } else {
       s_maps[l][m++] = KB_HIDE; s_maps[l][m++] = K_SYM;
@@ -251,7 +260,8 @@ static void onEvent(lv_event_t* e) {
   if (!t) return;
 
   if (strcmp(t, KB_SH) == 0)   { if (s_layout <= L_PAIRED_END) apply(kbd, s_layout ^ 1); return; }
-  if (strcmp(t, K_SYM) == 0)   { apply(kbd, L_SYM); return; }
+  if (strcmp(t, K_SYM) == 0 || strcmp(t, K_SYM1) == 0) { apply(kbd, L_SYM); return; }
+  if (strcmp(t, K_SYM2) == 0)  { apply(kbd, L_SYM2); return; }
   if (strcmp(t, K_BACK) == 0)  { apply(kbd, s_script * 2); return; }
   if (strcmp(t, K_GLOBE) == 0) {
     s_script = (s_script == mainScript()) ? altScript() : mainScript();
