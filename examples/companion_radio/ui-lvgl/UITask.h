@@ -77,7 +77,7 @@ public:
   // ── Navigation (called from LVGL event callbacks) ────────────────────────
   void showHome();
   void setHomePage(int page);
-  void homeEdit(bool on);   // Home's apps: drag to move, tap to hide (hold an app, or Settings > Home apps)
+  void homeEdit(bool on);   // Home's apps: drag to move, tap to hide (hold an app)
   void homeAppDrop(int from, int to);
   void homeAppToggle(int pos);
   void goHome();                   // the side button: Home's clock page
@@ -369,6 +369,13 @@ public:
   void diagReset();
   void diagNoiseRun();
   void showCompass();
+  void showGallery();
+  void galleryTab(int tab);
+  void galleryPage(int page);
+  void galleryOpen(int i);           // a screenshot on the whole screen
+  void galleryStep(int d);
+  void galleryViewAction(uint8_t act);
+  void galleryTrail(int idx);        // -1 = the device's own slot
   void showFlashlight();   // Flashlight.h
   void flashlightClose();
   bool flashlightOn() const;
@@ -394,7 +401,7 @@ public:
   void statusBarSync();   // up or hidden, by the screen's title bar (UITask.cpp)
 
 private:
-  enum Screen : uint8_t { SCR_HOME, SCR_CHATS, SCR_CONTACTS, SCR_THREAD, SCR_SETTINGS, SCR_NEARBY, SCR_NODE, SCR_MAP, SCR_WIFI, SCR_SETTINGS_NAV, SCR_CLOCK, SCR_RADIO, SCR_CHANNEL_EDIT, SCR_ADMIN, SCR_BOT, SCR_DIAG, SCR_COMPASS, SCR_SCOPES, SCR_REPEATER, SCR_MELODY, SCR_QUICK, SCR_ADMIN_PICK, SCR_OTA, SCR_STORAGE, SCR_GPS, SCR_BATT, SCR_ROUTE, SCR_ROUTE_PICK };
+  enum Screen : uint8_t { SCR_HOME, SCR_CHATS, SCR_CONTACTS, SCR_THREAD, SCR_SETTINGS, SCR_NEARBY, SCR_NODE, SCR_MAP, SCR_WIFI, SCR_SETTINGS_NAV, SCR_CLOCK, SCR_RADIO, SCR_CHANNEL_EDIT, SCR_ADMIN, SCR_BOT, SCR_DIAG, SCR_COMPASS, SCR_SCOPES, SCR_REPEATER, SCR_MELODY, SCR_QUICK, SCR_ADMIN_PICK, SCR_OTA, SCR_STORAGE, SCR_GPS, SCR_BATT, SCR_ROUTE, SCR_ROUTE_PICK, SCR_GALLERY };
 
   void buildStatusBar();
   void refreshStatusBar();
@@ -487,6 +494,8 @@ private:
   bool navCurrentTarget(int32_t& lat, int32_t& lon, char* name, int n, bool& person, bool& set);
   bool exportTrailGpx(char* name_out, size_t n);
   void mapDownloadTick();
+  void wifiClockTick();             // the clock from NTP while WiFi is up (LvglPort.h ntpStart())
+  bool _ntp_on = false;
   void mapLiveBegin();
   void refreshDownloadPopup();
   void buildWifi();
@@ -538,6 +547,10 @@ private:
   void sampleHistory();            // DiagScreen.h: History's readings, from loop()
   void fillHistory();
   void buildCompass();
+  void buildGallery();
+  void galleryTick();
+  void galleryCloseView();
+  void galleryBack();                // the full view closes, else Home
   void refreshCompass();
   void favPickPopup(int slot);
   void adminValuePopup();

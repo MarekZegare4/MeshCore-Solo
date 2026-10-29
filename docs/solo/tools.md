@@ -8,9 +8,9 @@ home page.
 
 > [!NOTE]
 > **Wio Tracker L2:** the tools are apps on the home screen: Messages, Nodes,
-> Settings, Compass, Clock, GPS, Bot, Repeater, Admin, Diagnostics, Flashlight. The trail,
-> live sharing and the locator are on the map (its tools button) and in
-> Settings › Map.
+> Settings, Compass, Clock, GPS, Bot, Repeater, Admin, Diagnostics, Flashlight,
+> Gallery. The trail, live sharing and the locator are on the map (its tools
+> button) and in Settings › Map.
 
 ## Clock
 
@@ -18,7 +18,8 @@ The **Clock** home page shows the time with a bar under it that fills with
 the seconds (Settings › Display › Clock seconds), the date, and up to three
 fields you choose (hold Enter): battery, temperature, humidity, pressure, altitude
 (barometric or GPS), light, CO₂, GPS position, satellites, contacts, unread
-messages. The time comes from GPS or the phone app; the time zone and summer
+messages. The time comes from GPS or the phone app (on the Wio Tracker L2
+also from the internet whenever WiFi is connected); the time zone and summer
 time are in Settings.
 
 **Enter** on the clock opens the clock tools:
@@ -107,6 +108,15 @@ when you leave. Not on e-ink, which gives no light.
 > [!NOTE]
 > **Wio Tracker L2:** the Flashlight app. A tap, the side button or the top
 > button puts it away.
+
+## Gallery
+
+> [!NOTE]
+> **Wio Tracker L2 only.** Two tabs. **Screenshots** shows the ones on the SD
+> card (side + top button takes one), newest first, as thumbnails, 30 to a
+> page. Tap one to see it on the whole screen: swipe for the next or the
+> previous, tap for its name, **Delete** and close. **Trails** lists the saved
+> trails; tap one to open it on the map with Load, GPX and Delete.
 
 ## Status
 

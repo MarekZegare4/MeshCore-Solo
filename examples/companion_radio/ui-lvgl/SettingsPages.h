@@ -66,7 +66,6 @@ static void onOpenSchemaPage(lv_event_t* e) {
   s_nav_section = -1;   // from Settings: all of a page
   s_ui->showSchemaSettings((int)(uintptr_t)lv_event_get_user_data(e));
 }
-static void onHomeApps(lv_event_t* e) { (void)e; s_ui->homeEdit(true); }
 static void onPruneContacts(lv_event_t* e) { (void)e; s_ui->pruneContacts(); }
 static void onOpenQuickMsgs(lv_event_t* e);
 static void onPinSetup(lv_event_t* e);   // DeviceScreen.h
@@ -574,8 +573,6 @@ void UITask::settingsGroup(int i) {
     g = group(body, "DEVICE");
     listRow(g, LV_SYMBOL_EYE_OPEN "  Display", "Brightness, screen off, lock, colour",
             onOpenSchemaPage, (void*)(uintptr_t)PG_DISPLAY);
-    snprintf(sub, sizeof(sub), "Order, hide  -  %d of %d shown", home::shownCount(), home::APP_COUNT);
-    listRow(g, LV_SYMBOL_HOME "  Home apps", sub, onHomeApps, NULL);
     snprintf(sub, sizeof(sub), "Shutdown %s  -  GPS: %s", settingText(*_prefs, SETTING(low_batt_mv), v1, sizeof(v1)),
              settingText(*_prefs, SETTING(gps_interval), v2, sizeof(v2)));
     listRow(g, LV_SYMBOL_BATTERY_FULL "  Power", sub, onOpenSchemaPage, (void*)(uintptr_t)PG_POWER);

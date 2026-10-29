@@ -957,11 +957,14 @@ static int32_t s_settings_y = 0;                    // Settings' scroll, kept wh
 // A one-of-N choice: a row (or grid, with "\n" in the map) of checkable
 // buttons, `sel` checked (-1: none). `item` is the unchecked button colour —
 // SURFACE on a SURFACE_2 panel, SURFACE_2 on the page.
+// Picked on release over the same button (CLICK_TRIG), not on press as
+// lv_buttonmatrix does by default: a swipe starting on a screen's tabs (to
+// scroll the list under them back up) switched the tab.
 static lv_obj_t* segmented(lv_obj_t* parent, const char** map, int sel, int w, int h,
                            uint32_t item = theme::SURFACE_2) {
   lv_obj_t* m = lv_buttonmatrix_create(parent);
   lv_buttonmatrix_set_map(m, map);
-  lv_buttonmatrix_set_button_ctrl_all(m, LV_BUTTONMATRIX_CTRL_CHECKABLE);
+  lv_buttonmatrix_set_button_ctrl_all(m, (lv_buttonmatrix_ctrl_t)(LV_BUTTONMATRIX_CTRL_CHECKABLE | LV_BUTTONMATRIX_CTRL_CLICK_TRIG));
   lv_buttonmatrix_set_one_checked(m, true);
   if (sel >= 0) lv_buttonmatrix_set_button_ctrl(m, sel, LV_BUTTONMATRIX_CTRL_CHECKED);
   lv_obj_set_size(m, w, h);

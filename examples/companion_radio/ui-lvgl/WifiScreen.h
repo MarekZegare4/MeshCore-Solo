@@ -319,3 +319,28 @@ void UITask::wifiSave() {
   snprintf(msg, sizeof(msg), LV_SYMBOL_REFRESH "  Connecting to %s...", s_wifi_test_ssid);
   wifiTestShow(msg, nullptr, nullptr);
 }
+
+// From loop(), any screen, once a second: SNTP runs while WiFi is connected
+// (Settings > WiFi, a map download, an update, the app over WiFi), and each
+// time it answers the clock takes the time -- ahead or behind, as from GPS.
+// The first answer of a connection says so when it moved the clock.
+void UITask::wifiClockTick() {
+  static uint32_t next_ms = 0;
+  static bool first = false;
+  if ((int32_t)(millis() - next_ms) < 0) return;
+  next_ms = millis() + 1000;
+  const bool up = lvport::netRadio() == lvport::NET_UP;
+  if (up != _ntp_on) {
+    _ntp_on = up;
+    if (up) lvport::ntpStart(); else lvport::ntpStop();
+    first = up;
+  }
+  const uint32_t t = lvport::ntpTake();
+  if (t > 1700000000UL) {
+    const uint32_t now = rtc_clock.getCurrentTime();
+    const bool moved = t > now + 1 || now > t + 1;
+    if (moved) rtc_clock.setCurrentTime(t);
+    if (first && moved && !_asleep) showToast("Clock set from the network");
+    first = false;
+  }
+}

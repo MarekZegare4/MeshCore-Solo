@@ -99,10 +99,9 @@ if your mesh agrees on it.
 > **Wio Tracker L2:** one list of pages:
 >
 > - **Device**: Display (including the lock, **Tap to wake**, the **Theme**,
->   dark or light, which restarts the device, and the accent colour), Home apps,
->   Power (battery, GPS, and the **Battery curve** as a chart whose points you
->   drag), Sound (with the melody editor), Keyboard, Messages
->   & contacts.
+>   dark or light, which restarts the device, and the accent colour), Power
+>   (battery, GPS, and the **Battery curve** as a chart whose points you
+>   drag), Sound (with the melody editor), Keyboard, Messages & contacts.
 > - **Connections**: Radio (with **Advanced** at the bottom), Privacy,
 >   Bluetooth, WiFi, GPS. Adding contacts is in Messages & contacts.
 > - **Map & data**: Map (trail, live sharing and arrival alert options),

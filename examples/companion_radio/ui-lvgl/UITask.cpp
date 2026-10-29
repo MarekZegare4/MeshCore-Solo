@@ -324,6 +324,7 @@ void UITask::loop() {
 #endif
   checkLowBattery();
   mapDownloadTick();   // a map download keeps running on any screen, and asleep
+  wifiClockTick();
   otaTick();           // so does a firmware update
   trailJournalTick();   // the live trail's copy on the card, once a minute
   if ((int32_t)(millis() - _next_trackback_ms) >= 0) {   // walking the trail back, on any screen
@@ -347,6 +348,7 @@ void UITask::loop() {
     }
     if (locked()) lockPoll();
     else if (_screen == SCR_HOME) { homeSwipePoll(); homeMapLoop(); }
+    else if (_screen == SCR_GALLERY) galleryTick();
     if ((_screen == SCR_NEARBY || _screen == SCR_NODE) && (int32_t)(millis() - _next_nearby_ms) >= 0) {
       // Scan results trickle in over a few seconds: poll fast while scanning.
       _next_nearby_ms = millis() + (_scanning ? 250 : 2000);
@@ -1229,7 +1231,7 @@ int UITask::screenDepth(Screen s) {
   switch (s) {
     case SCR_HOME: return 0;
     case SCR_CHATS: case SCR_NEARBY: case SCR_MAP: case SCR_SETTINGS:
-    case SCR_COMPASS: case SCR_CLOCK: case SCR_BOT: case SCR_REPEATER: case SCR_ADMIN_PICK:
+    case SCR_COMPASS: case SCR_GALLERY: case SCR_CLOCK: case SCR_BOT: case SCR_REPEATER: case SCR_ADMIN_PICK:
     case SCR_DIAG: case SCR_GPS: return 1;
     case SCR_THREAD: case SCR_CONTACTS: case SCR_CHANNEL_EDIT: case SCR_NODE:
     case SCR_SETTINGS_NAV: case SCR_ADMIN: return 2;
@@ -1255,6 +1257,7 @@ void UITask::back() {
     case SCR_ROUTE_PICK: _screen = SCR_ROUTE; buildRoute(); break;
     case SCR_OTA:      otaLeave(); break;
     case SCR_COMPASS:  showHome(); break;
+    case SCR_GALLERY:  galleryBack(); break;
     case SCR_BATT:     showSchemaSettings(PG_POWER); break;
     case SCR_GPS:      if (_gps_from_settings) showSettings(); else showHome(); break;
     case SCR_ADMIN:    if (_nav_overlay) navClosePopup(); else adminLeave(); break;
@@ -1338,6 +1341,7 @@ static void onOpenNodesMap(lv_event_t* e) { (void)e; s_ui->openMap(false); }
 static void onOpenClock(lv_event_t* e);   // ClockScreen.h
 static void onOpenBot(lv_event_t* e);     // BotScreen.h
 static void onOpenCompass(lv_event_t* e);   // CompassScreen.h
+static void onOpenGallery(lv_event_t* e);   // GalleryScreen.h
 static void onOpenFlashlight(lv_event_t* e);   // Flashlight.h
 static void onOpenDiag(lv_event_t* e);      // DiagScreen.h
 static void onOpenGps(lv_event_t* e);       // GpsScreen.h
@@ -1360,6 +1364,7 @@ static void onFactoryReset(lv_event_t* e) { s_ui->factoryResetStep((int)(uintptr
 #include "Chart.h"
 #include "ProfileView.h"
 #include "NavMap.h"
+#include "GalleryScreen.h"
 #include "MapAreas.h"
 #include "MapRegions.h"
 #include "HomeScreen.h"
@@ -1442,7 +1447,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_open(const char* name) {
     { "nodes", &UITask::showNearby }, { "ota", &UITask::showOta }, { "wifi", &UITask::showWifi },
     { "clock", &UITask::showClock }, { "radio", &UITask::showRadio }, { "scopes", &UITask::showScopes },
     { "repeater", &UITask::showRepeater }, { "bot", &UITask::showBot }, { "storage", &UITask::showStorage },
-    { "diag", &UITask::showDiag }, { "compass", &UITask::showCompass }, { "admin", &UITask::showAdminPick },
+    { "diag", &UITask::showDiag }, { "compass", &UITask::showCompass }, { "gallery", &UITask::showGallery }, { "admin", &UITask::showAdminPick },
     { "quick", &UITask::showQuickMsgs }, { "contacts", &UITask::showContacts },
   };
   for (auto& s : SCREENS) if (!strcmp(s.n, name)) { (s_ui->*s.fn)(); return; }

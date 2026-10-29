@@ -27,6 +27,7 @@
     #include <USBMSC.h>
   #endif
   #include <mbedtls/platform.h>
+  #include <esp_sntp.h>
 #elif defined(SIM_PLATFORM) && defined(__EMSCRIPTEN__)
   #include <emscripten/fetch.h>
   #include <dirent.h>
@@ -573,8 +574,10 @@ static bool flashInfo(uint64_t& total, uint64_t& used) {
 // straight away when it's the only one.
 static bool s_net_scanning = false;
 static char s_fb_ssid[33], s_fb_pass[65];
+static void ntpAskDhcp();
 static void netBegin(const char* ssid, const char* pass) {
   WiFi.mode(WIFI_STA);
+  ntpAskDhcp();
   snprintf(s_fb_ssid, sizeof(s_fb_ssid), "%s", ssid);
   snprintf(s_fb_pass, sizeof(s_fb_pass), "%s", pass);
   if (wifiSavedCount() <= 1) { WiFi.begin(ssid, pass); return; }
@@ -585,6 +588,7 @@ static void netBegin(const char* ssid, const char* pass) {
 static void netJoin(const char* ssid, const char* pass) {
   s_net_scanning = false;
   WiFi.mode(WIFI_STA);
+  ntpAskDhcp();
   WiFi.begin(ssid, pass);
 }
 // After NET_FAILED / a timeout: true when the network wasn't there at all
@@ -615,6 +619,29 @@ static int netState() {
     default:                return NET_CONNECTING;
   }
 }
+// The clock over WiFi (SNTP), while connected: the router's own NTP server
+// when its DHCP lease names one (option 42 -- asked for before joining, the
+// lease is where it comes from), then public pools. SNTP sets the system time
+// itself; ntpTake() hands the time on to rtc_clock (a hardware RTC, if any).
+static volatile uint32_t s_ntp_secs = 0;
+static char s_ntp_dhcp[16];
+static void ntpAskDhcp() { esp_sntp_servermode_dhcp(true); }
+static void ntpSynced(struct timeval* tv) { s_ntp_secs = (uint32_t)tv->tv_sec; }   // the lwIP task
+static void ntpStart() {
+  if (esp_sntp_enabled()) esp_sntp_stop();
+  esp_sntp_setoperatingmode(ESP_SNTP_OPMODE_POLL);
+  const ip_addr_t* a = esp_sntp_getserver(0);
+  const bool router = a && !ip_addr_isany(a);
+  if (router) snprintf(s_ntp_dhcp, sizeof(s_ntp_dhcp), "%s", ipaddr_ntoa(a));
+  esp_sntp_setservername(0, router ? s_ntp_dhcp : "pool.ntp.org");
+  esp_sntp_setservername(1, router ? "pool.ntp.org" : "time.google.com");
+  esp_sntp_setservername(2, "time.cloudflare.com");
+  sntp_set_time_sync_notification_cb(ntpSynced);
+  esp_sntp_init();
+}
+static void ntpStop() { if (esp_sntp_enabled()) esp_sntp_stop(); }
+static uint32_t ntpTake() { uint32_t t = s_ntp_secs; s_ntp_secs = 0; return t; }
+
 static void fetchFreeBuffer();
 static void netEnd() {
   if (s_net_scanning) { s_net_scanning = false; WiFi.scanDelete(); }
@@ -912,6 +939,9 @@ static bool netNotFound() { return false; }
 static int  netState() { return NET_UP; }
 static void netEnd() { s_net_on = false; }
 static int  netRadio() { return s_net_on ? NET_UP : NET_OFF; }
+static void ntpStart() {}   // the browser's clock is the computer's already
+static void ntpStop() {}
+static uint32_t ntpTake() { return 0; }
 static void netSsid(char* out, size_t n) { const WifiNet* w = wifiSaved(0); snprintf(out, n, "%s", s_net_on && w ? w->ssid : ""); }
 static uint32_t s_scan_at = 0;
 static void scanStart() { s_scan_at = millis(); }

@@ -8,7 +8,7 @@
 //   map          -- a minimap round your position, framing anyone sharing
 //                   theirs and the target; tap for the Navigation map
 //   apps         -- the tools, 3x2 to a page, in the user's order with some
-//                   maybe hidden (Settings > Home apps, or hold an app)
+//                   maybe hidden (hold an app)
 //
 // Single-TU fragment: included by ui-lvgl/UITask.cpp after NavMap.h (the
 // minimap draws with the map's tile cache).
@@ -34,6 +34,7 @@ static const App APP_LIST[] = {
   { 'A', UI_SYMBOL_KEY,      "Admin",       onOpenAdminPick, false },
   { 'D', UI_SYMBOL_CHART,    "Diagnostics", onOpenDiag,      false },
   { 'L', UI_SYMBOL_BULB,     "Flashlight",  onOpenFlashlight, false },
+  { 'P', LV_SYMBOL_IMAGE,    "Gallery",     onOpenGallery,   false },
 };
 static const int APP_COUNT = sizeof(APP_LIST) / sizeof(APP_LIST[0]);
 static const int PER_PAGE = 6;
@@ -41,7 +42,7 @@ static const char ALWAYS = 'S';   // Settings can't be hidden: it's the way back
 
 // ── The user's order ──
 // The letters in order, a hidden app's in lower case. Arranged on Home itself
-// (hold an app, or Settings > Home apps); saved on Done or on leaving Home,
+// (hold an app); saved on Done or on leaving Home,
 // not per change.
 static char s_order[APP_COUNT + 1];
 static bool s_order_loaded = false, s_order_dirty = false;
