@@ -279,7 +279,7 @@ static const Setting ALL[] = {
   MAP("Battery shutdown", "Power off below this voltage", SEC_POWER, low_batt_mv, LOW_BATT, optLowBatt, nullptr),
   MAP("GPS power saving", "Sleep between fixes", SEC_POWER, gps_interval, GPS_DUTY, optGpsDuty, applyGpsDuty),
 
-  MAP("Time zone", "For the clock and the alarm", SEC_TIME, tz_offset_hours, TZ, optTz, nullptr),
+  MAP("Time zone", "Winter time: the clock and alarm", SEC_TIME, tz_offset_hours, TZ, optTz, nullptr),
   IDX("Summer time", "An hour ahead, changed by itself", SEC_TIME, dst_rule, NodePrefs::DST_COUNT, optDst, nullptr),
   SW("12-hour clock", "AM / PM instead of 24 h", SEC_TIME, clock_12h, nullptr),
   MAP("Clock seconds", "On the home clock", SEC_TIME, clock_hide_seconds, INVERTED, nullptr, nullptr),
