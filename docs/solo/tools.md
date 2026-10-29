@@ -18,8 +18,8 @@ The **Clock** home page shows the time with a bar under it that fills with
 the seconds (Settings › Display › Clock seconds), the date, and up to three
 fields you choose (hold Enter): battery, temperature, humidity, pressure, altitude
 (barometric or GPS), light, CO₂, GPS position, satellites, contacts, unread
-messages. The time comes from GPS or the phone app; the time zone is in
-Settings.
+messages. The time comes from GPS or the phone app; the time zone and summer
+time are in Settings.
 
 **Enter** on the clock opens the clock tools:
 

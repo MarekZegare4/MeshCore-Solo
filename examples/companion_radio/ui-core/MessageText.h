@@ -88,8 +88,9 @@ static void expand(const char* tmpl, char* out, int n, const NodePrefs* p) {
   }
 #endif
   float batt = (float)board.getBattMilliVolts() / 1000.0f;
-  ::expandMsg(tmpl, out, n, lat, lon, gps_valid, rtc_clock.getCurrentTime(),
-              p ? p->tz_offset_hours : 0, &sensors, batt, nullptr, -1, board.getMCUTemperature());
+  const uint32_t now = rtc_clock.getCurrentTime();
+  ::expandMsg(tmpl, out, n, lat, lon, gps_valid, now,
+              tzHoursAt(p, now), &sensors, batt, nullptr, -1, board.getMCUTemperature());
 }
 
 // A typed message: a reply's leading "@[nick] " stays as it is (a nick may

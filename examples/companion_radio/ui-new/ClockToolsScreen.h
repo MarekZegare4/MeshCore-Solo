@@ -263,7 +263,7 @@ class ClockToolsScreen : public UIScreen {
   // screen), the grid goes tight and the month and year stand beside it.
   int renderCalendar(DisplayDriver& d) {
     struct tm t;
-    if (!localTm(rtc_clock.getCurrentTime(), _prefs ? _prefs->tz_offset_hours : 0, t) || t.tm_year < 120) {
+    if (!localTm(rtc_clock.getCurrentTime(), tzHoursAt(_prefs, rtc_clock.getCurrentTime()), t) || t.tm_year < 120) {
       drawScreenHeader(d, "Calendar");
       d.drawTextCentered(d.width() / 2, d.height() / 2 - d.getLineHeight() / 2, "Clock not set");
       return 60000;

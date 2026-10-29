@@ -1166,9 +1166,9 @@ static void tileBadge(lv_obj_t* tile, int n) {
   lv_obj_align(lv_obj_get_child(tile, -1), LV_ALIGN_TOP_RIGHT, -2, 2);
 }
 
-// Local time (NodePrefs::tz_offset_hours), now or at `utc`; false before the clock is set.
+// Local time (time zone + summer time), now or at `utc`; false before the clock is set.
 static bool localTime(const NodePrefs* p, struct tm& out, uint32_t utc = rtc_clock.getCurrentTime()) {
-  return localTm(utc, p ? p->tz_offset_hours : 0, out);
+  return localTm(utc, tzHoursAt(p, utc), out);
 }
 static const char* const MONTHS[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
                                       "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };

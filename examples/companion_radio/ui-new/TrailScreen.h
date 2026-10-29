@@ -632,14 +632,13 @@ private:
     _list_max_scroll = max_scroll;
 
     NodePrefs* p = _task->getNodePrefs();
-    int32_t tz_off = (int32_t)(p ? p->tz_offset_hours : 0) * 3600;
 
     for (int i = 0; i < visible; i++) {
       int idx = total - 1 - (_list_scroll + i);
       if (idx < 0) break;
       const TrailPoint& pt = _store->at(idx);
 
-      time_t lt = (time_t)((int32_t)pt.ts + tz_off);
+      time_t lt = (time_t)((int32_t)pt.ts + (int32_t)tzHoursAt(p, pt.ts) * 3600);
       struct tm* ti = gmtime(&lt);
 
       char dist[12];

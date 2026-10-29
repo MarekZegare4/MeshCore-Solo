@@ -153,12 +153,11 @@ public:
       display.drawTextCentered(display.width() / 2, display.height() / 2, "No replies yet");
       return 2000;
     }
-    const int8_t tz = _prefs ? _prefs->tz_offset_hours : 0;
     int mq_delay = 0;
     drawList(display, log.count(), _sel, _scroll, [&](int i, int y, bool sel, int reserve) {
       drawRowSelection(display, y, sel, reserve);
       char line[200];
-      botcfg::logLine(log.at(i), tz, line, sizeof(line));
+      botcfg::logLine(log.at(i), tzHoursAt(_prefs, log.at(i).ts), line, sizeof(line));
       char filt[200];
       display.translateUTF8ToBlocks(filt, line, sizeof(filt));
       int r = display.drawTextEllipsized(2, y, display.width() - 2 - reserve, filt, sel);

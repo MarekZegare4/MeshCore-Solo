@@ -157,6 +157,10 @@ static void optLockLook(uint8_t v, char* b, int n, const NodePrefs&) { snprintf(
 static void optExpiry(uint8_t v, char* b, int n, const NodePrefs&) {
   snprintf(b, n, "%s", NodePrefs::contactExpiryLabel(v));
 }
+static void optDst(uint8_t v, char* b, int n, const NodePrefs&) {
+  static const char* L[NodePrefs::DST_COUNT] = { "Off", "Europe", "North America", "Australia", "New Zealand" };
+  snprintf(b, n, "%s", L[v < NodePrefs::DST_COUNT ? v : 0]);
+}
 static void optChSort(uint8_t v, char* b, int n, const NodePrefs&) {
   static const char* L[NodePrefs::CH_SORT_COUNT] = { "Slots", "Newest", "Name" };
   snprintf(b, n, "%s", L[v < NodePrefs::CH_SORT_COUNT ? v : 0]);
@@ -276,6 +280,7 @@ static const Setting ALL[] = {
   MAP("GPS power saving", "Sleep between fixes", SEC_POWER, gps_interval, GPS_DUTY, optGpsDuty, applyGpsDuty),
 
   MAP("Time zone", "For the clock and the alarm", SEC_TIME, tz_offset_hours, TZ, optTz, nullptr),
+  IDX("Summer time", "An hour ahead, changed by itself", SEC_TIME, dst_rule, NodePrefs::DST_COUNT, optDst, nullptr),
   SW("12-hour clock", "AM / PM instead of 24 h", SEC_TIME, clock_12h, nullptr),
   MAP("Clock seconds", "On the home clock", SEC_TIME, clock_hide_seconds, INVERTED, nullptr, nullptr),
 

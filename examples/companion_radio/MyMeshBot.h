@@ -124,7 +124,8 @@ void MyMesh::botDmRecord(const uint8_t* pubkey) {
 // wraps past midnight.
 bool MyMesh::botInQuietHours() const {
   int h;
-  if (!localHour(getRTCClock()->getCurrentTime(), _prefs.tz_offset_hours, h)) return false;   // clock not set -- don't suppress
+  const uint32_t now = getRTCClock()->getCurrentTime();
+  if (!localHour(now, tzHoursAt(_prefs, now), h)) return false;   // clock not set -- don't suppress
   return hourInWindow(h, _prefs.bot_quiet_start, _prefs.bot_quiet_end);
 }
 
@@ -188,7 +189,7 @@ void MyMesh::tryBotReplyDM(const ContactInfo& from, const char* text, uint8_t ho
   expandMsg(_prefs.bot_reply_dm, expanded, sizeof(expanded),
             sensors.node_lat, sensors.node_lon,
             sensors.node_lat != 0.0 || sensors.node_lon != 0.0,
-            ts, _prefs.tz_offset_hours,
+            ts, tzHoursAt(_prefs, ts),
             &sensors, (float)board.getBattMilliVolts() / 1000.0f,
             from.name, hops, board.getMCUTemperature(), &s_bot_in);
   uint32_t expected_ack, est_timeout;
@@ -230,7 +231,7 @@ void MyMesh::tryBotReplyChannel(uint8_t channel_idx, const char* text, uint8_t h
   expandMsg(_prefs.bot_reply_ch, expanded, sizeof(expanded),
             sensors.node_lat, sensors.node_lon,
             sensors.node_lat != 0.0 || sensors.node_lon != 0.0,
-            ts, _prefs.tz_offset_hours,
+            ts, tzHoursAt(_prefs, ts),
             &sensors, (float)board.getBattMilliVolts() / 1000.0f,
             sender_name, hops, board.getMCUTemperature(), &s_bot_in);
   // Anti-loop: don't echo a message identical to our own reply (e.g. another bot
@@ -275,7 +276,7 @@ void MyMesh::tryBotReplyRoom(const ContactInfo& from, const uint8_t* sender_pref
   expandMsg(_prefs.bot_reply_room, expanded, sizeof(expanded),
             sensors.node_lat, sensors.node_lon,
             sensors.node_lat != 0.0 || sensors.node_lon != 0.0,
-            ts, _prefs.tz_offset_hours,
+            ts, tzHoursAt(_prefs, ts),
             &sensors, (float)board.getBattMilliVolts() / 1000.0f,
             sender_name, hops, board.getMCUTemperature(), &s_bot_in);
   // Anti-loop, mirrors the channel path: don't echo a message identical to
@@ -437,7 +438,7 @@ bool MyMesh::botCommandReply(const char* cmd, const char* arg, const char* arg2,
   expandMsg(tmpl, out, out_len,
             sensors.node_lat, sensors.node_lon,
             sensors.node_lat != 0.0 || sensors.node_lon != 0.0,
-            ts, _prefs.tz_offset_hours,
+            ts, tzHoursAt(_prefs, ts),
             &sensors, (float)board.getBattMilliVolts() / 1000.0f,
             sender_name, hops, board.getMCUTemperature(), &s_bot_in);
   if (strchr(out, '{')) strcpy(out, "n/a");      // requested sensor not present

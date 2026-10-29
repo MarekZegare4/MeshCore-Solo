@@ -632,8 +632,8 @@ void UITask::settingsGroup(int i) {
     g = group(body, "SYSTEM");
     listRow(g, LV_SYMBOL_EDIT "  Name", the_mesh.getNodeName(), onNodeName, NULL);
     if (_prefs) {
-      snprintf(sub, sizeof(sub), "%s, %s", settingText(*_prefs, SETTING(tz_offset_hours), v1, sizeof(v1)),
-               _prefs->clock_12h ? "12 h" : "24 h");
+      snprintf(sub, sizeof(sub), "%s%s, %s", settingText(*_prefs, SETTING(tz_offset_hours), v1, sizeof(v1)),
+               inSummerTime(*_prefs, rtc_clock.getCurrentTime()) ? " summer" : "", _prefs->clock_12h ? "12 h" : "24 h");
       listRow(g, UI_SYMBOL_CLOCK "  Time", sub, onOpenSchemaPage, (void*)(uintptr_t)PG_TIME);
       schemaRow(g, SETTING(units_imperial));
     }

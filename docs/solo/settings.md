@@ -7,7 +7,7 @@ board supports are shown.
 
 | Section | What's there |
 | ------- | ------------ |
-| **Display** | Brightness, auto-off, wake on message, the message alert (banner, corner envelope or off), lock screen, the lock clock's look and the [PIN](./lock.md), battery as icon / % / volts, time zone, clock format and seconds; on e-ink also rotation and full refresh, and on a 4.26" panel the text and icon size |
+| **Display** | Brightness, auto-off, wake on message, the message alert (banner, corner envelope or off), lock screen, the lock clock's look and the [PIN](./lock.md), battery as icon / % / volts, time zone and summer time, clock format and seconds; on e-ink also rotation and full refresh, and on a 4.26" panel the text and icon size |
 | **Sound** | Buzzer on / off / auto (quiet while the app is connected), volume, quiet hours, the melody for messages, channels and adverts |
 | **Home Pages** | Order of the home pages, and which are shown |
 | **Radio** | TX power, preset, frequency, SF / BW / CR, saved presets, Auto pwr, the scope list, then the advanced options (below) |
@@ -26,6 +26,10 @@ A few notes:
   apart. The default one is used for direct messages and repeating, and a channel
   follows it unless it picks its own (see [Messages](./messages.md#channels)). Anyone who
   types the same name gets the same scope; it isn't encryption.
+- **Summer time** puts the clock an hour ahead and back again by itself, by
+  the rule of your region: Europe (the last Sundays of March and October),
+  North America, south-east Australia or New Zealand. The time zone stays
+  the winter one, e.g. UTC+1 for Poland. The alarm and quiet hours follow it.
 - **Low battery** shuts the device down at the voltage you choose, which is
   also 0 % on the battery indicator.
 - **Batt curve** sets the cell voltage at 0, 10 … 100 % for a battery that
@@ -124,7 +128,7 @@ so its documentation applies:
 | `agc.reset.interval` | Seconds between radio gain resets (in steps of 4, `0` off), with `get` / `set` |
 | `get name`, `set name …` | The device name |
 | `get pin`, `set pin 123456` | The Bluetooth PIN, `0` for a random one; used from the next start |
-| `get tz.offset`, `set tz.offset 2` | Time zone, in hours from UTC |
+| `get tz.offset`, `set tz.offset 1` | Time zone, in hours from UTC (the winter one when summer time is on) |
 | `get lat`, `set lat …`, `get lon`, `set lon …` | The fixed position |
 | `ver`, `board` | Firmware version, hardware |
 | `reboot`, `poweroff` | Restart or turn off |

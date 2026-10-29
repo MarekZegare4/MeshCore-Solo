@@ -100,7 +100,7 @@ void UITask::buildBot() {
     if (log.count() == 0) label(g, "No replies yet", THEME_FONT_BODY, theme::TEXT_MUTED);
     for (int i = 0; i < log.count(); i++) {
       const BotLogEntry& e = log.at(i);
-      const uint32_t t = e.ts + (int32_t)p->tz_offset_hours * 3600;
+      const uint32_t t = e.ts + (int32_t)tzHoursAt(p, e.ts) * 3600;
       static const char* const WHERE[] = { "DM", "channel", "room" };
       char hd[64];
       snprintf(hd, sizeof(hd), "%02u:%02u  %s  (%s)", (unsigned)(t / 3600 % 24), (unsigned)(t / 60 % 60),

@@ -268,6 +268,11 @@ struct NodePrefsFields {
   // ── Clock & alarm ─────────────────────────────────────────────────────
   uint8_t  clock_hide_seconds; // 0=show HH:MM:SS/refresh 1s (default), 1=hide/refresh 60s
   uint8_t  clock_12h;          // 0=24h (default), 1=12h with AM/PM
+  // Summer time: the rule that puts the clock an hour ahead for part of the
+  // year, on top of tz_offset_hours (then the standard, winter offset). Every
+  // local time goes through tzHoursAt() below.
+  enum : uint8_t { DST_OFF, DST_EU, DST_US, DST_AU, DST_NZ, DST_COUNT };
+  uint8_t  dst_rule;
   // Alarm clock — a wake alarm, configured from the Clock page (Enter › Alarm).
   // Stored as a local time-of-day; the actual fire instant is (re)computed as an
   // absolute time in tickBackground(), which is what makes it robust to RTC
@@ -830,7 +835,7 @@ class NodePrefs : public NodePrefsFields, public ConfigSerializer {
     s.def("kb_main", keyboard_main_alphabet); s.def("kb_cardkb", keyboard_cardkb_compact);
   }
   void clockSolo(Section& s) {
-    s.def("hide_sec", clock_hide_seconds); s.def("h12", clock_12h);
+    s.def("hide_sec", clock_hide_seconds); s.def("h12", clock_12h); s.def("dst", dst_rule);
     s.def("alarm", alarm_on); s.def("alarm_h", alarm_hour); s.def("alarm_m", alarm_min);
     s.def("alarm_rep", alarm_repeat_mask);
   }
@@ -996,6 +1001,48 @@ static inline bool hourInWindow(int h, int start, int end) {
   if (start == end) return false;
   return start < end ? (h >= start && h < end) : (h >= start || h < end);
 }
+// Days since 1970-01-01 of a calendar date (H. Hinnant's days_from_civil).
+static inline int32_t daysFromCivil(int y, int m, int d) {
+  y -= m <= 2;
+  const int era = (y >= 0 ? y : y - 399) / 400;
+  const int yoe = y - era * 400;
+  const int doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+  return era * 146097 + yoe * 365 + yoe / 4 - yoe / 100 + doy - 719468;
+}
+// The day (since 1970) of the n-th Sunday of a month, n = 1..4, 5 = the last.
+static inline int32_t nthSunday(int y, int m, int n) {
+  const int32_t first = daysFromCivil(y, m, 1);
+  int32_t d = first + (3 - first % 7 + 7) % 7 + (n - 1) * 7;   // 1970-01-01 was a Thursday
+  if (n == 5 && d >= daysFromCivil(m == 12 ? y + 1 : y, m == 12 ? 1 : m + 1, 1)) d -= 7;
+  return d;
+}
+// Summer time in force at `utc`. The changes, per NodePrefs::dst_rule: Europe
+// (EU / UK) last Sunday of March - last Sunday of October at 01:00 UTC; North
+// America second Sunday of March - first Sunday of November; south-east
+// Australia first Sunday of October - first Sunday of April; New Zealand last
+// Sunday of September - first Sunday of April; those three forward at 02:00,
+// back at 02:00 summer time in America and at 03:00 in the other two.
+static inline bool inSummerTime(const NodePrefs& p, uint32_t utc) {
+  // Hours in local standard time, or UTC with `utc` set.
+  struct Rule { uint8_t on_mon, on_nth, on_hour, off_mon, off_nth, off_hour, utc; };
+  static const Rule RULES[NodePrefs::DST_COUNT - 1] = {
+    { 3, 5, 1, 10, 5, 1, 1 }, { 3, 2, 2, 11, 1, 1, 0 }, { 10, 1, 2, 4, 1, 2, 0 }, { 9, 5, 2, 4, 1, 2, 0 },
+  };
+  if (p.dst_rule == NodePrefs::DST_OFF || p.dst_rule >= NodePrefs::DST_COUNT || utc < 1000000000UL) return false;
+  const Rule& r = RULES[p.dst_rule - 1];
+  const int64_t std_off = r.utc ? 0 : (int64_t)p.tz_offset_hours * 3600;
+  time_t lt = (time_t)((int64_t)utc + (int64_t)p.tz_offset_hours * 3600);
+  const int y = gmtime(&lt)->tm_year + 1900;
+  const int64_t on  = (int64_t)nthSunday(y, r.on_mon, r.on_nth) * 86400 + r.on_hour * 3600 - std_off;
+  const int64_t off = (int64_t)nthSunday(y, r.off_mon, r.off_nth) * 86400 + r.off_hour * 3600 - std_off;
+  const int64_t t = utc;
+  return on < off ? (t >= on && t < off) : (t >= on || t < off);   // southern summers span New Year
+}
+// The offset from UTC in force at `utc`, in hours: the time zone plus summer time.
+static inline int8_t tzHoursAt(const NodePrefs& p, uint32_t utc) {
+  return (int8_t)(p.tz_offset_hours + (inSummerTime(p, utc) ? 1 : 0));
+}
+static inline int8_t tzHoursAt(const NodePrefs* p, uint32_t utc) { return p ? tzHoursAt(*p, utc) : 0; }
 // The local hour from a UTC time; false while the clock isn't set.
 static inline bool localHour(uint32_t utc, int8_t tz_hours, int& h) {
   if (utc < 1000000000UL) return false;
@@ -1012,7 +1059,7 @@ static inline bool localTm(uint32_t utc, int8_t tz_hours, struct tm& out) {
 // Settings > Sound > Quiet hours in force at `utc` (never with the clock unset).
 static inline bool inQuietHours(const NodePrefs& p, uint32_t utc) {
   int h;
-  return p.quiet_hours && localHour(utc, p.tz_offset_hours, h) && hourInWindow(h, p.quiet_from, p.quiet_to);
+  return p.quiet_hours && localHour(utc, tzHoursAt(p, utc), h) && hourInWindow(h, p.quiet_from, p.quiet_to);
 }
 
 // Bounds for a usable repeater radio profile. The frequency range is passed in

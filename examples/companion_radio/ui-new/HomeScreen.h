@@ -1002,7 +1002,7 @@ public:
 
   void drawClockPage(DisplayDriver& d, uint32_t unix_ts) {
     struct tm ti;
-    localTm(unix_ts, _node_prefs ? _node_prefs->tz_offset_hours : 0, ti);
+    localTm(unix_ts, tzHoursAt(_node_prefs, unix_ts), ti);
     const bool h12 = _node_prefs && _node_prefs->clock_12h;
     const bool show_sec = !Features::IS_EINK && (!_node_prefs || !_node_prefs->clock_hide_seconds);
     const int W = d.width(), H = d.height();
@@ -1086,7 +1086,7 @@ public:
     const uint32_t unix_ts = _rtc->getCurrentTime();
     const bool synced = unix_ts >= 1000000000UL;
     struct tm ti;
-    if (synced) localTm(unix_ts, _node_prefs ? _node_prefs->tz_offset_hours : 0, ti);
+    if (synced) localTm(unix_ts, tzHoursAt(_node_prefs, unix_ts), ti);
     const bool h12 = _node_prefs && _node_prefs->clock_12h;
     const bool compact = _node_prefs && _node_prefs->lock_compact && W > H;
     // The month and the rows under the big clock: on a tall screen (portrait
@@ -1338,7 +1338,7 @@ public:
         uint32_t now_ts = _rtc->getCurrentTime();
         if (now_ts >= 1000000000UL) {
           struct tm lt;
-          localTm(now_ts, _node_prefs->tz_offset_hours, lt);
+          localTm(now_ts, tzHoursAt(_node_prefs, now_ts), lt);
           int hh = lt.tm_hour;
           if (_node_prefs->clock_12h) { hh %= 12; if (hh == 0) hh = 12; }
           snprintf(filtered_name, sizeof(filtered_name), "%d:%02d", hh, lt.tm_min);

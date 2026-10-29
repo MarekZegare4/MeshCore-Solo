@@ -349,6 +349,7 @@ static void sanitize(NodePrefs& p) {
   flag(p.fav_sort, 1);
   flag(p.msg_wake, 1);
   if (p.contact_expiry_idx >= NodePrefs::CONTACT_EXPIRY_COUNT) p.contact_expiry_idx = 0;
+  if (p.dst_rule >= NodePrefs::DST_COUNT) p.dst_rule = NodePrefs::DST_OFF;
   if (p.display_brightness_pct > 100) p.display_brightness_pct = 0;
   flag(p.quiet_hours, 0);
   if (p.quiet_from > 23) p.quiet_from = 22;
