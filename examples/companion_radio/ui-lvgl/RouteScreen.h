@@ -146,6 +146,7 @@ void UITask::buildRoute() {
   _route_note = noteLabel(scroll, "", THEME_FONT_SMALL, theme::TEXT_MUTED);
   _route_disc = flexBox(scroll, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_width(_route_disc, LV_PCT(100));
+  lv_obj_set_style_pad_row(_route_disc, theme::GAP, 0);   // Discover's button off the group, as the list's rows
   _route_disc_shown = 0xFFFFFFFF;
 
   lv_obj_t* bar = buttonBar(body);
@@ -321,18 +322,29 @@ void UITask::routeDiscRebuild() {
     lv_obj_t* l = groupLine(g, false);
     noteLabel(l, t, THEME_FONT_SMALL, R.discoverFailed() ? theme::FAIL : theme::TEXT_MUTED);
   }
+  // Code i * 2 + 1: the way back, turned round into a route there to trace.
   for (int i = 0; i < R.foundCount(); i++) {
     const PathEditor::Found& f = R.found(i);
-    char route[96], back[64], sub[96];
+    char route[96], back[64], sub[128];
     R.foundText(i, false, route, sizeof(route));
     R.foundText(i, true, back, sizeof(back));
     const int hops = PathEditor::hopsOf(f.out_len);
-    snprintf(sub, sizeof(sub), "%d hop%s%s, found %u time%s. Back: %s", hops, hops == 1 ? "" : "s",
-             hops > PathEditor::MAX_HOPS ? " (too long to use)" : "", (unsigned)f.times, f.times == 1 ? "" : "s", back);
-    lv_obj_t* r = groupLine(g, true);
+    const bool same = R.foundBackSame(i);
+    int o = snprintf(sub, sizeof(sub), "%d hop%s%s, found %u time%s. ", hops, hops == 1 ? "" : "s",
+                     hops > PathEditor::MAX_HOPS ? " (too long to use)" : "", (unsigned)f.times, f.times == 1 ? "" : "s");
+    if (same) snprintf(sub + o, sizeof(sub) - o, "Back the same way");
+    else      snprintf(sub + o, sizeof(sub) - o, "Back: %s", back);
+    lv_obj_t* r = groupLine(g, same);
     groupText(r, route, sub);
-    label(r, "Use", THEME_FONT_SMALL, theme::ACCENT);
-    lv_obj_add_event_cb(r, onRouteFound, LV_EVENT_CLICKED, (void*)(uintptr_t)i);
+    if (same) {
+      label(r, "Use", THEME_FONT_SMALL, theme::ACCENT);
+      lv_obj_add_event_cb(r, onRouteFound, LV_EVENT_CLICKED, (void*)(uintptr_t)(i * 2));
+    } else {
+      lv_obj_t* col = flexBox(r, LV_FLEX_FLOW_COLUMN);
+      lv_obj_set_style_pad_row(col, 4, 0);
+      lv_obj_set_width(pillButton(col, "There", theme::SURFACE_2, onRouteFound, i * 2), 64);
+      lv_obj_set_width(pillButton(col, "Back", theme::SURFACE_2, onRouteFound, i * 2 + 1), 64);
+    }
   }
   lv_obj_t* bar = buttonBar(_route_disc);
   barButton(bar, R.discovering() ? LV_SYMBOL_CLOSE " Stop" : LV_SYMBOL_REFRESH " Discover", onRouteDiscover, 0, !R.discovering());
@@ -350,11 +362,14 @@ void UITask::routeDiscTries(int sel) {
   if (sel >= 0 && sel < 3) routeview::s_tries = sel;
 }
 
-void UITask::routeUseFound(int i) {
+void UITask::routeUseFound(int code) {
   PathEditor& R = _core->route;
-  if (PathEditor::hopsOf(R.found(i).out_len) > PathEditor::MAX_HOPS) { showToast("Too long: up to 7 repeaters"); return; }
-  if (!R.useFound(i)) return;
-  showToast("In the list: Trace to check it, Save to use it");
+  const int i = code >> 1;
+  const bool back = code & 1;
+  if (i >= R.foundCount()) return;
+  if (PathEditor::foundHops(R.found(i), back) > PathEditor::MAX_HOPS) { showToast("Too long: up to 7 repeaters"); return; }
+  if (!R.useFound(i, back)) return;
+  showToast(back ? "The way back, turned round, in the list: Trace to check it" : "In the list: Trace to check it, Save to use it");
   routeRebuild();
 }
 

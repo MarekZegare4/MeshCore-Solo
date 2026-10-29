@@ -948,14 +948,19 @@ void UITask::takeScreenshot() {
   if (!lvport::mountStorage()) { showToast("No SD card"); return; }
   mkdir("/sdcard", 0777);   // the sim's MEMFS may not have it yet (the card: fails, harmless)
   mkdir("/sdcard/screenshots", 0777);
-  char path[48];
-  struct stat st;
-  int n = 1;
-  for (; n <= 9999; n++) {
-    snprintf(path, sizeof(path), "/sdcard/screenshots/scr_%04d.bmp", n);
-    if (stat(path, &st) != 0) break;
+  // One past the highest number: a deleted one's isn't reused, so the newest
+  // stays first in the Gallery (one pass over the folder, not a stat a file).
+  int n = 0;
+  if (DIR* d = opendir("/sdcard/screenshots")) {
+    while (struct dirent* de = readdir(d)) {
+      int k;
+      if (sscanf(de->d_name, "scr_%4d", &k) == 1 && k > n) n = k;
+    }
+    closedir(d);
   }
-  if (n > 9999) { showToast("Screenshots folder full"); return; }
+  if (++n > 9999) { showToast("Screenshots folder full"); return; }
+  char path[48];
+  snprintf(path, sizeof(path), "/sdcard/screenshots/scr_%04d.bmp", n);
   int W, H;
   uint16_t* px = captureFrame(W, H);
   if (!px) { showToast("Out of memory"); return; }
@@ -1249,8 +1254,9 @@ void UITask::back() {
     case SCR_BOT:      if (_nav_overlay) navClosePopup(); else showHome(); break;
     case SCR_DIAG:     if (_nav_overlay) navClosePopup(); else showHome(); break;
     case SCR_ADMIN_PICK: showHome(); break;
-    case SCR_ROUTE:      // back to the node; a trace in flight is dropped
+    case SCR_ROUTE:      // back to the node; a trace or discovery in flight is dropped
       _core->route.cancelTrace();
+      _core->route.stopDiscover();
       _screen = SCR_NODE;
       buildNode();
       break;
@@ -1527,8 +1533,9 @@ extern "C" EMSCRIPTEN_KEEPALIVE int sim_scroll(int dy) {
   dbgScrollable(lv_layer_top(), o, h);
   if (!o) dbgScrollable(lv_screen_active(), o, h);
   if (!o) return -1;
-  int left = lv_obj_get_scroll_bottom(o);
-  lv_obj_scroll_by(o, 0, -(dy < left ? dy : left), LV_ANIM_OFF);
+  int left = dy >= 0 ? lv_obj_get_scroll_bottom(o) : lv_obj_get_scroll_top(o);   // up: no further than the top
+  const int step = dy >= 0 ? (dy < left ? dy : left) : (-dy < left ? dy : -left);
+  lv_obj_scroll_by(o, 0, -step, LV_ANIM_OFF);
   return left;
 }
 #endif

@@ -131,7 +131,7 @@ public:
   uint32_t routeDiscSig();
   void routeDiscover();
   void routeDiscTries(int sel);
-  void routeUseFound(int i);
+  void routeUseFound(int code);   // found route code >> 1; bit 0: its way back, turned round
   void routeAct(uint8_t act);
   void routeOp(int code);
   void routeKeep();

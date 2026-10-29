@@ -323,9 +323,11 @@ void UITask::wifiSave() {
 // From loop(), any screen, once a second: SNTP runs while WiFi is connected
 // (Settings > WiFi, a map download, an update, the app over WiFi), and each
 // time it answers the clock takes the time -- ahead or behind, as from GPS.
-// The first answer of a connection says so when it moved the clock.
+// The first answer of a connection says so when it moved the clock --
+// judged against the clock a tick before: without a clock chip rtc_clock is
+// the system time, which SNTP has set already by the time we hear of it.
 void UITask::wifiClockTick() {
-  static uint32_t next_ms = 0;
+  static uint32_t next_ms = 0, ref_wall = 0, ref_ms = 0;
   static bool first = false;
   if ((int32_t)(millis() - next_ms) < 0) return;
   next_ms = millis() + 1000;
@@ -338,9 +340,11 @@ void UITask::wifiClockTick() {
   const uint32_t t = lvport::ntpTake();
   if (t > 1700000000UL) {
     const uint32_t now = rtc_clock.getCurrentTime();
-    const bool moved = t > now + 1 || now > t + 1;
-    if (moved) rtc_clock.setCurrentTime(t);
-    if (first && moved && !_asleep) showToast("Clock set from the network");
+    if (t > now + 1 || now > t + 1) rtc_clock.setCurrentTime(t);   // a clock chip: SNTP set only the system time
+    const uint32_t was = ref_wall + (millis() - ref_ms) / 1000;
+    if (first && (t > was + 2 || was > t + 2) && !_asleep) showToast("Clock set from the network");
     first = false;
   }
+  ref_wall = rtc_clock.getCurrentTime();
+  ref_ms = millis();
 }

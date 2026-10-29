@@ -94,7 +94,10 @@ on the map. On the **Discover** row, **Left / Right** sets 1, 3 or 5 tries
 and **Enter** starts it (or stops it). Each try waits for its reply or its
 timeout, then 20 seconds more, so the floods don't come all at once. Each
 route found is listed under it with how many times it came; **Enter** on one
-puts it in the list, ready to **Trace** and save. A repeater you don't have
+puts it in the list, ready to **Trace** and save. When the reply came back
+another way, a **Back** row follows it: that way turned round, as a route to
+the node, so a trace checks it too (a trace goes there and back on the same
+repeaters). A repeater you don't have
 as a contact shows as its hash (`?8D`). Nothing is saved until you save it.
 
 Only a node that answers requests can be asked: a companion whose
@@ -119,7 +122,8 @@ straight to the node. The route a node sends back usually replaces it again;
 > **Discover** is under the route, in **Find the route**, with the number of
 > tries beside it and where it is (the try waiting for its reply, or the
 > seconds to the next one). Tap a route found to use it; the way back is under
-> it.
+> it. When the way back is another one, **There** and **Back** put either in
+> the list to trace.
 
 ## Your own contact
 

@@ -1079,6 +1079,8 @@ uint32_t MyMesh::sendPathDiscovery(const uint8_t* pub_key, DiscoverCallback cb, 
   uint32_t tag, est;
   if (sendDiscoveryReq(*recipient, tag, est) == MSG_SEND_FAILED) return 0;
   _ui_discovery = tag;
+  _ui_disc_sent[_ui_disc_next] = tag;
+  _ui_disc_next = (_ui_disc_next + 1) % UI_DISC_KEEP;
   _discover_cb = cb;
   if (est_timeout) *est_timeout = est;
   return tag;
@@ -1089,10 +1091,16 @@ bool MyMesh::onContactPathRecv(ContactInfo& contact, uint8_t* in_path, uint8_t i
     uint32_t tag;
     memcpy(&tag, extra, 4);
 
-    if (_ui_discovery && tag == _ui_discovery) {   // this device's own (sendPathDiscovery())
-      _ui_discovery = 0;
-      if (_discover_cb && mesh::Packet::isValidPathLen(in_path_len) && mesh::Packet::isValidPathLen(out_path_len))
-        _discover_cb(contact.id.pub_key, out_path, out_path_len, in_path, in_path_len);
+    // This device's own (sendPathDiscovery()): to the editor while it waits
+    // for it; late (timed out, stopped, an earlier try's) only dropped.
+    for (int k = 0; k < UI_DISC_KEEP; k++) {
+      if (!tag || _ui_disc_sent[k] != tag) continue;
+      _ui_disc_sent[k] = 0;
+      if (tag == _ui_discovery) {
+        _ui_discovery = 0;
+        if (_discover_cb && mesh::Packet::isValidPathLen(in_path_len) && mesh::Packet::isValidPathLen(out_path_len))
+          _discover_cb(contact.id.pub_key, out_path, out_path_len, in_path, in_path_len);
+      }
       return false;  // DON'T send reciprocal path, nor take it: the user picks
     }
 

@@ -14,7 +14,8 @@
 //   save()            -- the list becomes the contact's out_path
 //   discover(tries)   -- asks the node by flood which way it's reached (path
 //                        discovery), `tries` times with a pause between; the
-//                        routes found, useFound() puts one in the list
+//                        routes found, useFound() puts one in the list -- the
+//                        way there, or the reply's way back turned round
 //
 // A TRACE is answered only by the node that hears the last retransmission, so
 // a route is traced there and back (A B dest B A): every node of it has to
@@ -299,30 +300,48 @@ public:
   int foundCount() const { return _found_n; }
   const Found& found(int i) const { return _found[i]; }
   static int hopsOf(uint8_t len) { return len & 63; }
-  // Route i's hops, "Name > Name" (hash "?3F" for one not a contact), cut to fit.
-  void foundText(int i, bool back, char* out, size_t n) const {
+  // Route i's hops, "Name > Name" (hash "?3F" for one not a contact), cut to
+  // fit. The way back as the reply came (from the node), or with `as_route`
+  // turned round, from here: as useFound(i, true) lists it.
+  void foundText(int i, bool back, char* out, size_t n, bool as_route = false) const {
     const Found& f = _found[i];
     const uint8_t len = back ? f.back_len : f.out_len;
     const uint8_t* p = back ? f.back : f.out;
     const int hops = hopsOf(len), size = (len >> 6) + 1;
+    const int kept = hops < FOUND_HOPS ? hops : FOUND_HOPS;
+    const bool rev = back && as_route;
     size_t o = 0;
     out[0] = '\0';
     if (hops == 0) { snprintf(out, n, "direct"); return; }
-    for (int h = 0; h < hops && h < FOUND_HOPS && o + 4 < n; h++) {
+    for (int h = 0; h < kept && o + 4 < n; h++) {
       char nm[NAME_LEN];
-      hashName(&p[h * size], size, nm, sizeof(nm));
+      hashName(&p[(rev ? kept - 1 - h : h) * size], size, nm, sizeof(nm));
       o += snprintf(out + o, n - o, "%s%s", h ? " > " : "", nm);
     }
     if (hops > FOUND_HOPS && o + 4 < n) snprintf(out + o, n - o, " ...");
   }
-  // Route i as the list (its repeaters by key where they're contacts).
-  bool useFound(int i) {
+  // The reply's way back, turned round, is route i itself: one way both ways.
+  bool foundBackSame(int i) const {
+    const Found& f = _found[i];
+    if (f.back_len != f.out_len) return false;
+    const int hops = hopsOf(f.out_len) < FOUND_HOPS ? hopsOf(f.out_len) : FOUND_HOPS, size = (f.out_len >> 6) + 1;
+    for (int h = 0; h < hops; h++)
+      if (memcmp(&f.out[h * size], &f.back[(hops - 1 - h) * size], size) != 0) return false;
+    return true;
+  }
+  static int foundHops(const Found& f, bool back) { return hopsOf(back ? f.back_len : f.out_len); }
+  // Route i as the list (its repeaters by key where they're contacts): the
+  // way there, or the way back turned round -- a route there too, which a
+  // trace then checks out and back like any.
+  bool useFound(int i, bool back = false) {
     if (i < 0 || i >= _found_n) return false;
     const Found& f = _found[i];
-    const int hops = hopsOf(f.out_len), size = (f.out_len >> 6) + 1;
+    const uint8_t len = back ? f.back_len : f.out_len;
+    const uint8_t* p = back ? f.back : f.out;
+    const int hops = hopsOf(len), size = (len >> 6) + 1;
     cancelTrace();
     _n = 0;
-    for (int h = 0; h < hops && h < MAX_HOPS; h++) loadHash(&f.out[h * size], size);
+    for (int h = 0; h < hops && h < MAX_HOPS; h++) loadHash(&p[(back ? hops - 1 - h : h) * size], size);
     _too_long = hops > MAX_HOPS;
     _edited = true;
     invalidate();

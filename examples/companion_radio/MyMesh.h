@@ -679,6 +679,9 @@ private:
   uint32_t pending_status;
   uint32_t pending_telemetry, pending_discovery;   // pending _TELEMETRY_REQ
   uint32_t _ui_discovery = 0;                       // sendPathDiscovery()'s, answered to _discover_cb
+  static const int UI_DISC_KEEP = 6;
+  uint32_t _ui_disc_sent[UI_DISC_KEEP] = {};        // the last ones sent: a late reply is dropped, not taken as the route
+  uint8_t  _ui_disc_next = 0;
   DiscoverCallback _discover_cb = nullptr;
   int sendDiscoveryReq(ContactInfo& recipient, uint32_t& tag, uint32_t& est_timeout);
   uint32_t pending_req;   // pending _BINARY_REQ

@@ -26,6 +26,7 @@ static PSRAM_BSS char s_names[SHOTS_MAX][16];
 static int s_n = 0;
 static int s_page = 0;                      // the grid's page, from the newest
 static uint8_t s_tab = T_SHOTS;
+static bool s_listed = false;               // s_names read since the gallery opened (pages, tabs reuse it)
 
 // The grid's thumbnails: one buffer per grid, freed with it (a rebuild makes
 // the new grid before the old one goes, so each frees only its own).
@@ -49,12 +50,17 @@ static const int SWIPE_PX = 40;
 
 static void scan() {
   s_n = 0;
+  s_listed = true;
   DIR* d = opendir(SHOTS_DIR);
   if (!d) return;
   while (struct dirent* de = readdir(d)) {
     size_t l = strlen(de->d_name);
     if (de->d_name[0] == '.' || l < 5 || l >= sizeof(s_names[0]) || strcasecmp(de->d_name + l - 4, ".bmp") != 0) continue;
-    if (s_n < SHOTS_MAX) snprintf(s_names[s_n++], sizeof(s_names[0]), "%s", de->d_name);
+    if (s_n < SHOTS_MAX) { snprintf(s_names[s_n++], sizeof(s_names[0]), "%s", de->d_name); continue; }
+    // Full: the newest SHOTS_MAX stay, whatever order the folder lists them in.
+    int lo = 0;
+    for (int k = 1; k < s_n; k++) if (strcmp(s_names[k], s_names[lo]) < 0) lo = k;
+    if (strcmp(de->d_name, s_names[lo]) > 0) snprintf(s_names[lo], sizeof(s_names[0]), "%s", de->d_name);
   }
   closedir(d);
   // Newest first: scr_NNNN numbers count up.
@@ -89,12 +95,17 @@ static void dscInit(lv_image_dsc_t& d, uint16_t* px, int w, int h) {
   d.data = (const uint8_t*)px;
 }
 
-// An uncompressed 24-bit BMP, read a row at a time (top row = 0).
+static const int CHUNK_ROWS = 16;          // rows read at once for the full view
+
+// An uncompressed 24-bit BMP, read several rows at a time (top row = 0) in
+// the file's order, so a seek only goes forward and each read is long.
 struct Bmp {
   FILE* f = nullptr;
   int32_t w = 0, h = 0;
   uint32_t off = 0, stride = 0;
   bool bottom_up = true;
+  uint8_t* buf = nullptr;                   // CHUNK_ROWS rows
+  int ch = 1, c0 = 0, cn = 0;               // rows read at a time; rows c0..c0+cn-1 in buf
   bool open(const char* p) {
     f = fopen(p, "rb");
     uint8_t hdr[54];
@@ -110,13 +121,26 @@ struct Bmp {
     stride = ((uint32_t)w * 3 + 3) & ~3u;
     return true;
   }
-  bool row(int y, uint8_t* out) {   // BGR
-    if (fseek(f, (long)(off + (uint32_t)(bottom_up ? h - 1 - y : y) * stride), SEEK_SET) != 0) return false;
-    return fread(out, 1, (size_t)w * 3, f) == (size_t)w * 3;
+  // Rows lo..hi in buf (hi - lo < ch), with the next ones in the file's
+  // order: a bottom-up file is read from its end, upwards on the screen.
+  bool load(int lo, int hi) {
+    if (lo >= c0 && hi < c0 + cn) return true;
+    int a, z;
+    if (bottom_up) { z = hi; a = hi - ch + 1 < 0 ? 0 : hi - ch + 1; }
+    else           { a = lo; z = lo + ch - 1 >= h ? h - 1 : lo + ch - 1; }
+    cn = 0;
+    if (fseek(f, (long)(off + (uint32_t)(bottom_up ? h - 1 - z : a) * stride), SEEK_SET) != 0) return false;
+    const size_t n = (size_t)(z - a + 1) * stride;
+    if (fread(buf, 1, n, f) < n - (stride - (uint32_t)w * 3)) return false;   // the last row's padding may be missing
+    c0 = a; cn = z - a + 1;
+    return true;
+  }
+  const uint8_t* row(int y) const {   // BGR, after load()
+    return buf + (size_t)(bottom_up ? c0 + cn - 1 - y : y - c0) * stride;
   }
   ~Bmp() { if (f) fclose(f); }
 };
-static PSRAM_BSS uint8_t s_row[2][BMP_MAX_W * 3];
+static PSRAM_BSS uint8_t s_rows[CHUNK_ROWS * ((BMP_MAX_W * 3 + 3) & ~3)];
 
 // File `i` scaled into w x h: each pixel the mean of the 2x2 under its
 // spot (a thumbnail), or the one pixel there (the full view).
@@ -125,11 +149,14 @@ static bool decode(int i, uint16_t* out, int w, int h, bool smooth) {
   path(i, p, sizeof(p));
   Bmp b;
   if (!b.open(p)) return false;
-  for (int ty = 0; ty < h; ty++) {
+  b.buf = s_rows;
+  b.ch = smooth ? 2 : CHUNK_ROWS;   // a thumbnail skips rows: just the pair it means
+  for (int k = 0; k < h; k++) {
+    const int ty = b.bottom_up ? h - 1 - k : k;
     const int sy = ty * b.h / h, sy2 = smooth && sy + 1 < b.h ? sy + 1 : sy;
-    if (!b.row(sy, s_row[0]) || (sy2 != sy && !b.row(sy2, s_row[1]))) return false;
-    const uint8_t* r1 = s_row[0];
-    const uint8_t* r2 = sy2 != sy ? s_row[1] : s_row[0];
+    if (!b.load(sy, sy2)) return false;
+    const uint8_t* r1 = b.row(sy);
+    const uint8_t* r2 = b.row(sy2);
     for (int tx = 0; tx < w; tx++) {
       const int sx = tx * b.w / w, sx2 = smooth && sx + 1 < b.w ? sx + 1 : sx;
       const uint8_t* a = r1 + sx * 3; const uint8_t* c = r1 + sx2 * 3;
@@ -184,6 +211,7 @@ static void onGalleryViewTouch(lv_event_t* e) {
 void UITask::showGallery() {
   _screen = SCR_GALLERY;
   gallery::s_page = 0;
+  gallery::s_listed = false;
   buildGallery();
 }
 
@@ -230,7 +258,7 @@ void UITask::buildGallery() {
   }
 
   if (!card) { noteLabel(list, "No SD card - screenshots are saved on it.", THEME_FONT_BODY); return; }
-  scan();
+  if (!s_listed) scan();
   if (s_n == 0) {
     noteLabel(list, "No screenshots yet. Hold the side button and press the top one to take one.", THEME_FONT_BODY);
     return;
@@ -246,7 +274,7 @@ void UITask::buildGallery() {
   const int first = s_page * PAGE;
   const int cells = s_n - first < PAGE ? s_n - first : PAGE;
 
-  uint16_t* px = (uint16_t*)psramBuf<uint16_t>((size_t)PAGE * TW * TH);
+  uint16_t* px = (uint16_t*)psramBuf<uint16_t>((size_t)cells * TW * TH);
   if (!px) { noteLabel(list, "Out of memory", THEME_FONT_BODY); return; }
   s_thumbs = px;
   s_cells = cells;
@@ -313,7 +341,13 @@ void UITask::galleryOpen(int i) {
   if (!s_full) s_full = (uint16_t*)psramBuf<uint16_t>((size_t)SW * SH);
   if (!s_full) { showToast("Out of memory"); return; }
   if (s_view_img) lv_image_cache_drop(&s_fdsc);
-  if (!decode(i, s_full, SW, SH, false)) { showToast("Can't read this file"); return; }
+  if (!decode(i, s_full, SW, SH, false)) {
+    // The picture shown (if any) was half overwritten: back to it whole.
+    if (s_view) decode(s_cur, s_full, SW, SH, false);
+    else { free(s_full); s_full = nullptr; }
+    showToast("Can't read this file");
+    return;
+  }
   s_cur = i;
   dscInit(s_fdsc, s_full, SW, SH);
   if (!s_view) {

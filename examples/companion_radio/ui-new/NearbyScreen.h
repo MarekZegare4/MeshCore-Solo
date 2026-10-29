@@ -24,8 +24,8 @@ class RouteView {
   bool _seen_disc = false;                  // a discovery running at the last pass: its end said once
   uint8_t _tries = 1;                       // Discover: triesOf(_tries) tries
 
-  // R_FOUND before R_NODE: like the hops, not an action the cursor follows.
-  enum Row : uint8_t { R_HOP, R_FOUND, R_NODE, R_ADD, R_TRACE, R_PROBE, R_TO_NODE, R_SAVE, R_KEEP, R_DISCOVER };
+  // R_FOUND(_BACK) before R_NODE: like the hops, not an action the cursor follows.
+  enum Row : uint8_t { R_HOP, R_FOUND, R_FOUND_BACK, R_NODE, R_ADD, R_TRACE, R_PROBE, R_TO_NODE, R_SAVE, R_KEEP, R_DISCOVER };
   static int triesOf(int i) { return i == 0 ? 1 : i == 1 ? 3 : 5; }
 
   PathEditor& R() { return _task->core().route; }
@@ -43,14 +43,17 @@ class RouteView {
     out[k++] = R_SAVE;
     out[k++] = R_KEEP;
     out[k++] = R_DISCOVER;
-    for (int i = 0; i < r.foundCount(); i++) out[k++] = R_FOUND;
+    for (int i = 0; i < r.foundCount(); i++) {   // a way back of its own: a row to use that too
+      out[k++] = R_FOUND;
+      if (!r.foundBackSame(i)) out[k++] = R_FOUND_BACK;
+    }
     return k;
   }
-  static const int ROWS_MAX = PathEditor::MAX_HOPS + 8 + PathEditor::FOUND_MAX;
-  // Which found route row `idx` is.
+  static const int ROWS_MAX = PathEditor::MAX_HOPS + 8 + 2 * PathEditor::FOUND_MAX;
+  // Which found route row `idx` (R_FOUND or the R_FOUND_BACK after it) is of.
   static int foundIndex(const Row* kind, int idx) {
-    int f = 0;
-    for (int i = 0; i < idx; i++) if (kind[i] == R_FOUND) f++;
+    int f = -1;
+    for (int i = 0; i <= idx; i++) if (kind[i] == R_FOUND) f++;
     return f;
   }
 
@@ -192,6 +195,12 @@ public:
           snprintf(right, sizeof(right), "%ux", (unsigned)r.found(f).times);
           break;
         }
+        case R_FOUND_BACK: {   // the way the reply came, turned round as the list will have it
+          char route[40];
+          r.foundText(foundIndex(kind, idx), true, route, sizeof(route), true);
+          snprintf(left, sizeof(left), " Back %s", route);
+          break;
+        }
       }
       const int rw = right[0] ? display.getTextWidth(right) + display.getCharWidth() : 0;
       display.drawTextEllipsized(2, y, display.width() - reserve - 4 - rw, left, sel);
@@ -260,10 +269,11 @@ public:
         else if (!r.discover(triesOf(_tries))) _task->showAlert("Send failed", 1000);
         else _seen_disc = true;
         break;
-      case R_FOUND: {
+      case R_FOUND: case R_FOUND_BACK: {
         const int f = foundIndex(kind, _sel);
-        if (PathEditor::hopsOf(r.found(f).out_len) > PathEditor::MAX_HOPS) { _task->showAlert("Too long", 1000); break; }
-        if (r.useFound(f)) { _task->showAlert("In list: Trace, Save", 1200); _sel = 0; }
+        const bool back = k == R_FOUND_BACK;
+        if (PathEditor::foundHops(r.found(f), back) > PathEditor::MAX_HOPS) { _task->showAlert("Too long", 1000); break; }
+        if (r.useFound(f, back)) { _task->showAlert(back ? "Way back in list" : "In list: Trace, Save", 1200); _sel = 0; }
         break;
       }
     }

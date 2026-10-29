@@ -625,7 +625,9 @@ static int netState() {
 // itself; ntpTake() hands the time on to rtc_clock (a hardware RTC, if any).
 static volatile uint32_t s_ntp_secs = 0;
 static char s_ntp_dhcp[16];
-static void ntpAskDhcp() { esp_sntp_servermode_dhcp(true); }
+// Slot 0 emptied first: it keeps the address it last used (pool.ntp.org's,
+// or the last network's router), which ntpStart() would take for this one's.
+static void ntpAskDhcp() { esp_sntp_setserver(0, nullptr); esp_sntp_servermode_dhcp(true); }
 static void ntpSynced(struct timeval* tv) { s_ntp_secs = (uint32_t)tv->tv_sec; }   // the lwIP task
 static void ntpStart() {
   if (esp_sntp_enabled()) esp_sntp_stop();
