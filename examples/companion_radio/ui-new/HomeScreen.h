@@ -1306,6 +1306,10 @@ public:
   }
 
   int render(DisplayDriver& display) override {
+    // Ensure current page is visible (after a settings change, or at the start
+    // with the Clock hidden). First: the title bar below goes by the page.
+    if (!isPageVisible(_page)) _page = navPage(_page, +1);
+
     char tmp[80];
     int mq_delay = 0;   // >0 while a selected row's name is marquee-scrolling
     int anim_ms = 0;    // >0 while something animates: a page turn
@@ -1364,9 +1368,6 @@ public:
         }
       }
     }
-
-    // ensure current page is visible (e.g. after settings change)
-    if (!isPageVisible(_page)) _page = navPage(_page, +1);
 
     // curr page indicator — a row of small page icons, one per visible page, with
     // the current page underlined. Hidden on CLOCK and LOCK (full screen used for
