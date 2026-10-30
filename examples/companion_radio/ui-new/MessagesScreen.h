@@ -73,6 +73,8 @@ class MessagesScreen : public UIScreen {
   char      _ctx_pin_item[28];   // "Pin to dial" or "Unpin (slot N)"
   char      _ctx_fav_item[12]; // "Fav: ON" / "Fav: OFF" — shared by the channel,
                                // contact and room menus (never open at once)
+  char      _ctx_save_item[12]; // "Save: ON" / "Save: OFF"
+  int       _ctx_save_idx = -1; // its row in the channel menu, -1 with nothing to save
   int       _ctx_fav_idx = -1; // row the Fav toggle sits on, frozen at menu open
   int       _ctx_pin_idx = -1; // ...and the Pin row, in the room menu (it sits after Fav,
                                // whose own row depends on whether Logout is shown)
@@ -985,6 +987,11 @@ class MessagesScreen : public UIScreen {
         snprintf(_ctx_fav_item, sizeof(_ctx_fav_item), is_fav ? "Fav: ON" : "Fav: OFF");
         _ctx_dirty = true;
       }
+    } else if (sel == _ctx_save_idx) {
+      bool on = !chanctl::saved(_task->getNodePrefs(), ch_idx);
+      chanctl::setSaved(_task->getNodePrefs(), ch_idx, on);
+      snprintf(_ctx_save_item, sizeof(_ctx_save_item), on ? "Save: ON" : "Save: OFF");
+      _ctx_dirty = true;
     }
   }
 
@@ -2365,6 +2372,7 @@ public:
         if (res == PopupMenu::SELECTED && _num_channels > 0) {
           uint8_t ch_idx = _ctx_ch_idx;   // frozen at menu open — see declaration
           int sel = _ctx_menu.selectedIndex();
+          if (_ctx_save_idx >= 0 && sel > _ctx_save_idx) sel--;   // the rows below count without it
           if (sel == 0) {
             int cleared = (int)_history.chUnread(ch_idx);
             _history.setChUnread(ch_idx, 0);
@@ -2465,6 +2473,15 @@ public:
         _ctx_menu.addValueItem(_ctx_melody_item);
         _ctx_fav_idx = 3;
         _ctx_menu.addValueItem(_ctx_fav_item);
+        _ctx_save_idx = -1;
+#ifdef HIST_FLASH
+        if (_task->getNodePrefs() && _task->getNodePrefs()->msg_keep) {   // only with the log on
+          snprintf(_ctx_save_item, sizeof(_ctx_save_item),
+                   chanctl::saved(_task->getNodePrefs(), ch_idx) ? "Save: ON" : "Save: OFF");
+          _ctx_save_idx = 4;
+          _ctx_menu.addValueItem(_ctx_save_item);
+        }
+#endif
         _ctx_menu.addItem(_ctx_scope_item);
         _ctx_menu.addItem(_ctx_pin_item);
         _ctx_menu.addItem("Edit");

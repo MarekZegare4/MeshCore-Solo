@@ -336,6 +336,9 @@ struct NodePrefsFields {
   // Settings > Messages > Delete after: messages older than this go, from the
   // list at once (index into contactExpiryDays(); 0 = never).
   uint8_t  msg_expire;
+  // Channel options > Save: bit i = channel i isn't kept on flash, for one too
+  // busy to be worth the room [del→onChannelRemoved]
+  uint64_t ch_no_save;
   // ui-new's new-message alert: the banner from the top, an envelope with a
   // count in the corner, or nothing (the sound and the wake still happen).
   static const uint8_t MSG_ALERT_NORMAL = 0, MSG_ALERT_COMPACT = 1, MSG_ALERT_OFF = 2;
@@ -904,6 +907,7 @@ class NodePrefs : public NodePrefsFields, public ConfigSerializer {
     s.hex("ch_fav", ch_fav_bitmask); s.def("ch_fav_only", ch_fav_only);
     s.hex("favs", favourite_contacts); s.hex("fav_kinds", favourite_kinds);
     s.def("fav_sort", fav_sort); s.def("expiry", contact_expiry_idx); s.def("msg_keep", msg_keep); s.def("msg_expire", msg_expire);
+    s.hex("ch_no_save", ch_no_save);
   }
   void gpioSolo(Section& s) {
     s.def("m1", gpio1_mode); s.def("m2", gpio2_mode); s.def("m3", gpio3_mode); s.def("m4", gpio4_mode);

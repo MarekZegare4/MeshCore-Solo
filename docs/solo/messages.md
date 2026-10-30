@@ -144,6 +144,7 @@ correctly whatever the keyboard is set to.
 | Mark all read | Clears its unread count |
 | Notif, Melody | Its own notification and sound, instead of the global ones |
 | Fav | Marks it as a favourite (shared with the app) |
+| Save | Wio Tracker L1, with Keep messages on: whether its new messages go on the flash. Off for a busy channel you only read live, so it leaves the room to the others; what's already saved stays until the limit or Delete after removes it |
 | Scope | The region its messages are tagged with: **Default** follows the list's default, `*` sends none; the list is in Settings › Radio › Scope |
 | Pin to dial | Puts it on the Favourites page |
 | Edit, Delete | Renames it or changes its secret; removes it |

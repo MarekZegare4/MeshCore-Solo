@@ -25,7 +25,9 @@
 // A record: Rec, the path, the text, then its own total length as one byte, so
 // the log can be walked from the end. restore() fills the RAM rings from there.
 // A channel's messages carry channelKey(), so they follow the channel, not the
-// slot; those of a channel since deleted aren't restored.
+// slot; those of a channel since deleted aren't restored. A channel with Save
+// off (chanctl::saved()) stays out of the log from then on; what it has there
+// stays until it ages out.
 //
 // Older messages, past what the rings hold, are read a page at a time
 // (pageBegin*(), pageOlder(), pageNewer()): the messages screen measures its
@@ -54,6 +56,8 @@ public:
     if (_on) {
       scan();
       restore();
+    } else if (_fs && _fs->exists(ROOT)) {
+      forget();   // Keep messages off since the last start, see loop()
     }
     _next_prune = millis() + SAVE_DELAY_MS;
     history->setArchive(this);
@@ -61,8 +65,12 @@ public:
 
   // ── HistArchive ────────────────────────────────────────────────────────────
   // arc_id orders the entries of this run; a restored one keeps 0, already saved.
-  void chAppend(ChHistEntry& e) override { e.arc_id = ++_seq; appended(); }
-  void chUpdate(const ChHistEntry&) override { touch(); }
+  void chAppend(ChHistEntry& e) override {
+    if (!chanctl::saved(_prefs, e.ch_idx)) { e.arc_id = NOT_SAVED; return; }
+    e.arc_id = ++_seq;
+    appended();
+  }
+  void chUpdate(const ChHistEntry& e) override { if (e.arc_id != NOT_SAVED) touch(); }
   void dmAppend(DmHistEntry& e) override { e.arc_id = ++_seq; appended(); }
   void dmUpdate(const DmHistEntry&) override { touch(); }
 
@@ -70,7 +78,9 @@ public:
     bool on = _fs && _prefs && _prefs->msg_keep;
     if (on != _on) {
       _on = on;
-      if (on) touch(); else forget();
+      // Off only stops the saving; begin() deletes the log, so a value stepped
+      // past on the way to another costs nothing, and the wait comes at a start.
+      if (on) touch(); else _dirty = false;
     }
     if (_dirty && (int32_t)(millis() - _due) >= 0) flush(false);
     if (_on && (int32_t)(millis() - _next_prune) >= 0) {
@@ -177,6 +187,9 @@ public:
 
 private:
   static constexpr const char* ROOT = "/h";
+  // arc_id of a message that stays in the ring: a channel with Save off. Above
+  // any _ch_done, so it never counts as in the log (pageBeginCh).
+  static const uint32_t NOT_SAVED = 0xFFFFFFFFUL;
 
   struct __attribute__((packed)) Rec {
     uint32_t key;         // channelKey(), or a DM's 4-byte public key prefix
@@ -250,7 +263,7 @@ private:
     uint32_t now = rtc_clock.getCurrentTime();
     for (int j = _history->chHistCount() - 1; j >= 0; j--) {
       const ChHistEntry& e = _history->chAtPos(_history->chHistPosNewest(j));
-      if (e.arc_id <= _ch_done) continue;
+      if (e.arc_id <= _ch_done || e.arc_id == NOT_SAVED) continue;
       if (!all && e.relay_status == ACK_PENDING && now - e.timestamp < SETTLE_SECS) { more = true; break; }
       ChannelDetails ch;
       if (the_mesh.getChannel(e.ch_idx, ch) && ch.name[0] &&

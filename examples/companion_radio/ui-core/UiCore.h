@@ -15,6 +15,7 @@
 
 #include "MessageHistory.h"
 #ifdef HIST_FLASH
+#include "ChannelControl.h"   // chanctl::saved()
 #include "HistoryLog.h"
 #endif
 #include "DmUnreadTable.h"
