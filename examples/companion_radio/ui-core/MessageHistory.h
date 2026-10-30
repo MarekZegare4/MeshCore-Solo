@@ -11,6 +11,11 @@
 // MSG_TEXT_BUF and the two entry structs are file-scope (not nested) so the
 // phase machine in MessagesScreen keeps referring to them unqualified.
 
+// The flash log (HistoryLog.h) is a kind of archive; it needs nothing more.
+#if defined(HIST_FLASH) && !defined(HIST_ARCHIVE)
+#define HIST_ARCHIVE
+#endif
+
 // Outgoing-message delivery state. DM: a real end-to-end ACK (✓ delivered to
 // the recipient). Channel: only a "relayed into mesh" echo from a repeater (no
 // recipient ACK exists for floods), so a missing echo is NOT shown as failure.
@@ -87,10 +92,18 @@ struct DmHistEntry {
 };
 
 #ifdef HIST_ARCHIVE
+// FNV-1a over the channel's secret, what a kept message knows its channel by
+// (a slot can be reused): renaming a channel keeps its messages.
+inline uint32_t channelKey(const ChannelDetails& ch) {
+  uint32_t h = 2166136261u;
+  for (size_t i = 0; i < sizeof(ch.channel.secret); i++) { h ^= ch.channel.secret[i]; h *= 16777619u; }
+  return h;
+}
+
 // A lasting copy of the history (the L2 keeps one file per conversation on
-// the SD card, ui-lvgl/HistoryStore.h). Told of every new entry -- it sets
-// arc_id -- and of every later change to one (relay echoes, delivery), so the
-// copy shows the same marks the ring does.
+// the SD card, ui-lvgl/HistoryStore.h; the L1s a log on flash, HistoryLog.h).
+// Told of every new entry -- it sets arc_id -- and of every later change to
+// one (relay echoes, delivery), so the copy shows the same marks the ring does.
 class HistArchive {
 public:
   virtual void chAppend(ChHistEntry& e) = 0;

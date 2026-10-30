@@ -348,6 +348,7 @@ static void sanitize(NodePrefs& p) {
     if (p.favourite_kinds[i] > NodePrefs::FAV_KIND_MAX) p.favourite_kinds[i] = NodePrefs::FAV_KIND_CONTACT;
   flag(p.fav_sort, 1);
   flag(p.msg_wake, 1);
+  if (p.msg_keep >= NodePrefs::MSG_KEEP_COUNT) p.msg_keep = 0;
   if (p.contact_expiry_idx >= NodePrefs::CONTACT_EXPIRY_COUNT) p.contact_expiry_idx = 0;
   if (p.dst_rule >= NodePrefs::DST_COUNT) p.dst_rule = NodePrefs::DST_OFF;
   if (p.display_brightness_pct > 100) p.display_brightness_pct = 0;

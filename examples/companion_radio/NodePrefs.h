@@ -330,6 +330,9 @@ struct NodePrefsFields {
   // Settings > Display > "Msg wake": an incoming message turns the display on
   // (UITask::newMsg()) if it was off and no companion app is already showing it.
   uint8_t  msg_wake;            // 1=wake display for incoming msgs (default), 0=not
+  // Settings > Messages > Keep messages, boards with HIST_FLASH: how many
+  // messages in all stay on flash (index into msgKeepTotal(); 0 = off, none).
+  uint8_t  msg_keep;
   // ui-new's new-message alert: the banner from the top, an envelope with a
   // count in the corner, or nothing (the sound and the wake still happen).
   static const uint8_t MSG_ALERT_NORMAL = 0, MSG_ALERT_COMPACT = 1, MSG_ALERT_OFF = 2;
@@ -640,6 +643,11 @@ struct NodePrefsFields {
     static const char* L[CONTACT_EXPIRY_COUNT] = { "Off", "7d", "30d", "90d" };
     return L[idx < CONTACT_EXPIRY_COUNT ? idx : 0];
   }
+  static const uint8_t MSG_KEEP_COUNT = 4;
+  static uint16_t msgKeepTotal(uint8_t idx) {
+    static const uint16_t N[MSG_KEEP_COUNT] = { 0, 500, 1000, 2500 };
+    return N[idx < MSG_KEEP_COUNT ? idx : 0];
+  }
 
   // /prefs' layout (see the comment at the top). A file of another version
   // isn't read: the defaults stand.
@@ -892,7 +900,7 @@ class NodePrefs : public NodePrefsFields, public ConfigSerializer {
     s.def("dm_all", dm_show_all); s.def("room_fav", room_fav_only);
     s.hex("ch_fav", ch_fav_bitmask); s.def("ch_fav_only", ch_fav_only);
     s.hex("favs", favourite_contacts); s.hex("fav_kinds", favourite_kinds);
-    s.def("fav_sort", fav_sort); s.def("expiry", contact_expiry_idx);
+    s.def("fav_sort", fav_sort); s.def("expiry", contact_expiry_idx); s.def("msg_keep", msg_keep);
   }
   void gpioSolo(Section& s) {
     s.def("m1", gpio1_mode); s.def("m2", gpio2_mode); s.def("m3", gpio3_mode); s.def("m4", gpio4_mode);

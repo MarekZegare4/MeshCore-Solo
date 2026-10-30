@@ -46,12 +46,7 @@ struct Hdr {
   uint32_t cap, head, count, next_id;
 };
 
-// FNV-1a over the channel's secret: renaming a channel keeps its archive.
-static uint32_t chKey(const ChannelDetails& ch) {
-  uint32_t h = 2166136261u;
-  for (size_t i = 0; i < sizeof(ch.channel.secret); i++) { h ^= ch.channel.secret[i]; h *= 16777619u; }
-  return h;
-}
+static uint32_t chKey(const ChannelDetails& ch) { return channelKey(ch); }
 // Earlier builds hashed the name in too (see migrateKeys()).
 static uint32_t chKeyNamed(const ChannelDetails& ch) {
   uint32_t h = 2166136261u;

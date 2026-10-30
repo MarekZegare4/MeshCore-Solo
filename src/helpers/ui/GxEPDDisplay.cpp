@@ -76,6 +76,19 @@ void GxEPDDisplay::turnOff() {
   _isOn = false;
 }
 
+// The last frame the panel will show, then the controller into deep sleep. Only
+// a shutdown gets here: a power switch cuts the board with no warning. A full
+// refresh, for a clean page, with no radio to serve during its busy wait.
+void GxEPDDisplay::showPoweredOff() {
+  if (!_init) return;
+  setBusyPumpFn(nullptr, nullptr);
+  startFrame(GxEPD_WHITE);
+  setTextSize(1);
+  drawTextCentered(width() / 2, (height() - getLineHeight()) / 2, "Powered off");
+  display.display(false);
+  display.hibernate();
+}
+
 void GxEPDDisplay::clear() {
   display.fillScreen(GxEPD_WHITE);
   forceRedraw();

@@ -14,6 +14,9 @@
 // frontend does (the_mesh, rtc_clock).
 
 #include "MessageHistory.h"
+#ifdef HIST_FLASH
+#include "HistoryLog.h"
+#endif
 #include "DmUnreadTable.h"
 #include "UiEvents.h"
 #include "UiCoreHost.h"
@@ -47,6 +50,9 @@ public:
     locator.begin(prefs, &course, &live_share, &events);
     trail.begin(prefs, &course);
     waypoints.begin(&locator);   // loads /waypoints
+#ifdef HIST_FLASH
+    history_log.begin(prefs, &history);
+#endif
   }
 
   // Driven from the frontend's loop(), before it drains `events`.
@@ -55,6 +61,9 @@ public:
     // and finalise the ✗ marker; free DM unread slots the ring no longer backs.
     history.tickDmResends();
     dm_unread.reconcile(history);
+#ifdef HIST_FLASH
+    history_log.loop();
+#endif
     clock.loop();
     course.loop();
     live_share.loop();
@@ -81,6 +90,9 @@ public:
 
   // ── Models ────────────────────────────────────────────────────────────────
   MessageHistory history;   // channel + DM rings, delivery state, channel unread
+#ifdef HIST_FLASH
+  HistoryLog     history_log; // the same messages on flash, across a power-off
+#endif
   DmUnreadTable  dm_unread; // per-contact DM unread counters
   WaypointModel  waypoints; // saved places, persisted to /waypoints
 

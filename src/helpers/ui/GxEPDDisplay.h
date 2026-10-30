@@ -109,6 +109,7 @@ public:
   bool isOn() override { return _isOn; }
   void turnOn() override;
   void turnOff() override;
+  void showPoweredOff() override;
   void clear() override;
   void setDisplayRotation(uint8_t rot) override;
   void setFullRefreshInterval(uint8_t n) override { _full_refresh_interval = n; _partial_count = 0; }

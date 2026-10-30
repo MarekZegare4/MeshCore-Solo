@@ -896,6 +896,9 @@ void UITask::shutdown(bool restart){
 
   // Auto-save the live GPS trail if enabled (covers low-battery auto-shutdown).
   _core->trail.onShutdown();
+#ifdef HIST_FLASH
+  _core->history_log.onShutdown();
+#endif
 
   #ifdef PIN_BUZZER
   /* note: we have a choice here -

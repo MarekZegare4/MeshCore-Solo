@@ -60,7 +60,10 @@ protected:
   // SYSTEMOFF, so the module would go on draining the battery.
   void powerDown(bool restart, DisplayDriver* display, SensorManager* sensors) {
     if (restart) { _board->reboot(); return; }
-    if (display) display->turnOff();
+    if (display) {
+      display->showPoweredOff();
+      display->turnOff();
+    }
     radio_driver.powerOff();
     if (sensors) {
       LocationProvider* loc = sensors->getLocationProvider();
