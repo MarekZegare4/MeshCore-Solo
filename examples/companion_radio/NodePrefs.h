@@ -333,6 +333,9 @@ struct NodePrefsFields {
   // Settings > Messages > Keep messages, boards with HIST_FLASH: how many
   // messages in all stay on flash (index into msgKeepTotal(); 0 = off, none).
   uint8_t  msg_keep;
+  // Settings > Messages > Delete after: messages older than this go, from the
+  // list at once (index into contactExpiryDays(); 0 = never).
+  uint8_t  msg_expire;
   // ui-new's new-message alert: the banner from the top, an envelope with a
   // count in the corner, or nothing (the sound and the wake still happen).
   static const uint8_t MSG_ALERT_NORMAL = 0, MSG_ALERT_COMPACT = 1, MSG_ALERT_OFF = 2;
@@ -900,7 +903,7 @@ class NodePrefs : public NodePrefsFields, public ConfigSerializer {
     s.def("dm_all", dm_show_all); s.def("room_fav", room_fav_only);
     s.hex("ch_fav", ch_fav_bitmask); s.def("ch_fav_only", ch_fav_only);
     s.hex("favs", favourite_contacts); s.hex("fav_kinds", favourite_kinds);
-    s.def("fav_sort", fav_sort); s.def("expiry", contact_expiry_idx); s.def("msg_keep", msg_keep);
+    s.def("fav_sort", fav_sort); s.def("expiry", contact_expiry_idx); s.def("msg_keep", msg_keep); s.def("msg_expire", msg_expire);
   }
   void gpioSolo(Section& s) {
     s.def("m1", gpio1_mode); s.def("m2", gpio2_mode); s.def("m3", gpio3_mode); s.def("m4", gpio4_mode);

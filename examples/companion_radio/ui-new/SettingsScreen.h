@@ -73,6 +73,9 @@ class SettingsScreen : public UIScreen {
     // Messages section
     SECTION_MESSAGES,
     SCHEMA_MESSAGES,
+#ifdef HIST_FLASH
+    DELETE_HISTORY,
+#endif
     MSG_SLOT_0, MSG_SLOT_1, MSG_SLOT_2, MSG_SLOT_3, MSG_SLOT_4,
     MSG_SLOT_5, MSG_SLOT_6, MSG_SLOT_7, MSG_SLOT_8, MSG_SLOT_9,
     Count,
@@ -585,6 +588,10 @@ class SettingsScreen : public UIScreen {
       val("Rooms", (p && p->room_fav_only) ? "Fav" : "All");
     } else if (item == PRUNE_NOW) {
       display.print("Prune now");   // action row: Enter counts + confirms + removes
+#ifdef HIST_FLASH
+    } else if (item == DELETE_HISTORY) {
+      display.print("Delete history");   // action row: Enter confirms + erases
+#endif
     } else if (isMsgSlot(item)) {
       // A message template reads from the left, cut at the edge (scrolls when selected).
       int slot = msgSlotIndex(item);
@@ -994,6 +1001,15 @@ public:
     // Contacts > "Prune now" confirm
     if (_prune_confirm.active) {
       auto res = _prune_confirm.handleInput(c);
+#ifdef HIST_FLASH
+      if (_selected == DELETE_HISTORY) {
+        if (res == PopupMenu::SELECTED && _prune_confirm.selectedIndex() == 0) {   // "Delete"
+          _task->core().deleteHistory();
+          _task->showAlert("History deleted", 1400);
+        }
+        return true;
+      }
+#endif
       if (res == PopupMenu::SELECTED && _prune_confirm.selectedIndex() == 0) {   // "Remove"
         int n = the_mesh.pruneStaleContacts();
         char msg[24];
@@ -1238,6 +1254,12 @@ public:
       }
       return true;
     }
+#ifdef HIST_FLASH
+    if (_selected == DELETE_HISTORY && enter) {
+      _prune_confirm.beginConfirm("Delete all messages?", "Delete");
+      return true;
+    }
+#endif
     if (isMsgSlot(_selected) && enter) {
       int slot = msgSlotIndex(_selected);
       _edit_slot = slot;

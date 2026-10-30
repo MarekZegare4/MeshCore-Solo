@@ -113,6 +113,11 @@ public:
 };
 #endif
 
+#ifdef HIST_FLASH
+// A page of messages read back from the flash log (HistoryLog.h).
+union OlderSlot { ChHistEntry ch; DmHistEntry dm; };
+#endif
+
 // Boards with PSRAM raise these (the L2: -D HIST_CH_MAX=256 -D HIST_DM_MAX=128,
 // ~80 KB in PSRAM with UiCore); the defaults are sized for the nRF52's heap.
 #ifndef HIST_CH_MAX
@@ -274,8 +279,16 @@ public:
 #endif
   }
 
+#ifdef HIST_FLASH
+  // A position past the ring is a slot of the page of older messages, for the
+  // messages screen, which reaches both the same way. Allocated while it's open.
+  OlderSlot* older = nullptr;
+  ChHistEntry&       chAtPos(int pos)       { return pos >= CH_HIST_MAX ? older[pos - CH_HIST_MAX].ch : _hist[pos]; }
+  const ChHistEntry& chAtPos(int pos) const { return pos >= CH_HIST_MAX ? older[pos - CH_HIST_MAX].ch : _hist[pos]; }
+#else
   ChHistEntry&       chAtPos(int pos)       { return _hist[pos]; }
   const ChHistEntry& chAtPos(int pos) const { return _hist[pos]; }
+#endif
 
   // ── Per-channel unread counters ─────────────────────────────────────────────
   // Always clamped to what the ring still holds for that channel. The raw
@@ -541,8 +554,13 @@ public:
   // Recent DM contacts, newest first, deduped. Resolves the 4-byte _dm_hist
   // prefix to a 6-byte pub_key prefix by walking the contact list once per
   // unique sender. Returns the number filled.
+#ifdef HIST_FLASH
+  DmHistEntry&       dmAtPos(int pos)       { return pos >= DM_HIST_MAX ? older[pos - DM_HIST_MAX].dm : _dm_hist[pos]; }
+  const DmHistEntry& dmAtPos(int pos) const { return pos >= DM_HIST_MAX ? older[pos - DM_HIST_MAX].dm : _dm_hist[pos]; }
+#else
   DmHistEntry&       dmAtPos(int pos)       { return _dm_hist[pos]; }
   const DmHistEntry& dmAtPos(int pos) const { return _dm_hist[pos]; }
+#endif
 
   // Whole DM ring, newest first (j = 0 newest) -- for "recent conversations".
   int dmHistCount() const { return _dm_hist_count; }

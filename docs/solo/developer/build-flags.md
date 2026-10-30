@@ -117,5 +117,5 @@ values above that are set from the phone app or the CLI.
 | `ADVERT_NAME='"name"'` | Sets the default node name baked into a fresh device, instead of the hex of the first 4 bytes of its public key. Note the doubled quoting — it's a C string literal passed through a build flag. |
 | `MAP_VECTOR` | Wio Tracker L2: turns on the unfinished vector map (regions from `tools/maps/osm_vector.py`). Without it the vector map stays off whatever was saved. |
 | `HIST_ARCHIVE` | Wio Tracker L2: message history also kept on the SD card (`ui-lvgl/HistoryStore.h`). Set in its solo build. |
-| `HIST_FLASH` | Wio Tracker L1: message history also kept on the QSPI flash, across a power-off (`ui-core/HistoryLog.h`, Settings > Messages > Keep messages, off by default). Implies `HIST_ARCHIVE`'s hooks. Set in its solo builds. |
+| `HIST_FLASH` | Wio Tracker L1: message history also kept on the QSPI flash, across a power-off and past what RAM holds, read back a page at a time (`ui-core/HistoryLog.h`, Settings > Messages > Keep messages, off by default). Implies `HIST_ARCHIVE`'s hooks. Set in its solo builds. |
 | `MESHCORE_VERSION='"x.y"'` | Overrides the upstream MeshCore base-version string shown in diagnostics, for boards whose port hasn't been rebased onto the latest yet. Cosmetic only — doesn't change protocol behaviour. |

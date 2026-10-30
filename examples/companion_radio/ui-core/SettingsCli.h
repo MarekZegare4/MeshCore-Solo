@@ -21,7 +21,7 @@ static const Key KEYS[] = {
   K("autoadd", manual_add_contacts), KB("autoadd.chat", autoadd_config, 0x02), KB("autoadd.repeater", autoadd_config, 0x04),
   KB("autoadd.room", autoadd_config, 0x08), KB("autoadd.sensor", autoadd_config, 0x10),
   KB("autoadd.overwrite", autoadd_config, 0x01), K("autoadd.max.hops", autoadd_max_hops),
-  K("contacts.expiry", contact_expiry_idx), K("contacts.fav.first", fav_sort), K("contacts.channel.order", ch_sort), K("map.flow", flow_show), K("dm.resend", dm_resend_count), K("messages.keep", msg_keep),
+  K("contacts.expiry", contact_expiry_idx), K("contacts.fav.first", fav_sort), K("contacts.channel.order", ch_sort), K("map.flow", flow_show), K("dm.resend", dm_resend_count), K("messages.keep", msg_keep), K("messages.expire", msg_expire),
   K("display.brightness", display_brightness), K("display.off", auto_off_secs), K("display.wake", msg_wake),
   K("display.alert", msg_alert), K("lock", auto_lock), K("lock.clock", lock_compact),
   K("display.text.size", ui_text_scale), K("display.icon.size", ui_icon_scale),

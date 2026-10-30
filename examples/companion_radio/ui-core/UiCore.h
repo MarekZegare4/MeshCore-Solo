@@ -110,6 +110,9 @@ public:
   void    clearAllDMUnread()                      { dm_unread.clearAll(); }
   // Every conversation read: direct, channels, rooms.
   void    markAllRead() { _room_unread = 0; dm_unread.clearAll(); history.clearAllChannelUnread(); }
+#ifdef HIST_FLASH
+  void    deleteHistory() { history_log.erase(); markAllRead(); }   // Settings > Messages > Delete history
+#endif
 
   // ── Actions ───────────────────────────────────────────────────────────────
   // Send a DM composed on the device and file it (with end-to-end ACK tracking

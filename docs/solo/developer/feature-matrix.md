@@ -45,7 +45,7 @@ build flag it needs.
 | Channels, direct, rooms | yes | yes | yes | yes | yes, one screen with sections |
 | Opens on the first unread, "New" line | yes | yes | yes | yes | yes |
 | Bubbles | 2-line boxes | whole text | whole text | whole text | whole text |
-| History kept | 48 ch / 32 DM | same; the L1s can keep it on flash across a power-off (`HIST_FLASH`) | same | same | 256 / 128 in memory, all on SD (`HIST_ARCHIVE`) |
+| History kept | 48 ch / 32 DM | same; the L1s can keep up to 2500 more on flash (`HIST_FLASH`) | same | same | 256 / 128 in memory, all on SD (`HIST_ARCHIVE`) |
 | Path of a message | Path list | same | same | same | path diagram on the card |
 | Quick messages, placeholders | yes | yes | yes | yes | yes |
 | Bytes left while typing | yes | yes | yes | yes | yes |

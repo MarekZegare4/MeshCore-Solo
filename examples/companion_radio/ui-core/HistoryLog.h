@@ -16,7 +16,9 @@
 //   gives no warning) leaves the log as it was before the batch.
 //
 // A batch is written SAVE_DELAY_MS after the first change not yet saved -- not
-// after the last, or a busy channel would never get there -- and at shutdown().
+// after the last, or a busy channel would never get there -- at shutdown(), and
+// after SAVE_BURST new messages: a room's backlog can arrive faster than the
+// delay, and what leaves the ring unsaved is gone.
 // A record is written once, so a message waits for its final delivery state;
 // until then the entries behind it wait too, to keep the log in order.
 //
@@ -24,12 +26,24 @@
 // the log can be walked from the end. restore() fills the RAM rings from there.
 // A channel's messages carry channelKey(), so they follow the channel, not the
 // slot; those of a channel since deleted aren't restored.
+//
+// Older messages, past what the rings hold, are read a page at a time
+// (pageBegin*(), pageOlder(), pageNewer()): the messages screen measures its
+// whole list every frame, so it gets a short one, MessageHistory::older, never
+// the log. A page is found by walking the log, as a conversation's records lie
+// among all the others; a place in it (Spot) stays good as the log grows.
+//
+// Settings > Messages > Delete after hides what's older at once; the flash is
+// freed a whole segment at a time, once the newest record in it is that old.
 
 class HistoryLog : public HistArchive {
 public:
   static const uint8_t  SEGMENTS = 8;
   static const uint32_t SAVE_DELAY_MS = 60000;
   static const uint32_t SETTLE_SECS = 60;   // an own channel post no repeater has echoed yet
+  static const uint8_t  SAVE_BURST = 12;
+  static const uint32_t PRUNE_EVERY_MS = 3600000;
+  static const int      PAGE = 12;
 
   void begin(NodePrefs* prefs, MessageHistory* history) {
     _prefs = prefs;
@@ -41,14 +55,15 @@ public:
       scan();
       restore();
     }
+    _next_prune = millis() + SAVE_DELAY_MS;
     history->setArchive(this);
   }
 
   // ── HistArchive ────────────────────────────────────────────────────────────
   // arc_id orders the entries of this run; a restored one keeps 0, already saved.
-  void chAppend(ChHistEntry& e) override { e.arc_id = ++_seq; touch(); }
+  void chAppend(ChHistEntry& e) override { e.arc_id = ++_seq; appended(); }
   void chUpdate(const ChHistEntry&) override { touch(); }
-  void dmAppend(DmHistEntry& e) override { e.arc_id = ++_seq; touch(); }
+  void dmAppend(DmHistEntry& e) override { e.arc_id = ++_seq; appended(); }
   void dmUpdate(const DmHistEntry&) override { touch(); }
 
   void loop() {
@@ -58,9 +73,107 @@ public:
       if (on) touch(); else forget();
     }
     if (_dirty && (int32_t)(millis() - _due) >= 0) flush(false);
+    if (_on && (int32_t)(millis() - _next_prune) >= 0) {
+      _next_prune = millis() + PRUNE_EVERY_MS;
+      prune(_ch);
+      prune(_dm);
+    }
   }
 
   void onShutdown() { if (_dirty && _prefs->msg_keep) flush(true); }
+
+  // Settings > Messages > Delete history: the log and the rings.
+  void erase() {
+    pageEnd();
+    if (_fs) forget();
+    _history->clearAll();
+  }
+
+  // ── Older messages ─────────────────────────────────────────────────────────
+  // Start reading a conversation from just past what the ring holds of it.
+  // False when the log has nothing more; true: a page is in MessageHistory::older.
+  bool pageBeginCh(int slot) {
+    ChannelDetails ch;
+    if (!the_mesh.getChannel(slot, ch) || !ch.name[0]) return false;
+    int in_ring = 0;
+    for (int j = 0; j < _history->chHistCount(); j++) {
+      const ChHistEntry& e = _history->chAtPos(_history->chHistPosNewest(j));
+      if (e.ch_idx == slot && e.arc_id <= _ch_done) in_ring++;
+    }
+    return pageBegin(&_ch, channelKey(ch), (uint8_t)slot, in_ring);
+  }
+  bool pageBeginDm(const uint8_t* prefix) {
+    int in_ring = 0;
+    for (int j = 0; j < _history->dmHistCount(); j++) {
+      const DmHistEntry& e = _history->dmAtPos(_history->dmHistPosNewest(j));
+      if (memcmp(e.prefix, prefix, 4) == 0 && e.arc_id <= _dm_done) in_ring++;
+    }
+    uint32_t key;
+    memcpy(&key, prefix, 4);
+    return pageBegin(&_dm, key, 0, in_ring);
+  }
+  int pageCount() const { return _pg_n; }
+  void pageEnd() {
+    free(_history->older);
+    _history->older = nullptr;
+    _pg = nullptr;
+    _pg_n = 0;
+  }
+
+  // The next page back; false, and the page as it was, at the end of the log.
+  bool pageOlder() {
+    if (!_pg) return false;
+    int got = 0;
+    Spot start = _lo;
+    Spot end = back(start, [&](File& f, uint32_t, uint32_t pos, const Rec& r) {
+      uint8_t buf[REC_MAX];
+      if (readBody(f, pos, r, buf)) fill(got++, r, buf);
+      return got < PAGE;
+    });
+    if (!got) return false;
+    _pg_n = got;
+    _hi = start;
+    _lo = end;
+    return true;
+  }
+
+  // The next page forward, up to where the ring takes over; false at that point.
+  bool pageNewer() {
+    if (!_pg) return false;
+    int got = 0;
+    Spot first = { 0, 0 }, past = _hi;
+    char p[24];
+    for (uint32_t seg = _hi.seg; seg && seg <= _pg->last && seg <= _ceil.seg && got < PAGE; seg++) {
+      filePath(*_pg, seg, p, sizeof(p));
+      File f = _fs->open(p, FILE_O_READ);
+      if (!f) continue;
+      uint32_t size = f.size(), pos = seg == _hi.seg ? _hi.pos : 0;
+      uint32_t stop = seg == _ceil.seg && _ceil.pos < size ? _ceil.pos : size;
+      while (pos < stop && got < PAGE) {
+        uint8_t buf[REC_MAX];
+        Rec r;
+        if (!f.seek(pos) || f.read(&r, sizeof(r)) != (int)sizeof(r) || !readBody(f, pos, r, buf)) break;
+        uint32_t next = pos + sizeof(r) + pathBytes(r.path_len) + r.text_len + 1;
+        if (mine(r, cutoff())) {
+          if (!got) first = { seg, pos };
+          fill(got++, r, buf);
+          past = { seg, next };
+        }
+        pos = next;
+      }
+      f.close();
+    }
+    if (!got) return false;
+    for (int i = 0, j = got - 1; i < j; i++, j--) {   // index 0 is the newest
+      OlderSlot t = _history->older[i];
+      _history->older[i] = _history->older[j];
+      _history->older[j] = t;
+    }
+    _pg_n = got;
+    _lo = first;
+    _hi = past;
+    return true;
+  }
 
 private:
   static constexpr const char* ROOT = "/h";
@@ -82,11 +195,16 @@ private:
     uint32_t first, last;
     uint16_t in_last;
   };
+  struct Spot { uint32_t seg, pos; };   // a place in a log; seg 0: before its start
 
   void touch() {
     if (!_on || _dirty) return;
     _dirty = true;
     _due = millis() + SAVE_DELAY_MS;
+  }
+  void appended() {
+    touch();
+    if (_on && ++_unsaved >= SAVE_BURST) _due = millis();
   }
 
   static void dirPath(const Log& l, uint32_t seg, char* out, size_t n) {
@@ -107,10 +225,19 @@ private:
     return r.text_len < MSG_TEXT_BUF && len == (int)sizeof(Rec) + pathBytes(r.path_len) + r.text_len + 1;
   }
 
+  // Timestamps older than this are past Settings > Messages > Delete after (0:
+  // keep all). Never with a clock not set, or behind the log's newest message:
+  // a wrong clock must not cost messages.
+  uint32_t cutoff() const {
+    uint32_t days = NodePrefs::contactExpiryDays(_prefs->msg_expire), now = rtc_clock.getCurrentTime();
+    return days && now >= 1000000000UL && now >= _newest ? now - days * 86400UL : 0;
+  }
+
   // ── Writing ────────────────────────────────────────────────────────────────
   void flush(bool all) {
     uint32_t t0 = millis();
     _dirty = false;
+    _unsaved = 0;
     bool more = flushCh(all);
     if (flushDm(all)) more = true;
     MESH_DEBUG_PRINTLN("HistoryLog: flush %lu ms", (unsigned long)(millis() - t0));
@@ -170,6 +297,7 @@ private:
     buf[n] = (uint8_t)(n + 1);                   n++;
     if ((int)f.write(buf, n) != n) return false;
     l.in_last++;
+    if (ts > _newest) _newest = ts;
     return true;
   }
 
@@ -187,9 +315,22 @@ private:
     }
   }
 
+  // Drops the segments that have gone past Delete after, never the newest.
+  void prune(Log& l) {
+    uint32_t cut = cutoff();
+    char p[24];
+    while (cut && l.first && l.first < l.last) {
+      Rec r;
+      if (lastRec(l, l.first, r) && r.timestamp >= cut) break;
+      dirPath(l, l.first++, p, sizeof(p));
+      _fs->rmdir_r(p);
+    }
+  }
+
   void forget() {
     _fs->rmdir_r(ROOT);
     _dirty = false;
+    _newest = 0;
     _ch = { 'c', 0, 0, 0 };
     _dm = { 'd', 0, 0, 0 };
     _ch_done = _dm_done = 0;   // on again: what the rings hold goes back in
@@ -227,7 +368,23 @@ private:
     uint8_t len;
     for (uint32_t pos = f.size(); pos > 0 && stepBack(f, pos, len); pos -= len) n++;
     f.close();
+    Rec r;
+    if (n && lastRec(l, l.last, r) && r.timestamp > _newest) _newest = r.timestamp;
     return n;
+  }
+
+  // The last record of a segment.
+  bool lastRec(const Log& l, uint32_t seg, Rec& r) {
+    char p[24];
+    filePath(l, seg, p, sizeof(p));
+    File f = _fs->open(p, FILE_O_READ);
+    if (!f) return false;
+    uint32_t pos = f.size();
+    uint8_t len;
+    bool ok = pos > 0 && stepBack(f, pos, len) && f.seek(pos - len) &&
+              f.read(&r, sizeof(r)) == (int)sizeof(r) && sane(r, len);
+    f.close();
+    return ok;
   }
 
   // The record ending at pos: its length, false when that makes no sense.
@@ -255,7 +412,7 @@ private:
   void restoreLog(const Log& l, int want, const uint32_t* keys) {
     if (!l.last) return;
     char p[24];
-    uint32_t seg0 = l.last, off0 = 0;
+    uint32_t seg0 = l.last, off0 = 0, cut = cutoff();
     int got = 0;
     for (uint32_t seg = l.last; seg >= l.first && got < want; seg--) {
       filePath(l, seg, p, sizeof(p));
@@ -267,7 +424,7 @@ private:
         pos -= len;
         Rec r;
         if (!f.seek(pos) || f.read(&r, sizeof(r)) != (int)sizeof(r) || !sane(r, len)) { pos += len; break; }
-        if (!keys || chSlot(keys, r.key) >= 0) got++;
+        if ((!keys || chSlot(keys, r.key) >= 0) && r.timestamp >= cut) got++;
       }
       seg0 = seg;
       off0 = pos;
@@ -285,7 +442,7 @@ private:
         int rest = pathBytes(r.path_len) + r.text_len + 1;
         if (r.text_len >= MSG_TEXT_BUF || f.read(buf, rest) != rest) break;
         if (buf[rest - 1] != (uint8_t)(sizeof(r) + rest)) break;
-        restoreRec(r, buf, keys);
+        if (r.timestamp >= cut) restoreRec(r, buf, keys);
         pos += sizeof(r) + rest;
       }
       f.close();
@@ -293,31 +450,103 @@ private:
   }
 
   void restoreRec(const Rec& r, const uint8_t* buf, const uint32_t* keys) {
-    int pn = pathBytes(r.path_len);
     if (keys) {
       int slot = chSlot(keys, r.key);
       if (slot < 0) return;
       ChHistEntry e;
-      memset(&e, 0, sizeof(e));
-      e.ch_idx = (uint8_t)slot;
-      e.timestamp = r.timestamp;
-      e.relay_status = r.flags & STATUS_MASK;
-      e.path_len = r.path_len;
-      memcpy(e.path, buf, pn);
-      memcpy(e.text, buf + pn, r.text_len);
+      fillCh(e, r, buf, (uint8_t)slot);
       _history->restoreCh(e);
     } else {
       DmHistEntry e;
-      memset(&e, 0, sizeof(e));
-      memcpy(e.prefix, &r.key, 4);
-      e.outgoing = (r.flags & OUTGOING) ? 1 : 0;
-      e.timestamp = r.timestamp;
-      e.msg_ts = r.msg_ts;
-      e.ack_status = r.flags & STATUS_MASK;
-      e.path_len = r.path_len;
-      memcpy(e.path, buf, pn);
-      memcpy(e.text, buf + pn, r.text_len);
+      fillDm(e, r, buf);
       _history->restoreDm(e);
+    }
+  }
+
+  static void fillCh(ChHistEntry& e, const Rec& r, const uint8_t* buf, uint8_t slot) {
+    int pn = pathBytes(r.path_len);
+    memset(&e, 0, sizeof(e));
+    e.ch_idx = slot;
+    e.timestamp = r.timestamp;
+    e.relay_status = r.flags & STATUS_MASK;
+    e.path_len = r.path_len;
+    memcpy(e.path, buf, pn);
+    memcpy(e.text, buf + pn, r.text_len);
+  }
+  static void fillDm(DmHistEntry& e, const Rec& r, const uint8_t* buf) {
+    int pn = pathBytes(r.path_len);
+    memset(&e, 0, sizeof(e));
+    memcpy(e.prefix, &r.key, 4);
+    e.outgoing = (r.flags & OUTGOING) ? 1 : 0;
+    e.timestamp = r.timestamp;
+    e.msg_ts = r.msg_ts;
+    e.ack_status = r.flags & STATUS_MASK;
+    e.path_len = r.path_len;
+    memcpy(e.path, buf, pn);
+    memcpy(e.text, buf + pn, r.text_len);
+  }
+
+  // ── Older messages ─────────────────────────────────────────────────────────
+  bool pageBegin(Log* l, uint32_t key, uint8_t slot, int in_ring) {
+    pageEnd();
+    if (!_on || !l->last) return false;
+    _history->older = (OlderSlot*)malloc(PAGE * sizeof(OlderSlot));
+    if (!_history->older) return false;
+    _pg = l;
+    _pg_key = key;
+    _pg_slot = slot;
+    Spot from = { l->last, 0xFFFFFFFFUL };
+    int skip = in_ring;
+    if (skip > 0) from = back(from, [&](File&, uint32_t, uint32_t, const Rec&) { return --skip > 0; });
+    _ceil = _lo = _hi = from;
+    if (pageOlder()) return true;
+    pageEnd();
+    return false;
+  }
+
+  bool mine(const Rec& r, uint32_t cut) const { return r.key == _pg_key && r.timestamp >= cut; }
+
+  // Walks the conversation's records back from `from` until fn says stop:
+  // where it stopped, or the log's start. fn(file, seg, pos, record).
+  template <class F> Spot back(Spot from, F fn) {
+    const Log& l = *_pg;
+    uint32_t cut = cutoff();
+    char p[24];
+    for (uint32_t seg = from.seg; seg && seg >= l.first; seg--) {
+      filePath(l, seg, p, sizeof(p));
+      File f = _fs->open(p, FILE_O_READ);
+      if (!f) continue;
+      uint32_t pos = f.size();
+      if (seg == from.seg && from.pos < pos) pos = from.pos;
+      uint8_t len;
+      while (pos > 0 && stepBack(f, pos, len)) {
+        pos -= len;
+        Rec r;
+        if (!f.seek(pos) || f.read(&r, sizeof(r)) != (int)sizeof(r) || !sane(r, len)) break;
+        if (mine(r, cut) && !fn(f, seg, pos, r)) {
+          f.close();
+          return { seg, pos };
+        }
+      }
+      f.close();
+    }
+    return { 0, 0 };
+  }
+
+  static bool readBody(File& f, uint32_t pos, const Rec& r, uint8_t* buf) {
+    int rest = pathBytes(r.path_len) + r.text_len + 1;
+    return r.text_len < MSG_TEXT_BUF && f.seek(pos + sizeof(r)) && f.read(buf, rest) == rest &&
+           buf[rest - 1] == (uint8_t)(sizeof(r) + rest);
+  }
+
+  void fill(int i, const Rec& r, const uint8_t* buf) {
+    OlderSlot& o = _history->older[i];
+    if (_pg == &_ch) {
+      fillCh(o.ch, r, buf, _pg_slot);
+      if (o.ch.relay_status == ACK_PENDING) o.ch.relay_status = ACK_NONE;
+    } else {
+      fillDm(o.dm, r, buf);
+      if (o.dm.ack_status == ACK_PENDING) o.dm.ack_status = ACK_NONE;
     }
   }
 
@@ -325,8 +554,17 @@ private:
   MessageHistory* _history = nullptr;
   FILESYSTEM*     _fs = nullptr;
   bool     _on = false, _dirty = false;
-  uint32_t _due = 0;
+  uint32_t _due = 0, _next_prune = 0;
+  uint8_t  _unsaved = 0;
+  uint32_t _newest = 0;   // the newest timestamp in the log
   uint32_t _seq = 0, _ch_done = 0, _dm_done = 0;   // arc_id: the last given, the last saved
   Log      _ch = { 'c', 0, 0, 0 };
   Log      _dm = { 'd', 0, 0, 0 };
+  // The page being read: its log and conversation, where it starts and where
+  // the one after it does, and where the ring takes over from the log.
+  Log*     _pg = nullptr;
+  uint32_t _pg_key = 0;
+  uint8_t  _pg_slot = 0;
+  int      _pg_n = 0;
+  Spot     _lo = { 0, 0 }, _hi = { 0, 0 }, _ceil = { 0, 0 };
 };

@@ -140,6 +140,9 @@ static void optResend(uint8_t v, char* b, int n, const NodePrefs&) {
 static void optMsgKeep(uint8_t v, char* b, int n, const NodePrefs&) {
   if (v == 0) snprintf(b, n, "Off"); else snprintf(b, n, "%u", (unsigned)NodePrefs::msgKeepTotal(v));
 }
+static void optMsgExpire(uint8_t v, char* b, int n, const NodePrefs&) {
+  if (v == 0) snprintf(b, n, "Never"); else snprintf(b, n, "%u days", (unsigned)NodePrefs::contactExpiryDays(v));
+}
 #endif
 static void optBattDisplay(uint8_t v, char* b, int n, const NodePrefs&) {
   static const char* L[] = { "Icon", "Percent", "Voltage" };
@@ -296,6 +299,8 @@ static const Setting ALL[] = {
 #ifdef HIST_FLASH
   IDX("Keep messages", "On flash, after a power-off too", SEC_MESSAGES, msg_keep, NodePrefs::MSG_KEEP_COUNT,
       optMsgKeep, nullptr),
+  IDX("Delete after", "Messages older than this", SEC_MESSAGES, msg_expire, NodePrefs::CONTACT_EXPIRY_COUNT,
+      optMsgExpire, nullptr),
 #endif
 
   IDX("Contact expiry", "Prune after inactivity", SEC_CONTACTS, contact_expiry_idx,

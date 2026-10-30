@@ -142,6 +142,7 @@ class MessagesScreen : public UIScreen {
 
   // DM_HIST view state (the ring itself is in _history).
   int _dm_hist_sel, _dm_hist_scroll;
+  bool _older = false;   // showing a page of the flash log, not the ring
   FullscreenMsgView _dm_fs;
 
   // "New" over the first message unread when the conversation opened (index
@@ -742,6 +743,7 @@ class MessagesScreen : public UIScreen {
     }
     _reply_mode = false;
     _share_mode = false;
+    dropOlder();                     // a reply from an older page: back to the newest
     if (_sending_to_channel) {
       _hist_sel = 0;
       _hist_scroll = 0;
@@ -1057,10 +1059,10 @@ public:
   // relabeling a different one in under them. At sel <= 0 (already at newest,
   // or -1 == compose button focused) there's nothing to preserve.
   bool isViewingChannel(uint8_t ch_idx) const {
-    return _phase == CHANNEL_HIST && _sel_channel_idx == (int)ch_idx;
+    return _phase == CHANNEL_HIST && _sel_channel_idx == (int)ch_idx && !_older;
   }
   bool isViewingDM(const uint8_t* pub_key) const {
-    return _phase == DM_HIST && memcmp(_sel_contact.id.pub_key, pub_key, 4) == 0;
+    return _phase == DM_HIST && memcmp(_sel_contact.id.pub_key, pub_key, 4) == 0 && !_older;
   }
   void onViewedHistoryGrew(bool channel) {
     if (channel) {
@@ -1102,6 +1104,73 @@ public:
   // Open the message history for the currently selected contact/room and reset
   // the scroll/selection view state. Shared by the Enter-on-contact path and the
   // post-login auto-enter.
+  // The conversation being shown: the ring's entries for it, or a page of
+  // older ones from the flash log. A list of a few either way, as a render
+  // measures all of it. `_older` is that page.
+  int chViewCount() const {
+    return _older ? olderCount() : _history.histCountForChannel(_sel_channel_idx);
+  }
+  int chViewPos(int j) const {
+    if (_older) return j < olderCount() ? MessageHistory::CH_HIST_MAX + j : -1;
+    return _history.histEntryForChannel(_sel_channel_idx, j);
+  }
+  int dmViewCount() const {
+    return _older ? olderCount() : _history.dmHistCountForContact(_sel_contact.id.pub_key);
+  }
+  int dmViewPos(int j) const {
+    if (_older) return j < olderCount() ? MessageHistory::DM_HIST_MAX + j : -1;
+    return _history.dmHistEntryForContact(_sel_contact.id.pub_key, j);
+  }
+#ifdef HIST_FLASH
+  int  olderCount() const { return _task->core().history_log.pageCount(); }
+  void dropOlder() {
+    if (_older) _task->core().history_log.pageEnd();
+    _older = false;
+  }
+  // Past the oldest entry: the next page back. True when that's handled
+  // (at the very end nothing moves); false with nothing older, as a plain list.
+  bool turnOlder(bool channel) {
+    HistoryLog& log = _task->core().history_log;
+    if (_older) {
+      if (!log.pageOlder()) return true;
+    } else {
+      if (!(channel ? log.pageBeginCh(_sel_channel_idx) : log.pageBeginDm(_sel_contact.id.pub_key))) return false;
+      _older = true;
+      _new_idx = -1;
+      _anchor_new = false;
+    }
+    (channel ? _hist_sel : _dm_hist_sel) = 0;
+    (channel ? _hist_scroll : _dm_hist_scroll) = 0;
+    return true;
+  }
+  // Past the newest of a page: the next one forward, then the ring again.
+  bool turnNewer(bool channel) {
+    if (!_older) return false;
+    int count;
+    if (_task->core().history_log.pageNewer()) {
+      count = olderCount();
+    } else {
+      bool shown = (channel ? _fs : _dm_fs).active;
+      leaveOlder(channel);
+      (channel ? _fs : _dm_fs).active = shown;
+      _new_idx = -1;
+      count = channel ? chViewCount() : dmViewCount();
+    }
+    (channel ? _hist_sel : _dm_hist_sel) = count - 1;
+    (channel ? _hist_scroll : _dm_hist_scroll) = count > _hist_visible ? count - _hist_visible : 0;
+    return true;
+  }
+#else
+  int  olderCount() const { return 0; }
+  void dropOlder() {}
+  bool turnOlder(bool) { return false; }
+  bool turnNewer(bool) { return false; }
+#endif
+  void leaveOlder(bool channel) {
+    dropOlder();
+    if (channel) beginChannelView(_sel_channel_idx); else beginDmView();
+  }
+
   void openDmHistory() {
     beginDmView();
     _phase = DM_HIST;
@@ -1110,6 +1179,7 @@ public:
   // Opening a conversation: on its first unread message ("New" above it), else
   // on the compose row under the newest.
   void beginDmView() {
+    dropOlder();
     const uint8_t* key = _sel_contact.id.pub_key;
     _new_idx = _history.firstUnreadDm(key, _task->getDMUnread(key));
     _anchor_new = _new_idx >= 0;
@@ -1119,6 +1189,7 @@ public:
     _dm_fs.active = false;
   }
   void beginChannelView(uint8_t channel_idx) {
+    dropOlder();
     _sel_channel_idx = channel_idx;
     _unread_at_entry = (int)_history.chUnread(channel_idx);
     _unread_base = 0;
@@ -1187,7 +1258,7 @@ public:
   // resulting count down into the store. The ring lives in _history, but this
   // "what has the user seen on screen" logic is pure phase-machine state.
   void updateChannelUnread() {
-    if (_sel_channel_idx < 0 || _sel_channel_idx >= MAX_GROUP_CHANNELS) return;
+    if (_sel_channel_idx < 0 || _sel_channel_idx >= MAX_GROUP_CHANNELS || _older) return;
     // histEntryForChannel is newest-first: index 0 = newest, higher = older;
     // the unread from opening are _unread_base onwards. Count everything
     // actually rendered on screen as seen — not just the highlighted row — so
@@ -1207,6 +1278,7 @@ public:
   }
 
   void reset() {
+    dropOlder();
     _phase = MODE_SELECT;
     _mode_sel = 0;
     _contact_sel = _contact_scroll = 0;
@@ -1540,7 +1612,7 @@ public:
       display.translateUTF8ToBlocks(filtered_name, _sel_contact.name, sizeof(filtered_name));
 
       if (_dm_fs.active && _dm_hist_sel >= 0) {
-        int ring_pos = _history.dmHistEntryForContact(_sel_contact.id.pub_key, _dm_hist_sel);
+        int ring_pos = dmViewPos(_dm_hist_sel);
         if (ring_pos >= 0) {
           const DmHistEntry& e = _history.dmAtPos(ring_pos);
           char sender_buf[33];
@@ -1549,7 +1621,7 @@ public:
           const char* body = dmDisplayParts(e, _sel_contact.type == ADV_TYPE_ROOM,
                                             filtered_name, sender_buf, sizeof(sender_buf));
           const char* sender = sender_buf;
-          int dm_count = _history.dmHistCountForContact(_sel_contact.id.pub_key);
+          int dm_count = dmViewCount();
           int ret = _dm_fs.render(display, sender, body,
                                   _dm_hist_sel < dm_count - 1,
                                   _dm_hist_sel > 0);
@@ -1576,7 +1648,7 @@ public:
       snprintf(title, sizeof(title), "%.23s", filtered_name);
       drawScreenHeader(display, title, -1, 0, true, _ctx_menu.active);
 
-      int dm_count = _history.dmHistCountForContact(_sel_contact.id.pub_key);
+      int dm_count = dmViewCount();
       uint32_t now_ts = rtc_clock.getCurrentTime();
       bool is_room = (_sel_contact.type == ADV_TYPE_ROOM);
 
@@ -1605,13 +1677,13 @@ public:
         return t;
       };
       auto bodyAt = [&](int idx, char* sb, size_t sbn) -> const char* {
-        int rp = _history.dmHistEntryForContact(_sel_contact.id.pub_key, idx);
+        int rp = dmViewPos(idx);
         if (rp < 0) return nullptr;
         return skipReplyPrefix(dmDisplayParts(_history.dmAtPos(rp), is_room, filtered_name, sb, sbn));
       };
       // Height of compact bubble idx at a given scrollbar reserve.
       auto compactH = [&](int idx, int rsv) {
-        int rp = _history.dmHistEntryForContact(_sel_contact.id.pub_key, idx);
+        int rp = dmViewPos(idx);
         if (rp < 0) return lh + 1;
         char sb[33];
         const char* body = bodyAt(idx, sb, sizeof(sb));
@@ -1651,7 +1723,7 @@ public:
         for (int ii = 0; ii < MAX_VIS_BOXES && (s + ii) < dm_count; ii++) {
           int bh = compact_dm ? compactH(s + ii, reserve) : fixed_bh;
           if (expand) {
-            int rp = _history.dmHistEntryForContact(_sel_contact.id.pub_key, s + ii);
+            int rp = dmViewPos(s + ii);
             if (rp >= 0) {
               char hsb[33];
               const char* hbody = skipReplyPrefix(dmDisplayParts(_history.dmAtPos(rp), is_room, filtered_name, hsb, sizeof(hsb)));
@@ -1683,7 +1755,7 @@ public:
         int y = box_ys[i];
         int bh = box_hs[i];
 
-        int ring_pos = _history.dmHistEntryForContact(_sel_contact.id.pub_key, item);
+        int ring_pos = dmViewPos(item);
         if (ring_pos < 0) continue;
 
         const DmHistEntry& e = _history.dmAtPos(ring_pos);
@@ -1780,8 +1852,8 @@ public:
 
     } else if (_phase == CHANNEL_HIST) {
       if (_fs.active && _hist_sel >= 0) {
-        int fs_hist_count = _history.histCountForChannel(_sel_channel_idx);
-        int ring_pos = _history.histEntryForChannel(_sel_channel_idx, _hist_sel);
+        int fs_hist_count = chViewCount();
+        int ring_pos = chViewPos(_hist_sel);
         if (ring_pos >= 0) {
           const char* ftext = _history.chAtPos(ring_pos).text;
           const char* fsep = strstr(ftext, ": ");
@@ -1834,7 +1906,7 @@ public:
       }
       drawScreenHeader(display, title, -1, 0, true, _ctx_menu.active);
 
-      int ch_hist_count = _history.histCountForChannel(_sel_channel_idx);
+      int ch_hist_count = chViewCount();
       uint32_t now_ts = rtc_clock.getCurrentTime();
 
       // On a tall enough screen (expandHistory): boxes as tall as their whole
@@ -1847,7 +1919,7 @@ public:
         return computeHistScroll(display, expand, ch_hist_count, _hist_scroll,
           hist_start_y, cby, lh,
           [&](int idx) -> const char* {
-            int rp = _history.histEntryForChannel(_sel_channel_idx, idx);
+            int rp = chViewPos(idx);
             if (rp < 0) return nullptr;
             const char* t = _history.chAtPos(rp).text;
             const char* s = strstr(t, ": ");
@@ -1868,7 +1940,7 @@ public:
         for (int ii = 0; ii < MAX_VIS_BOXES && (s + ii) < ch_hist_count; ii++) {
           int bh = fixed_bh;
           if (expand) {
-            int rp = _history.histEntryForChannel(_sel_channel_idx, s + ii);
+            int rp = chViewPos(s + ii);
             if (rp >= 0) {
               const char* rtext = _history.chAtPos(rp).text;
               const char* rsep = strstr(rtext, ": ");
@@ -1903,7 +1975,7 @@ public:
         int y = box_ys[i];
         int bh = box_hs[i];
 
-        int ring_pos = _history.histEntryForChannel(_sel_channel_idx, item);
+        int ring_pos = chViewPos(item);
         if (ring_pos < 0) continue;
 
         const char* text = _history.chAtPos(ring_pos).text;
@@ -2402,7 +2474,7 @@ public:
       }
 
     } else if (_phase == DM_HIST) {
-      int dm_count = _history.dmHistCountForContact(_sel_contact.id.pub_key);
+      int dm_count = dmViewCount();
       if (_dm_fs.active) {
         if (_ctx_menu.active) {
           auto res = _ctx_menu.handleInput(c);
@@ -2418,12 +2490,14 @@ public:
         auto res = _dm_fs.handleInput(c);
         if (res == FullscreenMsgView::PREV) {
           if (_dm_hist_sel < dm_count - 1) { _dm_hist_sel++; _dm_fs.scroll = 0; }
+          else if (turnOlder(false)) _dm_fs.scroll = 0;
         } else if (res == FullscreenMsgView::NEXT) {
           if (_dm_hist_sel > 0) { _dm_hist_sel--; _dm_fs.scroll = 0; }
+          else if (turnNewer(false)) _dm_fs.scroll = 0;
         } else if (res == FullscreenMsgView::CLOSE) {
           _dm_fs.active = false;
         } else if (res == FullscreenMsgView::REPLY) {
-          int ring_pos = _history.dmHistEntryForContact(_sel_contact.id.pub_key, _dm_hist_sel);
+          int ring_pos = dmViewPos(_dm_hist_sel);
           if (ring_pos >= 0) {
             bool reply_ok = !_history.dmAtPos(ring_pos).outgoing;
             if (reply_ok) buildDmReplyPrefix(_history.dmAtPos(ring_pos));
@@ -2443,6 +2517,7 @@ public:
         }
         return true;
       }
+      if (c == KEY_CANCEL && _older) { leaveOlder(false); return true; }
       if (c == KEY_CANCEL) {
         if (_direct_entry) {
           _direct_entry = false;
@@ -2458,12 +2533,14 @@ public:
       // now walks toward newer (lower index, physically downward) and off the
       // bottom (index 0) reaches the compose row, which sits right below it.
       if (c == KEY_UP) {
+        if (dm_count == 0 && turnOlder(false)) return true;   // the ring has lost this conversation
         if (_dm_hist_sel == -1 && dm_count > 0) { _dm_hist_sel = 0; _dm_hist_scroll = 0; }
         else if (_dm_hist_sel >= 0 && _dm_hist_sel < dm_count - 1) {
           _dm_hist_sel++;
           if (_dm_hist_sel >= _dm_hist_scroll + _hist_visible)
             _dm_hist_scroll = _dm_hist_sel - _hist_visible + 1;
         } else if (_dm_hist_sel == dm_count - 1) {
+          if (turnOlder(false)) return true;
           // Oldest (top of the list) -> wrap straight to the newest (bottom
           // of the list), same ring-wrap every other list in the UI does at
           // its ends -- the compose row sits below the list itself and is
@@ -2478,6 +2555,7 @@ public:
           _dm_hist_sel--;
           if (_dm_hist_sel < _dm_hist_scroll) _dm_hist_scroll = _dm_hist_sel;
         } else if (_dm_hist_sel == 0) {
+          if (turnNewer(false)) return true;
           _dm_hist_sel = -1;
         } else if (_dm_hist_sel == -1 && dm_count > 0) {
           // Compose row -> wrap to the oldest message (top of the list).
@@ -2497,7 +2575,7 @@ public:
         return true;
       }
       if (c == KEY_CONTEXT_MENU && _dm_hist_sel >= 0) {
-        int ring_pos = _history.dmHistEntryForContact(_sel_contact.id.pub_key, _dm_hist_sel);
+        int ring_pos = dmViewPos(_dm_hist_sel);
         if (ring_pos >= 0) {
           bool reply_ok = !_history.dmAtPos(ring_pos).outgoing;
           if (reply_ok) buildDmReplyPrefix(_history.dmAtPos(ring_pos));
@@ -2507,7 +2585,7 @@ public:
       }
 
     } else if (_phase == CHANNEL_HIST) {
-      int ch_hist_count = _history.histCountForChannel(_sel_channel_idx);
+      int ch_hist_count = chViewCount();
       if (_fs.active) {
         if (_ctx_menu.active) {
           auto res = _ctx_menu.handleInput(c);
@@ -2523,12 +2601,14 @@ public:
         auto res = _fs.handleInput(c);
         if (res == FullscreenMsgView::PREV) {
           if (_hist_sel < ch_hist_count - 1) { _hist_sel++; _fs.scroll = 0; updateChannelUnread(); }
+          else if (turnOlder(true)) _fs.scroll = 0;
         } else if (res == FullscreenMsgView::NEXT) {
           if (_hist_sel > 0) { _hist_sel--; _fs.scroll = 0; updateChannelUnread(); }
+          else if (turnNewer(true)) _fs.scroll = 0;
         } else if (res == FullscreenMsgView::CLOSE) {
           _fs.active = false;
         } else if (res == FullscreenMsgView::REPLY) {
-          int ring_pos = _history.histEntryForChannel(_sel_channel_idx, _hist_sel);
+          int ring_pos = chViewPos(_hist_sel);
           if (ring_pos >= 0)
             buildFsMenu(_history.chAtPos(ring_pos).text, buildChannelReplyPrefix(_history.chAtPos(ring_pos).text), ring_pos, true);
         }
@@ -2545,6 +2625,7 @@ public:
         }
         return true;
       }
+      if (c == KEY_CANCEL && _older) { leaveOlder(true); return true; }
       if (c == KEY_CANCEL) {
         if (_direct_entry) { _direct_entry = false; _task->gotoHomeScreen(); }
         else               { enterChannelList(_sel_channel_idx); }
@@ -2554,11 +2635,13 @@ public:
       // render block above) — UP/DOWN swap direction accordingly, same as the
       // DM history handler above.
       if (c == KEY_UP) {
+        if (ch_hist_count == 0 && turnOlder(true)) return true;   // the ring has lost this channel
         if (_hist_sel == -1 && ch_hist_count > 0) { _hist_sel = 0; _hist_scroll = 0; }
         else if (_hist_sel >= 0 && _hist_sel < ch_hist_count - 1) {
           _hist_sel++;
           if (_hist_sel >= _hist_scroll + _hist_visible) _hist_scroll = _hist_sel - _hist_visible + 1;
         } else if (_hist_sel == ch_hist_count - 1) {
+          if (turnOlder(true)) return true;
           // Oldest -> wrap straight to the newest, same as the DM history handler.
           _hist_sel = 0;
           _hist_scroll = 0;
@@ -2568,7 +2651,7 @@ public:
       }
       if (c == KEY_DOWN) {
         if (_hist_sel > 0) { _hist_sel--; if (_hist_sel < _hist_scroll) _hist_scroll = _hist_sel; }
-        else if (_hist_sel == 0) _hist_sel = -1;
+        else if (_hist_sel == 0) { if (turnNewer(true)) return true; _hist_sel = -1; }
         else if (_hist_sel == -1 && ch_hist_count > 0) {
           // Compose row -> wrap to the oldest message.
           _hist_sel = ch_hist_count - 1;
@@ -2589,7 +2672,7 @@ public:
         return true;
       }
       if (c == KEY_CONTEXT_MENU && _hist_sel >= 0) {
-        int ring_pos = _history.histEntryForChannel(_sel_channel_idx, _hist_sel);
+        int ring_pos = chViewPos(_hist_sel);
         if (ring_pos >= 0)
           buildFsMenu(_history.chAtPos(ring_pos).text, buildChannelReplyPrefix(_history.chAtPos(ring_pos).text), ring_pos, true);
         return true;
