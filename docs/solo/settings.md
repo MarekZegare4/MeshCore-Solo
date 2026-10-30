@@ -15,7 +15,7 @@ board supports are shown.
 | **Keyboard** | ABC or T9 layout, the two scripts, CardKB mode |
 | **Contacts** | Show all or favourites only (DMs, channels, rooms), favourites on top, the order of the channel list, contact expiry and prune, which heard nodes are added |
 | **Privacy** | Whether your adverts carry your position and which position, who may ask for your status, location and sensor readings, the Bluetooth PIN |
-| **Messages** | Automatic resend of direct messages, the ten quick messages |
+| **Messages** | Automatic resend of direct messages, on the Wio Tracker L1 the messages kept on flash (below), the ten quick messages |
 
 A few notes:
 
@@ -36,6 +36,16 @@ A few notes:
   doesn't follow the usual LiPo curve: **Left / Right** move a point by
   10 mV, **Reset** goes back to LiPo. The current voltage is shown, so a point
   can be set against what the battery reads.
+- **Keep messages** (Wio Tracker L1) saves messages on the flash, across a
+  power-off and past what fits in memory (see
+  [How much is kept](./messages.md#how-much-is-kept)): **Off**, 500, 1000 or
+  2500 in total. When the limit is reached the oldest go, in batches. Setting
+  it to Off deletes what was saved.
+- **Delete after** (Wio Tracker L1) removes saved messages older than 7, 30 or
+  90 days, or **Never**. They go in batches too, so some stay a little longer,
+  and nothing goes while the clock isn't set.
+- **Delete history** (Wio Tracker L1) deletes every message, saved and in
+  memory, after asking.
 - **Factory reset** erases contacts, channels, messages, settings and the
   node's keys, then restarts as a new node. It asks twice. On the Wio Tracker
   L2 the SD card is left as it is.

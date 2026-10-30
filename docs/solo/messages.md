@@ -57,6 +57,18 @@ haven't read, its unread count gets a **+** (for example `48+`).
 > messages each, Settings › Storage). The history survives a reboot and
 > scrolls back through everything on the card.
 
+> [!NOTE]
+> **Wio Tracker L1:** with **Keep messages** on (Settings › Messages, off by
+> default) messages are also saved on the flash, 500, 1000 or 2500 in total:
+> two thirds for channels, one third for direct messages and rooms. The newest
+> come back after a power-off. Scrolling past the oldest message of a
+> conversation goes on to the saved ones, twelve at a time; **Back** returns
+> to the newest.
+>
+> Messages are saved within a minute of arriving, or sooner in a burst. The
+> power switch cuts the power at once, so it can lose that last minute;
+> hibernating and the low-battery shutdown save first.
+
 ## Writing
 
 Open a conversation and choose **+ Send** (or Enter at the bottom of the

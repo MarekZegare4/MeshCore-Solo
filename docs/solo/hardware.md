@@ -96,6 +96,10 @@ The e-ink screens show more than the OLED, the portrait one most:
   arrows in the node list;
 - under a saved trail (portrait), its map and elevation profile.
 
+Hibernating leaves **Powered off** on the screen, and it stays there even if
+you then use the power switch. The switch alone cuts the board with no warning,
+so the screen goes grey or dark soon after: hibernate first to keep it clean.
+
 Settings › Display has a few settings of its own:
 
 - **Rotation** turns the screen upside down; the joystick turns with it.

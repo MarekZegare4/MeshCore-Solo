@@ -29,6 +29,7 @@ interleaved. Classified:
 
 **Models — already UI-free, move as-is**
 - `MessageHistory.h` — channel (48) / DM (32) rings, unread counters + overflow flags. ✅ moved to `ui-core/`.
+- `HistoryLog.h` (`HIST_FLASH`, the L1s) — the rings' `HistArchive` on the QSPI flash: two append-only logs, one directory per segment because LittleFS 1.x erases a directory's two fixed blocks on every commit. Older messages reach `MessageHistory::older` a page at a time, since ui-new measures its whole list every frame.
 - `Trail.h` / `TrailStore`, `ScopeList.h`. Waypoints ✅ `ui-core/WaypointModel.h` (store + `/waypoints` persistence + "delete clears the Locator target"; ui-new's `UITask::waypoints()` forwards to it).
 
 **Engines — logic living inside `UITask.cpp` / `UITask.h`**
