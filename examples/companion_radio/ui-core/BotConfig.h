@@ -6,7 +6,10 @@
 //
 // Row kinds: switches (a uint8_t flag), text (trigger / reply, with a
 // capacity), a target (channel / room: a picker in the frontend), an hour
-// (quiet from / to; equal hours = quiet hours off).
+// (quiet from / to; equal hours = quiet hours off), a list of the commands a
+// target answers (a mask over botcmd::, a list popup in the frontend).
+
+#include "BotCommands.h"
 
 namespace botcfg {
 
@@ -22,10 +25,10 @@ static const char* const TAB_LABELS[TAB_COUNT] = { "Channel", "Room", "Direct", 
 static bool isLog(int) { return false; }
 #endif
 
-enum Kind : uint8_t { ENABLE_DM, DM_SCOPE, COMMANDS_DM, ACTIONS_DM, TRIGGER_DM, REPLY_DM,
-                      ENABLE_CH, CHANNEL, COMMANDS_CH, ACTIONS_CH, TRIGGER_CH, REPLY_CH,
-                      ENABLE_ROOM, ROOM, COMMANDS_ROOM, ACTIONS_ROOM, TRIGGER_ROOM, REPLY_ROOM,
-                      QUIET_FROM, QUIET_TO, ACTIONS_SCOPE };
+enum Kind : uint8_t { ENABLE_DM, DM_SCOPE, COMMANDS_DM, ALLOWED_DM, ACTIONS_DM, TRIGGER_DM, REPLY_DM,
+                      ENABLE_CH, CHANNEL, COMMANDS_CH, ALLOWED_CH, ACTIONS_CH, TRIGGER_CH, REPLY_CH,
+                      ENABLE_ROOM, ROOM, COMMANDS_ROOM, ALLOWED_ROOM, ACTIONS_ROOM, TRIGGER_ROOM, REPLY_ROOM,
+                      QUIET_FROM, QUIET_TO, ACTIONS_SCOPE, POS_SCOPE, GAP };
 
 // hint: a one-line explanation for frontends with room for it.
 struct Row { Kind kind; const char* label; const char* hint; };
@@ -34,6 +37,7 @@ static const Row CHANNEL_ROWS[] = {
   { ENABLE_CH,   "Enable",   "Answer on one channel" },
   { CHANNEL,     "Channel",  nullptr },
   { COMMANDS_CH, "Commands", "!ping, !help, ..." },
+  { ALLOWED_CH,  "Allowed",  "Which ones it answers" },
   { ACTIONS_CH,  "Actions",  "!gps, !gpio (this device)" },
   { TRIGGER_CH,  "Trigger",  "Reply trigger; * = any" },
   { REPLY_CH,    "Reply",    "{name} {loc} {time} ..." },
@@ -42,6 +46,7 @@ static const Row ROOM_ROWS[] = {
   { ENABLE_ROOM,   "Enable",   "Answer in one room server" },
   { ROOM,          "Room",     nullptr },
   { COMMANDS_ROOM, "Commands", "!ping, !help, ..." },
+  { ALLOWED_ROOM,  "Allowed",  "Which ones it answers" },
   { ACTIONS_ROOM,  "Actions",  "!gps, !gpio (this device)" },
   { TRIGGER_ROOM,  "Trigger",  "Reply trigger; * = any" },
   { REPLY_ROOM,    "Reply",    "{name} {loc} {time} ..." },
@@ -49,7 +54,9 @@ static const Row ROOM_ROWS[] = {
 static const Row DIRECT_ROWS[] = {
   { ENABLE_DM,   "Enable",   "Answer direct messages" },
   { DM_SCOPE,    "DM allow", "Everyone, or favourites only" },
+  { POS_SCOPE,   "Position", "Fav: only favourites get it" },
   { COMMANDS_DM, "Commands", "!ping, !help, ..." },
+  { ALLOWED_DM,  "Allowed",  "Which ones it answers" },
   { ACTIONS_DM,  "Actions",  "!gps, !gpio (this device)" },
   { TRIGGER_DM,  "Trigger",  "Reply trigger; * = any" },
   { REPLY_DM,    "Reply",    "{name} {loc} {time} ..." },
@@ -58,6 +65,7 @@ static const Row OTHER_ROWS[] = {
   { QUIET_FROM, "Quiet from", "No replies in these hours" },
   { QUIET_TO,   "Quiet to",   "Same hour = always on" },
   { ACTIONS_SCOPE, "Actions by", "Fav: favourites only (a channel name can be faked)" },
+  { GAP,        "Reply gap",  "On the channel and in the room" },
 };
 
 static int rowCount(int tab) {
@@ -93,8 +101,24 @@ static uint8_t* flag(NodePrefs* p, Kind k) {
     case ACTIONS_CH:    return &p->bot_actions_ch;
     case ACTIONS_ROOM:  return &p->bot_actions_room;
     case ACTIONS_SCOPE: return &p->bot_actions_scope;     // 1 = favourites only
+    case POS_SCOPE:     return &p->bot_pos_scope;         // 1 = favourites only
     default:            return nullptr;
   }
+}
+
+// Allowed rows: the target's mask of commands switched off; nullptr for other kinds.
+static uint16_t* cmdOff(NodePrefs* p, Kind k) {
+  switch (k) {
+    case ALLOWED_DM:   return &p->bot_cmd_off_dm;
+    case ALLOWED_CH:   return &p->bot_cmd_off_ch;
+    case ALLOWED_ROOM: return &p->bot_cmd_off_room;
+    default:           return nullptr;
+  }
+}
+
+// That Allowed row's target has its Actions on: the list shows them.
+static bool actionsOn(const NodePrefs* p, Kind k) {
+  return (k == ALLOWED_DM ? p->bot_actions_dm : k == ALLOWED_CH ? p->bot_actions_ch : p->bot_actions_room) != 0;
 }
 
 // Text rows: the buffer and its size (incl. NUL); nullptr for other kinds.
@@ -111,12 +135,15 @@ static char* text(NodePrefs* p, Kind k, int& cap) {
 }
 
 // All / Fav rows (a flag shown as who, not on / off).
-static bool isScope(Kind k)   { return k == DM_SCOPE || k == ACTIONS_SCOPE; }
+static bool isScope(Kind k)   { return k == DM_SCOPE || k == ACTIONS_SCOPE || k == POS_SCOPE; }
 static bool isTrigger(Kind k) { return k == TRIGGER_DM || k == TRIGGER_CH || k == TRIGGER_ROOM; }
 static bool isHour(Kind k)    { return k == QUIET_FROM || k == QUIET_TO; }
 
 static uint8_t& hour(NodePrefs* p, Kind k) { return k == QUIET_FROM ? p->bot_quiet_start : p->bot_quiet_end; }
 static bool quietOff(const NodePrefs* p) { return p->bot_quiet_start == p->bot_quiet_end; }
+
+// The Reply gap's choices, by NodePrefs::botGapSecs() index; "" ends the list.
+static const char* GAP_LABELS[NodePrefs::BOT_GAP_COUNT + 1] = { "10s", "30s", "1m", "5m", "" };
 
 // Placeholders a reply can use: the bot fills {name} / {hops} / {path} from the
 // message it answers; {loc} / {time} and the sensor ones come from here.

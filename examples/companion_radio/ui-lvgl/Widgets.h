@@ -908,6 +908,19 @@ static lv_obj_t* choiceRow(lv_obj_t* parent, const char* text, const char* hint,
   return c;
 }
 
+// A value picked or typed behind the row: cut to `w`, with a chevron, the whole
+// row is the tap. Returns the value's label.
+static lv_obj_t* rowPick(lv_obj_t* row, const char* text, int w, lv_event_cb_t cb, void* user = nullptr) {
+  lv_obj_t* v = label(row, text, THEME_FONT_BODY, theme::ACCENT);
+  lv_label_set_long_mode(v, LV_LABEL_LONG_DOT);
+  lv_obj_set_width(v, w);   // fixed: LONG_DOT needs a width
+  lv_obj_set_style_text_align(v, LV_TEXT_ALIGN_RIGHT, 0);
+  label(row, LV_SYMBOL_RIGHT, THEME_FONT_SMALL, theme::TEXT_MUTED);
+  rowPressable(row);
+  lv_obj_add_event_cb(row, cb, LV_EVENT_CLICKED, user);
+  return v;
+}
+
 // A value typed in a popup (frequency, name ...): shown as a choice is, with
 // a pencil; the tap is the caller's.
 static lv_obj_t* rowValue(lv_obj_t* row, const char* text, lv_event_cb_t cb, void* user = nullptr) {

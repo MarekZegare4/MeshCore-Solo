@@ -664,14 +664,17 @@ extern "C" EMSCRIPTEN_KEEPALIVE const char* sim_test_contact_hash(int type) {
 
 // Turns on the DM bot's commands (Tools > Bot > Direct > Commands), with its
 // actions and who may run them (Other > Actions by: 0 all, 1 favourites), so
-// a host page can test the bot from a peer. In memory only.
-extern "C" EMSCRIPTEN_KEEPALIVE int sim_test_bot(int actions, int actions_scope) {
+// a host page can test the bot from a peer; cmd_off: the commands it doesn't
+// answer (bot_cmd_off_dm), pos_scope: Direct > Position. In memory only.
+extern "C" EMSCRIPTEN_KEEPALIVE int sim_test_bot(int actions, int actions_scope, int cmd_off, int pos_scope) {
   if (!g_sim_ready) return 0;
   NodePrefs* prefs = the_mesh.getNodePrefs();
   if (!prefs) return 0;
   prefs->bot_commands_enabled = 1;
   prefs->bot_actions_dm = actions ? 1 : 0;
   prefs->bot_actions_scope = actions_scope ? 1 : 0;
+  prefs->bot_cmd_off_dm = (uint16_t)cmd_off;
+  prefs->bot_pos_scope = pos_scope ? 1 : 0;
   return 1;
 }
 

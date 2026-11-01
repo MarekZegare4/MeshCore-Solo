@@ -419,6 +419,13 @@ struct NodePrefsFields {
   uint8_t  bot_quiet_start;     // quiet-hours start hour, local 0-23 (start==end → disabled)
   uint8_t  bot_quiet_end;       // quiet-hours end hour, local 0-23
   uint8_t  bot_actions_scope;   // who may run the bot's actions (!gps !buzz !gpio ...): 0 = all, 1 = favourites
+  // Commands each target doesn't answer, bits of botcmd::Id (ui-core/BotCommands.h);
+  // 0 = all of them. Under Commands / Actions, which stay the on/off switches.
+  uint16_t bot_cmd_off_dm;
+  uint16_t bot_cmd_off_ch;
+  uint16_t bot_cmd_off_room;
+  uint8_t  bot_pos_scope;       // who gets the position in a DM: 0 = all, 1 = favourites (the others as if !loc were off)
+  uint8_t  bot_gap_idx;         // index into botGapSecs(): between replies on the channel / in the room
 
   // ── GPS, trail & location sharing ─────────────────────────────────────
   uint8_t  gps_enabled;      // GPS enabled flag (0=disabled, 1=enabled)
@@ -648,6 +655,11 @@ struct NodePrefsFields {
   static const char* contactExpiryLabel(uint8_t idx) {
     static const char* L[CONTACT_EXPIRY_COUNT] = { "Off", "7d", "30d", "90d" };
     return L[idx < CONTACT_EXPIRY_COUNT ? idx : 0];
+  }
+  static const uint8_t BOT_GAP_COUNT = 4;
+  static uint16_t botGapSecs(uint8_t idx) {
+    static const uint16_t S[BOT_GAP_COUNT] = { 10, 30, 60, 300 };
+    return S[idx < BOT_GAP_COUNT ? idx : 0];
   }
   static const uint8_t MSG_KEEP_COUNT = 4;
   static uint16_t msgKeepTotal(uint8_t idx) {
@@ -879,6 +891,8 @@ class NodePrefs : public NodePrefsFields, public ConfigSerializer {
     s.def("rm_reply", bot_reply_room, sizeof(bot_reply_room));
     s.def("rm_cmd", bot_commands_room); s.def("rm_act", bot_actions_room);
     s.def("q_start", bot_quiet_start); s.def("q_end", bot_quiet_end); s.def("act_scope", bot_actions_scope);
+    s.def("dm_off", bot_cmd_off_dm); s.def("ch_off", bot_cmd_off_ch); s.def("rm_off", bot_cmd_off_room);
+    s.def("pos_scope", bot_pos_scope); s.def("gap", bot_gap_idx);
   }
   void gpsSolo(Section& s) {
     s.def("imperial", units_imperial);

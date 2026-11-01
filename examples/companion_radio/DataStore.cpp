@@ -329,6 +329,8 @@ static void sanitize(NodePrefs& p) {
   flag(p.bot_actions_ch, 0);
   flag(p.bot_actions_room, 0);
   flag(p.bot_dm_scope, 0);
+  flag(p.bot_pos_scope, 0);
+  if (p.bot_gap_idx >= NodePrefs::BOT_GAP_COUNT) p.bot_gap_idx = 0;
   flag(p.bot_room_enabled, 0);
   if (p.bot_quiet_start > 23) p.bot_quiet_start = 0;
   if (p.bot_quiet_end > 23) p.bot_quiet_end = 0;

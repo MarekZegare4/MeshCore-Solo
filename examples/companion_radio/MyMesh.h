@@ -185,6 +185,7 @@ public:
       virtual void onChannelRemoved(uint8_t channel_idx) { }
       // Remote bot device actions (!gps/!buzz/!gpioN), gated by bot_actions_* prefs.
       virtual void botSetGPS(bool on) { }
+      virtual bool botGpsHeld() { return false; }   // an SOS has the GPS: !gps is refused
       virtual void botBuzz(int seconds) { }
       virtual bool botSetGPIO(int idx, bool on) { return false; }
       virtual bool botGetGPIO(int idx, bool& is_output, bool& value) { return false; }
@@ -614,8 +615,9 @@ private:
   bool tryBotCommand(const ContactInfo& from, const char* text, uint8_t hops);          // DM commands
   bool tryBotChannelCommand(uint8_t channel_idx, const char* text, uint8_t hops);       // channel commands
   bool tryBotRoomCommand(const ContactInfo& from, const uint8_t* sender_prefix, const char* text, uint8_t hops); // room commands
-  bool botCommandReply(const char* cmd, const char* arg, const char* arg2, bool actions_allowed, uint8_t hops, uint32_t ts, char* out, int out_len, const char* sender_name);  // one command → reply text
-  int  botScanCommands(const char* body, uint8_t hops, uint32_t ts, char* out, int out_len, const char* sender_name, bool actions_allowed); // scan "!word"s → combined reply, returns count
+  bool botGapPassed(unsigned long last) const;   // the Reply gap since a channel / room reply
+  bool botCommandReply(const char* cmd, const char* arg, const char* arg2, bool actions_allowed, uint16_t cmd_off, uint8_t hops, uint32_t ts, char* out, int out_len, const char* sender_name);  // one command → reply text
+  int  botScanCommands(const char* body, uint8_t hops, uint32_t ts, char* out, int out_len, const char* sender_name, bool actions_allowed, uint16_t cmd_off); // scan "!word"s → combined reply, returns count
   // !gps fix -- single-shot "wait for a stabilised GPS fix, then push a follow-up
   // message" action. botCommandReply() only sets _locfix_requested (it doesn't know
   // the destination); the tryBot*Command() wrappers call startLocFix() with the

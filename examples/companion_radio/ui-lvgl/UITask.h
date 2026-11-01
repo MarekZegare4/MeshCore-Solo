@@ -313,6 +313,8 @@ public:
   void botTab(int tab);
   void botRow(int row);
   void botToggle(int row, bool on);
+  void botCmd(int id, bool on);
+  void botGap(int idx);
   void botPick(int idx);
   void botHour(uint8_t act);
   void botTextDone(bool ok);

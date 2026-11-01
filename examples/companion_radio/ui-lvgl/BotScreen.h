@@ -3,7 +3,8 @@
 // their NodePrefs fields are ui-core/BotConfig.h; the bot runs in MyMesh.
 // Tabs Channel / Room / Direct / Other; switches inline, trigger / reply in a
 // popup with the keyboard (reply: placeholder buttons above it), channel /
-// room from a list popup, quiet hours with - / +.
+// room from a list popup, quiet hours with - / +, the commands a target
+// answers as a list of switches in a popup.
 //
 // Single-TU fragment: included by ui-lvgl/UITask.cpp after AdminScreen.h.
 
@@ -12,6 +13,7 @@ namespace botview {
 static uint8_t s_tab = botcfg::TAB_CHANNEL;
 static int s_row = -1;                 // row a popup is editing
 static lv_obj_t* s_hour_lbl = nullptr;
+static lv_obj_t* s_allowed_lbl = nullptr;   // the Allowed row's value, behind the popup
 static uint8_t s_rooms[32][NodePrefs::FAVOURITE_PREFIX_LEN];
 
 enum : uint8_t { B_MINUS, B_PLUS, B_DONE };
@@ -29,6 +31,12 @@ static void onBotSwitch(lv_event_t* e) {
 static void onBotScope(lv_event_t* e) {
   s_ui->botToggle((int)(uintptr_t)lv_event_get_user_data(e),
                   lv_buttonmatrix_get_selected_button((lv_obj_t*)lv_event_get_target(e)) == 1);
+}
+static void onBotCmd(lv_event_t* e) {
+  s_ui->botCmd((int)(uintptr_t)lv_event_get_user_data(e), lv_obj_has_state((lv_obj_t*)lv_event_get_target(e), LV_STATE_CHECKED));
+}
+static void onBotGap(lv_event_t* e) {
+  s_ui->botGap((int)lv_buttonmatrix_get_selected_button((lv_obj_t*)lv_event_get_target(e)));
 }
 static void onBotPick(lv_event_t* e)   { s_ui->botPick((int)(uintptr_t)lv_event_get_user_data(e)); }
 static void onBotHour(lv_event_t* e)   { s_ui->botHour((uint8_t)(uintptr_t)lv_event_get_user_data(e)); }
@@ -50,6 +58,12 @@ static void botChip(const char* ph, void* parent) {
   lv_obj_add_event_cb(b, onBotPlaceholder, LV_EVENT_CLICKED, NULL);
   lv_obj_center(label(b, ph, THEME_FONT_SMALL, theme::TEXT));
 }
+// A switchRow() for something that isn't a plain pref: `cb` gets `idx`.
+static void switchRowIdx(lv_obj_t* parent, const char* text, const char* hint, bool on, lv_event_cb_t cb, int idx) {
+  lv_obj_t* sw = switchRow(parent, text, hint, nullptr);
+  if (on) lv_obj_add_state(sw, LV_STATE_CHECKED);
+  lv_obj_add_event_cb(sw, cb, LV_EVENT_VALUE_CHANGED, (void*)(uintptr_t)idx);
+}
 static void onOpenBot(lv_event_t* e) { (void)e; s_ui->showBot(); }
 
 static lv_obj_t* botHourButton(lv_obj_t* parent, const char* text, uint8_t act, bool accent) {
@@ -63,6 +77,18 @@ static lv_obj_t* botHourButton(lv_obj_t* parent, const char* text, uint8_t act, 
   lv_obj_center(label(b, text, act == botview::B_DONE ? THEME_FONT_BODY : THEME_FONT_LARGE, theme::TEXT));
   if (accent) stylePrimary(b);
   return b;
+}
+
+// The open tab's Allowed value: it follows that tab's Actions too.
+static void botShowAllowed(NodePrefs* p) {
+  for (int i = 0; i < botcfg::rowCount(botview::s_tab); i++) {
+    botcfg::Kind k = botcfg::row(botview::s_tab, i).kind;
+    uint16_t* off = botcfg::cmdOff(p, k);
+    if (!off || !botview::s_allowed_lbl) continue;
+    char val[16];
+    botcmd::shown(*off, botcfg::actionsOn(p, k), val, sizeof(val));
+    lv_label_set_text(botview::s_allowed_lbl, val);
+  }
 }
 
 void UITask::showBot() {
@@ -121,20 +147,24 @@ void UITask::buildBot() {
   for (int i = 0; i < botcfg::rowCount(s_tab); i++) {
     const botcfg::Row& r = botcfg::row(s_tab, i);
     uint8_t* fl = botcfg::flag(p, r.kind);
-    lv_obj_t* row = settingRow(g, r.label, fl || botcfg::isHour(r.kind) ? r.hint : nullptr);
-    if (fl && botcfg::isScope(r.kind)) {
+    if (fl && !botcfg::isScope(r.kind)) {
+      switchRowIdx(g, r.label, r.hint, *fl, onBotSwitch, i);
+      continue;
+    }
+    uint16_t* cmd_off = botcfg::cmdOff(p, r.kind);
+    const bool gap = r.kind == botcfg::GAP;
+    lv_obj_t* row = settingRow(g, r.label, fl || cmd_off || gap || botcfg::isHour(r.kind) ? r.hint : nullptr);
+    if (gap) {
+      lv_obj_t* seg = segmented(row, botcfg::GAP_LABELS, p->bot_gap_idx, 160, 32);
+      lv_obj_align(seg, LV_ALIGN_RIGHT_MID, -4, 0);
+      lv_obj_add_event_cb(seg, onBotGap, LV_EVENT_VALUE_CHANGED, NULL);
+      continue;
+    }
+    if (fl) {
       static const char* SCOPE[] = { "All", "Fav", "" };
       lv_obj_t* seg = segmented(row, SCOPE, *fl ? 1 : 0, 110, 32);
       lv_obj_align(seg, LV_ALIGN_RIGHT_MID, -4, 0);
       lv_obj_add_event_cb(seg, onBotScope, LV_EVENT_VALUE_CHANGED, (void*)(uintptr_t)i);
-      continue;
-    }
-    if (fl) {
-      lv_obj_t* sw = lv_switch_create(row);
-      lv_obj_set_size(sw, 46, 24);
-      lv_obj_align(sw, LV_ALIGN_RIGHT_MID, -theme::PAD, 0);
-      if (*fl) lv_obj_add_state(sw, LV_STATE_CHECKED);
-      lv_obj_add_event_cb(sw, onBotSwitch, LV_EVENT_VALUE_CHANGED, (void*)(uintptr_t)i);
       continue;
     }
     // Value on the right; tap the row to change it.
@@ -143,15 +173,11 @@ void UITask::buildBot() {
     if (const char* t = botcfg::text(p, r.kind, cap)) snprintf(val, sizeof(val), "%s", botcfg::shownText(t, botcfg::isTrigger(r.kind)));
     else if (r.kind == botcfg::CHANNEL) { if (!botcfg::channelName(p, val, sizeof(val))) snprintf(val, sizeof(val), "(pick one)"); }
     else if (r.kind == botcfg::ROOM)    { if (!botcfg::roomName(p, val, sizeof(val))) snprintf(val, sizeof(val), "(pick one)"); }
+    else if (cmd_off) botcmd::shown(*cmd_off, botcfg::actionsOn(p, r.kind), val, sizeof(val));
     else if (botcfg::quietOff(p)) snprintf(val, sizeof(val), "Off");
     else snprintf(val, sizeof(val), "%02d:00", botcfg::hour(p, r.kind));
-    lv_obj_t* v = label(row, val, THEME_FONT_BODY, theme::ACCENT);
-    lv_label_set_long_mode(v, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(v, botcfg::isHour(r.kind) ? 60 : 150);   // fixed: LONG_DOT needs a width
-    lv_obj_set_style_text_align(v, LV_TEXT_ALIGN_RIGHT, 0);
-    label(row, LV_SYMBOL_RIGHT, THEME_FONT_SMALL, theme::TEXT_MUTED);
-    rowPressable(row);
-    lv_obj_add_event_cb(row, onBotRow, LV_EVENT_CLICKED, (void*)(uintptr_t)i);
+    lv_obj_t* v = rowPick(row, val, botcfg::isHour(r.kind) ? 60 : cmd_off ? 80 : 150, onBotRow, (void*)(uintptr_t)i);
+    if (cmd_off) s_allowed_lbl = v;
   }
 }
 
@@ -167,6 +193,25 @@ void UITask::botToggle(int row, bool on) {
   if (!fl) return;
   *fl = on ? 1 : 0;
   prefsSave();
+  botShowAllowed(_prefs);
+}
+
+void UITask::botGap(int idx) {
+  if (!_prefs || idx < 0 || idx >= NodePrefs::BOT_GAP_COUNT) return;
+  _prefs->bot_gap_idx = (uint8_t)idx;
+  prefsSave();
+}
+
+// A command's switch in the Allowed popup: the mask is the row's the popup opened on.
+void UITask::botCmd(int id, bool on) {
+  using namespace botview;
+  if (!_prefs || s_row < 0 || s_row >= botcfg::rowCount(s_tab)) return;
+  uint16_t* off = botcfg::cmdOff(_prefs, botcfg::row(s_tab, s_row).kind);
+  if (!off || id < 0 || id >= botcmd::COUNT) return;
+  if (on) *off &= ~botcmd::flag(id);
+  else    *off |= botcmd::flag(id);
+  prefsSave();
+  botShowAllowed(_prefs);
 }
 
 // Tap on a value row: its editor.
@@ -204,6 +249,13 @@ void UITask::botRow(int row) {
         if (strcmp(ph, "{batt}") != 0) botChip(ph, c);   // already there
       }, chips);
     }
+    return;
+  }
+
+  if (uint16_t* off = botcfg::cmdOff(p, r.kind)) {
+    lv_obj_t* g = group(scrollList(navPopupPanel("Allowed commands", true)), nullptr);
+    for (int i = 0; i < botcmd::count(botcfg::actionsOn(p, r.kind)); i++)
+      switchRowIdx(g, botcmd::CMDS[i].label, botcmd::CMDS[i].hint, !(*off & botcmd::flag(i)), onBotCmd, i);
     return;
   }
 

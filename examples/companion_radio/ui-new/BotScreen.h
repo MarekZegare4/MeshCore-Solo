@@ -33,6 +33,10 @@ class BotScreen : public UIScreen {
   // steps the hour and Enter/Cancel exits back to normal row browsing.
   int _stepper_row;  // -1=off, else the row index being stepped
 
+  // Allowed rows: the commands list instead of the rows, over this target's mask.
+  uint16_t* _cmd_off;
+  int _cmd_sel, _cmd_scroll, _cmd_count;
+
   // channel/room counts (refreshed on enter) — just gate whether Enter opens
   // the (possibly empty) picker; the picker itself browses the real list, so
   // no local index cache is needed now that there's no LEFT/RIGHT quick-cycle.
@@ -66,6 +70,27 @@ class BotScreen : public UIScreen {
     tabbar::draw(display, botcfg::TAB_LABELS, botcfg::TAB_COUNT, _tab, right_reserve);
   }
 
+  int renderCommands(DisplayDriver& display) {
+    drawScreenHeader(display, "Bot commands");
+    drawList(display, _cmd_count, _cmd_sel, _cmd_scroll, [&](int i, int y, bool sel, int reserve) {
+      drawRowSelection(display, y, sel, reserve);
+      info::listRow(display, y, botcmd::CMDS[i].label, (*_cmd_off & botcmd::flag(i)) ? "OFF" : "ON", sel, reserve);
+      display.setColor(UIColor::primary_txt);
+    });
+    return 2000;
+  }
+
+  bool commandsInput(char c) {
+    if (c == KEY_CANCEL) { _cmd_off = nullptr; return true; }
+    if (c == KEY_UP)   { _cmd_sel = (_cmd_sel + _cmd_count - 1) % _cmd_count; return true; }
+    if (c == KEY_DOWN) { _cmd_sel = (_cmd_sel + 1) % _cmd_count; return true; }
+    if (c == KEY_ENTER || keyIsPrev(c) || keyIsNext(c)) {
+      *_cmd_off ^= botcmd::flag(_cmd_sel);
+      _dirty = true;
+    }
+    return true;
+  }
+
 public:
   BotScreen(UITask* task, NodePrefs* prefs, KeyboardWidget* kb)
     : _task(task), _prefs(prefs), _tab(botcfg::TAB_CHANNEL), _kb(kb) {}
@@ -77,6 +102,7 @@ public:
     _scroll     = 0;
     _kb_row     = -1;
     _stepper_row = -1;
+    _cmd_off    = nullptr;
     _dirty      = false;
     refreshChannels();
     refreshRooms();
@@ -89,6 +115,7 @@ public:
     if (_kb_row >= 0) {
       return _kb->render(display);
     }
+    if (_cmd_off) return renderCommands(display);
 
     // Reply counter, right-aligned in the header — reserve its width from the
     // tab bar before drawing so a right-side tab can't run under it.
@@ -123,6 +150,11 @@ public:
         shown = botcfg::isScope(r.kind) ? (*fl ? "Fav" : "All") : (*fl ? "ON" : "OFF");
       } else if (txt) {
         shown = botcfg::shownText(txt, botcfg::isTrigger(r.kind));
+      } else if (const uint16_t* off = botcfg::cmdOff(_prefs, r.kind)) {
+        botcmd::shown(*off, botcfg::actionsOn(_prefs, r.kind), name, sizeof(name));
+        shown = name;
+      } else if (r.kind == botcfg::GAP) {
+        shown = botcfg::GAP_LABELS[_prefs->bot_gap_idx];
       } else if (r.kind == botcfg::CHANNEL || r.kind == botcfg::ROOM) {
         bool any = r.kind == botcfg::CHANNEL ? _num_channels > 0 : _num_rooms > 0;
         bool ok = r.kind == botcfg::CHANNEL ? botcfg::channelName(_prefs, name, sizeof(name))
@@ -188,6 +220,8 @@ public:
       return true;
     }
 
+    if (_cmd_off) return commandsInput(c);
+
     if (_stepper_row >= 0) {
       uint8_t& h = botcfg::hour(_prefs, tabRow(_tab, _stepper_row).kind);
       if (up)   { h = (h + 1) % 24;  _dirty = true; return true; }
@@ -215,6 +249,12 @@ public:
     Kind k = tabRow(_tab, _sel).kind;
 
     if (uint8_t* fl = botcfg::flag(_prefs, k)) { *fl ^= 1; _dirty = true; return true; }
+    if (uint16_t* off = botcfg::cmdOff(_prefs, k)) {
+      _cmd_off = off;
+      _cmd_count = botcmd::count(botcfg::actionsOn(_prefs, k));
+      _cmd_sel = _cmd_scroll = 0;
+      return true;
+    }
     int cap = 0;
     if (char* txt = botcfg::text(_prefs, k, cap)) {
       _kb_row = _sel;
@@ -251,6 +291,10 @@ public:
       case botcfg::QUIET_FROM:
       case botcfg::QUIET_TO:
         _stepper_row = _sel;
+        return true;
+      case botcfg::GAP:
+        _prefs->bot_gap_idx = (_prefs->bot_gap_idx + 1) % NodePrefs::BOT_GAP_COUNT;
+        _dirty = true;
         return true;
       default: return false;
     }

@@ -1,5 +1,6 @@
 #include "MyMesh.h"
 #include "MsgExpand.h"
+#include "ui-core/BotCommands.h"
 #include "GeoUtils.h"
 #include "Features.h"
 
