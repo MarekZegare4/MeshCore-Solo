@@ -180,6 +180,10 @@ public:
       // A [LOC] share (pub_key set = verified DM; null = channel/room, by name).
       virtual void onSharedLocation(const uint8_t* pub_key, const char* name,
                                     int32_t lat_1e6, int32_t lon_1e6, uint32_t ts, bool verified) { }
+      // An SOS with a position: unlike a share, always kept (name as above).
+      virtual void onSosPosition(const uint8_t* pub_key, const char* name,
+                                 int32_t lat_1e6, int32_t lon_1e6, bool verified) {}
+      virtual void onSosNoPosition(const char* name) {}
       // A contact / channel slot is gone -- drop references to it.
       virtual void onContactRemoved(const uint8_t* pub_key) { }
       virtual void onChannelRemoved(uint8_t channel_idx) { }
@@ -642,6 +646,7 @@ private:
   // the body only. `*msg_out` points into `text` (no copy); `sender_name`
   // defaults to "someone" if there's no ": " separator.
   void botChannelSenderSplit(const char* text, char* sender_name, int sender_name_len, const char** msg_out);
+  void noteSos(const uint8_t* pub_key, const char* name, const char* body, bool verified);
 
   void writeOKFrame();
   void writeErrFrame(uint8_t err_code);

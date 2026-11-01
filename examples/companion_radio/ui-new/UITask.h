@@ -131,6 +131,7 @@ class UITask : public UITaskBase, public UiCoreHost {
   UIScreen* auto_advert_screen = nullptr;
   UIScreen* batt_curve_screen = nullptr;
   UIScreen* live_share_screen = nullptr;
+  UIScreen* sos_screen = nullptr;
   UIScreen* locator_screen = nullptr;
   UIScreen* trail_screen = nullptr;
   UIScreen* compass_screen = nullptr;
@@ -148,6 +149,15 @@ class UITask : public UITaskBase, public UiCoreHost {
   void     tickCore();
   void     drainCoreEvents();
   void     onMessageArrived(const UiEvent& ev);   // alert + wake + sound for an incoming message
+  void     openSosView(uint32_t ms);
+  void     closeSosView() { _sos_view_until = 0; _next_refresh = 0; }
+  bool     sosViewOpen() const { return _sos_view_until != 0; }
+  void     sosKey(char c);
+  void     renderSosBadge();
+  void     tickSos();
+  unsigned long _sos_view_until = 0;   // 0 = closed
+  int      _sos_left = 0;              // countdown second last beeped
+  unsigned long _back_held_at = 0;     // 0 = not held, or already acted on
 
 
 
@@ -404,6 +414,12 @@ public:
   void gotoGpioScreen();   // no-op on boards without user GPIO pins (see PIN_GPIO1)
   void gotoClockTools();   // Alarm / Timer / Stopwatch (from the home Clock page)
   void gotoFlashlight();
+  void gotoSosScreen();
+  void pickSosContact(int slot);           // open the Direct list for an SOS slot
+  // SOS: the full-screen status over everything, also on a locked device. Back
+  // held starts the SOS, or brings the status back while one is running.
+  void startSos();
+  void onBackHeld();
   // Wake the display for an alarm/timer ring (force an immediate refresh).
   void wakeForAlarm();
   // Clear any active alert overlay early (alarm dismiss).
@@ -552,6 +568,7 @@ public:
   // Settings changed through the schema (ui-core/SettingsSchema.h).
   void applyDisplayPrefs() override { applyBrightness(); applyUiScale(); _next_refresh = 0; }
   void applySoundPrefs() override;
+  void onSosRunning(bool running) override;
   bool cliCommand(const char* command, char* reply, int n) override;
   void setBuzzerVolumeLevel(uint8_t level);
   void applyTxPower();
@@ -566,10 +583,7 @@ public:
   void applyRotation();
   void applyFullRefreshInterval();
   void applyUiScale();   // Settings > Display > Text size / Icon size, from the prefs
-  uint32_t autoOffMillis() const {
-    if (!_node_prefs || _node_prefs->auto_off_secs == 0) return 0;
-    return (uint32_t)_node_prefs->auto_off_secs * 1000UL;
-  }
+  uint32_t autoOffMillis() const;
 
 
   // from UITaskBase

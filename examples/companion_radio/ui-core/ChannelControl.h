@@ -281,7 +281,7 @@ static uint8_t scopeFromRow(int row) {
 // here, so a channel re-added at a freed slot can't inherit the old one's
 // settings. Adding such a field: clear it below (and mark it in NodePrefs.h).
 // Covers bot_channel_idx, loc_share_channel_idx, ch_notif_melody_*,
-// ch_notif_override / ch_notif_muted, ch_fav_bitmask, ch_no_save, favourite dial
+// ch_notif_override / ch_notif_muted, ch_fav_bitmask, ch_no_save, sos_ch_mask, favourite dial
 // slots, ch_scope_idx. True when something changed (caller saves).
 static bool onRemoved(NodePrefs* p, uint8_t idx) {
   if (!p) return false;
@@ -294,6 +294,7 @@ static bool onRemoved(NodePrefs* p, uint8_t idx) {
   if (p->ch_notif_override & m)   { p->ch_notif_override &= ~m; p->ch_notif_muted &= ~m; changed = true; }
   if (p->ch_fav_bitmask & m)      { p->ch_fav_bitmask &= ~m; changed = true; }
   if (p->ch_no_save & m)          { p->ch_no_save &= ~m; changed = true; }
+  if (p->sos_ch_mask & m)         { p->sos_ch_mask &= ~m; changed = true; }
   if (idx < NodePrefs::MAX_SCOPED_CHANNELS && p->ch_scope_idx[idx] != NodePrefs::CH_SCOPE_DEFAULT) {
     p->ch_scope_idx[idx] = NodePrefs::CH_SCOPE_DEFAULT;   // back to Default, as a new channel
     changed = true;

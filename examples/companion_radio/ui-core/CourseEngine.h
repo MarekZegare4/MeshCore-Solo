@@ -17,7 +17,10 @@ public:
     if ((int32_t)(millis() - _next_sample_ms) < 0) return;
     _next_sample_ms = millis() + 1000UL;
     int32_t lat, lon;
-    if (currentLocation(lat, lon)) pushFix(lat, lon);
+    if (currentLocation(lat, lon)) {
+      _fix_lat = lat; _fix_lon = lon; _fix_ms = millis(); _had_fix = true;
+      pushFix(lat, lon);
+    }
   }
 
   // Current GPS position (1e6-scaled degrees), false when there's no usable fix.
@@ -29,6 +32,15 @@ public:
       return true;
     }
     return false;
+  }
+
+  // The last fix since this start, and how old it is. Only RAM: a position
+  // saved on flash has no age, so it can't be told from one a thousand km away.
+  bool lastFix(int32_t& lat, int32_t& lon, uint32_t& age_secs) const {
+    if (!_had_fix) return false;
+    lat = _fix_lat; lon = _fix_lon;
+    age_secs = (uint32_t)(millis() - _fix_ms) / 1000UL;
+    return true;
   }
 
   // Current GPS altitude in metres, false without a fix.
@@ -62,6 +74,9 @@ public:
   }
 
 private:
+  int32_t  _fix_lat = 0, _fix_lon = 0;
+  uint32_t _fix_ms = 0;
+  bool     _had_fix = false;
   // Insert a GPS fix into the ring, rejecting gross outliers (a jump implying
   // an impossible speed) so one bad fix can't swing the heading.
   void pushFix(int32_t lat, int32_t lon) {

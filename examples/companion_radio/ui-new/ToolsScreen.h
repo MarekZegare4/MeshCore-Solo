@@ -13,7 +13,7 @@ class ToolsScreen : public UIScreen {
 public:
   enum Action {
     ACT_NEARBY, ACT_LIVESHARE, ACT_TRAIL, ACT_LOCATOR, ACT_COMPASS,
-    ACT_BOT, ACT_AUTOADVERT, ACT_REPEATER, ACT_ADMIN,
+    ACT_SOS, ACT_BOT, ACT_AUTOADVERT, ACT_REPEATER, ACT_ADMIN,
     ACT_CLOCK, ACT_RINGTONE, ACT_FLASHLIGHT
 #if defined(PIN_GPIO1)
     , ACT_GPIO
@@ -45,6 +45,7 @@ public:
       case ACT_TRAIL:       task->gotoTrailScreen();       break;
       case ACT_LOCATOR:     task->gotoLocatorScreen();     break;
       case ACT_COMPASS:     task->gotoCompassScreen();     break;
+      case ACT_SOS:         task->gotoSosScreen();         break;
       case ACT_BOT:         task->gotoBotScreen();         break;
       case ACT_AUTOADVERT:  task->gotoAutoAdvertScreen();  break;
       case ACT_REPEATER:    task->gotoRepeaterScreen();    break;
@@ -128,6 +129,7 @@ const ToolsScreen::Tool ToolsScreen::LOCATION_TOOLS[] = {
   { "Compass",         ACT_COMPASS },
 };
 const ToolsScreen::Tool ToolsScreen::COMMS_TOOLS[] = {
+  { "SOS",             ACT_SOS },
   { "Remote Bot",      ACT_BOT },
   { "Auto-Advert",     ACT_AUTOADVERT },
   { "Repeater",        ACT_REPEATER },
@@ -145,6 +147,6 @@ const ToolsScreen::Tool ToolsScreen::SYSTEM_TOOLS[] = {
 };
 const ToolsScreen::Section ToolsScreen::SECTIONS[] = {
   { "Location", LOCATION_TOOLS, (uint8_t)(sizeof(LOCATION_TOOLS)/sizeof(LOCATION_TOOLS[0])) },
-  { "Comms",    COMMS_TOOLS,    4 },
+  { "Comms",    COMMS_TOOLS,    (uint8_t)(sizeof(COMMS_TOOLS)/sizeof(COMMS_TOOLS[0])) },
   { "System",   SYSTEM_TOOLS,   (uint8_t)(sizeof(SYSTEM_TOOLS)/sizeof(SYSTEM_TOOLS[0])) },
 };

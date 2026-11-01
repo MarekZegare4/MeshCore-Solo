@@ -100,6 +100,7 @@ static const telemetry::Style L1_INFO      = { "\xc2\xb0", true,  false, 5 };
 #include "AutoAdvertScreen.h"
 #include "BatteryCurveScreen.h"
 #include "LiveShareScreen.h"
+#include "SosScreen.h"
 #include "LocatorScreen.h"
 #include "TrailScreen.h"
 #include "CompassScreen.h"
@@ -229,6 +230,7 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
   auto_advert_screen = new AutoAdvertScreen(this, node_prefs);
   batt_curve_screen = new BatteryCurveScreen(this, node_prefs);
   live_share_screen = new LiveShareScreen(this, node_prefs);
+  sos_screen = new SosScreen(this, node_prefs, &_kb);
   locator_screen  = new LocatorScreen(this, node_prefs);
   trail_screen       = new TrailScreen(this, &_core->trail.store());
   compass_screen     = new CompassScreen(this);
@@ -292,6 +294,7 @@ void UITask::gotoGpioScreen() {
 #endif
 }
 void UITask::gotoLiveShareScreen() { setCurrScreen(live_share_screen); }
+void UITask::gotoSosScreen()       { setCurrScreen(sos_screen); }
 
 // ── Clock tools (engine in ui-core/ClockEngine.h) ───────────────────────────
 // The melody (soundctl::MEL_ALARM) overrides mute (playMelody →
@@ -321,6 +324,77 @@ void UITask::tickCore() {
   drainCoreEvents();
   // Repeat the ring melody until dismissed or the ring window elapses.
   if (_core->clock.isRinging() && !isMelodyPlaying()) playMelody(soundctl::MEL_ALARM);
+  tickSos();
+}
+
+// ── SOS (engine in ui-core/SosEngine.h) ─────────────────────────────────────
+static const uint32_t SOS_HOLD_MS = 3000;    // Back held; the lock sequence is shorter (3 s for three presses) and uses Enter
+static const uint32_t SOS_VIEW_MS = 30000;   // the status stays this long, then the display goes back to its usual rules
+
+void UITask::openSosView(uint32_t ms) {
+  if (_display) _display->turnOn();
+  if (_unlock_kb) cancelUnlockPrompt();
+  _sos_view_until = (millis() + ms) | 1;
+  _next_refresh = 0;
+}
+
+void UITask::startSos() {
+  if (!_core->sos.idle()) { openSosView(SOS_VIEW_MS); return; }
+  if (!SosEngine::hasTargets(_node_prefs)) {
+    if (_display) _display->turnOn();
+    if (_locked) _lock_wake_until = millis() + 2000;
+    showAlert("SOS: no targets", 2000);
+    _next_refresh = 0;
+    return;
+  }
+  _core->startSos();
+  _sos_left = 0;
+  openSosView(SOS_VIEW_MS);
+}
+
+void UITask::onBackHeld() {
+  if (!_core->sos.idle() || (_node_prefs && _node_prefs->sos_enabled)) startSos();
+}
+
+// Countdown: any key cancels it. After it, Back only hides the status: stopping
+// takes a hold, so a pocket can't end a call for help.
+void UITask::sosKey(char c) {
+  if (_core->sos.counting() || c == KEY_CONTEXT_MENU) {
+    showAlert(_core->sos.counting() ? "SOS cancelled" : "SOS stopped", 2000);
+    if (_locked) _lock_wake_until = millis() + 2000;
+    _core->stopSos();
+    closeSosView();
+  } else if (c == KEY_CANCEL) {
+    closeSosView();
+  } else {
+    openSosView(SOS_VIEW_MS);
+  }
+}
+
+uint32_t UITask::autoOffMillis() const {
+  return _core->sos.screenMs(_node_prefs ? (uint32_t)_node_prefs->auto_off_secs * 1000UL : 0);
+}
+
+void UITask::onSosRunning(bool running) {
+#ifdef PIN_BUZZER
+  if (!_node_prefs) return;
+  buzzer.setVolume(running && _node_prefs->sos_beep_idx ? 4 : _node_prefs->buzzer_volume);   // to be heard, not to be polite
+#endif
+}
+
+void UITask::tickSos() {
+  SosEngine& s = _core->sos;
+  if (s.beepDue(millis())) playMelody(soundctl::MEL_SOS);
+  if (s.counting()) {
+    int left = s.secsLeft(millis());
+    if (left != _sos_left) {   // a beep a second, past the buzzer's mute
+      _sos_left = left;
+      playMelody(soundctl::MEL_TICK);
+      _next_refresh = 0;
+    }
+  } else if (sosViewOpen() && (int32_t)(millis() - _sos_view_until) >= 0) {
+    closeSosView();
+  }
 }
 
 void UITask::drainCoreEvents() {
@@ -352,6 +426,21 @@ void UITask::drainCoreEvents() {
       break;
     case UiEventType::AdvertHeard:
       notify(ev.flag ? UIEventType::advertReceivedFlood : UIEventType::advertReceivedZeroHop);
+      break;
+    case UiEventType::SosSent:
+      if (ev.flag) { openSosView(SOS_VIEW_MS); playMelody(soundctl::MEL_ARRIVE); }
+      _next_refresh = 0;
+      break;
+    case UiEventType::SosHeard: {
+      char text[48];
+      snprintf(text, sizeof(text), "SOS: %s", ev.text);
+      showAlert(text, 5000);
+      _next_refresh = 0;
+      break;
+    }
+    case UiEventType::SosAcked:
+      openSosView(SOS_VIEW_MS);
+      playMelody(ev.flag ? soundctl::MEL_ALARM : soundctl::MEL_ARRIVE);
       break;
     default:
       break;
@@ -526,6 +615,11 @@ void UITask::shareToMessage(const char* text) {
 
 void UITask::pickLocShareTarget() {
   ((MessagesScreen*)messages_screen)->startPickTarget();
+  setCurrScreen(messages_screen);
+}
+
+void UITask::pickSosContact(int slot) {
+  ((MessagesScreen*)messages_screen)->startPickSos(slot);
   setCurrScreen(messages_screen);
 }
 
@@ -767,6 +861,22 @@ void UITask::renderMsgBadge() {
   d.fillRect(x - 2 * s, 0, w + 4 * s, h);
   d.setColor(UIColor::primary_txt);
   if (msgBadgeLit()) drawMailCount(d, x, 0, h, _alert_count);
+}
+
+// An SOS running behind whatever is showing: repeats go out and the GPS stays on
+// until it's ended, so it mustn't be forgotten. In the header: at its left, clear
+// of the centred title, and on Home in the middle, between the clock and the icons.
+void UITask::renderSosBadge() {
+  DisplayDriver& d = *_display;
+  d.setTextSize(1);
+  const int pad = d.pixelScale(), w = d.getTextWidth("SOS") + 2 * pad, h = d.getLineHeight();   // Home has its page icons under the bar
+  const int x = (curr == home || _locked) ? (d.width() - w) / 2 : 0;
+  d.setColor(UIColor::primary_txt);
+  d.fillRect(x, 0, w, h);
+  d.setColor(UIColor::window_bkg);
+  d.setCursor(x + pad, 0);
+  d.print("SOS");
+  d.setColor(UIColor::primary_txt);
 }
 
 void UITask::setCurrScreen(UIScreen* c) {
@@ -1346,6 +1456,16 @@ void UITask::loop() {
   if (_lock_seq_used && millis() - _lock_seq_ms > 5000) {
     _lock_seq_used = false;  // safety reset if Back release event was missed
   }
+  // Back held on its own: past the button's long press, so no click comes of it.
+  // Enter during the hold is the lock sequence, not this.
+  if (!back_btn.isPressed() || user_btn.isPressed() || _lock_seq_count > 0 || _lock_seq_used) {
+    _back_held_at = back_btn.isPressed() ? 1 : 0;   // 1: spoken for until released
+  } else if (_back_held_at == 0) {
+    _back_held_at = millis() | 2;
+  } else if (_back_held_at != 1 && millis() - _back_held_at >= SOS_HOLD_MS) {
+    _back_held_at = 1;
+    onBackHeld();
+  }
   ev = back_btn.check();
   if (ev == BUTTON_EVENT_CLICK) {
     if (_lock_seq_count > 0 || _lock_seq_used) {
@@ -1512,6 +1632,15 @@ void UITask::loop() {
     if (_locked) _lock_wake_until = millis() + 5000;
   }
 
+  // Over everything else, locked or not.
+  if (_kq_head != _kq_tail && sosViewOpen()) {
+    char k;
+    while (sosViewOpen() && dequeueKey(k)) sosKey(k);
+    _kq_head = _kq_tail = 0;
+    { uint32_t aoff = autoOffMillis(); if (aoff > 0) _auto_off = millis() + aoff; }
+    _next_refresh = 0;
+  }
+
   if (_kq_head != _kq_tail) {
     if (_unlock_kb) {
       // Lock-screen password keyboard: Consume every key press
@@ -1558,7 +1687,14 @@ void UITask::loop() {
       cancelUnlockPrompt(); // Cancel unlock attempt on idle
       _next_refresh = 0;
     }
-    if (_locked && !_unlock_kb && (int32_t)(millis() - _lock_wake_until) >= 0) {
+    if (sosViewOpen()) {
+      if (refreshDue()) {
+        _display->startFrame();
+        _badge_in_bar = false;
+        _next_refresh = millis() + ((SosScreen*)sos_screen)->renderStatus(*_display);
+        _display->endFrame();
+      }
+    } else if (_locked && !_unlock_kb && (int32_t)(millis() - _lock_wake_until) >= 0) {
       _display->turnOff();
     } else if (_locked && _unlock_kb && refreshDue()) {
       // While the prompt is up the password keyboard replaces the lockscreen view
@@ -1583,6 +1719,7 @@ void UITask::loop() {
       } else {
         home->render(*_display);
         _next_refresh = millis() + Features::LOCKSCREEN_REFRESH_MS;
+        if (!_core->sos.idle()) renderSosBadge();
       }
       // Alert overlay on top — without this a ringing alarm on a locked device
       // played its melody against a screen that never said what was ringing.
@@ -1600,6 +1737,7 @@ void UITask::loop() {
       _kb.beginFrame();
       int delay_millis = curr->render(*_display);
       if (tabbar::endFrame(*_display) && delay_millis > 15) delay_millis = 15;   // a tab turn sliding
+      if (!_core->sos.idle() && !_kb.isVisible()) renderSosBadge();
       // Skip the alert overlay (new-message toast) while the keyboard is the
       // thing actually on screen this frame -- it's shared across Messages/
       // Bot/Settings/Admin/etc., so this covers every screen that uses it for
@@ -1637,7 +1775,7 @@ void UITask::loop() {
       uint32_t aoff = autoOffMillis();
       _auto_off = millis() + (aoff > 0 ? aoff : AUTO_OFF_MILLIS);
     }
-    if (!_locked && autoOffMillis() > 0 && (int32_t)(millis() - _auto_off) >= 0 && !isRinging()) {
+    if (!_locked && autoOffMillis() > 0 && (int32_t)(millis() - _auto_off) >= 0 && !isRinging() && !sosViewOpen()) {
       _display->turnOff();
 #ifdef PIN_LED
       digitalWrite(PIN_LED, LOW);  // turn off status LED with display to save power
@@ -1715,6 +1853,7 @@ void UITask::loop() {
     bool gps_needed_live =
         _core->trail.isRecording()
         || (_node_prefs && _node_prefs->loc_share_enabled)
+        || _core->sos.gpsWanted()
         || (_node_prefs && _node_prefs->locator_enabled && _node_prefs->locator_has_target)
         || curr == compass_screen
         || (curr == status_screen && ((StatusScreen*)status_screen)->wantsLiveGps())

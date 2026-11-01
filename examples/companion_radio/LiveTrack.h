@@ -20,6 +20,7 @@ class LiveTrackStore {
 public:
   static const int      CAPACITY    = 16;            // max simultaneously tracked nodes
   static const uint32_t EXPIRY_SECS = 20UL * 60UL;   // drop a track 20 min after its last update
+  static const uint32_t SOS_EXPIRY_SECS = 24UL * 3600UL;   // a call for help: a day, whatever came after it
   static const int      NAME_LEN    = 16;            // display name buffer (incl. NUL)
   static const int      KEY_LEN     = 6;             // pubkey prefix bytes (matches favourites)
 
@@ -29,14 +30,16 @@ public:
     int32_t  lat_1e6, lon_1e6;
     uint32_t ts;                // RTC epoch seconds of the share
     bool     verified;          // true = DM/pubkey, false = channel/name
+    bool     sos;               // from an SOS: kept longer, evicted last
     bool     used;
   };
 
   // Insert or refresh a shared position. `key` may be null/ignored when not
   // verified. `name` is required (used as the channel key and for display).
   void update(const uint8_t* key, const char* name,
-              int32_t lat_1e6, int32_t lon_1e6, uint32_t ts, bool verified) {
+              int32_t lat_1e6, int32_t lon_1e6, uint32_t ts, bool verified, bool sos = false) {
     int slot = find(key, name, verified);
+    const bool was_sos = slot >= 0 && _e[slot].sos;
     if (slot < 0) slot = allocSlot();
     Entry& e = _e[slot];
     if (verified && key) memcpy(e.key, key, KEY_LEN);
@@ -47,6 +50,7 @@ public:
     e.lon_1e6  = lon_1e6;
     e.ts       = ts;
     e.verified = verified;
+    e.sos      = sos || was_sos;
     e.used     = true;
   }
 
@@ -105,7 +109,7 @@ private:
   // Guarded against now < ts (RTC stepped backwards) so a clock fix can't
   // mass-expire the table.
   static bool expired(const Entry& e, uint32_t now) {
-    return now > e.ts && (now - e.ts) > EXPIRY_SECS;
+    return now > e.ts && (now - e.ts) > (e.sos ? SOS_EXPIRY_SECS : EXPIRY_SECS);
   }
 
   // Match an existing entry: verified shares by key, channel shares by name.
@@ -121,12 +125,12 @@ private:
     return -1;
   }
 
-  // First free slot, else evict the oldest (smallest ts).
+  // First free slot, else evict the oldest (smallest ts), an SOS only if all are.
   int allocSlot() {
     int oldest = 0;
     for (int i = 0; i < CAPACITY; i++) {
       if (!_e[i].used) return i;
-      if (_e[i].ts < _e[oldest].ts) oldest = i;
+      if (_e[oldest].sos != _e[i].sos ? _e[oldest].sos : _e[i].ts < _e[oldest].ts) oldest = i;
     }
     return oldest;
   }

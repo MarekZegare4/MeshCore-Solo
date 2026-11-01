@@ -72,6 +72,7 @@ public:
   void onViewedHistoryGrew(bool channel) override { (void)channel; _thread_dirty = true; }
   void botSetGPS(bool on) override;
   void applySoundPrefs() override;
+  void onSosRunning(bool running) override;
   bool cliCommand(const char* command, char* reply, int n) override;
 
   // ── Navigation (called from LVGL event callbacks) ────────────────────────
@@ -315,6 +316,15 @@ public:
   void botToggle(int row, bool on);
   void botCmd(int id, bool on);
   void botGap(int idx);
+  void showSos();                        // SosScreen.h
+  void sosSheet();                       // the slider that starts one
+  void sosOpen();                        // the running one's view
+  void sosButton();                      // Cancel / Hide, or a physical button
+  void sosRow(int row);
+  void sosSet(int what, int val);
+  void sosChannel(int idx, bool on);
+  void sosContact(int idx);
+  void sosTextDone(bool ok);
   void botPick(int idx);
   void botHour(uint8_t act);
   void botTextDone(bool ok);
@@ -403,7 +413,7 @@ public:
   void statusBarSync();   // up or hidden, by the screen's title bar (UITask.cpp)
 
 private:
-  enum Screen : uint8_t { SCR_HOME, SCR_CHATS, SCR_CONTACTS, SCR_THREAD, SCR_SETTINGS, SCR_NEARBY, SCR_NODE, SCR_MAP, SCR_WIFI, SCR_SETTINGS_NAV, SCR_CLOCK, SCR_RADIO, SCR_CHANNEL_EDIT, SCR_ADMIN, SCR_BOT, SCR_DIAG, SCR_COMPASS, SCR_SCOPES, SCR_REPEATER, SCR_MELODY, SCR_QUICK, SCR_ADMIN_PICK, SCR_OTA, SCR_STORAGE, SCR_GPS, SCR_BATT, SCR_ROUTE, SCR_ROUTE_PICK, SCR_GALLERY };
+  enum Screen : uint8_t { SCR_HOME, SCR_CHATS, SCR_CONTACTS, SCR_THREAD, SCR_SETTINGS, SCR_NEARBY, SCR_NODE, SCR_MAP, SCR_WIFI, SCR_SETTINGS_NAV, SCR_CLOCK, SCR_RADIO, SCR_CHANNEL_EDIT, SCR_ADMIN, SCR_BOT, SCR_DIAG, SCR_COMPASS, SCR_SCOPES, SCR_REPEATER, SCR_MELODY, SCR_QUICK, SCR_ADMIN_PICK, SCR_OTA, SCR_STORAGE, SCR_GPS, SCR_BATT, SCR_ROUTE, SCR_ROUTE_PICK, SCR_GALLERY, SCR_SOS };
 
   void buildStatusBar();
   void refreshStatusBar();
@@ -540,6 +550,14 @@ private:
   void lockScreen();
   void refreshLock();
   void lockPoll();
+  bool sosViewOpen() const;
+  void sosViewClose();
+  void sosLive();
+  void sosRefresh();
+  void sosButtonHeld();
+  void sosPoll();
+  void sosTick();
+  void buildSos();
   void favGrid(lv_obj_t* grid);
   void favRefresh();
   int unreadTotal();   // DMs, channels and rooms
@@ -571,6 +589,7 @@ private:
   uint32_t _next_wake_poll_ms = 0;
   uint32_t _next_touch_poll_ms = 0;   // tap to wake, while the screen is off
   bool _wake_down = false;
+  uint32_t _wake_since_ms = 0;   // when the top button went down
   uint32_t autoOffMillis() const;
   uint32_t idleMillis(uint32_t lv_next);
   bool cpuNeeded();

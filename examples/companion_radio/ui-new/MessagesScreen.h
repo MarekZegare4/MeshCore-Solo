@@ -81,6 +81,7 @@ class MessagesScreen : public UIScreen {
   char      _pin_slot_labels[NodePrefs::FAVOURITES_COUNT][22];  // per-slot picker labels
   bool      _pin_picker_active;  // true while the slot-picker submenu is open
   int       _pick_fav_slot = -1; // >=0 = browsing to fill that Favourites dial slot
+  int       _pick_sos_slot = -1; // >=0 = choosing the contact for that SOS slot
   int       _pin_slot_ch_idx = -1; // >=0 = that submenu is pinning this channel, not a contact
   bool      _ch_delete_confirm_active = false; // true while the Delete/Cancel submenu is open
   bool      _direct_entry;      // entered a history view straight from the Favourites dial;
@@ -1311,6 +1312,7 @@ public:
     _scope_pick_active = false;
     _ch_delete_confirm_active = false;
     _pick_fav_slot = -1;
+    _pick_sos_slot = -1;
     _direct_entry = false;
     _unread_at_entry = 0;
     _new_idx = -1;
@@ -1419,6 +1421,24 @@ public:
     _pick_bot_room = false;
     _room_mode = false;
     _task->gotoBotScreen();
+  }
+
+  // Tools > SOS: a contact to call for help, straight to the Direct list.
+  void startPickSos(int slot) {
+    reset();
+    _pick_sos_slot = slot;
+    _contact_sel = _contact_scroll = 0;
+    _phase = CONTACT_PICK;
+  }
+
+  void commitPickSos(const ContactInfo& ci) {
+    NodePrefs* p = _task->getNodePrefs();
+    if (p) {
+      memcpy(p->sos_dm[_pick_sos_slot], ci.id.pub_key, NodePrefs::FAVOURITE_PREFIX_LEN);
+      the_mesh.savePrefs();
+    }
+    _pick_sos_slot = -1;
+    _task->gotoSosScreen();
   }
 
   void commitPickTargetDM(const ContactInfo& ci) {
@@ -2235,6 +2255,7 @@ public:
       }
       if (c == KEY_CANCEL) {
         if (_pick_bot_room) { _pick_bot_room = false; _room_mode = false; _task->gotoBotScreen(); return true; }
+        if (_pick_sos_slot >= 0) { _pick_sos_slot = -1; _task->gotoSosScreen(); return true; }
         _room_mode = false;
         _phase = MODE_SELECT;
         return true;
@@ -2246,6 +2267,7 @@ public:
         if (the_mesh.getContactByIdx(_sorted[_contact_sel], _sel_contact)) {
           if (_pick_target) { commitPickTargetDM(_sel_contact); return true; }
           if (_pick_fav_slot >= 0) { commitPickFavContact(_sel_contact); return true; }
+          if (_pick_sos_slot >= 0) { commitPickSos(_sel_contact); return true; }
           if (_pick_bot_room) {
             if (!isRoomLoggedIn(_sel_contact.id.pub_key)) {
               // Known password, just not re-established this boot: the Core

@@ -339,6 +339,19 @@ struct NodePrefsFields {
   // Channel options > Save: bit i = channel i isn't kept on flash, for one too
   // busy to be worth the room [del→onChannelRemoved]
   uint64_t ch_no_save;
+  // SOS (ui-core/SosEngine.h). The hold (Back, the L2's top button) works only with sos_enabled:
+  // a long press in a pocket mustn't call for help on a device set up for
+  // something else. Targets: bit i = channel i [del→onChannelRemoved], and up to
+  // SOS_DM_MAX contacts, an all-zero prefix = none [del→onContactRemoved].
+  static const uint8_t SOS_DM_MAX = 3;
+  uint8_t  sos_enabled;
+  uint8_t  sos_countdown_idx;    // index into sosCountdownSecs()
+  uint8_t  sos_repeat_idx;       // index into sosRepeatMins()
+  uint8_t  sos_beep_idx;         // index into sosBeepSecs(): a beep to be found by; 0 = off
+  uint64_t sos_ch_mask;
+  uint8_t  sos_dm[SOS_DM_MAX][6];
+  char     sos_ack[16];          // the word a reply must hold; "" = none is recognised
+  char     sos_note[48];         // added to the end of the message
   // ui-new's new-message alert: the banner from the top, an envelope with a
   // count in the corner, or nothing (the sound and the wake still happen).
   static const uint8_t MSG_ALERT_NORMAL = 0, MSG_ALERT_COMPACT = 1, MSG_ALERT_OFF = 2;
@@ -656,6 +669,21 @@ struct NodePrefsFields {
     static const char* L[CONTACT_EXPIRY_COUNT] = { "Off", "7d", "30d", "90d" };
     return L[idx < CONTACT_EXPIRY_COUNT ? idx : 0];
   }
+  static const uint8_t SOS_COUNTDOWN_COUNT = 3;
+  static uint8_t sosCountdownSecs(uint8_t idx) {
+    static const uint8_t S[SOS_COUNTDOWN_COUNT] = { 5, 10, 15 };
+    return S[idx < SOS_COUNTDOWN_COUNT ? idx : 1];
+  }
+  static const uint8_t SOS_REPEAT_COUNT = 5;
+  static uint8_t sosRepeatMins(uint8_t idx) {   // 0 = send once
+    static const uint8_t M[SOS_REPEAT_COUNT] = { 0, 1, 2, 5, 10 };
+    return M[idx < SOS_REPEAT_COUNT ? idx : 3];
+  }
+  static const uint8_t SOS_BEEP_COUNT = 4;
+  static uint16_t sosBeepSecs(uint8_t idx) {   // 0 = off
+    static const uint16_t S[SOS_BEEP_COUNT] = { 0, 30, 60, 300 };
+    return S[idx < SOS_BEEP_COUNT ? idx : 0];
+  }
   static const uint8_t BOT_GAP_COUNT = 4;
   static uint16_t botGapSecs(uint8_t idx) {
     static const uint16_t S[BOT_GAP_COUNT] = { 10, 30, 60, 300 };
@@ -923,6 +951,11 @@ class NodePrefs : public NodePrefsFields, public ConfigSerializer {
     s.def("fav_sort", fav_sort); s.def("expiry", contact_expiry_idx); s.def("msg_keep", msg_keep); s.def("msg_expire", msg_expire);
     s.hex("ch_no_save", ch_no_save);
   }
+  void sosSolo(Section& s) {
+    s.def("en", sos_enabled); s.def("count", sos_countdown_idx); s.def("repeat", sos_repeat_idx); s.def("beep", sos_beep_idx);
+    s.hex("ch", sos_ch_mask); s.hex("dm", sos_dm);
+    s.def("ack", sos_ack, sizeof(sos_ack)); s.def("note", sos_note, sizeof(sos_note));
+  }
   void gpioSolo(Section& s) {
     s.def("m1", gpio1_mode); s.def("m2", gpio2_mode); s.def("m3", gpio3_mode); s.def("m4", gpio4_mode);
   }
@@ -946,7 +979,7 @@ class NodePrefs : public NodePrefsFields, public ConfigSerializer {
     s.sub("display", display_solo); s.sub("clock", clock_solo); s.sub("sound", sound_solo);
     s.sub("scope", scope_solo); s.sub("bot", bot_solo); s.sub("gps", gps_solo);
     s.sub("share", share_solo); s.sub("locator", locator_solo); s.sub("lists", lists_solo);
-    s.sub("gpio", gpio_solo); s.sub("msgs", msgs_solo); s.sub("lock", lock_solo);
+    s.sub("gpio", gpio_solo); s.sub("msgs", msgs_solo); s.sub("lock", lock_solo); s.sub("sos", sos_solo);
   }
 
   Section radio, gps, repeat, comp;
@@ -955,7 +988,7 @@ class NodePrefs : public NodePrefsFields, public ConfigSerializer {
 #endif
   Section solo, radio_solo, preset[USER_RADIO_PRESET_MAX], repeater_solo, power_solo, display_solo,
           clock_solo, sound_solo, scope_solo, bot_solo, gps_solo, share_solo, locator_solo,
-          lists_solo, gpio_solo, msgs_solo, lock_solo;
+          lists_solo, gpio_solo, msgs_solo, lock_solo, sos_solo;
   FemPrefs fem;
   DynamicConfigSerializer custom;
 
@@ -996,6 +1029,7 @@ public:
       share_solo(this, &NodePrefs::shareSolo), locator_solo(this, &NodePrefs::locatorSolo),
       lists_solo(this, &NodePrefs::listsSolo), gpio_solo(this, &NodePrefs::gpioSolo),
       msgs_solo(this, &NodePrefs::msgsSolo), lock_solo(this, &NodePrefs::lockSolo),
+      sos_solo(this, &NodePrefs::sosSolo),
       fem(this), custom(&fem) {
     clearFields();
   }

@@ -122,6 +122,8 @@ static bool s_sim_btn_click = false, s_sim_btn_hold = false, s_sim_wake = false;
 extern "C" EMSCRIPTEN_KEEPALIVE void sim_lcd_button() { s_sim_btn_click = true; }
 extern "C" EMSCRIPTEN_KEEPALIVE void sim_lcd_button_hold() { s_sim_btn_hold = true; }
 extern "C" EMSCRIPTEN_KEEPALIVE void sim_wake_button() { s_sim_wake = true; }
+static bool s_sim_wake_hold = false;   // the top button held 5 s
+extern "C" EMSCRIPTEN_KEEPALIVE void sim_wake_hold() { s_sim_wake_hold = true; }
 static bool s_sim_shot = false;   // the side + top button combo
 extern "C" EMSCRIPTEN_KEEPALIVE void sim_screenshot() { s_sim_shot = true; }
 // The speaker, polled every frame by the page's Web Audio oscillator.
@@ -211,6 +213,7 @@ void UITask::toggleMute() {
 }
 
 static constexpr uint32_t LOCK_OFF_MS = 30000;   // the lock screen's own auto-off cap
+static constexpr uint32_t SOS_HOLD_MS = 5000;    // the top button held: the SOS slider
 
 #include "PerfTest.h"   // -D UI_PERF_TEST only: draw profiles and control timing
 
@@ -244,6 +247,7 @@ void UITask::loop() {
     wake_press = down && !_wake_down;
     wake_release = !down && _wake_down;
     _wake_down = down;
+    if (wake_press) _wake_since_ms = millis();
   }
 #endif
   // Side button held + top button: a screenshot (and neither does its own thing).
@@ -261,13 +265,29 @@ void UITask::loop() {
   s_sim_shot = false;
   if (mute_armed) { mute_armed = false; mute = true; }   // the page sends the hold on release
 #endif
+  // Top button held, alone: SOS. Its release then does nothing more.
+  bool sos_hold = false;
+#if defined(SEEED_WIO_TRACKER_L2)
+  static bool sos_held = false;
+  if (wake_release) sos_held = false;
+  if (_wake_down && !sos_held && !user_btn.isPressed() && millis() - _wake_since_ms >= SOS_HOLD_MS) {
+    sos_held = true;
+    sos_hold = true;
+  }
+#elif defined(SIM_PLATFORM) && defined(__EMSCRIPTEN__)
+  sos_hold = s_sim_wake_hold;
+  s_sim_wake_hold = false;
+#endif
+  if (sos_hold) { wake_used = true; sosButtonHeld(); }
   if (wake_press && _core->clock.isRinging()) wake_used = true;
   const bool wake_now = wake_press && _asleep && !wake_used;
   if (wake_now) wake_used = true;   // its release must not put it back to sleep
-  const bool sleep_now = wake_release && !wake_used && !_asleep;
+  const bool sos_press = sosViewOpen() && ((wake_release && !wake_used) || btn_click);   // it takes the buttons
+  const bool sleep_now = wake_release && !wake_used && !_asleep && !sos_press;
   if (wake_release) wake_used = false;
   if (shot) { if (!_asleep) takeScreenshot(); }
   else if ((btn_click || btn_hold || wake_press) && _core->clock.isRinging()) dismissRing();
+  else if (sos_press) sosButton();
   else if (wake_now) wake();
   else if (sleep_now) sleep();
   else if (btn_hold && millis() - _ui_started_ms < 8000) {   // held in the first 8 s: CLI rescue, as on the L1
@@ -294,11 +314,12 @@ void UITask::loop() {
     // even with auto-off at Never (a woken-up pocket, a boot PIN, a message).
     uint32_t aoff = autoOffMillis();
     if (locked() && (aoff == 0 || aoff > LOCK_OFF_MS)) aoff = LOCK_OFF_MS;
-    if (aoff > 0 && lv_display_get_inactive_time(NULL) > aoff && !_core->clock.isRinging() && !otaBusy() && !flashlightOn()) sleep();
+    if (aoff > 0 && lv_display_get_inactive_time(NULL) > aoff && !_core->clock.isRinging() && !otaBusy() && !flashlightOn() && !_core->sos.counting()) sleep();
   }
 
   _core->loop();
   drainCoreEvents();
+  sosTick();
   prefsFlush();
   usbPoll();
 #if defined(UI_HEAP_REPORT) && defined(ESP32)
@@ -346,7 +367,8 @@ void UITask::loop() {
       refreshBattCurve();
       if (quickPanelOpen()) quickPanelRefresh();
     }
-    if (locked()) lockPoll();
+    if (sosViewOpen()) sosPoll();
+    else if (locked()) lockPoll();
     else if (_screen == SCR_HOME) { homeSwipePoll(); homeMapLoop(); }
     else if (_screen == SCR_GALLERY) galleryTick();
     if ((_screen == SCR_NEARBY || _screen == SCR_NODE) && (int32_t)(millis() - _next_nearby_ms) >= 0) {
@@ -434,8 +456,7 @@ void UITask::checkLowBattery() {
 }
 
 uint32_t UITask::autoOffMillis() const {
-  if (!_prefs || _prefs->auto_off_secs == 0) return 0;
-  return (uint32_t)_prefs->auto_off_secs * 1000UL;
+  return _core->sos.screenMs(_prefs ? (uint32_t)_prefs->auto_off_secs * 1000UL : 0);
 }
 
 static void bannerDismiss();   // below, with the banner
@@ -446,6 +467,7 @@ void UITask::sleep() {
   quickPanelClose(false);
   flashlightClose();
   bannerDismiss();
+  if (sosViewOpen()) sosViewClose();
   if (_toast) {   // same: the toast's timer won't run while asleep
     if (_toast_timer) lv_timer_pause(_toast_timer);
     lv_anim_delete(_toast, NULL);
@@ -466,6 +488,7 @@ void UITask::wake() {
   refreshStatusBar();
   if (_screen == SCR_HOME) refreshHome();
   if (_screen == SCR_THREAD) { if (locked()) refreshThread(); else reopenThreadIfUnread(); }   // locked: on unlocking
+  if (_core->sos.acked()) sosLive();   // who answered, and what: it mustn't be missed
   lv_obj_invalidate(lv_screen_active());
   lv_refr_now(NULL);
   lvport::backlightFadeIn();
@@ -480,6 +503,22 @@ void UITask::drainCoreEvents() {
     case UiEventType::MessageArrived:
       onMessageArrived(ev);
       break;
+    case UiEventType::SosSent:
+      if (ev.flag) {
+        sosOpen();
+        playMelody(soundctl::MEL_ARRIVE);
+      }
+      break;
+    case UiEventType::SosAcked:
+      sosOpen();
+      playMelody(ev.flag ? soundctl::MEL_ALARM : soundctl::MEL_ARRIVE);
+      break;
+    case UiEventType::SosHeard: {
+      char text[48];
+      snprintf(text, sizeof(text), "SOS: %s", ev.text);
+      showToast(text, 5000);
+      break;
+    }
     case UiEventType::ClockAlert:
       showRing(ev.text);
       playMelody(soundctl::MEL_ALARM);
@@ -833,8 +872,16 @@ void UITask::refreshStatusBar() {
   // share, repeater, arrival alert -- in the accent colour. Right to left in
   // that order, next to the battery.
   struct Icon { const char* sym; uint32_t col; };
-  Icon icons[11];
+  Icon icons[12];
   int n = 0;
+  static const char SOS_SYM[] = "SOS";   // text, not in the icon font
+  const bool sos = !_core->sos.idle();
+  const uint32_t sos_col = _core->sos.acked() ? theme::OK : theme::FAIL;   // green: someone has answered
+  if (sos) icons[n++] = { SOS_SYM, sos_col };
+  if (_hdr_time) {   // a screen with a title bar has no status bar: its clock takes the colour
+    lv_obj_set_style_bg_color(lv_obj_get_parent(_hdr_time), lv_color_hex(sos ? sos_col : theme::SURFACE), 0);
+    setTextColor(_hdr_time, sos ? 0xFFFFFF : theme::TEXT);
+  }
   if (isBluetoothEnabled()) icons[n++] = { LV_SYMBOL_BLUETOOTH, hasConnection() ? theme::ACCENT : theme::TEXT_MUTED };
   if (lvport::wifiAllowed())   // WiFi switched on: accent while connected (map tiles, update)
     icons[n++] = { LV_SYMBOL_WIFI, lvport::netRadio() == lvport::NET_UP ? theme::ACCENT : theme::TEXT_MUTED };
@@ -860,7 +907,7 @@ void UITask::refreshStatusBar() {
     strcpy(_status_sig, sig);
     lv_obj_clean(_status_icons);
     for (int i = n - 1; i >= 0; i--)   // the icon font gives each the same size and cell
-      label(_status_icons, icons[i].sym, THEME_FONT_ICONS, icons[i].col);
+      label(_status_icons, icons[i].sym, icons[i].sym == SOS_SYM ? THEME_FONT_BODY : THEME_FONT_ICONS, icons[i].col);
   }
   placeLeftOf(_status_icons, left_of, -5);
 }
@@ -1236,7 +1283,7 @@ int UITask::screenDepth(Screen s) {
   switch (s) {
     case SCR_HOME: return 0;
     case SCR_CHATS: case SCR_NEARBY: case SCR_MAP: case SCR_SETTINGS:
-    case SCR_COMPASS: case SCR_GALLERY: case SCR_CLOCK: case SCR_BOT: case SCR_REPEATER: case SCR_ADMIN_PICK:
+    case SCR_COMPASS: case SCR_GALLERY: case SCR_CLOCK: case SCR_BOT: case SCR_SOS: case SCR_REPEATER: case SCR_ADMIN_PICK:
     case SCR_DIAG: case SCR_GPS: return 1;
     case SCR_THREAD: case SCR_CONTACTS: case SCR_CHANNEL_EDIT: case SCR_NODE:
     case SCR_SETTINGS_NAV: case SCR_ADMIN: return 2;
@@ -1252,6 +1299,7 @@ void UITask::back() {
     case SCR_CONTACTS: showChats(); break;
     case SCR_CHANNEL_EDIT: showChats(); break;
     case SCR_BOT:      if (_nav_overlay) navClosePopup(); else showHome(); break;
+    case SCR_SOS:      if (_nav_overlay) navClosePopup(); else showHome(); break;
     case SCR_DIAG:     if (_nav_overlay) navClosePopup(); else showHome(); break;
     case SCR_ADMIN_PICK: showHome(); break;
     case SCR_ROUTE:      // back to the node; a trace or discovery in flight is dropped
@@ -1346,6 +1394,7 @@ static void onOpenNearby(lv_event_t* e) { (void)e; s_ui->showNearby(); }
 static void onOpenNodesMap(lv_event_t* e) { (void)e; s_ui->openMap(false); }
 static void onOpenClock(lv_event_t* e);   // ClockScreen.h
 static void onOpenBot(lv_event_t* e);     // BotScreen.h
+static void onOpenSos(lv_event_t* e);     // SosScreen.h
 static void onOpenCompass(lv_event_t* e);   // CompassScreen.h
 static void onOpenGallery(lv_event_t* e);   // GalleryScreen.h
 static void onOpenFlashlight(lv_event_t* e);   // Flashlight.h
@@ -1392,6 +1441,7 @@ static void onOpenSchemaPage(lv_event_t* e);   // Radio > Advanced
 #include "DiagScreen.h"
 #include "CompassScreen.h"
 #include "Flashlight.h"
+#include "SosScreen.h"
 #include "BatteryScreen.h"
 #include "GpsScreen.h"
 #include "RadioExtras.h"
@@ -1452,7 +1502,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_open(const char* name) {
     { "home", &UITask::showHome }, { "chats", &UITask::showChats }, { "settings", &UITask::showSettings },
     { "nodes", &UITask::showNearby }, { "ota", &UITask::showOta }, { "wifi", &UITask::showWifi },
     { "clock", &UITask::showClock }, { "radio", &UITask::showRadio }, { "scopes", &UITask::showScopes },
-    { "repeater", &UITask::showRepeater }, { "bot", &UITask::showBot }, { "storage", &UITask::showStorage },
+    { "repeater", &UITask::showRepeater }, { "bot", &UITask::showBot }, { "sos", &UITask::showSos }, { "storage", &UITask::showStorage },
     { "diag", &UITask::showDiag }, { "compass", &UITask::showCompass }, { "gallery", &UITask::showGallery }, { "admin", &UITask::showAdminPick },
     { "quick", &UITask::showQuickMsgs }, { "contacts", &UITask::showContacts },
   };

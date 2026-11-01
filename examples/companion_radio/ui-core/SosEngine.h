@@ -1,0 +1,216 @@
+#pragma once
+// SOS: a countdown that can be cancelled, then a position message to the chosen
+// channels and contacts (UiCore::sendSos()), repeated until someone answers
+// with the ACK word, the sends run out or the user stops it. Once more as soon
+// as the GPS gets a fix, if none has gone with one yet, even past the last
+// send. An optional beep keeps going until it's stopped. Only the timing and the
+// matching live here: no radio, no clock, so it's tested on the host
+// (test/test_sos_engine). Not kept across a restart.
+
+#include <ctype.h>
+#include <stdio.h>
+#include <string.h>
+#include <strings.h>
+#include <helpers/UTF8Helpers.h>
+#include "../NodePrefs.h"
+
+class SosEngine {
+public:
+  static const int RESPONDERS_MAX = 3;
+  struct Responder {
+    char     name[24];
+    char     text[48];   // what they wrote; "" when it was only the ACK word
+    uint32_t at;         // millis() of their last message
+  };
+  static const uint8_t  MAX_SENDS = 12;       // a flood to every target: never without end
+  static const uint32_t RETRY_MS  = 10000UL;  // nothing went out: soon again, still counted
+  static const uint32_t LAST_MAX_SECS = 3600; // an older fix isn't sent: you could be anywhere by then
+  static const uint32_t SCREEN_MS = 30000UL;  // while one runs the screen goes off by this, whatever auto-off says
+  static const uint32_t BEEP_FIRST_MS = 3000UL;   // after the first send's own sound
+
+  void begin(const NodePrefs* prefs) { _prefs = prefs; }
+
+  bool  idle() const        { return _state == IDLE; }
+  bool  counting() const    { return _state == COUNTDOWN; }
+  bool  acked() const       { return _acked; }
+  int   responders() const  { return _responders; }
+  const Responder& responder(int i) const { return _resp[i]; }   // the latest first
+  uint8_t sent() const      { return _sent; }     // sends that went out
+  // Nothing more will go out: the GPS has done its part.
+  bool  finished() const {
+    return _state == ACTIVE && _sent && (_acked || (_with_fix && (_attempts >= MAX_SENDS || !_next_on)));
+  }
+  // The GPS must stay awake, past any duty cycle.
+  bool  gpsWanted() const { return _state != IDLE && !finished(); }
+  // The screen's auto-off while one runs. ms: the user's, 0 = never.
+  uint32_t screenMs(uint32_t ms) const {
+    if (_state != IDLE && (ms == 0 || ms > SCREEN_MS)) return SCREEN_MS;
+    return ms;
+  }
+
+  void start(uint32_t now) {
+    if (_state != IDLE) return;
+    stop();
+    _state = COUNTDOWN;
+    _t0 = now;
+  }
+  void stop() {
+    _state = IDLE;
+    _attempts = _sent = _responders = 0;
+    _acked = _with_fix = _next_on = _failed = false;
+  }
+
+  // Whole seconds left of the countdown, rounded up: 0 when not counting.
+  int secsLeft(uint32_t now) const {
+    if (_state != COUNTDOWN) return 0;
+    uint32_t total = countdownMs(), el = now - _t0;
+    return el >= total ? 0 : (int)((total - el + 999) / 1000);
+  }
+  // Seconds to the next send, -1 when there won't be one.
+  int nextSecs(uint32_t now) const {
+    if (_state != ACTIVE || !repeating()) return -1;
+    int32_t left = (int32_t)(_next - now);
+    return left <= 0 ? 0 : (left + 999) / 1000;
+  }
+
+  // How it's going, for the status views.
+  void sentLine(char* out, int n) const {
+    if (_sent) snprintf(out, n, "Sent %u x", (unsigned)_sent);
+    else       snprintf(out, n, "Not sent");
+  }
+  void nextLine(char* out, int n, uint32_t now) const {
+    const int next = nextSecs(now);
+    if (next < 0)       snprintf(out, n, "No more repeats");
+    else if (next < 60) snprintf(out, n, "Next in %d s", next);
+    else                snprintf(out, n, "Next in %d min", (next + 59) / 60);
+  }
+
+  // True when a message is due: the caller sends it and calls markSent().
+  bool loop(uint32_t now, bool has_fix) {
+    if (_state == COUNTDOWN) {
+      if (now - _t0 < countdownMs()) return false;
+      _state = ACTIVE;
+      _beep_next = now + BEEP_FIRST_MS;
+      return true;
+    }
+    if (_state != ACTIVE || _acked) return false;
+    if (has_fix && !_with_fix && _sent && !_failed) return true;   // the position they don't have yet
+    return _attempts < MAX_SENDS && _next_on && (int32_t)(now - _next) >= 0;
+  }
+  // True when the beep is due, for whoever lies there unable to answer: past
+  // the sends and an ACK too, help still has to find you. Until it's stopped.
+  bool beepDue(uint32_t now) {
+    const uint32_t gap = _prefs ? (uint32_t)NodePrefs::sosBeepSecs(_prefs->sos_beep_idx) * 1000UL : 0;
+    if (_state != ACTIVE || gap == 0 || (int32_t)(now - _beep_next) < 0) return false;
+    _beep_next = now + gap;
+    return true;
+  }
+  void markSent(uint32_t now, bool with_fix, bool ok) {
+    _attempts++;
+    if (ok) _sent++;
+    if (ok && with_fix) _with_fix = true;
+    _failed = !ok;
+    uint32_t gap = _prefs ? (uint32_t)NodePrefs::sosRepeatMins(_prefs->sos_repeat_idx) * 60000UL : 0;
+    _next_on = _failed || gap > 0;
+    _next = now + (_failed ? RETRY_MS : gap);
+  }
+
+  // A message came in. True when it's an answer: one holding the ACK word, from
+  // anyone, or anything further from someone who has answered, who is the one
+  // talking to you now. Repeats stop at the first, and the screen says who
+  // answered and what they said.
+  bool onReply(const char* from, const char* text, uint32_t now = 0) {
+    if (_state != ACTIVE || !_sent || !_prefs || !text) return false;
+    if (!from) from = "";
+    int i = 0;
+    while (i < _responders && strncmp(_resp[i].name, from, sizeof(_resp[i].name) - 1) != 0) i++;
+    const bool known = i < _responders;
+    const bool word = hasWord(text, _prefs->sos_ack);
+    if (!known && !word) return false;
+    _acked = true;
+    if (!known) {
+      if (_responders < RESPONDERS_MAX) _responders++;
+      i = _responders - 1;   // full: over the one quiet the longest
+    }
+    Responder r = _resp[i];
+    for (; i > 0; i--) _resp[i] = _resp[i - 1];   // to the front
+    _resp[0] = r;
+    snprintf(_resp[0].name, sizeof(_resp[0].name), "%s", from);
+    const bool bare = word && strlen(text) == strlen(_prefs->sos_ack);
+    if (!bare || !known) {   // the word alone adds nothing to what they said before
+      snprintf(_resp[0].text, sizeof(_resp[0].text), "%s", bare ? "" : text);
+      _resp[0].text[mesh::validUtf8PrefixLength(_resp[0].text, sizeof(_resp[0].text) - 1)] = '\0';   // cut off mid-character
+    }
+    _resp[0].at = now;
+    return true;
+  }
+
+  // ── Text ──────────────────────────────────────────────────────────────────
+  // `word` on its own in `text`, whatever the case: ACK in "ack, on our way",
+  // not in "back". A byte past ASCII counts as a letter (UTF-8).
+  static bool hasWord(const char* text, const char* word) {
+    int n = word ? (int)strlen(word) : 0;
+    if (!text || n == 0) return false;
+    for (const char* p = text; *p; p++) {
+      if (p != text && isWordByte(p[-1])) continue;
+      if (strncasecmp(p, word, n) == 0 && !isWordByte(p[n])) return true;
+    }
+    return false;
+  }
+
+  enum Where : uint8_t { FIX, LAST_KNOWN, NOWHERE };
+  // "SOS 50.06143,19.93658 ALT 212m sent 14:32 note": short, and the position is
+  // what a receiver's Navigate and map read (geo::parseSos). alt: nullptr without
+  // one, age_min: how old a LAST_KNOWN is, -1 not given, time: "" when the clock
+  // isn't set.
+  static void compose(char* out, int n, Where where, int32_t lat, int32_t lon,
+                      const int16_t* alt, int age_min, const char* time, const char* note) {
+    int o = 0;
+    // snprintf answers with what it would have written: never past the buffer.
+    auto left = [&](int wrote) { o = o + wrote < n ? o + wrote : n - 1; return n - o; };
+    left(snprintf(out, n, "SOS"));
+    if (where == NOWHERE) left(snprintf(out + o, n - o, " no GPS"));
+    else left(snprintf(out + o, n - o, "%s %.5f,%.5f", where == LAST_KNOWN ? " last" : "", lat / 1e6, lon / 1e6));
+    if (alt && where == FIX) left(snprintf(out + o, n - o, " ALT %dm", (int)*alt));
+    if (where == LAST_KNOWN && age_min >= 0) left(snprintf(out + o, n - o, " %dmin ago", age_min));
+    if (time && time[0]) left(snprintf(out + o, n - o, " sent %s", time));
+    if (note && note[0]) snprintf(out + o, n - o, " %s", note);
+  }
+
+  // Anywhere to send to. A channel or a contact that has gone clears its own
+  // target (chanctl::onRemoved, UiCore::cleanupContactPrefs).
+  static bool hasTargets(const NodePrefs* p) {
+    if (!p) return false;
+    return p->sos_ch_mask || contacts(p) > 0;
+  }
+  static int channels(const NodePrefs* p) {
+    int on = 0;
+    for (uint64_t m = p->sos_ch_mask; m; m &= m - 1) on++;
+    return on;
+  }
+  static int contacts(const NodePrefs* p) {
+    int on = 0;
+    for (int i = 0; i < NodePrefs::SOS_DM_MAX; i++) if (hasDm(p, i)) on++;
+    return on;
+  }
+  static bool hasDm(const NodePrefs* p, int slot) {
+    for (int b = 0; b < NodePrefs::FAVOURITE_PREFIX_LEN; b++) if (p->sos_dm[slot][b]) return true;
+    return false;
+  }
+
+private:
+  enum State : uint8_t { IDLE, COUNTDOWN, ACTIVE };
+  static bool isWordByte(char c) { return isalnum((uint8_t)c) || (uint8_t)c >= 0x80; }
+  uint32_t countdownMs() const {
+    return (uint32_t)NodePrefs::sosCountdownSecs(_prefs ? _prefs->sos_countdown_idx : 1) * 1000UL;
+  }
+  bool repeating() const { return !_acked && _attempts < MAX_SENDS && _next_on; }
+
+  const NodePrefs* _prefs = nullptr;
+  State    _state = IDLE;
+  uint32_t _t0 = 0, _next = 0, _beep_next = 0;
+  uint8_t  _attempts = 0, _sent = 0;
+  bool     _acked = false, _with_fix = false, _next_on = false, _failed = false;
+  Responder _resp[RESPONDERS_MAX];
+  uint8_t  _responders = 0;
+};

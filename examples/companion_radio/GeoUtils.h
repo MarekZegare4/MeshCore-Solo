@@ -143,6 +143,22 @@ static inline bool parseLatLon(const char* text, int32_t& lat_1e6, int32_t& lon_
 // the tag (it just looks like a coordinate).
 #define LOCATION_MSG_TAG "[LOC]"
 
+// An SOS with a position ("SOS 50.06143,19.93658 ...", "SOS last ...", see
+// ui-core/SosEngine.h): `text` without the sender's name in front. Only at the
+// very start, so a message that mentions SOS isn't taken for one.
+static inline bool parseSos(const char* text, int32_t& lat_1e6, int32_t& lon_1e6) {
+  if (!text || strncmp(text, "SOS ", 4) != 0) return false;
+  const char* p = text + 4;
+  if (strncmp(p, "last ", 5) == 0) p += 5;
+  if (*p != '-' && !isdigit((unsigned char)*p)) return false;
+  return parseLatLon(p, lat_1e6, lon_1e6);
+}
+
+// The same without a position to give: the one a receiver mustn't miss either.
+static inline bool isSosNoGps(const char* text) {
+  return text && strncmp(text, "SOS no GPS", 10) == 0 && (text[10] == '\0' || text[10] == ' ');
+}
+
 // True if `text` carries a LOCATION_MSG_TAG share; fills lat/lon (1e6-scaled)
 // from the coordinate that follows it. Returns false for plain text, for a
 // bare coordinate, or for a [WAY] share — only an explicit [LOC] tag counts,

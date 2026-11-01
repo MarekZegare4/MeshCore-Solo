@@ -18,6 +18,9 @@ enum class UiEventType : uint8_t {
                   // room / channel message; `key` (flag = valid) = DM sender prefix
                   // for per-contact sounds; `idx` = channel slot (-1 = unknown)
   AdvertHeard,    // an advert was heard; flag = flood (else zero-hop)
+  SosSent,        // a round of an SOS was tried; flag = the first that went out
+  SosAcked,       // someone answered: text = who; flag = the first of this SOS
+  SosHeard,       // someone else's SOS: text = who
 };
 
 struct UiEvent {

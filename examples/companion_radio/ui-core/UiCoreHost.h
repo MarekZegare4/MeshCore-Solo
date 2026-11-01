@@ -30,6 +30,9 @@ public:
   virtual void onContactRemoved(const uint8_t* pub_key) {}
   virtual void onChannelRemoved(uint8_t channel_idx) {}
   virtual void botSetGPS(bool on) {}
+  // An SOS began or ended (the UI's own startSos() / stopSos() calls): what only
+  // the frontend can rest or raise. May touch the status bar.
+  virtual void onSosRunning(bool running) {}
   virtual void botBuzz(int seconds) {}
   virtual bool botSetGPIO(int idx, bool on) { return false; }
   virtual bool botGetGPIO(int idx, bool& is_output, bool& value) { return false; }

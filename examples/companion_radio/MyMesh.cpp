@@ -679,6 +679,14 @@ void MyMesh::sendFloodScoped(const mesh::GroupChannel& channel, mesh::Packet* pk
 }
 
 
+// Someone's SOS (SosEngine::compose()), `body` without the name in front.
+void MyMesh::noteSos(const uint8_t* pub_key, const char* name, const char* body, bool verified) {
+  int32_t lat, lon;
+  if (!_listener) return;
+  if (geo::parseSos(body, lat, lon)) _listener->onSosPosition(pub_key, name, lat, lon, verified);
+  else if (geo::isSosNoGps(body)) _listener->onSosNoPosition(name);
+}
+
 void MyMesh::onMessageRecv(const ContactInfo &from, mesh::Packet *pkt, uint32_t sender_timestamp,
                            const char *text) {
   markConnectionActive(from); // in case this is from a server, and we have a connection
@@ -688,6 +696,8 @@ void MyMesh::onMessageRecv(const ContactInfo &from, mesh::Packet *pkt, uint32_t 
   int32_t loc_lat, loc_lon;
   if (_listener && geo::parseLocShare(text, loc_lat, loc_lon)) {
     _listener->onSharedLocation(from.id.pub_key, from.name, loc_lat, loc_lon, sender_timestamp, true);
+  } else {
+    noteSos(from.id.pub_key, from.name, text, true);
   }
 
   // hop count of the received message. getPathHashCount() (low 6 bits of path_len)
@@ -743,6 +753,9 @@ void MyMesh::onSignedMessageRecv(const ContactInfo &from, mesh::Packet *pkt, uin
     ContactInfo* sc = sender_prefix ? lookupContactByPubKey(sender_prefix, 4) : nullptr;
     const char* who = (sc && sc->name[0]) ? sc->name : from.name;
     _listener->onSharedLocation(nullptr, who, loc_lat, loc_lon, sender_timestamp, false);
+  } else {
+    ContactInfo* sc = sender_prefix ? lookupContactByPubKey(sender_prefix, 4) : nullptr;
+    noteSos(nullptr, (sc && sc->name[0]) ? sc->name : from.name, text, false);
   }
 
   // Room-server auto-reply bot — only ever fires for the room server contact
@@ -822,6 +835,11 @@ void MyMesh::onChannelMessageRecv(const mesh::GroupChannel &channel, mesh::Packe
     const char* msg;
     botChannelSenderSplit(text, sender, sizeof(sender), &msg);
     _listener->onSharedLocation(nullptr, sender, loc_lat, loc_lon, timestamp, false);
+  } else {
+    char sender[32];
+    const char* msg;
+    botChannelSenderSplit(text, sender, sizeof(sender), &msg);
+    noteSos(nullptr, sender, msg, false);
   }
 
   // hop count for !hops (see onMessageRecv); not the wire path_len above.
@@ -1467,6 +1485,9 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   _prefs.bot_quiet_start = 0;
   _prefs.bot_quiet_end = 0;       // start==end → quiet hours disabled
   _prefs.bot_actions_scope = 0;   // actions by everyone
+  _prefs.sos_countdown_idx = 1;   // 10 s
+  _prefs.sos_repeat_idx = 3;      // every 5 minutes
+  strcpy(_prefs.sos_ack, "ACK");
   _prefs.dm_show_all = 1;        // show all contacts by default
   _prefs.fav_sort = 1;           // favourites first in lists
   _prefs.msg_wake = 1;           // a new message turns the screen on

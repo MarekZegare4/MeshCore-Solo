@@ -136,6 +136,78 @@ void UITask::powerPopup(bool restart) {
 
 // ── Lock screen ───────────────────────────────────────────────────────────────
 
+// Grows to push what follows to the bottom of a flex column.
+static void flexFill(lv_obj_t* parent) {
+  lv_obj_t* f = lv_obj_create(parent);
+  lv_obj_remove_style_all(f);
+  lv_obj_set_width(f, 1);
+  lv_obj_set_flex_grow(f, 1);
+}
+
+static const int SLIDE_W = 264;
+// A slide to confirm: a round knob in a track, `text` on it. Not clickable:
+// slidePoll() drives it, so that a tap on the track doesn't jump to the end.
+static lv_obj_t* slideBar(lv_obj_t* parent, const char* text, uint32_t knob) {
+  lv_obj_t* s = lv_slider_create(parent);
+  lv_obj_set_size(s, SLIDE_W, 48);
+  lv_slider_set_range(s, 0, 100);
+  lv_obj_set_style_anim_duration(s, 0, 0);   // no lag behind the finger
+  lv_obj_set_style_bg_color(s, lv_color_hex(theme::SURFACE), LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(s, LV_OPA_COVER, LV_PART_MAIN);
+  lv_obj_set_style_radius(s, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+  lv_obj_set_style_pad_hor(s, 24, LV_PART_MAIN);   // half the track: the knob's centre stops short of its ends
+  lv_obj_set_style_bg_opa(s, LV_OPA_TRANSP, LV_PART_INDICATOR);
+  lv_obj_set_style_bg_color(s, lv_color_hex(knob), LV_PART_KNOB);
+  lv_obj_set_style_pad_all(s, -4, LV_PART_KNOB);   // inside the track
+  lv_obj_set_style_shadow_width(s, 0, LV_PART_KNOB);
+  lv_obj_set_style_bg_image_src(s, LV_SYMBOL_RIGHT, LV_PART_KNOB);
+  lv_obj_set_style_text_font(s, THEME_FONT_BODY, LV_PART_KNOB);
+  lv_obj_set_style_text_color(s, lv_color_hex(0xFFFFFF), LV_PART_KNOB);
+  lv_obj_remove_flag(s, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_center(label(s, text, THEME_FONT_BODY, theme::TEXT_MUTED));   // fades as the knob comes (slidePoll)
+  return s;
+}
+
+static void slideText(lv_obj_t* s, int32_t v) {
+  const int32_t opa = LV_OPA_COVER - v * LV_OPA_COVER / 60;
+  lv_obj_set_style_opa(lv_obj_get_child(s, 0), opa < 0 ? 0 : (lv_opa_t)opa, 0);
+}
+
+// True once, when a drag that began on the knob reached the end and let go;
+// short of the end the knob springs back.
+struct SlideDrag { bool dragging = false, was_down = false; };
+static bool slidePoll(lv_obj_t* s, SlideDrag& d) {
+  lv_indev_t* in = lv_indev_get_next(NULL);
+  if (!s || !in) { d = SlideDrag(); return false; }
+  bool down = lv_indev_get_state(in) == LV_INDEV_STATE_PRESSED;
+  lv_point_t p;
+  lv_indev_get_point(in, &p);
+  lv_area_t a;
+  lv_obj_get_coords(s, &a);
+  int32_t knob = lv_area_get_height(&a);   // round knob, as tall as the track
+  if (down && !d.was_down) {               // a drag starts on the knob only
+    d.dragging = p.y >= a.y1 - 10 && p.y <= a.y2 + 10 && p.x <= a.x1 + knob + 16;
+    if (d.dragging) lv_anim_delete(s, anim::setSlider);
+  }
+  d.was_down = down;
+  if (!down) {
+    if (!d.dragging) return false;
+    d.dragging = false;
+    int32_t v = lv_slider_get_value(s);
+    if (v >= 100) return true;
+    if (v > 0) anim::run(s, anim::setSlider, v, 0, anim::SPRING_MS);
+    slideText(s, 0);
+    return false;
+  }
+  if (!d.dragging) return false;
+  int32_t span = lv_area_get_width(&a) - knob;
+  int32_t v = span > 0 ? (p.x - a.x1 - knob / 2) * 100 / span : 0;
+  v = v < 0 ? 0 : v >= 92 ? 100 : v;       // snaps to the end: let go to confirm
+  lv_slider_set_value(s, v, LV_ANIM_OFF);
+  slideText(s, v);
+  return false;
+}
+
 // From sleep() when the lock is on. Built while the screen is dark, so waking
 // shows it straight away.
 void UITask::lockScreen() {
@@ -181,26 +253,9 @@ void UITask::lockScreen() {
   s_lock_unread = label(s_lock, "", THEME_FONT_BODY, theme::ACCENT);
   lv_obj_set_style_pad_top(s_lock_unread, 8, 0);
 
-  lv_obj_t* track = lv_obj_create(s_lock);   // grows to push the slider to the bottom
-  lv_obj_remove_style_all(track);
-  lv_obj_set_width(track, 1);
-  lv_obj_set_flex_grow(track, 1);
-
-  s_lock_slider = lv_slider_create(s_lock);
-  lv_obj_set_size(s_lock_slider, 250, 44);
+  flexFill(s_lock);
+  s_lock_slider = slideBar(s_lock, "slide to unlock", theme::ACCENT);
   lv_obj_set_style_margin_bottom(s_lock_slider, 44, 0);   // clear of the toast below
-  lv_slider_set_range(s_lock_slider, 0, 100);
-  lv_obj_set_style_anim_duration(s_lock_slider, 0, 0);   // no lag behind the finger
-  lv_obj_set_style_bg_color(s_lock_slider, lv_color_hex(theme::SURFACE), LV_PART_MAIN);
-  lv_obj_set_style_bg_opa(s_lock_slider, LV_OPA_COVER, LV_PART_MAIN);
-  lv_obj_set_style_radius(s_lock_slider, LV_RADIUS_CIRCLE, LV_PART_MAIN);
-  lv_obj_set_style_bg_opa(s_lock_slider, LV_OPA_TRANSP, LV_PART_INDICATOR);
-  lv_obj_set_style_bg_color(s_lock_slider, lv_color_hex(theme::ACCENT), LV_PART_KNOB);
-  lv_obj_set_style_pad_all(s_lock_slider, 2, LV_PART_KNOB);
-  lv_obj_set_style_shadow_width(s_lock_slider, 0, LV_PART_KNOB);
-  lv_obj_remove_flag(s_lock_slider, LV_OBJ_FLAG_CLICKABLE);   // lockPoll() drives it
-  lv_obj_t* hint = label(s_lock_slider, "slide to unlock  " LV_SYMBOL_RIGHT, THEME_FONT_BODY, theme::TEXT_MUTED);
-  lv_obj_align(hint, LV_ALIGN_CENTER, 14, 0);
 
   if (_toast) lv_obj_move_foreground(_toast);   // new-message toasts still show
   refreshLock();
@@ -238,34 +293,8 @@ bool UITask::locked() const { return devview::s_lock != nullptr; }
 // itself, like the Home page swipe -- LVGL stops feeding a pressed widget
 // once the finger has moved past its scroll threshold.
 void UITask::lockPoll() {
-  using namespace devview;
-  static bool s_dragging = false, s_was_down = false;
-  lv_indev_t* in = lv_indev_get_next(NULL);
-  if (!s_lock_slider || !in) { s_dragging = s_was_down = false; return; }
-  bool down = lv_indev_get_state(in) == LV_INDEV_STATE_PRESSED;
-  lv_point_t p;
-  lv_indev_get_point(in, &p);
-  lv_area_t a;
-  lv_obj_get_coords(s_lock_slider, &a);
-  int32_t knob = lv_area_get_height(&a);   // round knob, as tall as the track
-  if (down && !s_was_down) {               // a drag starts on the knob only
-    s_dragging = p.y >= a.y1 - 10 && p.y <= a.y2 + 10 && p.x <= a.x1 + knob + 16;
-    if (s_dragging) lv_anim_delete(s_lock_slider, anim::setSlider);
-  }
-  s_was_down = down;
-  if (!down) {
-    if (!s_dragging) return;
-    s_dragging = false;
-    int32_t v = lv_slider_get_value(s_lock_slider);
-    if (v >= 100) unlockScreen();
-    else if (v > 0) anim::run(s_lock_slider, anim::setSlider, v, 0, anim::SPRING_MS);
-    return;
-  }
-  if (!s_dragging) return;
-  int32_t span = lv_area_get_width(&a) - knob;
-  int32_t v = span > 0 ? (p.x - a.x1 - knob / 2) * 100 / span : 0;
-  v = v < 0 ? 0 : v >= 92 ? 100 : v;       // snaps to the end: let go to unlock
-  lv_slider_set_value(s_lock_slider, v, LV_ANIM_OFF);
+  static SlideDrag s_drag;
+  if (slidePoll(devview::s_lock_slider, s_drag)) unlockScreen();
 }
 
 void UITask::refreshLock() {
@@ -499,6 +528,29 @@ void UITask::favAction(uint8_t act) {
   favRefresh();
 }
 
+// A picker's contacts, favourites first with their star; `rooms`: rooms too.
+// A row's user data is `base` + its number, its key s_pick_keys[number].
+// `selected` (a key's prefix) stands out.
+static void pickContacts(lv_obj_t* list, bool rooms, lv_event_cb_t cb, int base, const uint8_t* selected = nullptr) {
+  using namespace devview;
+  int rows = 0, total = the_mesh.getNumContacts();
+  for (int pass = 0; pass < 2; pass++) {
+    for (int i = 0; i < total && rows < PICK_MAX; i++) {
+      ContactInfo c;
+      if (!the_mesh.getContactByIdx(MAX_ANON_CONTACTS + i, c)) continue;
+      if (c.type != ADV_TYPE_CHAT && !(rooms && c.type == ADV_TYPE_ROOM)) continue;
+      if (contactctl::favourite(c) != (pass == 0)) continue;
+      memcpy(s_pick_keys[rows], c.id.pub_key, PUB_KEY_SIZE);
+      char t[48];
+      snprintf(t, sizeof(t), "%s%s%s", contactctl::favourite(c) ? UI_SYMBOL_STAR " " : "", c.name,
+               c.type == ADV_TYPE_ROOM ? "  (room)" : "");
+      lv_obj_t* row = listRow(list, t, NULL, cb, (void*)(uintptr_t)(base + rows));
+      if (selected && memcmp(c.id.pub_key, selected, NodePrefs::FAVOURITE_PREFIX_LEN) == 0) styleSelected(row, true);
+      rows++;
+    }
+  }
+}
+
 // What to put in a slot: channels, then contacts and rooms (favourites first).
 void UITask::favPickPopup(int slot) {
   using namespace devview;
@@ -519,22 +571,7 @@ void UITask::favPickPopup(int slot) {
     listRow(list, ch.name, NULL, onFavPick, (void*)(uintptr_t)i);
   }
   sectionTitle(list, "CONTACTS AND ROOMS");
-  int rows = 0, total = the_mesh.getNumContacts();
-  const int MAX_ROWS = PICK_MAX;
-  for (int pass = 0; pass < 2; pass++) {
-    for (int i = 0; i < total && rows < MAX_ROWS; i++) {
-      ContactInfo c;
-      if (!the_mesh.getContactByIdx(MAX_ANON_CONTACTS + i, c)) continue;
-      if (c.type != ADV_TYPE_CHAT && c.type != ADV_TYPE_ROOM) continue;
-      if (contactctl::favourite(c) != (pass == 0)) continue;
-      memcpy(s_pick_keys[rows], c.id.pub_key, PUB_KEY_SIZE);
-      char t[48];
-      snprintf(t, sizeof(t), "%s%s%s", contactctl::favourite(c) ? UI_SYMBOL_STAR " " : "", c.name,
-               c.type == ADV_TYPE_ROOM ? "  (room)" : "");
-      listRow(list, t, NULL, onFavPick, (void*)(uintptr_t)(PICK_CONTACT + rows));
-      rows++;
-    }
-  }
+  pickContacts(list, true, onFavPick, PICK_CONTACT);
 }
 
 void UITask::favPick(int code) {

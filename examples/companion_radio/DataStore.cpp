@@ -352,6 +352,9 @@ static void sanitize(NodePrefs& p) {
   flag(p.msg_wake, 1);
   if (p.msg_keep >= NodePrefs::MSG_KEEP_COUNT) p.msg_keep = 0;
   if (p.msg_expire >= NodePrefs::CONTACT_EXPIRY_COUNT) p.msg_expire = 0;
+  if (p.sos_countdown_idx >= NodePrefs::SOS_COUNTDOWN_COUNT) p.sos_countdown_idx = 1;
+  if (p.sos_repeat_idx >= NodePrefs::SOS_REPEAT_COUNT) p.sos_repeat_idx = 3;
+  if (p.sos_beep_idx >= NodePrefs::SOS_BEEP_COUNT) p.sos_beep_idx = 0;
   if (p.contact_expiry_idx >= NodePrefs::CONTACT_EXPIRY_COUNT) p.contact_expiry_idx = 0;
   if (p.dst_rule >= NodePrefs::DST_COUNT) p.dst_rule = NodePrefs::DST_OFF;
   if (p.display_brightness_pct > 100) p.display_brightness_pct = 0;

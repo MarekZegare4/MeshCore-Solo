@@ -35,6 +35,9 @@
 #include "RoomSessions.h"
 #include "ContactControl.h"
 #include "HopRoute.h"   // after ContactControl (hopName)
+#include "RadioControl.h"
+#include "RepeaterControl.h"
+#include "SosEngine.h"
 
 class UiCore : public MyMesh::Listener {
 public:
@@ -50,6 +53,7 @@ public:
     live_share.begin(prefs, &course, &events);
     locator.begin(prefs, &course, &live_share, &events);
     trail.begin(prefs, &course);
+    sos.begin(prefs);
     waypoints.begin(&locator);   // loads /waypoints
 #ifdef HIST_FLASH
     history_log.begin(prefs, &history);
@@ -72,6 +76,7 @@ public:
     trail.loop();
     admin.loop();
     rooms.loop();
+    if (!sos.idle()) sosLoop();
   }
 
   UiEventQueue events;      // Core → frontend; drained by the frontend's loop()
@@ -88,6 +93,7 @@ public:
   TrailEngine  trail;       // GPS trail store, sampling, auto-pause, shutdown save
   AdminSession admin;       // remote repeater / room admin: login + CLI round trips
   RoomSessions rooms;       // room server logins for posting (messages screens)
+  SosEngine    sos;         // countdown, repeats, the ACK word
 
   // ── Models ────────────────────────────────────────────────────────────────
   MessageHistory history;   // channel + DM rings, delivery state, channel unread
@@ -147,6 +153,28 @@ public:
     if (pos >= 0) history.armChannelRelay(pos, the_mesh.lastChannelRelaySeq());
     history.setChUnread(channel_idx, 0);
     return true;
+  }
+
+  // SOS: the GPS on for the fix (back off afterwards if it was off), the repeater
+  // at rest (maybe on a profile of its own, and the message goes to the user's own
+  // network), then SosEngine's countdown. All of it ends with stopSos().
+  void startSos() {
+    if (!sos.idle()) return;
+    _sos_gps_on = gpsAvailable() && !gpsEnabled();
+    if (_sos_gps_on) setGpsEnabled(true, false);
+    _sos_repeat_was = _prefs && _prefs->client_repeat;
+    if (_sos_repeat_was) rptctl::setEnabled(_prefs, false);
+    sos.start(millis());
+    _host->onSosRunning(true);
+  }
+  void stopSos() {
+    if (sos.idle()) return;
+    sos.stop();
+    if (_sos_gps_on) setGpsEnabled(false, false);
+    _sos_gps_on = false;
+    if (_sos_repeat_was) rptctl::setEnabled(_prefs, true);
+    _sos_repeat_was = false;
+    _host->onSosRunning(false);
   }
 
   // GPS power: the sensor manager's "gps" setting, persisted as
@@ -262,6 +290,7 @@ public:
       }
       addDMMsg(from.id.pub_key, false, labeled, sender_timestamp, 0, 0, 0, pkt->path, (uint8_t)pkt->path_len);
     }
+    if (from.type == ADV_TYPE_CHAT) sosReply(from.name, text);
   }
 
   // Upstream-shaped entry point without the channel slot: MyMesh itself always
@@ -279,6 +308,11 @@ public:
     if (strncmp(text, "Me: ", 4) == 0) { snprintf(quoted, sizeof(quoted), "\"Me\"%s", text + 2); text = quoted; }
     addChannelMsg(channel_idx, text, timestamp, pkt->path, (uint8_t)pkt->path_len);
     pushMessageArrived(UIEventType::channelMessage, channel_details.name, channel_idx);
+    if (_prefs && (_prefs->sos_ch_mask & (1ULL << channel_idx))) {   // only where the SOS went
+      char from[32];
+      const char* body = contactctl::splitRoomPost(text, from, sizeof(from));   // the same "Name: text"
+      sosReply(from[0] ? from : channel_details.name, body);
+    }
   }
 
   // Also the entry point for our own sends mirrored from the app / the bot
@@ -332,6 +366,13 @@ public:
     live_share.onSharedLocation(pub_key, name, lat_1e6, lon_1e6, ts, verified);
   }
 
+  void onSosPosition(const uint8_t* pub_key, const char* name, int32_t lat_1e6, int32_t lon_1e6,
+                     bool verified) override {
+    live_share.onSos(pub_key, name, lat_1e6, lon_1e6, verified);
+    events.push(UiEventType::SosHeard, name);
+  }
+  void onSosNoPosition(const char* name) override { events.push(UiEventType::SosHeard, name); }
+
   // Login answers go to the admin session when it's the one waiting, else to
   // the room sessions (logins from the messages screen), then the frontend.
   void onRoomLoginResult(const uint8_t* pub_key, bool success, uint8_t permissions) override {
@@ -363,13 +404,67 @@ public:
     if (chanctl::onRemoved(_prefs, channel_idx)) the_mesh.savePrefs();
     _host->onChannelRemoved(channel_idx);
   }
-  void botSetGPS(bool on) override { _host->botSetGPS(on); }
+  // The end of a !gps fix must not take the GPS from a running SOS: off afterwards.
+  void botSetGPS(bool on) override {
+    if (!on && !sos.idle()) { _sos_gps_on = gpsAvailable(); return; }
+    _host->botSetGPS(on);
+  }
+  bool botGpsHeld() override { return !sos.idle(); }
   void botBuzz(int seconds) override { _host->botBuzz(seconds); }
   bool botSetGPIO(int idx, bool on) override { return _host->botSetGPIO(idx, on); }
   bool botGetGPIO(int idx, bool& is_output, bool& value) override { return _host->botGetGPIO(idx, is_output, value); }
   bool botGetGPIOAnalog(int idx, int& millivolts) override { return _host->botGetGPIOAnalog(idx, millivolts); }
 
 private:
+  void sosLoop() {
+    int32_t lat, lon;
+    if (sos.loop(millis(), course.currentLocation(lat, lon))) sendSos();
+    if (_sos_gps_on && sos.finished()) {   // it only ran for the SOS: the battery has better use
+      setGpsEnabled(false, false);
+      _sos_gps_on = false;
+    }
+  }
+
+  // After the message's own event, so the answer's sound is the one that plays.
+  void sosReply(const char* from, const char* text) {
+    const bool first = !sos.acked();
+    if (sos.onReply(from, text, millis())) events.push(UiEventType::SosAcked, from, first);
+  }
+
+  // One round: every target, with the position as of now.
+  void sendSos() {
+    const uint32_t now = rtc_clock.getCurrentTime();
+    int32_t lat = 0, lon = 0;
+    int16_t alt = 0;
+    uint32_t age = 0;
+    const bool fix = course.currentLocation(lat, lon);
+    const bool has_alt = fix && course.currentAltitude(alt);
+    // A position nobody can tell the age of could be anywhere, and is worse than
+    // none: only a recent fix, with its age. Where there's no GPS at all, the
+    // position set by hand is the one the owner chose to give.
+    const bool recent = !fix && course.lastFix(lat, lon, age) && age <= SosEngine::LAST_MAX_SECS;
+    const bool set = !fix && !gpsAvailable() && fixedPosition(lat, lon);
+    SosEngine::Where where = fix ? SosEngine::FIX : recent || set ? SosEngine::LAST_KNOWN : SosEngine::NOWHERE;
+    char hhmm[8] = "";
+    struct tm ti;
+    if (localTm(now, tzHoursAt(_prefs, now), ti)) snprintf(hhmm, sizeof(hhmm), "%02d:%02d", ti.tm_hour, ti.tm_min);
+    char text[MAX_TEXT_LEN + 1];
+    SosEngine::compose(text, sizeof(text), where, lat, lon, has_alt ? &alt : nullptr, recent ? (int)(age / 60) : -1,
+                       hhmm, _prefs->sos_note);
+
+    bool ok = false;
+    for (int i = 0; i < MAX_GROUP_CHANNELS; i++)
+      if ((_prefs->sos_ch_mask & (1ULL << i)) && sendChannelText((uint8_t)i, text)) ok = true;
+    for (int i = 0; i < NodePrefs::SOS_DM_MAX; i++) {
+      if (!SosEngine::hasDm(_prefs, i)) continue;
+      ContactInfo* c = the_mesh.lookupContactByPubKey(_prefs->sos_dm[i], NodePrefs::FAVOURITE_PREFIX_LEN);
+      if (c && sendDirectText(*c, text)) ok = true;
+    }
+    const bool first = ok && sos.sent() == 0;
+    sos.markSent(millis(), fix, ok);
+    events.push(UiEventType::SosSent, nullptr, first);
+  }
+
   UiEvent& pushMessageArrived(UIEventType kind, const char* name, int channel_idx) {
     UiEvent& ev = events.push(UiEventType::MessageArrived, name);
     ev.kind = kind;
@@ -404,6 +499,11 @@ private:
       p->loc_share_enabled = 0;
       changed = true;
     }
+    for (int i = 0; i < NodePrefs::SOS_DM_MAX; i++)
+      if (memcmp(p->sos_dm[i], pub_key, NodePrefs::FAVOURITE_PREFIX_LEN) == 0) {
+        memset(p->sos_dm[i], 0, NodePrefs::FAVOURITE_PREFIX_LEN);
+        changed = true;
+      }
     if (p->bot_room_enabled && memcmp(p->bot_room_prefix, pub_key, NodePrefs::FAVOURITE_PREFIX_LEN) == 0) {
       p->bot_room_enabled = 0;
       changed = true;
@@ -426,4 +526,6 @@ private:
   SensorManager* _sensors = nullptr;
   int _queue_len = 0;     // last onQueueSizeChanged()
   int _room_unread = 0;
+  bool _sos_gps_on = false;       // startSos() turned the GPS on
+  bool _sos_repeat_was = false;   // ... and rested the repeater
 };
