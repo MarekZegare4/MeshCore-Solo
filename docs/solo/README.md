@@ -19,8 +19,9 @@ still connects as with the stock firmware, over Bluetooth or USB.
 - **Nearby nodes**: who's around, signal and distance, ping, and remote
   admin of your repeaters and rooms.
 - **Tools**: clock with alarm, timer and stopwatch, a remote bot that answers
-  commands over the mesh, repeater mode, a ringtone editor, and a status
-  screen with the radio, GPS, battery and mesh counters.
+  commands over the mesh, repeater mode, a ringtone editor, a status screen
+  with the radio, GPS, battery and mesh counters, and
+  [SOS](./tools.md#sos) (experimental).
 - **Screen lock** with an optional PIN.
 - **On the Wio Tracker L2**: an offline map, message history on the SD card,
   the SD card as a USB drive, updates over WiFi.

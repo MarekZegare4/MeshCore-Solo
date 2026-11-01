@@ -2,6 +2,7 @@
 
 The lock keeps pocket presses from doing anything. It locks the screen only:
 messages still arrive, alarms still ring and the phone app still connects.
+[SOS](./tools.md#sos), when switched on, also starts from a locked device.
 
 ## Locking and unlocking
 

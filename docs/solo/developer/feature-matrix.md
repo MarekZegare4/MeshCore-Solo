@@ -92,6 +92,7 @@ build flag it needs.
 | Clock tools (alarm, timer, stopwatch) | yes, tenths on the stopwatch | no tenths | no tenths | wide layout | Clock app |
 | Calendar | Clock tools (tight grid) | Clock tools (tight grid) | + under the clock, on the lock screen | + under the clock | in the Clock app |
 | Remote bot, repeater, auto-advert | yes | yes | yes | yes | yes |
+| SOS (experimental) | Tools › SOS, hold Back | same | same | same | SOS app, hold the top button, then a slider |
 | Melodies (`PIN_BUZZER`) | Ringtones tool | same | same | wide editor | Settings › Sound |
 | Status: Radio, GPS, Power, Mesh | yes, 32 min history | yes, 8 h charts | yes, 8 h charts | tiles with charts | Diagnostics app (+ noise chart) |
 | Sky view (`GPS_SKYVIEW`) | Status › Sky | same | same | + side panel | GPS app: Sky, Signal, Details |
