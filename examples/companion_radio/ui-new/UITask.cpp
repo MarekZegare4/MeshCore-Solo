@@ -1907,7 +1907,6 @@ bool UITask::currentCourse(int& deg_out) const { return _core->course.currentCou
 bool UITask::currentLocation(int32_t& lat, int32_t& lon) const { return _core->course.currentLocation(lat, lon); }
 
 bool UITask::sendLocationShare(int32_t lat, int32_t lon) { return _core->live_share.send(lat, lon); }
-void UITask::restartLocShareSession() { _core->live_share.restartSession(); }
 void UITask::restartLocShareClock()   { _core->live_share.restartClock(); }
 LiveTrackStore& UITask::liveTrack()   { return _core->live_share.track(); }
 
@@ -1923,7 +1922,7 @@ void UITask::quickShareMyLocation() {
     return;
   }
   char text[40];
-  snprintf(text, sizeof(text), LOCATION_MSG_TAG "%.5f,%.5f", lat / 1e6, lon / 1e6);
+  geo::fmtLocShare(text, sizeof(text), lat, lon);
   shareToMessage(text);
 }
 

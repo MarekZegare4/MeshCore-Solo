@@ -371,15 +371,18 @@ void UITask::quickPanelTile(int t, bool hold) {
 #endif
       break;
     case T_TRAIL:
-      _core->trail.setActive(!_core->trail.isActive());
-      if (_core->trail.isActive()) ensureGps();   // turns GPS on, or says it's waiting
-      break;
-    case T_SHARE:
+    case T_SHARE: {
       if (!_prefs) break;
-      _prefs->loc_share_enabled = !_prefs->loc_share_enabled;
-      if (_prefs->loc_share_enabled) { _core->live_share.restartSession(); ensureGps(); }
-      prefsSave();
+      const bool on = t == T_TRAIL ? _core->trail.isActive() : _prefs->loc_share_enabled;
+      if (!on && _core->gpsAvailable() && !_core->gpsEnabled()) {   // "GPS is off", over the screen
+        quickPanelClose(false);
+        gpsAsked(t == T_TRAIL ? GA_TRAIL : GA_SHARE);
+        return;
+      }
+      if (t == T_TRAIL) _core->trail.setActive(!on);
+      else { _core->live_share.setEnabled(!on); prefsSave(); }
       break;
+    }
   }
   refreshStatusBar();
   quickPanelRefresh();

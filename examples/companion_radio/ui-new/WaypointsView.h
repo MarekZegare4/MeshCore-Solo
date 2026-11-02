@@ -388,11 +388,8 @@ public:
           }
         } else if (sel == 2) {                            // Send (share in a message)
           if (wi >= 0 && wi < _task->waypoints().count()) {
-            const Waypoint& w = _task->waypoints().at(wi);
-            double lat = w.lat_1e6 / 1000000.0, lon = w.lon_1e6 / 1000000.0;
             char text[80];
-            if (w.label[0]) snprintf(text, sizeof(text), WAYPOINT_MSG_TAG "%.5f,%.5f %s", lat, lon, w.label);
-            else            snprintf(text, sizeof(text), WAYPOINT_MSG_TAG "%.5f,%.5f", lat, lon);
+            _task->core().waypoints.shareText(wi, text, sizeof(text));
             _task->shareToMessage(text);   // hands off to the Messages screen
           }
         } else {                                          // Set as target

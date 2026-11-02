@@ -404,7 +404,12 @@ public:
   void pinPopup(bool channel, uint8_t ch_idx, const uint8_t* pub_key);
   void pinTo(int slot);
   void setGps(bool on);
-  bool ensureGps();   // true with a fix; else turns GPS on / says it's waiting
+  // What needs the GPS while it's off: asked first ("GPS is off"), then done
+  // once it's turned on (GpsScreen.h).
+  enum GpsAsk : uint8_t { GA_TRAIL, GA_SHARE, GA_TRACKBACK, GA_CENTRE, GA_FIX };
+  bool gpsAsked(GpsAsk what);    // true: it was off, the question is up
+  bool ensureGps(GpsAsk what);   // true with a fix; else asks, or says it's waiting
+  void gpsAskDone(GpsAsk what);
 
   // Kept for main.cpp's sim hooks (ui-new API).
   void openContactDM(const ContactInfo& ci) { openDM(ci.id.pub_key); }

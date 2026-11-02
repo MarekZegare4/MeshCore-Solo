@@ -176,6 +176,33 @@ TEST(SosText, OnlyAnSosWithAPositionIsTakenForOne) {
   EXPECT_FALSE(geo::parseSos("SOSNA 50.06143,19.93658", lat, lon));
 }
 
+// The [LOC] share every sender builds, and what the receiver reads back.
+TEST(GeoText, LocationShareRoundTrips) {
+  char t[64];
+  geo::fmtLocShare(t, sizeof(t), 50061430, -19936580);
+  EXPECT_STREQ(t, "[LOC]50.06143,-19.93658");
+  geo::fmtLocShare(t, sizeof(t), 50061430, -19936580, "Hiker");
+  EXPECT_STREQ(t, "[LOC]50.06143,-19.93658 Hiker");
+  int32_t lat = 0, lon = 0;
+  ASSERT_TRUE(geo::parseLocShare(t, lat, lon));
+  EXPECT_EQ(lat, 50061430);
+  EXPECT_EQ(lon, -19936580);
+  geo::fmtLatLon(t, sizeof(t), 50061430, 19936580, true);
+  EXPECT_STREQ(t, "50.06143, 19.93658");
+  ASSERT_TRUE(geo::parseLatLon(t, lat, lon));   // an edited value reads back
+  EXPECT_EQ(lon, 19936580);
+}
+
+TEST(GeoText, TurnIsTheShortWayRound) {
+  EXPECT_EQ(geo::turnDeg(90, 0), 90);
+  EXPECT_EQ(geo::turnDeg(0, 90), -90);
+  EXPECT_EQ(geo::turnDeg(10, 350), 20);
+  EXPECT_EQ(geo::turnDeg(350, 10), -20);
+  EXPECT_EQ(geo::turnDeg(180, 0), -180);
+  EXPECT_TRUE(geo::isAhead(geo::turnDeg(5, 355)));
+  EXPECT_FALSE(geo::isAhead(geo::turnDeg(20, 0)));
+}
+
 TEST(SosText, NoGpsIsRecognisedOnItsOwn) {
   char t[64];
   SosEngine::compose(t, sizeof(t), SosEngine::NOWHERE, 0, 0, nullptr, -1, "14:32", "");

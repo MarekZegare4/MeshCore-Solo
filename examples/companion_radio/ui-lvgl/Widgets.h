@@ -1071,6 +1071,19 @@ static void stylePrimary(lv_obj_t* b) {
     lv_obj_set_style_text_color(lv_obj_get_child(b, i), lv_color_hex(theme::ON_ACCENT), 0);
 }
 
+// The one main action under a form or a list, full width (Save, Measure ...).
+// Its label is child 0.
+static lv_obj_t* primaryButton(lv_obj_t* parent, const char* text, lv_event_cb_t cb, void* user = nullptr) {
+  lv_obj_t* b = lv_button_create(parent);
+  lv_obj_set_size(b, LV_PCT(100), 40);
+  lv_obj_set_style_shadow_width(b, 0, 0);
+  lv_obj_set_style_radius(b, theme::RADIUS, 0);
+  lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, user);
+  lv_obj_center(label(b, text, THEME_FONT_BODY, theme::TEXT));
+  stylePrimary(b);
+  return b;
+}
+
 // Something selected / on (a tab, a chip, a row): SEL_BG with SEL_FG text
 // (Theme.h), or back to the surface with TEXT. Every label under it follows.
 static void textUnder(lv_obj_t* o, uint32_t col) {
@@ -1254,6 +1267,52 @@ static void prefsFlush() {
   if (!due) return;
   s_prefs_dirty_ms = s_prefs_save_at = 0;
   the_mesh.savePrefs();
+}
+
+// A switch, one size on every screen.
+static lv_obj_t* switchCreate(lv_obj_t* parent, bool on, lv_event_cb_t cb, void* user) {
+  lv_obj_t* sw = lv_switch_create(parent);
+  lv_obj_set_size(sw, 46, 24);
+  if (on) lv_obj_add_state(sw, LV_STATE_CHECKED);
+  if (cb) lv_obj_add_event_cb(sw, cb, LV_EVENT_VALUE_CHANGED, user);
+  return sw;
+}
+
+// A preference toggle (0/1 byte in NodePrefs), saved on change.
+static void onPrefSwitch(lv_event_t* e) {
+  uint8_t* pref = (uint8_t*)lv_event_get_user_data(e);
+  *pref = lv_obj_has_state((lv_obj_t*)lv_event_get_target(e), LV_STATE_CHECKED) ? 1 : 0;
+  prefsSave();
+}
+
+// A settings row with a switch on the right. pref == nullptr: the caller wires
+// the switch itself.
+static lv_obj_t* switchRow(lv_obj_t* parent, const char* text, const char* sub, uint8_t* pref) {
+  lv_obj_t* row = settingRow(parent, text, sub, 236);   // the hint clear of the switch
+  lv_obj_t* sw = switchCreate(row, pref && *pref, pref ? onPrefSwitch : nullptr, pref);
+  lv_obj_align(sw, LV_ALIGN_RIGHT_MID, -theme::PAD, 0);
+  return sw;
+}
+
+// The same for a switch that isn't a plain pref: `cb` gets `user` on a change.
+static lv_obj_t* switchRow(lv_obj_t* parent, const char* text, const char* sub, bool on, lv_event_cb_t cb,
+                           void* user = nullptr) {
+  lv_obj_t* sw = switchRow(parent, text, sub, nullptr);
+  if (on) lv_obj_add_state(sw, LV_STATE_CHECKED);
+  lv_obj_add_event_cb(sw, cb, LV_EVENT_VALUE_CHANGED, user);
+  return sw;
+}
+
+// A switch row whose text opens the details (`open`) while the switch only
+// switches: Bluetooth, WiFi, GPS.
+static void onSwitchRowTap(lv_event_t* e) {
+  if (lv_event_get_target(e) != lv_event_get_current_target(e)) return;   // the switch
+  ((lv_event_cb_t)lv_event_get_user_data(e))(e);
+}
+static void switchRowOpens(lv_obj_t* sw, lv_event_cb_t open) {
+  lv_obj_t* row = lv_obj_get_parent(sw);
+  rowPressable(row);
+  lv_obj_add_event_cb(row, onSwitchRowTap, LV_EVENT_CLICKED, (void*)open);
 }
 
 // The big clock in the boot splash's lettering, as ui-new draws it on the

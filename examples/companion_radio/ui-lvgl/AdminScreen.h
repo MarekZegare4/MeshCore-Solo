@@ -309,10 +309,7 @@ void UITask::adminValuePopup() {
   if (f->kind == admin::K_ONOFF) {
     lv_obj_t* r = centerRow(panel);
     label(r, "Off", THEME_FONT_BODY, theme::TEXT_MUTED);
-    lv_obj_t* sw = lv_switch_create(r);
-    lv_obj_set_size(sw, 56, 28);
-    if (S.value != 0) lv_obj_add_state(sw, LV_STATE_CHECKED);
-    lv_obj_add_event_cb(sw, onAdminValue, LV_EVENT_VALUE_CHANGED, (void*)(uintptr_t)V_TOGGLE);
+    switchCreate(r, S.value != 0, onAdminValue, (void*)(uintptr_t)V_TOGGLE);
     label(r, "On", THEME_FONT_BODY, theme::TEXT_MUTED);
   } else if (f->kind == admin::K_NUMBER) {
     lv_obj_t* r = centerRow(panel);

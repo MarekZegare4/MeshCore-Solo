@@ -54,9 +54,7 @@ void UITask::buildRepeater() {
   NodePrefs* p = _prefs;
 
   lv_obj_t* g = group(body, nullptr);
-  lv_obj_t* sw = switchRow(g, "Repeater", p->client_repeat ? "Relaying for others" : "Relay others' messages", nullptr);
-  if (p->client_repeat) lv_obj_add_state(sw, LV_STATE_CHECKED);
-  lv_obj_add_event_cb(sw, onRptSwitch, LV_EVENT_VALUE_CHANGED, (void*)(uintptr_t)RP_ON);
+  lv_obj_t* sw = switchRow(g, "Repeater", p->client_repeat ? "Relaying for others" : "Relay others' messages", p->client_repeat, onRptSwitch, (void*)(uintptr_t)RP_ON);
   s_on_sub = rowSub(lv_obj_get_parent(sw));
   groupNote(body, "Uses more battery; auto power pauses.");
   fill(&UITask::repeaterGroup, 1, 3);   // the rest as the loop goes

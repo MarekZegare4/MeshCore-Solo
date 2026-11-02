@@ -14,8 +14,6 @@
 
 namespace navview {
 
-static const int AHEAD_DEG = 12;   // within this of straight on: "ahead"
-
 // own_valid : is there a usable GPS fix for the device right now
 // cog_valid : is there a stable course-over-ground (UITask::currentCourse)
 // eta       : optional closing-speed/ETA tracker; when supplied a third line is
@@ -89,8 +87,8 @@ inline void draw(DisplayDriver& d,
     }
   }
   int turn = 0;   // -180..179 degrees to turn, right positive; with a course
-  if (cog_valid) turn = ((to_deg - cog_deg + 540) % 360) - 180;
-  const bool ahead = cog_valid && turn <= AHEAD_DEG && turn >= -AHEAD_DEG;
+  if (cog_valid) turn = geo::turnDeg(to_deg, cog_deg);
+  const bool ahead = cog_valid && geo::isAhead(turn);
 
   // Distance — emphasised at size 2.
   d.setTextSize(2);

@@ -186,19 +186,9 @@ void UITask::buildChannelEdit() {
   s_secret = chanField(body, "Passphrase");
   lv_textarea_set_max_length(s_secret, 32);
 
-  lv_obj_t* row = settingRow(body, "Hex key", "32 characters");
-  s_hex_sw = lv_switch_create(row);
-  lv_obj_set_size(s_hex_sw, 46, 24);
-  lv_obj_align(s_hex_sw, LV_ALIGN_RIGHT_MID, -theme::PAD, 0);
-  lv_obj_add_event_cb(s_hex_sw, onChanHex, LV_EVENT_VALUE_CHANGED, NULL);
+  s_hex_sw = switchRow(body, "Hex key", "32 characters", false, onChanHex);
 
-  lv_obj_t* save = lv_button_create(body);
-  lv_obj_set_size(save, LV_PCT(100), 38);
-  lv_obj_set_style_shadow_width(save, 0, 0);
-  lv_obj_set_style_radius(save, theme::RADIUS, 0);
-  lv_obj_add_event_cb(save, onChanSave, LV_EVENT_CLICKED, NULL);
-  lv_obj_center(label(save, LV_SYMBOL_OK " Save", THEME_FONT_BODY, theme::TEXT));
-  stylePrimary(save);
+  primaryButton(body, LV_SYMBOL_OK "  Save", onChanSave);
   s_status = noteLabel(body, "", THEME_FONT_SMALL, theme::FAIL);
 
   if (edit) {

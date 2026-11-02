@@ -1292,7 +1292,8 @@ void UITask::mapZoom(int delta) {
 
 void UITask::mapCenterOnMe() {
   int32_t lat, lon;
-  if (!ensureGps() || !_core->course.currentLocation(lat, lon)) { _map_follow = true; followShown(_map_center_btn, true); return; }   // centres once a fix comes
+  if (gpsAsked(GA_CENTRE)) return;
+  if (!ensureGps(GA_CENTRE) || !_core->course.currentLocation(lat, lon)) { _map_follow = true; followShown(_map_center_btn, true); return; }   // centres once a fix comes
   _map_follow = true;
   _map_cx = mapview::lonToTileX(lon / 1e6, _map_z);
   _map_cy = mapview::latToTileY(lat / 1e6, _map_z) + mapCenterBias();

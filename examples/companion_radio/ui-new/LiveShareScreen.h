@@ -11,6 +11,7 @@
 #include "InfoKit.h"
 #include "../NodePrefs.h"
 #include "icons.h"   // drawList (shared scrolling-list helper)
+#include "PopupMenu.h"   // "GPS is off" before Auto share starts
 
 class LiveShareScreen : public UIScreen {
   UITask*    _task;
@@ -18,6 +19,7 @@ class LiveShareScreen : public UIScreen {
   bool       _dirty  = false;
   int        _sel    = 0;
   int        _scroll = 0;
+  PopupMenu  _gps_ask;
 
   enum Kind : uint8_t { K_TRACK, K_AUTO, K_DURATION, K_TARGET, K_SCOPE, K_MOVE, K_GAP, K_HB };
   struct Row { Kind kind; const char* label; };
@@ -39,7 +41,7 @@ class LiveShareScreen : public UIScreen {
 public:
   LiveShareScreen(UITask* task, NodePrefs* prefs) : _task(task), _prefs(prefs) {}
 
-  void onShow() override { _dirty = false; _sel = 0; _scroll = 0; }
+  void onShow() override { _dirty = false; _sel = 0; _scroll = 0; _gps_ask.active = false; }
 
   // Resolve the configured target's display name (channel name or contact name).
   void currentTargetName(char* buf, int n) {
@@ -112,6 +114,7 @@ public:
       int mqr = info::listRow(display, y, r.label, val, sel, reserve);
       if (mqr > 0) mq_delay = mqr;
     });
+    if (_gps_ask.active) _gps_ask.render(display);
     return (mq_delay > 0 && mq_delay < 500) ? mq_delay : 500;
   }
 
@@ -124,8 +127,14 @@ public:
     switch (rows(_sel).kind) {
       case K_TRACK: _prefs->track_shared_loc ^= 1; _dirty = true; break;
       case K_AUTO:
-        _prefs->loc_share_enabled ^= 1;
-        if (_prefs->loc_share_enabled) _task->restartLocShareSession();
+        // With the GPS off nothing would go out: asked first, as Trail does.
+        if (!_prefs->loc_share_enabled && _task->hasGPS() && !_task->getGPSState()) {
+          _gps_ask.begin("GPS is off", 2);   // the action first, as Trail's: nothing is lost
+          _gps_ask.addItem("Enable GPS & share");
+          _gps_ask.addItem("Cancel");
+          return;
+        }
+        _task->core().live_share.setEnabled(!_prefs->loc_share_enabled);
         _dirty = true; break;
       case K_DURATION:
         _prefs->loc_share_duration_idx = (uint8_t)((_prefs->loc_share_duration_idx + (dir >= 0 ? 1 : NodePrefs::LOC_SHARE_DURATION_COUNT - 1)) % NodePrefs::LOC_SHARE_DURATION_COUNT);
@@ -192,6 +201,15 @@ public:
   }
 
   bool handleInput(char c) override {
+    if (_gps_ask.active) {
+      if (_gps_ask.handleInput(c) == PopupMenu::SELECTED && _gps_ask.selectedIndex() == 0) {
+        _task->toggleGPS(false);
+        _task->core().live_share.setEnabled(true);
+        _dirty = true;
+        _task->showAlert("GPS on, sharing", 1200);
+      }
+      return true;
+    }
     if (c == KEY_CANCEL) {
       _task->savePrefsIfDirty(_dirty);
       _task->leaveTool();

@@ -111,10 +111,9 @@ void UITask::radioGroup(int i) {
   int tx = p->tx_power_dbm < TX_MIN ? TX_MIN : p->tx_power_dbm > TX_MAX ? TX_MAX : p->tx_power_dbm;
   rowDropdown(settingRow(g, "TX power", p->tx_apc ? "Ceiling for auto power" : nullptr), s_opts, tx - TX_MIN, 0,
               onRadioDropdown, R_TX);
-  lv_obj_t* sw = switchRow(g, "Auto power", p->client_repeat ? "Off while repeating" : "Lowers power on good links", nullptr);
-  if (p->tx_apc) lv_obj_add_state(sw, LV_STATE_CHECKED);
+  lv_obj_t* sw = switchRow(g, "Auto power", p->client_repeat ? "Off while repeating" : "Lowers power on good links",
+                           p->tx_apc, onRadioSwitch, (void*)(uintptr_t)R_APC);
   if (p->client_repeat) lv_obj_add_state(sw, LV_STATE_DISABLED);
-  lv_obj_add_event_cb(sw, onRadioSwitch, LV_EVENT_VALUE_CHANGED, (void*)(uintptr_t)R_APC);
 }
 
 void UITask::radioSet(int which, int v) {

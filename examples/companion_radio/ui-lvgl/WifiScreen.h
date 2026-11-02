@@ -72,9 +72,7 @@ void UITask::buildWifi() {
   {   // the same switch as Settings' row
     char sub[48];
     wifiHint(sub, sizeof(sub));
-    lv_obj_t* sw = switchRow(group(body, nullptr), LV_SYMBOL_WIFI "  WiFi", sub, nullptr);
-    if (lvport::wifiAllowed()) lv_obj_add_state(sw, LV_STATE_CHECKED);
-    lv_obj_add_event_cb(sw, onWifiAllowed, LV_EVENT_VALUE_CHANGED, NULL);
+    switchRow(group(body, nullptr), LV_SYMBOL_WIFI "  WiFi", sub, lvport::wifiAllowed(), onWifiAllowed);
     groupNote(body, "For map downloads, live map tiles and updates.");
   }
 
@@ -129,13 +127,7 @@ void UITask::buildWifi() {
 
   _wifi_pass = wifiField(body, "Password", true);
 
-  lv_obj_t* save = lv_button_create(body);
-  lv_obj_set_size(save, LV_PCT(100), 38);
-  lv_obj_set_style_shadow_width(save, 0, 0);
-  lv_obj_set_style_radius(save, theme::RADIUS, 0);
-  lv_obj_add_event_cb(save, onWifiSave, LV_EVENT_CLICKED, NULL);
-  lv_obj_center(label(save, LV_SYMBOL_OK " Save", THEME_FONT_BODY, theme::TEXT));
-  stylePrimary(save);
+  primaryButton(body, LV_SYMBOL_OK "  Save", onWifiSave);
   _wifi_status = label(body, "", THEME_FONT_SMALL, theme::TEXT_MUTED);
 
   // Keyboard over the bottom of the screen; the body shrinks above it while
@@ -182,14 +174,8 @@ void UITask::wifiKeyboardHide() {
 static void wifiRow(lv_obj_t* body) {
   char sub[48];
   wifiHint(sub, sizeof(sub));
-  lv_obj_t* sw = switchRow(body, LV_SYMBOL_WIFI "  WiFi", sub, nullptr);
-  if (lvport::wifiAllowed()) lv_obj_add_state(sw, LV_STATE_CHECKED);
-  lv_obj_add_event_cb(sw, onWifiAllowed, LV_EVENT_VALUE_CHANGED, NULL);
-  lv_obj_t* row = lv_obj_get_parent(sw);
-  rowPressable(row);
-  lv_obj_add_event_cb(row, [](lv_event_t* e) {
-    if (lv_event_get_target(e) == lv_event_get_current_target(e)) s_ui->showWifi();   // not the switch
-  }, LV_EVENT_CLICKED, NULL);
+  switchRowOpens(switchRow(body, LV_SYMBOL_WIFI "  WiFi", sub, lvport::wifiAllowed(), onWifiAllowed),
+                 [](lv_event_t* e) { (void)e; s_ui->showWifi(); });
 }
 
 void UITask::wifiSetAllowed(bool on) {

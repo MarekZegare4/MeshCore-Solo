@@ -964,7 +964,7 @@ public:
         } else if (sel == 0) {   // Type in
           int32_t lat, lon;
           char cur[32] = "";
-          if (_task->core().fixedPosition(lat, lon)) snprintf(cur, sizeof(cur), "%.5f, %.5f", lat / 1e6, lon / 1e6);
+          if (_task->core().fixedPosition(lat, lon)) geo::fmtLatLon(cur, sizeof(cur), lat, lon, true);
           _edit_pos = true;
           _kb->begin(cur, 31);
           _kb->prompt = "Lat, lon";

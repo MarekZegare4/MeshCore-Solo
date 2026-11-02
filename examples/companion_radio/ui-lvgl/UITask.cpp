@@ -930,9 +930,9 @@ void UITask::setGps(bool on) {
 
 void UITask::botSetGPS(bool on) { if (_core->setGpsEnabled(on)) refreshStatusBar(); }
 
-bool UITask::ensureGps() {
+bool UITask::ensureGps(GpsAsk what) {
   int32_t lat, lon;
-  if (_core->gpsAvailable() && !_core->gpsEnabled()) { setGps(true); return false; }   // off, its last fix still reads valid
+  if (gpsAsked(what)) return false;   // off, its last fix still reads valid
   if (_core->course.currentLocation(lat, lon)) return true;
   showToast("Waiting for a GPS fix");
   return false;
@@ -1516,6 +1516,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_open(const char* name) {
   if (!strncmp(name, "accent@", 7)) { theme::setAccent(atoi(name + 7)); return; }   // "accent@4": Cyan
   if (!strncmp(name, "map@", 4)) { s_ui->simMapAt(name + 4); return; }   // "map@lat,lon,z"
   if (!strncmp(name, "channel@", 8)) { s_ui->openChannel(atoi(name + 8)); return; }
+  if (!strcmp(name, "chanedit")) { s_ui->showChannelEdit(-1); return; }   // a new channel
   if (!strncmp(name, "compose@", 8)) { s_ui->simCompose(name + 8); return; }
   if (!strcmp(name, "dm")) { s_ui->simDm(); return; }
   if (!strcmp(name, "send")) { s_ui->simSend(); return; }

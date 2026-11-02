@@ -198,15 +198,8 @@ void UITask::buildOta() {
   lv_bar_set_range(_ota_bar, 0, 1000);
   lv_obj_set_style_bg_color(_ota_bar, lv_color_hex(theme::SURFACE), LV_PART_MAIN);
   lv_obj_set_style_bg_color(_ota_bar, lv_color_hex(theme::ACCENT), LV_PART_INDICATOR);
-  lv_obj_t* b = lv_button_create(body);
-  lv_obj_set_size(b, LV_PCT(100), 40);
-  lv_obj_set_style_shadow_width(b, 0, 0);
-  lv_obj_set_style_radius(b, theme::RADIUS, 0);
-  lv_obj_add_event_cb(b, onOtaButton, LV_EVENT_CLICKED, NULL);
-  _ota_btn = b;
-  _ota_btn_lbl = label(b, "", THEME_FONT_BODY, theme::TEXT);
-  lv_obj_center(_ota_btn_lbl);
-  stylePrimary(b);
+  _ota_btn = primaryButton(body, "", onOtaButton);
+  _ota_btn_lbl = lv_obj_get_child(_ota_btn, 0);
   groupNote(body, "From github.com/" OTA_REPO " releases, over WiFi. About a minute; keep the device "
                   "charged. Settings, contacts and messages are kept.");
   refreshOta();

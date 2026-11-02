@@ -100,9 +100,8 @@ static void onTrailDraw(lv_event_t* e) {
 static lv_obj_t* s_dial = nullptr;
 static int32_t s_dial_ang = 0;          // shown: degrees clockwise from the dial's top
 static bool    s_dial_course = false;   // a course is known: the top is ahead, else north
-static bool    s_dial_ahead = false;    // within AHEAD_DEG of straight on
+static bool    s_dial_ahead = false;    // within geo::AHEAD_DEG of straight on
 static const int DIAL = 38;
-static const int AHEAD_DEG = 12;
 static const uint32_t DIAL_MS = 300;
 
 static void setDialAng(void* o, int32_t v) {
@@ -159,7 +158,7 @@ static void setDial(int deg, bool course) {
   deg = ((deg % 360) + 360) % 360;
   const bool snap = course != s_dial_course || lv_obj_has_flag(s_dial, LV_OBJ_FLAG_HIDDEN);
   s_dial_course = course;
-  s_dial_ahead = course && (deg <= AHEAD_DEG || deg >= 360 - AHEAD_DEG);
+  s_dial_ahead = course && geo::isAhead(geo::turnDeg(deg, 0));
   lv_obj_remove_flag(s_dial, LV_OBJ_FLAG_HIDDEN);
   lv_obj_set_style_border_color(s_dial, lv_color_hex(s_dial_ahead ? theme::OK : theme::SURFACE_2), 0);
   lv_anim_delete(s_dial, setDialAng);
@@ -517,7 +516,7 @@ void UITask::refreshNavBar() {
   navmap::setDial(course ? to - cog : to, course);
   // Walking: how far to turn (the dial shows it); standing: where the target lies.
   if (course) {
-    int turn = ((to - cog + 540) % 360) - 180;   // -180..179, right is positive
+    int turn = geo::turnDeg(to, cog);
     if (navmap::s_dial_ahead) snprintf(what, sizeof(what), "straight ahead");
     else snprintf(what, sizeof(what), "turn %s %d\xC2\xB0", turn > 0 ? "right" : "left", turn > 0 ? turn : -turn);
   } else {
@@ -732,7 +731,7 @@ static void navRowRight(lv_obj_t* row, const char* text, uint32_t col, int right
 void UITask::placeCard(lv_obj_t* parent, int32_t lat, int32_t lon) {
   lv_obj_t* card = infoCard(parent);
   char t[40];
-  snprintf(t, sizeof(t), "%.5f, %.5f", lat / 1e6, lon / 1e6);
+  geo::fmtLatLon(t, sizeof(t), lat, lon, true);
   infoRow(card, "Coordinates", t);
   int32_t mlat, mlon;
   if (!_core->course.currentLocation(mlat, mlon)) return;
@@ -831,7 +830,7 @@ void UITask::navAddWaypoint(int32_t lat, int32_t lon) {
 
 void UITask::navMarkHere() {
   int32_t lat, lon;
-  if (!ensureGps() || !_core->course.currentLocation(lat, lon)) return;
+  if (!ensureGps(GA_FIX) || !_core->course.currentLocation(lat, lon)) return;
   uint16_t secs = NodePrefs::gpsAvgSecs(_prefs ? _prefs->gps_avg_idx : 0);
   if (secs == 0) { navAddWaypoint(lat, lon); return; }
   if (_core->waypoints.full()) { showToast(waypointsFull()); return; }
@@ -1030,14 +1029,10 @@ void UITask::navToolsPopup(bool back) {
   // What the map shows, right under the trail: used more than what follows.
   lv_obj_t* g = group(list, "LAYERS");
   choiceRow(g, "Map", "Topo, light, dark or satellite", mapview::LAYER_OPTS, mapview::s_layer, onMapLayer);
-  lv_obj_t* tsw = switchRow(g, "Hiking trails", "Marked routes in their colours", nullptr);
-  if (lvport::trailsOn()) lv_obj_add_state(tsw, LV_STATE_CHECKED);
-  lv_obj_add_event_cb(tsw, onTrails, LV_EVENT_VALUE_CHANGED, NULL);
+  switchRow(g, "Hiking trails", "Marked routes in their colours", lvport::trailsOn(), onTrails);
   schemaRow(g, SETTING(flow_show));
 #ifdef MAP_VECTOR   // unfinished (LvglPort.h vectorOn)
-  lv_obj_t* vsw = switchRow(g, "Vector map (test)", "Drawn on the device: trails, contours", nullptr);
-  if (lvport::vectorOn()) lv_obj_add_state(vsw, LV_STATE_CHECKED);
-  lv_obj_add_event_cb(vsw, onVectorMap, LV_EVENT_VALUE_CHANGED, NULL);
+  switchRow(g, "Vector map (test)", "Drawn on the device: trails, contours", lvport::vectorOn(), onVectorMap);
   char vr[48];
   int nv = mapview::s_vpacks.count();
   snprintf(vr, sizeof(vr), nv ? "%d on the card" : "None - packs go in /vmap", nv);
@@ -1094,9 +1089,7 @@ void UITask::navToolsPopup(bool back) {
   int na = mapview::s_areas.count();
   snprintf(ar, sizeof(ar), na ? "%d on the card - new, rename, refresh, delete" : "None yet - pick one with a frame", na);
   listRow(g, "Map areas", ar, onNavTool, (void*)(uintptr_t)navmap::TL_AREAS);
-  lv_obj_t* lsw = switchRow(g, "Live tiles", "Load missing tiles over WiFi", nullptr);
-  if (lvport::liveTiles()) lv_obj_add_state(lsw, LV_STATE_CHECKED);
-  lv_obj_add_event_cb(lsw, onLiveTiles, LV_EVENT_VALUE_CHANGED, NULL);
+  switchRow(g, "Live tiles", "Load missing tiles over WiFi", lvport::liveTiles(), onLiveTiles);
 
 
   refreshNavTools();
@@ -1360,10 +1353,11 @@ void UITask::navToolAction(uint8_t act) {
   switch (act) {
     case navmap::TL_TRAIL_TOGGLE:
       if (!tr.isActive()) {
+        if (gpsAsked(GA_TRAIL)) return;   // its popup in place of this one
         tr.setActive(true);
         int32_t lat, lon;
         if (_core->course.currentLocation(lat, lon)) showToast("Recording the trail");
-        else ensureGps();   // turns GPS on, or says it's waiting
+        else ensureGps(GA_TRAIL);   // says it's waiting
       } else {
         tr.setActive(false);
         showToast("Trail stopped");
@@ -1402,11 +1396,12 @@ void UITask::navToolAction(uint8_t act) {
       break;
     case navmap::TL_TRACKBACK: {
       if (navmap::s_tb.active()) { navmap::s_tb.stop(); showToast("Track back stopped"); break; }
+      if (gpsAsked(GA_TRACKBACK)) return;   // its popup in place of this one
       int32_t lat = 0, lon = 0;
       bool fix = _core->course.currentLocation(lat, lon);
       if (!navmap::s_tb.start(tr.store(), fix, lat, lon)) { showToast("No trail to walk back"); break; }
       navmap::s_eta.reset();
-      if (!fix) ensureGps();
+      if (!fix) ensureGps(GA_TRACKBACK);   // says it's waiting
       navClosePopup();
       navFrameTarget();
       refreshNavBar();
@@ -1421,24 +1416,24 @@ void UITask::navToolAction(uint8_t act) {
     }
     case navmap::TL_SHARE_TOGGLE:
       if (_prefs->loc_share_enabled) {
-        _prefs->loc_share_enabled = 0;
+        _core->live_share.setEnabled(false);
         showToast("Live share stopped");
       } else {
-        _prefs->loc_share_enabled = 1;
-        _core->live_share.restartSession();
+        if (gpsAsked(GA_SHARE)) return;
+        _core->live_share.setEnabled(true);
         int32_t lat, lon;
         if (_core->course.currentLocation(lat, lon)) showToast("Sharing your position");
-        else ensureGps();
+        else ensureGps(GA_SHARE);   // says it's waiting
       }
       prefsSave();
       break;
     case navmap::TL_SHARE_ONCE: {
       int32_t lat, lon;
-      if (!ensureGps() || !_core->course.currentLocation(lat, lon)) break;
+      if (!ensureGps(GA_FIX) || !_core->course.currentLocation(lat, lon)) break;
       // With a session on, straight to its target; otherwise pick a conversation.
       if (_prefs->loc_share_enabled && _core->live_share.send(lat, lon)) { showToast("Position sent"); break; }
       char text[40];
-      snprintf(text, sizeof(text), LOCATION_MSG_TAG "%.5f,%.5f", lat / 1e6, lon / 1e6);
+      geo::fmtLocShare(text, sizeof(text), lat, lon);
       navClosePopup();
       shareToMessage(text);
       return;
@@ -1520,7 +1515,7 @@ void UITask::navTargetsPopup() {
     const Waypoint& w = wp.at(i);
     char title[WAYPOINT_LABEL_LEN + 8], sub[40], d[12];
     snprintf(title, sizeof(title), UI_SYMBOL_FLAG "  %s", w.label[0] ? w.label : "(unnamed)");
-    snprintf(sub, sizeof(sub), "%.5f, %.5f", w.lat_1e6 / 1e6, w.lon_1e6 / 1e6);
+    geo::fmtLatLon(sub, sizeof(sub), w.lat_1e6, w.lon_1e6, true);
     lv_obj_t* row = listRow(list, title, sub, onNavPick, (void*)(uintptr_t)navmap::code(navmap::T_WAYPOINT, i));
     lv_obj_t* more = lv_button_create(row);   // the waypoint menu
     lv_obj_set_size(more, 40, 34);

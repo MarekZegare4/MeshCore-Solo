@@ -45,6 +45,18 @@ static inline const char* bearingCardinal(int deg) {
   return dirs[((deg + 22) % 360) / 45];
 }
 
+// How far to turn from course `cog` to bearing `to` (degrees): -180..179, right
+// positive. Within AHEAD_DEG either way the target counts as straight on.
+static const int AHEAD_DEG = 12;
+static inline int turnDeg(int to, int cog) { return (((to - cog) % 360 + 540) % 360) - 180; }
+static inline bool isAhead(int turn) { return turn <= AHEAD_DEG && turn >= -AHEAD_DEG; }
+
+// "50.06143,19.93658": a coordinate as messages carry it, and parseLatLon reads
+// back. `spaced` ("50.06143, 19.93658") to show it, or to edit it.
+static inline void fmtLatLon(char* buf, int n, int32_t lat_1e6, int32_t lon_1e6, bool spaced = false) {
+  snprintf(buf, n, spaced ? "%.5f, %.5f" : "%.5f,%.5f", lat_1e6 / 1e6, lon_1e6 / 1e6);
+}
+
 // Human distance string. Metric: "850m" / "2.3km" / "140km". Imperial:
 // "850ft" / "2.3mi" / "140mi" (feet below ~1000 ft, then miles). `spaced`
 // puts a space before the unit ("850 m"), for value rows with room for it.
@@ -142,6 +154,14 @@ static inline bool parseLatLon(const char* text, int32_t& lat_1e6, int32_t& lon_
 // for the coordinate, and both stay readable on firmware/apps that don't know
 // the tag (it just looks like a coordinate).
 #define LOCATION_MSG_TAG "[LOC]"
+
+// "[LOC]lat,lon", then `name` when given: a DM has no sender in front of it.
+static inline void fmtLocShare(char* buf, int n, int32_t lat_1e6, int32_t lon_1e6, const char* name = nullptr) {
+  int o = snprintf(buf, n, LOCATION_MSG_TAG);
+  if (o < 0 || o >= n) return;
+  fmtLatLon(buf + o, n - o, lat_1e6, lon_1e6);
+  if (name && name[0]) { size_t l = strlen(buf); snprintf(buf + l, n - l, " %s", name); }
+}
 
 // An SOS with a position ("SOS 50.06143,19.93658 ...", "SOS last ...", see
 // ui-core/SosEngine.h): `text` without the sender's name in front. Only at the

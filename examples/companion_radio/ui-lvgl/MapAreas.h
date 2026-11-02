@@ -388,13 +388,7 @@ void UITask::mapAreasPopup() {
   } else {
     noteLabel(list, "No areas yet. Maps downloaded before this list are still on the card.");
   }
-  lv_obj_t* add = lv_button_create(list);
-  lv_obj_set_size(add, LV_PCT(100), 38);
-  lv_obj_set_style_radius(add, theme::RADIUS, 0);
-  lv_obj_set_style_shadow_width(add, 0, 0);
-  lv_obj_add_event_cb(add, onNewArea, LV_EVENT_CLICKED, NULL);
-  lv_obj_center(label(add, LV_SYMBOL_PLUS "  New area", THEME_FONT_BODY, theme::TEXT));
-  stylePrimary(add);
+  primaryButton(list, LV_SYMBOL_PLUS "  New area", onNewArea);
 }
 
 void UITask::mapAreaPopup(int idx) {

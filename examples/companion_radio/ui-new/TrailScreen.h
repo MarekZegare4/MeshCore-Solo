@@ -81,7 +81,7 @@ class TrailScreen : public UIScreen {
   // correctly (settings rows cycle with LEFT/RIGHT; everything else is Enter).
   // Live-share *config* lives in its own tool (Tools › Live Share); the map only
   // keeps the one-shot "Share my pos" action.
-  enum MenuLevel { ML_MAIN, ML_FILE, ML_SETTINGS, ML_CONFIRM_GPS, ML_CONFIRM_RESET };
+  enum MenuLevel { ML_MAIN, ML_FILE, ML_SETTINGS, ML_CONFIRM_GPS, ML_CONFIRM_GPS_SHARE, ML_CONFIRM_RESET };
   PopupMenu _action_menu;
   uint8_t   _menu_level = ML_MAIN;
   uint8_t   _act_map[16];  // max rows on any one level; pushAction guards the cap
@@ -179,6 +179,11 @@ public:
           _menu_level = ML_MAIN;   // popup already closed by handleInput()
           return true;
         }
+        if (_menu_level == ML_CONFIRM_GPS_SHARE) {   // "Enable GPS": a fix takes a while, so no send yet
+          if (_action_menu.selectedIndex() == 0) { _task->toggleGPS(false); _task->showAlert("GPS on, share once it has a fix", 1500); }
+          _menu_level = ML_MAIN;
+          return true;
+        }
         // Reset confirmation popup: same shape, but defaults to Cancel (row 1)
         // since unlike the GPS prompt above, this one is destructive.
         if (_menu_level == ML_CONFIRM_RESET) {
@@ -198,13 +203,16 @@ public:
           case ACT_MARK_AVG:
           case ACT_AUTOSAVE:
           case ACT_AUTOPAUSE: return true;
-          case ACT_SHARE_NOW:     shareMyLocationNow(); break;
+          case ACT_SHARE_NOW:
+            if (_task->hasGPS() && !_task->getGPSState()) { buildGpsConfirmMenu(true); return true; }   // its last fix may be stale
+            shareMyLocationNow();
+            break;
           case ACT_TOGGLE:
             // Starting a trail with GPS switched off logs nothing and just
             // sits on "Waiting for GPS fix" forever -- prompt to enable it
             // first (only on boards that actually have a toggleable GPS).
             if (!_store->isActive() && _task->hasGPS() && !_task->getGPSState()) {
-              buildGpsConfirmMenu();
+              buildGpsConfirmMenu(false);
               return true;
             }
             handleToggle();
@@ -379,13 +387,14 @@ private:
     pushAction(ACT_SETTINGS,  "Settings...");
   }
 
-  // Confirmation shown when "Start tracking" is chosen with GPS off. Rows are
-  // plain (not ActionIds); handled by _menu_level in the SELECTED branch.
-  void buildGpsConfirmMenu() {
-    _menu_level = ML_CONFIRM_GPS;
+  // Confirmation shown when "Start tracking" or "Share my pos" is chosen with
+  // GPS off. Rows are plain (not ActionIds); handled by _menu_level in the
+  // SELECTED branch.
+  void buildGpsConfirmMenu(bool share) {
+    _menu_level = share ? ML_CONFIRM_GPS_SHARE : ML_CONFIRM_GPS;
     _act_count  = 0;
     _action_menu.begin("GPS is off", 2);
-    _action_menu.addItem("Enable GPS & start");
+    _action_menu.addItem(share ? "Enable GPS" : "Enable GPS & start");
     _action_menu.addItem("Cancel");
   }
 
@@ -471,16 +480,8 @@ private:
     p->gps_avg_idx = idx;
   }
 
-  // One-shot manual share: build "[LOC]lat,lon" and hand it to the Messages
-  // screen, where the user picks a DM or channel recipient. (Auto live-share
-  // config lives in Tools › Live Share.)
-  void shareMyLocationNow() {
-    int32_t lat, lon;
-    if (!_task->currentLocation(lat, lon)) { _task->showAlert("No GPS fix", 1000); return; }
-    char text[40];
-    snprintf(text, sizeof(text), LOCATION_MSG_TAG "%.5f,%.5f", lat / 1e6, lon / 1e6);
-    _task->shareToMessage(text);
-  }
+  // One-shot manual share, as the home Map page's: UITask::quickShareMyLocation.
+  void shareMyLocationNow() { _task->quickShareMyLocation(); }
 
   // Render the average speed (or pace) in the globally-selected unit system.
   void formatAvgPaceOrSpeed(char* buf, size_t n, NodePrefs* p) const {

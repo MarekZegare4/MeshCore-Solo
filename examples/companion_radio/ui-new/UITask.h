@@ -366,7 +366,6 @@ public:
   void gotoLiveShareScreen();
   // Live share session control (ui-core/LiveShareEngine.h): restart = new
   // session (re-announce + fresh clock); clock-only = changed "Stop after".
-  void restartLocShareSession();
   void restartLocShareClock();
   void gotoLocatorScreen();
   // Re-arm the locator state machine so the next evaluation initialises

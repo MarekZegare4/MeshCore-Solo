@@ -1614,6 +1614,7 @@ public:
       display.setTextSize(1);
       display.drawTextCentered(display.width() / 2, content_y + step, "hibernating...");   // the panel's Hibernate row
     }
+    if (_page == HomePage::MAP && _tile_menu.active) _tile_menu.render(display);   // "GPS is off"
     if (slide >= 0) {   // page turn: the page left behind slides out, this one in
       display.slideCompose(_slide_dir * (int)(display.width() * slide + 0.5f));
       anim_ms = 15;
@@ -1634,6 +1635,14 @@ public:
   }
 
   bool handleInput(char c) override {
+    // Map page: "GPS is off" before a share (the tile menu, free on this page).
+    if (_page == HomePage::MAP && _tile_menu.active) {
+      if (_tile_menu.handleInput(c) == PopupMenu::SELECTED && _tile_menu.selectedIndex() == 0) {
+        _task->toggleGPS(false);
+        _task->showAlert("GPS on, share once it has a fix", 1500);
+      }
+      return true;
+    }
     // Favourites grid claims joystick UP/DOWN and inner LEFT/RIGHT; LEFT at the
     // left column and RIGHT at the right column fall through to page nav so the
     // user can still leave the page sideways.
@@ -1759,6 +1768,12 @@ public:
       return true;
     }
     if (c == KEY_CONTEXT_MENU && _page == HomePage::MAP) {
+      if (_task->hasGPS() && !_task->getGPSState()) {   // its last fix may be stale: asked first
+        _tile_menu.begin("GPS is off", 2);
+        _tile_menu.addItem("Enable GPS");
+        _tile_menu.addItem("Cancel");
+        return true;
+      }
       _task->quickShareMyLocation();
       return true;
     }

@@ -99,6 +99,49 @@ static void onOpenGps(lv_event_t* e) { (void)e; s_ui->showGps(false); }
 static void onOpenGpsFromSettings(lv_event_t* e) { (void)e; s_ui->showGps(true); }
 static void onGpsTurnOn(lv_event_t* e) { (void)e; s_ui->setGps(true); s_ui->refreshGps(); }
 
+// ── "GPS is off" ──────────────────────────────────────────────────────────────
+// Something that needs the GPS while it's off asks first, as on the L1: Turn
+// on does it, the close button leaves it undone.
+
+static void onGpsAsk(lv_event_t* e) {
+  UITask::GpsAsk what = (UITask::GpsAsk)(uintptr_t)lv_event_get_user_data(e);
+  s_ui->navClosePopup();
+  s_ui->setGps(true);
+  s_ui->gpsAskDone(what);
+}
+
+bool UITask::gpsAsked(GpsAsk what) {
+  if (!_core->gpsAvailable() || _core->gpsEnabled()) return false;
+  static const char* const NEEDS[] = {
+    "The trail is recorded from the GPS.", "Live share sends the GPS position.", "Track back follows the GPS.",
+    "The map finds you by the GPS.", "This needs a GPS fix.",
+  };
+  lv_obj_t* panel = navPopupPanel("GPS is off", false);
+  noteLabel(panel, NEEDS[what]);
+  primaryButton(panel, LV_SYMBOL_GPS "  Turn on GPS", onGpsAsk, (void*)(uintptr_t)what);
+  return true;
+}
+
+// Just turned on: what asked for it. A position needs a fresh fix first (its
+// last one may be old), so a share or a mark is left for then.
+void UITask::gpsAskDone(GpsAsk what) {
+  switch (what) {
+    case GA_TRAIL:
+      _core->trail.setActive(true);
+      showToast("GPS on, recording the trail");
+      break;
+    case GA_SHARE:
+      _core->live_share.setEnabled(true);
+      prefsSave();
+      showToast("GPS on, sharing your position");
+      break;
+    case GA_TRACKBACK: navToolAction(navmap::TL_TRACKBACK); break;
+    case GA_CENTRE:    mapCenterOnMe(); break;
+    case GA_FIX:       showToast("GPS on, waiting for a fix"); break;
+  }
+  refreshStatusBar();
+}
+
 // Sky plot: horizon ring, 30 / 60 degree rings, N-S / E-W lines, one dot per
 // satellite at its azimuth (N up) and elevation (overhead in the centre).
 static void onGpsSkyDraw(lv_event_t* e) {
@@ -480,7 +523,7 @@ void UITask::refreshGps() {
     if (g->utc_valid) snprintf(utc, sizeof(utc), "%02u:%02u:%02u", g->utc_h, g->utc_m, g->utc_s);
     int32_t lat, lon;
     if (fix && _core->course.currentLocation(lat, lon)) {
-      snprintf(pos, sizeof(pos), "%.5f, %.5f", lat / 1e6, lon / 1e6);
+      geo::fmtLatLon(pos, sizeof(pos), lat, lon, true);
       locator(lat / 1e6, lon / 1e6, grid, sizeof(grid));
     }
     if (fix && g->alt_valid) snprintf(alt, sizeof(alt), "%.0f m", g->alt_m);

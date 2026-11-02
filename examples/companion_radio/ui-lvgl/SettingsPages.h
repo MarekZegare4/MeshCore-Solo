@@ -12,28 +12,8 @@ static void onKeyboardAlphabet(lv_event_t* e) {
   s_ui->setKeyboardAlphabets(choiceSelected(s_kb_main_dd), choiceSelected(s_kb_alt_dd));
 }
 
-// A preference toggle (0/1 byte in NodePrefs), saved on change.
-static void onPrefSwitch(lv_event_t* e) {
-  uint8_t* pref = (uint8_t*)lv_event_get_user_data(e);
-  *pref = lv_obj_has_state((lv_obj_t*)lv_event_get_target(e), LV_STATE_CHECKED) ? 1 : 0;
-  prefsSave();
-}
-
 static void onGpsSwitch(lv_event_t* e) {
   s_ui->setGps(lv_obj_has_state((lv_obj_t*)lv_event_get_target(e), LV_STATE_CHECKED));
-}
-
-// pref == nullptr: the caller wires the switch itself.
-static lv_obj_t* switchRow(lv_obj_t* parent, const char* text, const char* sub, uint8_t* pref) {
-  lv_obj_t* row = settingRow(parent, text, sub, 236);   // the hint clear of the switch
-  lv_obj_t* sw = lv_switch_create(row);
-  lv_obj_set_size(sw, 46, 24);
-  lv_obj_align(sw, LV_ALIGN_RIGHT_MID, -theme::PAD, 0);
-  if (pref) {
-    if (*pref) lv_obj_add_state(sw, LV_STATE_CHECKED);
-    lv_obj_add_event_cb(sw, onPrefSwitch, LV_EVENT_VALUE_CHANGED, pref);
-  }
-  return sw;
 }
 
 // ── Schema-driven settings (ui-core/SettingsSchema.h) ─────────────────────────
@@ -44,9 +24,7 @@ static void onMsgBannerSwitch(lv_event_t* e) {
   s_ui->setMsgBanner(lv_obj_has_state((lv_obj_t*)lv_event_get_target(e), LV_STATE_CHECKED));
 }
 void UITask::msgBannerRow(lv_obj_t* card) {
-  lv_obj_t* sw = switchRow(card, "Message banner", "A new message drops in from the top", nullptr);
-  if (!_prefs || _prefs->msg_alert != NodePrefs::MSG_ALERT_OFF) lv_obj_add_state(sw, LV_STATE_CHECKED);
-  lv_obj_add_event_cb(sw, onMsgBannerSwitch, LV_EVENT_VALUE_CHANGED, NULL);
+  switchRow(card, "Message banner", "A new message drops in from the top", !_prefs || _prefs->msg_alert != NodePrefs::MSG_ALERT_OFF, onMsgBannerSwitch);
 }
 void UITask::setMsgBanner(bool on) {
   if (!_prefs) return;
@@ -161,9 +139,7 @@ void UITask::buildSchemaSettings() {
       schemaRow(g, SETTING(display_brightness));
       schemaRow(g, SETTING(auto_off_secs));
       schemaRow(g, SETTING(msg_wake));
-      lv_obj_t* tw = switchRow(g, "Tap to wake", "Off: only the top button wakes it", nullptr);   // in NVS
-      if (_tap_wake) lv_obj_add_state(tw, LV_STATE_CHECKED);
-      lv_obj_add_event_cb(tw, onTapWake, LV_EVENT_VALUE_CHANGED, NULL);
+      switchRow(g, "Tap to wake", "Off: only the top button wakes it", _tap_wake, onTapWake);
       g = group(body, "LOCK");
       schemaRow(g, SETTING(auto_lock));
       listRow(g, "Screen PIN", pinSet() ? "On  -  asked when the screen wakes" : "Off", onPinSetup, NULL);
@@ -207,7 +183,7 @@ enum : int { OWNPOS_TYPE, OWNPOS_WAYPOINTS, OWNPOS_CLEAR, OWNPOS_WP0 = 100 };
 void UITask::ownPositionText(char* sub, size_t n) {
   int32_t lat, lon;
   if (_core->gpsEnabled()) snprintf(sub, n, "From the GPS while it's on");
-  else if (_core->fixedPosition(lat, lon)) snprintf(sub, n, "%.5f, %.5f", lat / 1e6, lon / 1e6);
+  else if (_core->fixedPosition(lat, lon)) geo::fmtLatLon(sub, n, lat, lon, true);
   else snprintf(sub, n, "Not set");
 }
 
@@ -230,7 +206,7 @@ void UITask::ownPositionPick(int code) {
   if (code == OWNPOS_TYPE) {
     int32_t lat, lon;
     char cur[32] = "";
-    if (_core->fixedPosition(lat, lon)) snprintf(cur, sizeof(cur), "%.5f, %.5f", lat / 1e6, lon / 1e6);
+    if (_core->fixedPosition(lat, lon)) geo::fmtLatLon(cur, sizeof(cur), lat, lon, true);
     TextEntry t = { "Fixed position", onOwnPosKb };
     t.text = cur;
     t.hint = "50.06143, 19.93658";
@@ -246,7 +222,7 @@ void UITask::ownPositionPick(int code) {
       const Waypoint& w = wp.at(i);
       char title[WAYPOINT_LABEL_LEN + 8], sub[40];
       snprintf(title, sizeof(title), UI_SYMBOL_FLAG "  %s", w.label[0] ? w.label : "(unnamed)");
-      snprintf(sub, sizeof(sub), "%.5f, %.5f", w.lat_1e6 / 1e6, w.lon_1e6 / 1e6);
+      geo::fmtLatLon(sub, sizeof(sub), w.lat_1e6, w.lon_1e6, true);
       listRow(list, title, sub, onOwnPosPick, (void*)(uintptr_t)(OWNPOS_WP0 + i));
     }
     return;
@@ -488,9 +464,7 @@ void UITask::schemaRow(lv_obj_t* card, int i) {
     return;
   }
   if (!st.option) {
-    lv_obj_t* sw = switchRow(card, st.label, st.hint, nullptr);
-    if (v) lv_obj_add_state(sw, LV_STATE_CHECKED);
-    lv_obj_add_event_cb(sw, onSchemaSwitch, LV_EVENT_VALUE_CHANGED, (void*)(uintptr_t)i);
+    switchRow(card, st.label, st.hint, v, onSchemaSwitch, (void*)(uintptr_t)i);
     return;
   }
   // The longest list, the time zone, is 27 options and 167 bytes: at 160
@@ -584,16 +558,9 @@ void UITask::settingsGroup(int i) {
     g = group(body, "CONNECTIONS");
     bluetoothRow(g);
     wifiRow(g);
-    if (_core->gpsAvailable()) {
-      lv_obj_t* sw = switchRow(g, LV_SYMBOL_GPS "  GPS", "Tap for satellites and options", nullptr);
-      if (_core->gpsEnabled()) lv_obj_add_state(sw, LV_STATE_CHECKED);
-      lv_obj_add_event_cb(sw, onGpsSwitch, LV_EVENT_VALUE_CHANGED, NULL);
-      lv_obj_t* row = lv_obj_get_parent(sw);
-      rowPressable(row);
-      lv_obj_add_event_cb(row, [](lv_event_t* e) {
-        if (lv_event_get_target(e) == lv_event_get_current_target(e)) onOpenGpsFromSettings(e);   // not the switch
-      }, LV_EVENT_CLICKED, NULL);
-    }
+    if (_core->gpsAvailable())
+      switchRowOpens(switchRow(g, LV_SYMBOL_GPS "  GPS", "Tap for satellites and options", _core->gpsEnabled(), onGpsSwitch),
+                     onOpenGpsFromSettings);
     break;
 
   case 2:

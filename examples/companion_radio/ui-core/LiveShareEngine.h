@@ -73,6 +73,12 @@ public:
   // Start the session afresh (next tick treats it as a new enable: re-announce
   // + new duration clock).
   void restartSession() { _was_enabled = false; }
+  // Sharing on (a session of its own, announced at once) or off.
+  void setEnabled(bool on) {
+    if (!_prefs) return;
+    _prefs->loc_share_enabled = on ? 1 : 0;
+    if (on) restartSession();
+  }
   // Restart only the session's duration clock -- unlike restartSession(), no
   // re-announce. For a changed "Stop after" length, where position hasn't
   // changed. No-op before a session has started (loop() sets the clock then).
@@ -108,7 +114,7 @@ public:
     if (_prefs->loc_share_target_type == 0) {
       // Channel: sendGroupMessage prepends "<name>: ", so the payload already
       // names the sender — keep the [LOC] text bare.
-      snprintf(text, sizeof(text), LOCATION_MSG_TAG "%.5f,%.5f", lat / 1e6, lon / 1e6);
+      geo::fmtLocShare(text, sizeof(text), lat, lon);
       ChannelDetails ch;
       if (!the_mesh.getChannel(_prefs->loc_share_channel_idx, ch)) return false;
       return the_mesh.sendGroupMessage(rtc_clock.getCurrentTime(), ch.channel,
@@ -120,8 +126,7 @@ public:
     ContactInfo* c = the_mesh.lookupContactByPubKey(_prefs->loc_share_dm_prefix,
                                                     NodePrefs::FAVOURITE_PREFIX_LEN);
     if (!c) return false;
-    snprintf(text, sizeof(text), LOCATION_MSG_TAG "%.5f,%.5f %s",
-             lat / 1e6, lon / 1e6, the_mesh.getNodeName());
+    geo::fmtLocShare(text, sizeof(text), lat, lon, the_mesh.getNodeName());
     uint32_t expected_ack = 0, est_timeout = 0;
     return the_mesh.sendMessage(*c, rtc_clock.getCurrentTime(), 0, text, expected_ack, est_timeout) > 0;
   }

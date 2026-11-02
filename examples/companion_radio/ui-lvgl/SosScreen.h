@@ -352,7 +352,7 @@ void UITask::sosRow(int row) {
     for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
       ChannelDetails ch;
       if (!the_mesh.getChannel(i, ch) || !ch.name[0]) continue;
-      switchRowIdx(g, ch.name, nullptr, p->sos_ch_mask & (1ULL << i), onSosChannel, i);
+      switchRow(g, ch.name, nullptr, (p->sos_ch_mask >> i) & 1, onSosChannel, (void*)(uintptr_t)i);
       n++;
     }
     if (n == 0) label(list, "No channels.", THEME_FONT_SMALL, theme::TEXT_MUTED);

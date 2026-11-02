@@ -314,10 +314,8 @@ void UITask::buildClock() {
     lv_obj_set_flex_align(on, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(on, 8, 0);
     lv_obj_set_style_pad_bottom(on, 4, 0);
-    lv_obj_t* sw = s_alarm_sw = lv_switch_create(on);
+    lv_obj_t* sw = s_alarm_sw = switchCreate(on, _prefs->alarm_on, nullptr, nullptr);
     label(on, "Alarm on", THEME_FONT_SMALL, theme::TEXT_MUTED);
-    lv_obj_set_size(sw, 50, 26);
-    if (_prefs->alarm_on) lv_obj_add_state(sw, LV_STATE_CHECKED);
     lv_obj_add_event_cb(sw, onAlarmSwitch, LV_EVENT_VALUE_CHANGED, NULL);
     label(col, "Repeat", THEME_FONT_SMALL, theme::TEXT_MUTED);
     char opts[48];

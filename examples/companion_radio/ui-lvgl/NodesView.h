@@ -294,8 +294,6 @@ static void nodeFavText() {
   if (s_nd_fav) lv_label_set_text(s_nd_fav, s_node.fav ? "Remove from favourites" : "Add to favourites");   // the star in its icon column
 }
 
-static lv_obj_t* switchRow(lv_obj_t* parent, const char* text, const char* sub, uint8_t* pref);   // below
-
 // One of the node's "Can ask for" switches; user data = its TELEM_PERM_* bit.
 static void onNodeTelemSwitch(lv_event_t* e) {
   ContactInfo* ci = the_mesh.lookupContactByPubKey(s_node.pub_key, PUB_KEY_SIZE);
@@ -366,9 +364,7 @@ void UITask::buildNode() {
     };
     uint8_t perms = contactctl::telemetry(*ci);
     for (const auto& t : T) {
-      lv_obj_t* sw = switchRow(g, t.text, t.sub, nullptr);
-      if (perms & t.bit) lv_obj_add_state(sw, LV_STATE_CHECKED);
-      lv_obj_add_event_cb(sw, onNodeTelemSwitch, LV_EVENT_VALUE_CHANGED, (void*)(uintptr_t)t.bit);
+      switchRow(g, t.text, t.sub, perms & t.bit, onNodeTelemSwitch, (void*)(uintptr_t)t.bit);
     }
   }
 
@@ -408,7 +404,7 @@ void UITask::refreshNode() {
       bearing = az;
       snprintf(dist, sizeof(dist), "%s  %d\xC2\xB0 %s", d, az, geo::bearingCardinal(az));
     }
-    snprintf(pos, sizeof(pos), "%.5f, %.5f", e.lat_e6 / 1e6, e.lon_e6 / 1e6);
+    geo::fmtLatLon(pos, sizeof(pos), e.lat_e6, e.lon_e6, true);
   } else if (!_node_from_scan) {
     snprintf(pos, sizeof(pos), "Not shared");
   }

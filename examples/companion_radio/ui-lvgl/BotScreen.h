@@ -58,12 +58,6 @@ static void botChip(const char* ph, void* parent) {
   lv_obj_add_event_cb(b, onBotPlaceholder, LV_EVENT_CLICKED, NULL);
   lv_obj_center(label(b, ph, THEME_FONT_SMALL, theme::TEXT));
 }
-// A switchRow() for something that isn't a plain pref: `cb` gets `idx`.
-static void switchRowIdx(lv_obj_t* parent, const char* text, const char* hint, bool on, lv_event_cb_t cb, int idx) {
-  lv_obj_t* sw = switchRow(parent, text, hint, nullptr);
-  if (on) lv_obj_add_state(sw, LV_STATE_CHECKED);
-  lv_obj_add_event_cb(sw, cb, LV_EVENT_VALUE_CHANGED, (void*)(uintptr_t)idx);
-}
 static void onOpenBot(lv_event_t* e) { (void)e; s_ui->showBot(); }
 
 static lv_obj_t* botHourButton(lv_obj_t* parent, const char* text, uint8_t act, bool accent) {
@@ -148,7 +142,7 @@ void UITask::buildBot() {
     const botcfg::Row& r = botcfg::row(s_tab, i);
     uint8_t* fl = botcfg::flag(p, r.kind);
     if (fl && !botcfg::isScope(r.kind)) {
-      switchRowIdx(g, r.label, r.hint, *fl, onBotSwitch, i);
+      switchRow(g, r.label, r.hint, *fl, onBotSwitch, (void*)(uintptr_t)i);
       continue;
     }
     uint16_t* cmd_off = botcfg::cmdOff(p, r.kind);
@@ -255,7 +249,7 @@ void UITask::botRow(int row) {
   if (uint16_t* off = botcfg::cmdOff(p, r.kind)) {
     lv_obj_t* g = group(scrollList(navPopupPanel("Allowed commands", true)), nullptr);
     for (int i = 0; i < botcmd::count(botcfg::actionsOn(p, r.kind)); i++)
-      switchRowIdx(g, botcmd::CMDS[i].label, botcmd::CMDS[i].hint, !(*off & botcmd::flag(i)), onBotCmd, i);
+      switchRow(g, botcmd::CMDS[i].label, botcmd::CMDS[i].hint, !(*off & botcmd::flag(i)), onBotCmd, (void*)(uintptr_t)i);
     return;
   }
 

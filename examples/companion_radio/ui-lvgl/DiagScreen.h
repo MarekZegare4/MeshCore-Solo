@@ -366,14 +366,8 @@ void UITask::buildDiag() {
   if (s_tab == TAB_NOISE) {
     noteLabel(s_list, "What the radio hears with nothing on air, on the mesh frequency and 1.1 MHz "
                       "either side. Takes about 12 seconds.");
-    lv_obj_t* b = lv_button_create(s_list);
-    lv_obj_set_size(b, LV_PCT(100), 40);
-    lv_obj_set_style_shadow_width(b, 0, 0);
-    lv_obj_set_style_radius(b, theme::RADIUS, 0);
-    lv_obj_add_event_cb(b, onNoiseRun, LV_EVENT_CLICKED, NULL);
-    s_noise_status = label(b, s_noise_have ? LV_SYMBOL_REFRESH "  Measure again" : LV_SYMBOL_PLAY "  Measure", THEME_FONT_BODY, theme::TEXT);
-    lv_obj_center(s_noise_status);
-    stylePrimary(b);
+    lv_obj_t* b = primaryButton(s_list, s_noise_have ? LV_SYMBOL_REFRESH "  Measure again" : LV_SYMBOL_PLAY "  Measure", onNoiseRun);
+    s_noise_status = lv_obj_get_child(b, 0);
     if (s_noise_have) {
       float mesh_f = _prefs ? _prefs->freq : 0;
       lv_obj_t* card = infoCard(s_list);

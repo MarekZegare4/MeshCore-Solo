@@ -861,7 +861,7 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
     // row, unlabelled: then there are five rows either way.
     const bool one_pos = top + step * 5 + display.getLineHeight() > bottom;
     if (one_pos) {
-      snprintf(buf, sizeof(buf), "%.5f,%.5f", e.lat_e6 / 1e6, e.lon_e6 / 1e6);
+      geo::fmtLatLon(buf, sizeof(buf), e.lat_e6, e.lon_e6);
       display.drawTextEllipsized(tx, top, w - 4, buf);
     } else {
       snprintf(buf, sizeof(buf), "Lat: %.5f", e.lat_e6 / 1e6);

@@ -277,6 +277,11 @@ Right** between them, **Up / Down** scrolls):
 battery; anything that needs your position (the trail, live share, the
 locator) keeps it on.
 
+With the GPS switched off, starting the trail, live share or track back, or
+sharing or marking your position, asks first (**GPS is off**): turning it on
+there starts what you chose; a share or a mark waits for the first fix, as
+the last one may be old. SOS doesn't ask: it turns the GPS on itself.
+
 > [!NOTE]
 > **Wio Tracker L2:** the Diagnostics app, with a **Noise** tab that
 > measures the noise floor over time and history charts you can touch for the
