@@ -331,7 +331,7 @@ static void onEditTile(lv_event_t* e) {
     if (!side) previewSlot(t, slotAt(p));
     int page = s_page + side;
     if (!side || page < APPS || page >= pageCount()) { s_edge_since = 0; return; }
-    if (!s_edge_since) { s_edge_since = millis() | 1; return; }
+    if (!s_edge_since) { s_edge_since = (millis() - 1) | 1; return; }   // never 0, never ahead of millis()
     if (millis() - s_edge_since < EDGE_MS) return;
     // Onto that page's nearest slot; the finger lifts to drag it on from there.
     int to = side > 0 ? (page - APPS) * PER_PAGE : (page - APPS) * PER_PAGE + PER_PAGE - 1;
@@ -621,7 +621,7 @@ void UITask::homeFieldText(uint8_t f, char* v, int n) {
   in.gps_on = _core->gpsEnabled();
   if (telemetry::isSensor(f)) {   // the sensors on the bus: read every few seconds, not per field
     if (_sensors && (s_lpp_ms == 0 || millis() - s_lpp_ms > 5000)) {
-      s_lpp_ms = millis() | 1;
+      s_lpp_ms = (millis() - 1) | 1;   // never 0, never ahead of millis()
       s_lpp.reset();
       queryLocalSensors(*_sensors, board.getMCUTemperature(), s_lpp);
     }

@@ -1257,7 +1257,7 @@ static void fmtDate(char* b, size_t n, const struct tm& ti) {
 // itself changes at once; shutdown() saves whatever is pending.
 static uint32_t s_prefs_dirty_ms = 0;   // when the first unsaved change came (0: none)
 static uint32_t s_prefs_save_at = 0;    // the screen was left: save from then (0: not yet)
-static void prefsSave() { if (!s_prefs_dirty_ms) s_prefs_dirty_ms = millis() | 1; }
+static void prefsSave() { if (!s_prefs_dirty_ms) s_prefs_dirty_ms = (millis() - 1) | 1; }   // never 0, never ahead of millis()
 static void prefsSaveSoon(uint32_t delay_ms) {
   if (s_prefs_dirty_ms && !s_prefs_save_at) s_prefs_save_at = (millis() + delay_ms) | 1;
 }

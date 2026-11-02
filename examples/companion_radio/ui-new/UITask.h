@@ -158,6 +158,7 @@ class UITask : public UITaskBase, public UiCoreHost {
   unsigned long _sos_view_until = 0;   // 0 = closed
   int      _sos_left = 0;              // countdown second last beeped
   unsigned long _back_held_at = 0;     // 0 = not held, or already acted on
+  unsigned long _back_up_at = 0;       // when Back was let go (0: held)
 
 
 

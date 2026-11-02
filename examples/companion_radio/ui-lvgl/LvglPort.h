@@ -310,7 +310,7 @@ static bool mountStorage() {
   if (s_sd_lent) return false;
   if (s_sd_mounted) return true;
   if (s_sd_last_try && millis() - s_sd_last_try < 5000) return false;
-  s_sd_last_try = millis() | 1;
+  s_sd_last_try = (millis() - 1) | 1;   // never 0, never ahead of millis()
   SD_MMC.setPins(2, 3, 1);
   s_sd_mounted = SD_MMC.begin("/sdcard", true /* 1-bit */);
   return s_sd_mounted;

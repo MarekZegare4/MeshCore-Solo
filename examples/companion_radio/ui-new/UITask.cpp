@@ -1456,12 +1456,21 @@ void UITask::loop() {
   if (_lock_seq_used && millis() - _lock_seq_ms > 5000) {
     _lock_seq_used = false;  // safety reset if Back release event was missed
   }
+  // The lock sequence lives while Back is held. A long hold gives no click on
+  // release, so a sequence left half done stayed and kept the SOS hold off:
+  // cleared once Back has been up past the click window.
+  if (back_btn.isPressed()) _back_up_at = 0;
+  else if (!_back_up_at) _back_up_at = (millis() - 1) | 1;
+  else if ((_lock_seq_count > 0 || _lock_seq_used) && millis() - _back_up_at > 500) {
+    _lock_seq_count = 0;
+    _lock_seq_used = false;
+  }
   // Back held on its own: past the button's long press, so no click comes of it.
   // Enter during the hold is the lock sequence, not this.
   if (!back_btn.isPressed() || user_btn.isPressed() || _lock_seq_count > 0 || _lock_seq_used) {
     _back_held_at = back_btn.isPressed() ? 1 : 0;   // 1: spoken for until released
   } else if (_back_held_at == 0) {
-    _back_held_at = millis() | 2;
+    _back_held_at = (millis() - 2) | 2;   // never 0 or 1, never ahead of millis(): ahead, the next pass read 3 s held
   } else if (_back_held_at != 1 && millis() - _back_held_at >= SOS_HOLD_MS) {
     _back_held_at = 1;
     onBackHeld();

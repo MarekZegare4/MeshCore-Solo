@@ -1807,7 +1807,7 @@ void UITask::mapDownloadTick() {
     // The WiFi goes 30 s after the map was left or the screen went off (a
     // quick look elsewhere keeps it).
     if (_screen != SCR_MAP || _asleep) {
-      if (!_map_left_ms) _map_left_ms = millis() | 1;
+      if (!_map_left_ms) _map_left_ms = (millis() - 1) | 1;   // never 0, never ahead of millis()
       else if (millis() - _map_left_ms > 30000) dl.liveEnd();
     }
   }

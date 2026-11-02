@@ -307,7 +307,7 @@ void UITask::wifiSave() {
   }
   lvport::netEnd();   // a scan might have left the radio on
   lvport::netJoin(s_wifi_test_ssid, s_wifi_test_pass);
-  s_wifi_test_ms = millis() | 1;
+  s_wifi_test_ms = (millis() - 1) | 1;   // never 0, never ahead of millis()
   snprintf(msg, sizeof(msg), LV_SYMBOL_REFRESH "  Connecting to %s...", s_wifi_test_ssid);
   wifiTestShow(msg, nullptr, nullptr);
 }

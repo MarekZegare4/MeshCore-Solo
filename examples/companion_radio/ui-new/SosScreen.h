@@ -13,6 +13,7 @@ class SosScreen : public UIScreen {
   NodePrefs*      _prefs;
   KeyboardWidget* _kb;
   bool _dirty  = false;
+  bool _picking = false;    // off to the contact picker: the changes stay unsaved until we leave
   int  _sel    = 0;
   int  _scroll = 0;
   int  _kb_row = -1;        // >=0: the keyboard is open on that row
@@ -135,7 +136,9 @@ class SosScreen : public UIScreen {
         if (enter) openChannels();
         break;
       case K_DM1: case K_DM2: case K_DM3:
-        if (enter) { _task->savePrefsIfDirty(_dirty); _task->pickSosContact(k - K_DM1); }
+        // No save on the way: a prefs write stalls the L1 for a moment, and
+        // leaving this screen saves the pick with the rest.
+        if (enter) { _picking = true; _task->pickSosContact(k - K_DM1); }
         else { memset(_prefs->sos_dm[k - K_DM1], 0, NodePrefs::FAVOURITE_PREFIX_LEN); _dirty = true; }
         break;
       case K_ACK: case K_NOTE:
@@ -156,7 +159,12 @@ class SosScreen : public UIScreen {
 public:
   SosScreen(UITask* task, NodePrefs* prefs, KeyboardWidget* kb) : _task(task), _prefs(prefs), _kb(kb) {}
 
-  void onShow() override { _dirty = false; _kb_row = -1; _ch_list = false; }   // the row stays: the contact list comes back here
+  void onShow() override {   // the row stays: the contact list comes back here
+    _dirty = _picking;   // back from the picker: what was changed, and the pick, still to save
+    _picking = false;
+    _kb_row = -1;
+    _ch_list = false;
+  }
 
   int render(DisplayDriver& display) override {
     if (_kb_row >= 0) return _kb->render(display);

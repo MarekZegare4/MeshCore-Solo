@@ -242,7 +242,7 @@ private:
     if (!_lpp_at || millis() - _lpp_at > 5000) {   // both passes (measure, draw) read one query
       _lpp.reset();
       { CardKBBusLock bus_lock; queryLocalSensors(sensors, board.getMCUTemperature(), _lpp); }   // shares the CardKB's bus
-      _lpp_at = millis() | 1;
+      _lpp_at = (millis() - 1) | 1;   // never 0, never ahead of millis()
     }
     static const struct { uint8_t type; const char* name; } NAMES[] = {
       { LPP_TEMPERATURE, "Temperature" }, { LPP_RELATIVE_HUMIDITY, "Humidity" },
@@ -428,7 +428,7 @@ public:
     static unsigned long at = 0;
     static int n = 0;
     if (at && millis() - at < 10000) return n;
-    at = millis() | 1;
+    at = (millis() - 1) | 1;   // never 0, never ahead of millis()
     n = 0;
     const uint32_t now = rtc_clock.getCurrentTime();
     const int nc = the_mesh.getNumContacts();

@@ -1433,10 +1433,7 @@ public:
 
   void commitPickSos(const ContactInfo& ci) {
     NodePrefs* p = _task->getNodePrefs();
-    if (p) {
-      memcpy(p->sos_dm[_pick_sos_slot], ci.id.pub_key, NodePrefs::FAVOURITE_PREFIX_LEN);
-      the_mesh.savePrefs();
-    }
+    if (p) memcpy(p->sos_dm[_pick_sos_slot], ci.id.pub_key, NodePrefs::FAVOURITE_PREFIX_LEN);   // saved on leaving SOS
     _pick_sos_slot = -1;
     _task->gotoSosScreen();
   }
