@@ -241,7 +241,7 @@ static const Setting ALL[] = {
 #endif
   IDX("Auto-pause", "Pause when standing still", SEC_TRAIL, trail_autopause_idx,
       NodePrefs::TRAIL_AUTOPAUSE_COUNT, optAutoPause, nullptr),
-  SW("Save on low battery", "Save it on low battery", SEC_TRAIL, trail_autosave_lowbatt, nullptr),
+  SW("Save on low battery", "The trail, before the battery runs out", SEC_TRAIL, trail_autosave_lowbatt, nullptr),
   IDX("Waypoint averaging", "Average fixes when marking", SEC_TRAIL, gps_avg_idx,
       NodePrefs::GPS_AVG_COUNT, optGpsAvg, nullptr),
 
@@ -262,7 +262,7 @@ static const Setting ALL[] = {
       NodePrefs::LOCATOR_MODE_COUNT, optLocMode, rearmLocator),
   SW("Proximity beeper", "Ticks faster when closer", SEC_LOCATOR, locator_beeper, nullptr),
 
-  SW("Packet flow", "What the radio hears, as lines between nodes", SEC_MAP_VIEW, flow_show, nullptr),
+  SW("Packet flow", "What the radio hears, node to node", SEC_MAP_VIEW, flow_show, nullptr),
 
   MAP("Auto-advert", "Your advert, on a timer", SEC_ADVERT, advert_auto_interval_sec, AUTO_ADVERT,
       optAutoAdvert, nullptr),

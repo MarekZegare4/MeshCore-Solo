@@ -1027,6 +1027,23 @@ void UITask::navToolsPopup(bool back) {
   listRow(group(list, nullptr), "Trail options", "Point spacing, auto-pause, low battery", onNavTool,
           (void*)(uintptr_t)navmap::TL_OPT_TRAIL);
 
+  // What the map shows, right under the trail: used more than what follows.
+  lv_obj_t* g = group(list, "LAYERS");
+  choiceRow(g, "Map", "Topo, light, dark or satellite", mapview::LAYER_OPTS, mapview::s_layer, onMapLayer);
+  lv_obj_t* tsw = switchRow(g, "Hiking trails", "Marked routes in their colours", nullptr);
+  if (lvport::trailsOn()) lv_obj_add_state(tsw, LV_STATE_CHECKED);
+  lv_obj_add_event_cb(tsw, onTrails, LV_EVENT_VALUE_CHANGED, NULL);
+  schemaRow(g, SETTING(flow_show));
+#ifdef MAP_VECTOR   // unfinished (LvglPort.h vectorOn)
+  lv_obj_t* vsw = switchRow(g, "Vector map (test)", "Drawn on the device: trails, contours", nullptr);
+  if (lvport::vectorOn()) lv_obj_add_state(vsw, LV_STATE_CHECKED);
+  lv_obj_add_event_cb(vsw, onVectorMap, LV_EVENT_VALUE_CHANGED, NULL);
+  char vr[48];
+  int nv = mapview::s_vpacks.count();
+  snprintf(vr, sizeof(vr), nv ? "%d on the card" : "None - packs go in /vmap", nv);
+  listRow(g, "Vector regions", vr, onNavTool, (void*)(uintptr_t)navmap::TL_REGIONS);
+#endif
+
   sectionTitle(list, "LIVE SHARE");
   _nav_share_lbl = noteLabel(list, "", THEME_FONT_SMALL, theme::TEXT);
   // Target: channels (as named -- "#" marks a hashtag channel), then
@@ -1064,7 +1081,7 @@ void UITask::navToolsPopup(bool back) {
 
   listRow(group(list, nullptr), "Share options", "How often, for how long", onNavTool, (void*)(uintptr_t)navmap::TL_OPT_SHARE);
 
-  lv_obj_t* g = group(list, "ARRIVAL ALERT");
+  g = group(list, "ARRIVAL ALERT");
   schemaRow(g, SETTING(locator_enabled));
   char al[48], rad[12];
   uint16_t m = NodePrefs::locatorRadiusMeters(_prefs->locator_radius_idx);
@@ -1081,20 +1098,6 @@ void UITask::navToolsPopup(bool back) {
   if (lvport::liveTiles()) lv_obj_add_state(lsw, LV_STATE_CHECKED);
   lv_obj_add_event_cb(lsw, onLiveTiles, LV_EVENT_VALUE_CHANGED, NULL);
 
-  g = group(list, "LAYERS");
-  choiceRow(g, "Map", "Topo, light, dark or satellite", mapview::LAYER_OPTS, mapview::s_layer, onMapLayer);
-  lv_obj_t* tsw = switchRow(g, "Hiking trails", "Marked routes in their colours", nullptr);
-  if (lvport::trailsOn()) lv_obj_add_state(tsw, LV_STATE_CHECKED);
-  lv_obj_add_event_cb(tsw, onTrails, LV_EVENT_VALUE_CHANGED, NULL);
-#ifdef MAP_VECTOR   // unfinished (LvglPort.h vectorOn)
-  lv_obj_t* vsw = switchRow(g, "Vector map (test)", "Drawn on the device: trails, contours", nullptr);
-  if (lvport::vectorOn()) lv_obj_add_state(vsw, LV_STATE_CHECKED);
-  lv_obj_add_event_cb(vsw, onVectorMap, LV_EVENT_VALUE_CHANGED, NULL);
-  char vr[48];
-  int nv = mapview::s_vpacks.count();
-  snprintf(vr, sizeof(vr), nv ? "%d on the card" : "None - packs go in /vmap", nv);
-  listRow(g, "Vector regions", vr, onNavTool, (void*)(uintptr_t)navmap::TL_REGIONS);
-#endif
 
   refreshNavTools();
   if (back) {   // scrolled where it was left

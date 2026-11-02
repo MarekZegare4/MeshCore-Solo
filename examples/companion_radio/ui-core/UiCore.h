@@ -195,9 +195,9 @@ public:
     return true;
   }
 
-  // Settings > Privacy > Position: where adverts say you are while the GPS is
-  // off -- the sensor manager's node_lat / node_lon, saved with the prefs as
-  // the app's CMD_SET_ADVERT_LATLON does. With the GPS on, each fix overwrites it.
+  // The fixed position (L2: GPS > Options): where adverts say you are while the
+  // GPS is off -- the sensor manager's node_lat / node_lon, saved with the prefs
+  // as the app's CMD_SET_ADVERT_LATLON does. With the GPS on, each fix overwrites it.
   bool fixedPosition(int32_t& lat, int32_t& lon) const {
     lat = (int32_t)lround(_sensors->node_lat * 1e6);
     lon = (int32_t)lround(_sensors->node_lon * 1e6);
@@ -209,9 +209,9 @@ public:
     the_mesh.savePrefs();
   }
 
-  // Settings > Privacy > Bluetooth PIN: NodePrefs::ble_pin, six digits, or 0
-  // for a new random one each start (shown on screen). Used from the next
-  // start, like the app's CMD_SET_DEVICE_PIN.
+  // The Bluetooth PIN (L2: a tap on Settings > Bluetooth): NodePrefs::ble_pin,
+  // six digits, or 0 for a new random one each start (shown on screen). Used
+  // from the next start, like the app's CMD_SET_DEVICE_PIN.
   static bool validBlePin(uint32_t pin) { return pin == 0 || (pin >= 100000 && pin <= 999999); }
   bool setBlePin(uint32_t pin) {
     if (!_prefs || !validBlePin(pin)) return false;

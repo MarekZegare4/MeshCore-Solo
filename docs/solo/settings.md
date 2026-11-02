@@ -107,19 +107,25 @@ if your mesh agrees on it.
 | **Airtime** | The pause after sending, as a multiple of the time on air |
 
 > [!NOTE]
-> **Wio Tracker L2:** one list of pages:
+> **Wio Tracker L2:** one list of pages, the same pieces everywhere: a
+> switch turns a thing on and off, a chevron opens its page, and a page with
+> one group has no heading over it.
 >
+> - At the top: **Name** and **Radio** (with **Advanced** at the bottom).
+> - **Connections**: Bluetooth, WiFi and GPS, their switches side by side.
+>   A tap on a row opens its details: Bluetooth the **Pairing PIN**, WiFi the
+>   saved networks, GPS the satellites and an **Options** tab with GPS power
+>   saving and the **Fixed position**.
 > - **Device**: Display (including the lock, **Tap to wake**, the **Theme**,
->   dark or light, which restarts the device, and the accent colour), Power
->   (battery, GPS, and the **Battery curve** as a chart whose points you
->   drag), Sound (with the melody editor), Keyboard, Messages & contacts.
-> - **Connections**: Radio (with **Advanced** at the bottom), Privacy,
->   Bluetooth, WiFi, GPS. Adding contacts is in Messages & contacts.
-> - **Map & data**: Map (trail, live sharing and arrival alert options),
->   Storage.
-> - **System**: Name, Time, Units, Firmware update, About; Reboot, Power off
->   and Factory reset. Privacy holds **Fixed position** and, under
->   Bluetooth, the **Pairing PIN**.
+>   dark or light, which restarts the device, and the accent colour), Sound
+>   (with the melody editor), Power (battery, and the **Battery curve** as a
+>   chart whose points you drag), Time & units, Keyboard.
+> - **Mesh & data**: Messages & contacts (adding contacts too; the node types
+>   show only with **By type**), Map (trail, live sharing and arrival alert
+>   options), Adverts & privacy (**Auto-advert** with the rest of what an
+>   advert carries), Storage.
+> - **System**: Firmware update, About; then Reboot, Power off and Factory
+>   reset.
 
 ## Console
 

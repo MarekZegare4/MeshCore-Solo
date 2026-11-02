@@ -284,16 +284,12 @@ void UITask::buildSos() {
   NodePrefs* p = _prefs;
   if (!p) return;
   lv_obj_t* list = scrollList(body);
-  lv_obj_t* g = group(list, nullptr);
-
+  lv_obj_t* g = group(list, "START");   // how it begins
   switchRow(g, "Top button", "Hold 5 s for the SOS slider", &p->sos_enabled);
   lv_obj_t* seg = segmented(settingRow(g, "Countdown", nullptr), COUNTDOWNS, p->sos_countdown_idx, 130, 32);
   lv_obj_add_event_cb(seg, onSosSeg, LV_EVENT_VALUE_CHANGED, (void*)(uintptr_t)P_COUNTDOWN);
-  seg = segmented(settingRow(g, "Repeat", nullptr), REPEATS, p->sos_repeat_idx, 200, 32);
-  lv_obj_add_event_cb(seg, onSosSeg, LV_EVENT_VALUE_CHANGED, (void*)(uintptr_t)P_REPEAT);
-  seg = segmented(settingRow(g, "Beep", "To be found by"), BEEPS, p->sos_beep_idx, 170, 32);
-  lv_obj_add_event_cb(seg, onSosSeg, LV_EVENT_VALUE_CHANGED, (void*)(uintptr_t)P_BEEP);
 
+  g = group(list, "SENT TO");   // where it goes, and what it says
   char val[40];
   snprintf(val, sizeof(val), "%d on", SosEngine::channels(p));
   s_ch_lbl = sosValueRow(g, "Channels", nullptr, val, R_CHANNELS);
@@ -304,8 +300,14 @@ void UITask::buildSos() {
     snprintf(name, sizeof(name), "Contact %d", i + 1);
     sosValueRow(g, name, nullptr, c ? c->name : "-", R_DM1 + i);
   }
-  sosValueRow(g, "ACK word", "The reply that means received", p->sos_ack[0] ? p->sos_ack : "-", R_ACK);
   sosValueRow(g, "Note", "Added to the message", p->sos_note[0] ? p->sos_note : "-", R_NOTE);
+
+  g = group(list, "WHILE IT RUNS");   // until someone answers, and after
+  seg = segmented(settingRow(g, "Repeat", nullptr), REPEATS, p->sos_repeat_idx, 200, 32);
+  lv_obj_add_event_cb(seg, onSosSeg, LV_EVENT_VALUE_CHANGED, (void*)(uintptr_t)P_REPEAT);
+  seg = segmented(settingRow(g, "Beep", "To be found by"), BEEPS, p->sos_beep_idx, 170, 32);
+  lv_obj_add_event_cb(seg, onSosSeg, LV_EVENT_VALUE_CHANGED, (void*)(uintptr_t)P_BEEP);
+  sosValueRow(g, "ACK word", "The reply that means received", p->sos_ack[0] ? p->sos_ack : "-", R_ACK);
 
   sosWideButton(list, "Send SOS", LV_PCT(100), 44, theme::FAIL, 0xFFFFFF, onSosSend);
 }
@@ -327,7 +329,7 @@ void UITask::sosChannel(int idx, bool on) {
   prefsSave();
   char val[16];
   snprintf(val, sizeof(val), "%d on", SosEngine::channels(_prefs));
-  if (s_ch_lbl) lv_label_set_text(s_ch_lbl, val);
+  if (s_ch_lbl) pickSet(s_ch_lbl, val);
 }
 
 void UITask::sosRow(int row) {

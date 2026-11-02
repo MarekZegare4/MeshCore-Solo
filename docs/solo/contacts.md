@@ -51,7 +51,7 @@ adverts solid, direct messages long dashes, channels short dashes, the rest
 dash and dot.
 
 > [!NOTE]
-> **Wio Tracker L2:** **Packet flow** is in the map's options (On the map).
+> **Wio Tracker L2:** **Packet flow** is in the map's tools, under Layers.
 > Every packet heard shows. One that can be placed runs along its line as a
 > dot and fades. One that can't (its sender or repeaters have no position)
 > is a ring around you. Colours by kind: adverts blue, direct messages

@@ -291,7 +291,7 @@ void UITask::openNode(int row) {
 
 static lv_obj_t* s_nd_fav = nullptr;
 static void nodeFavText() {
-  if (s_nd_fav) lv_label_set_text(s_nd_fav, s_node.fav ? UI_SYMBOL_STAR "  Remove from favourites" : UI_SYMBOL_STAR "  Add to favourites");
+  if (s_nd_fav) lv_label_set_text(s_nd_fav, s_node.fav ? "Remove from favourites" : "Add to favourites");   // the star in its icon column
 }
 
 static lv_obj_t* switchRow(lv_obj_t* parent, const char* text, const char* sub, uint8_t* pref);   // below
@@ -341,9 +341,9 @@ void UITask::buildNode() {
   s_nd_id = infoRow(_node_info, "ID", "");
 
   if (pos || contact) {
-    lv_obj_t* g = group(info, "More");
+    lv_obj_t* g = group(info, "MORE");
     if (pos) actionRow(g, UI_SYMBOL_FLAG "  Save as waypoint", onNodeAction, (void*)(uintptr_t)NODE_WAYPOINT);
-    if (contact) s_nd_fav = actionRow(g, "", onNodeAction, (void*)(uintptr_t)NODE_FAV);
+    if (contact) s_nd_fav = actionRow(g, UI_SYMBOL_STAR "  ", onNodeAction, (void*)(uintptr_t)NODE_FAV);
     nodeFavText();
     if (contact && e.has_key) actionRow(g, UI_SYMBOL_TACK "  Pin to Home", onNodeAction, (void*)(uintptr_t)NODE_PIN);
     ContactInfo* ci = (contact && e.has_key) ? the_mesh.lookupContactByPubKey(e.pub_key, PUB_KEY_SIZE) : nullptr;
@@ -358,7 +358,7 @@ void UITask::buildNode() {
   // Where Settings > Privacy says "Allowed", what this contact may ask for.
   ContactInfo* ci = (contact && e.has_key) ? the_mesh.lookupContactByPubKey(e.pub_key, PUB_KEY_SIZE) : nullptr;
   if (ci && contactctl::telemetryPerContact(_prefs)) {
-    lv_obj_t* g = group(info, "Can ask for");
+    lv_obj_t* g = group(info, "CAN ASK FOR");
     static const struct { const char* text; const char* sub; uint8_t bit; } T[] = {
       { "Status", "Battery; the two below need it", TELEM_PERM_BASE },
       { "Location", nullptr, TELEM_PERM_LOCATION },
@@ -524,7 +524,7 @@ void UITask::nodeAction(uint8_t action) {
       showToast(contactctl::share(e.pub_key) ? "Sent to nodes in range" : "No advert saved to send");
       break;
     case NODE_DELETE:
-      if (!tapConfirmed(_node_delete_lbl, LV_SYMBOL_TRASH "  Tap again to delete")) break;
+      if (!tapConfirmed(_node_delete_lbl, "Tap again to delete")) break;
       if (the_mesh.deleteContactByKey(e.pub_key)) {
         _screen = SCR_NEARBY;
         buildNearby();

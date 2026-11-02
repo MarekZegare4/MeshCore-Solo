@@ -98,7 +98,7 @@ void UITask::pruneContacts() {
     return;
   }
   char ask[40];
-  snprintf(ask, sizeof(ask), LV_SYMBOL_TRASH "  Remove %d contact%s?", n, n == 1 ? "" : "s");
+  snprintf(ask, sizeof(ask), "Remove %d contact%s?", n, n == 1 ? "" : "s");
   if (!tapConfirmed(_prune_lbl, ask)) return;
   int removed = the_mesh.pruneStaleContacts();
   char t[40];
@@ -144,8 +144,10 @@ void UITask::setTapWake(bool on) {
 }
 
 void UITask::buildSchemaSettings() {
-  static const char* const OWN[] = { "Keyboard", "About", "Display", "Power", "Time" };
-  const char* title = _settings_page >= PG_KEYBOARD ? OWN[_settings_page - PG_KEYBOARD] : settings::pageTitle(_settings_page);
+  static const char* const OWN[] = { "Keyboard", "About", "Display", "Power", "Time & units" };
+  const char* title = _settings_page >= PG_KEYBOARD ? OWN[_settings_page - PG_KEYBOARD]
+                    : _settings_page == settings::PG_PRIVACY ? "Adverts & privacy"   // with Auto-advert here
+                    : settings::pageTitle(_settings_page);
   if (_settings_page == settings::PG_NAV && s_nav_section >= 0)
     title = s_nav_section == settings::SEC_TRAIL ? "Trail options"
           : s_nav_section == settings::SEC_LIVE_SHARE ? "Share options" : "Alert options";
@@ -170,29 +172,28 @@ void UITask::buildSchemaSettings() {
       accentRow(g);   // DeviceScreen.h
       return;
     }
-    case PG_POWER: {
-      lv_obj_t* g = group(body, "BATTERY");
+    case PG_POWER: {   // one group: the page title says it (the GPS's power saving is under GPS > Options)
+      lv_obj_t* g = group(body, nullptr);
       schemaRow(g, SETTING(batt_display_mode));
       schemaRow(g, SETTING(low_batt_mv));
       listRow(g, "Battery curve", _prefs && battery::validCurve(_prefs->batt_curve_mv) ? "Your own" : "LiPo (built in)",
               onBattCurve, NULL);
-      g = group(body, "GPS");
-      schemaRow(g, SETTING(gps_interval));
       return;
     }
     case PG_TIME: {
-      lv_obj_t* g = group(body, nullptr);
-      for (int i = 0; i < settings::COUNT; i++) if (settings::ALL[i].section == settings::SEC_TIME) schemaRow(g, i);
+      for (uint8_t sec : { settings::SEC_TIME, settings::SEC_UNITS }) {
+        lv_obj_t* g = group(body, settings::sectionTitle(sec));
+        for (int i = 0; i < settings::COUNT; i++) if (settings::ALL[i].section == sec) schemaRow(g, i);
+      }
       return;
     }
   }
   schemaRows(body, _settings_page);
   if (_settings_page == settings::PG_SOUND) then(&UITask::schemaExtras, settings::PG_SOUND);   // after its groups
   if (_settings_page == settings::PG_MESSAGES) then(&UITask::schemaExtras, settings::PG_MESSAGES);
-  if (_settings_page == settings::PG_PRIVACY) then(&UITask::schemaExtras, settings::PG_PRIVACY);
 }
 
-// ── Settings > Privacy: position, Bluetooth PIN; factory reset ─────────────────
+// ── GPS > Options: the fixed position; Bluetooth: its PIN; factory reset ───────
 
 static void onOwnPos(lv_event_t* e)     { (void)e; s_ui->ownPositionPopup(); }
 static void onOwnPosPick(lv_event_t* e) { s_ui->ownPositionPick((int)(uintptr_t)lv_event_get_user_data(e)); }
@@ -201,6 +202,14 @@ static void onBlePin(lv_event_t* e)     { (void)e; s_ui->blePinPopup(); }
 static void onBlePinKb(lv_event_t* e)   { s_ui->blePinDone(lv_event_get_code(e) == LV_EVENT_READY); }
 
 enum : int { OWNPOS_TYPE, OWNPOS_WAYPOINTS, OWNPOS_CLEAR, OWNPOS_WP0 = 100 };
+
+// The Fixed position row's value (GPS > Options).
+void UITask::ownPositionText(char* sub, size_t n) {
+  int32_t lat, lon;
+  if (_core->gpsEnabled()) snprintf(sub, n, "From the GPS while it's on");
+  else if (_core->fixedPosition(lat, lon)) snprintf(sub, n, "%.5f, %.5f", lat / 1e6, lon / 1e6);
+  else snprintf(sub, n, "Not set");
+}
 
 void UITask::ownPositionPopup() {
   if (_core->gpsEnabled()) { showToast("The GPS sets your position while it's on", 2500); return; }
@@ -246,7 +255,7 @@ void UITask::ownPositionPick(int code) {
   else if (code >= OWNPOS_WP0 && code - OWNPOS_WP0 < wp.count())
     _core->setFixedPosition(wp.at(code - OWNPOS_WP0).lat_1e6, wp.at(code - OWNPOS_WP0).lon_1e6);
   navClosePopup();
-  if (_screen == SCR_SETTINGS_NAV) rebuildSchemaSettings();
+  if (_screen == SCR_GPS) buildGps();
 }
 
 void UITask::ownPositionDone(bool ok) {
@@ -259,7 +268,7 @@ void UITask::ownPositionDone(bool ok) {
     _core->setFixedPosition(lat, lon);
   }
   navClosePopup();
-  if (ok && _screen == SCR_SETTINGS_NAV) rebuildSchemaSettings();
+  if (ok && _screen == SCR_GPS) buildGps();
 }
 
 void UITask::blePinPopup() {
@@ -285,7 +294,6 @@ void UITask::blePinDone(bool ok) {
     showToast("Used from the next start", 2000);
   }
   navClosePopup();
-  if (ok && _screen == SCR_SETTINGS_NAV) rebuildSchemaSettings();
 }
 
 void UITask::factoryResetStep(int stage) {
@@ -314,22 +322,6 @@ bool UITask::cliCommand(const char* command, char* reply, int n) {
 
 // What a page adds to its schema groups, once they are there.
 void UITask::schemaExtras(int page) {
-  if (page == settings::PG_PRIVACY) {
-    if (lv_obj_t* c = s_sec_card[settings::SEC_PRIVACY]) {   // with "Position in adverts"
-      char sub[40];
-      int32_t lat, lon;
-      if (_core->gpsEnabled()) snprintf(sub, sizeof(sub), "From the GPS while it's on");
-      else if (_core->fixedPosition(lat, lon)) snprintf(sub, sizeof(sub), "%.5f, %.5f", lat / 1e6, lon / 1e6);
-      else snprintf(sub, sizeof(sub), "Not set");
-      listRow(c, "Fixed position", sub, onOwnPos, NULL);
-    }
-#ifdef BLE_PIN_CODE
-    char pin[40];
-    if (_prefs && _prefs->ble_pin) snprintf(pin, sizeof(pin), "%06lu", (unsigned long)_prefs->ble_pin);
-    else snprintf(pin, sizeof(pin), "Random each start, shown on screen");
-    listRow(group(_body, "BLUETOOTH"), "Pairing PIN", pin, onBlePin, NULL);
-#endif
-  }
   if (page == settings::PG_SOUND) buildSoundRows(_body, false);   // the melodies
   if (page == settings::PG_MESSAGES) {
     lv_obj_t* c = s_sec_card[settings::SEC_CONTACTS];   // the action that goes with "Contact expiry"
@@ -452,6 +444,7 @@ void UITask::schemaRows(lv_obj_t* body, uint8_t page) {
     const settings::Setting& st = settings::ALL[i];
     if (settings::sectionPage(st.section) != page || st.section == sec) continue;
     if (s_schema_one && st.section != s_nav_section) continue;
+    if (st.section == settings::SEC_MAP_VIEW) continue;   // Packet flow: Map tools > Layers, with the other layers
     sec = st.section;
     if (first || body != _body) schemaSection(i);
     else fill(&UITask::schemaSection, i, i + 1);
@@ -464,9 +457,13 @@ void UITask::schemaSection(int i) {
   uint8_t sec = settings::ALL[i].section;
   lv_obj_t* card = s_sec_card[sec] = group(s_schema_body, s_schema_bare ? nullptr : settings::sectionTitle(sec));
   if (sec == settings::SEC_SOUND) buildSoundRows(card, true);   // On / Off / Auto
+  if (sec == settings::SEC_PRIVACY) schemaRow(card, SETTING(advert_auto_interval_sec));   // all an advert carries, together
   for (int k = i; k < settings::COUNT && settings::ALL[k].section == sec; k++) {
-    if (settings::ALL[k].offset == offsetof(NodePrefs, lock_compact)) continue;   // ui-new's lock look; the slide card has one
-    if (settings::ALL[k].offset == offsetof(NodePrefs, msg_alert)) { msgBannerRow(card); continue; }   // no corner envelope here
+    const settings::Setting& st = settings::ALL[k];
+    if (st.offset == offsetof(NodePrefs, lock_compact)) continue;   // ui-new's lock look; the slide card has one
+    if (st.offset == offsetof(NodePrefs, msg_alert)) { msgBannerRow(card); continue; }   // no corner envelope here
+    if (st.offset == offsetof(NodePrefs, autoadd_config) && st.bit > 0x01 && _prefs && !_prefs->manual_add_contacts)
+      continue;   // the node types count only with "By type"
     schemaRow(card, k);
   }
 }
@@ -515,7 +512,8 @@ void UITask::setSchemaValue(int idx, int v) {
   settings::set(*_prefs, st, (uint8_t)v);
   if (st.changed) st.changed(*_core);
   prefsSave();
-  if (st.offset == offsetof(NodePrefs, units_imperial) && _screen == SCR_SETTINGS_NAV)   // other labels depend on it
+  if ((st.offset == offsetof(NodePrefs, units_imperial) || st.offset == offsetof(NodePrefs, manual_add_contacts))
+      && _screen == SCR_SETTINGS_NAV)   // other labels depend on it, or rows come and go
     rebuildSoon(&UITask::rebuildSchemaSettings);
 }
 
@@ -552,7 +550,9 @@ static void onOpenRadio(lv_event_t* e);   // RadioScreen.h
 static void onOpenStorage(lv_event_t* e); // StorageScreen.h
 
 // Settings: groups of rows, each opening a page (chevron) or switching
-// something on the spot. What the app is for first, the system last.
+// something on the spot. Who you are and on which network first, then the
+// links (their switches side by side), the device, what the mesh carries, and
+// the system last. Every row has its symbol; one-group pages have no heading.
 void UITask::buildSettings() {
   bool restore = _nav_back;   // back from one of its pages: where it was
   lv_obj_t* body = newScreen("Settings", true);
@@ -566,48 +566,26 @@ void UITask::settingsGroup(int i) {
   lv_obj_t* body = _body;
   char sub[48];
   lv_obj_t* g;
-  char v1[24], v2[24];
+  char v1[24];
   switch (i) {
   case 0:
-    if (!_prefs) break;
-    g = group(body, "DEVICE");
-    listRow(g, LV_SYMBOL_EYE_OPEN "  Display", "Brightness, screen off, lock, colour",
-            onOpenSchemaPage, (void*)(uintptr_t)PG_DISPLAY);
-    snprintf(sub, sizeof(sub), "Shutdown %s  -  GPS: %s", settingText(*_prefs, SETTING(low_batt_mv), v1, sizeof(v1)),
-             settingText(*_prefs, SETTING(gps_interval), v2, sizeof(v2)));
-    listRow(g, LV_SYMBOL_BATTERY_FULL "  Power", sub, onOpenSchemaPage, (void*)(uintptr_t)PG_POWER);
-    {
-      char vol[12];
-      settings::optVolume(_prefs->buzzer_volume, vol, sizeof(vol), *_prefs);
-      snprintf(sub, sizeof(sub), "%s, %s", soundctl::modeLabel(soundctl::mode(_prefs)), vol);
-    }
-    listRow(g, LV_SYMBOL_VOLUME_MAX "  Sound", sub, onOpenSchemaPage, (void*)(uintptr_t)settings::PG_SOUND);
-    {
-      static const char* const SCRIPT[] = { "Latin", "Cyrillic", "Greek" };
-      uint8_t ma = _prefs->keyboard_main_alphabet % NodePrefs::KB_ALPHABET_COUNT;
-      uint8_t aa = _prefs->keyboard_alt_alphabet % NodePrefs::KB_ALPHABET_COUNT;
-      snprintf(sub, sizeof(sub), aa == ma ? "%s" : "%s + %s", SCRIPT[ma], SCRIPT[aa]);
-    }
-    listRow(g, LV_SYMBOL_KEYBOARD "  Keyboard", sub, onOpenSchemaPage, (void*)(uintptr_t)PG_KEYBOARD);
-    listRow(g, LV_SYMBOL_ENVELOPE "  Messages & contacts", "Resend, adding, expiry, quick messages",
-            onOpenSchemaPage, (void*)(uintptr_t)settings::PG_MESSAGES);
-    break;
-
-  case 1:
-    g = group(body, "CONNECTIONS");
+    g = group(body, nullptr);
+    listRow(g, LV_SYMBOL_EDIT "  Name", the_mesh.getNodeName(), onNodeName, NULL);
     if (_prefs) {
       int pi = radioctl::currentPreset(_prefs);
       const char* pn = "Custom"; float f, b; uint8_t sf, cr;
       if (pi >= 0) radioctl::presetAt(_prefs, pi, pn, f, b, sf, cr);
       snprintf(sub, sizeof(sub), "%s  -  %.3f MHz, %d dBm", pn, _prefs->freq, _prefs->tx_power_dbm);
       listRow(g, UI_SYMBOL_RADIO "  Radio", sub, onOpenRadio, NULL);
-      listRow(g, LV_SYMBOL_EYE_CLOSE "  Privacy", "Position, who can ask for telemetry, Bluetooth PIN",
-              onOpenSchemaPage, (void*)(uintptr_t)settings::PG_PRIVACY);
     }
+    break;
+
+  case 1:   // the switch turns each on / off, the row opens its details
+    g = group(body, "CONNECTIONS");
     bluetoothRow(g);
     wifiRow(g);
-    if (_core->gpsAvailable()) {   // as WiFi: the switch turns it on / off, the row opens its details
-      lv_obj_t* sw = switchRow(g, LV_SYMBOL_GPS "  GPS", "Tap for satellites and signal", nullptr);
+    if (_core->gpsAvailable()) {
+      lv_obj_t* sw = switchRow(g, LV_SYMBOL_GPS "  GPS", "Tap for satellites and options", nullptr);
       if (_core->gpsEnabled()) lv_obj_add_state(sw, LV_STATE_CHECKED);
       lv_obj_add_event_cb(sw, onGpsSwitch, LV_EVENT_VALUE_CHANGED, NULL);
       lv_obj_t* row = lv_obj_get_parent(sw);
@@ -619,26 +597,51 @@ void UITask::settingsGroup(int i) {
     break;
 
   case 2:
-    g = group(body, "MAP & DATA");
-    if (_prefs) listRow(g, UI_SYMBOL_MAP "  Map", "Trail, live sharing, arrival alert",
-                        onOpenSchemaPage, (void*)(uintptr_t)settings::PG_NAV);
-    listRow(g, LV_SYMBOL_SD_CARD "  Storage", "SD card, message history", onOpenStorage, NULL);
+    if (!_prefs) break;
+    g = group(body, "DEVICE");
+    listRow(g, LV_SYMBOL_EYE_OPEN "  Display", "Brightness, screen off, lock, colour",
+            onOpenSchemaPage, (void*)(uintptr_t)PG_DISPLAY);
+    {
+      char vol[12];
+      settings::optVolume(_prefs->buzzer_volume, vol, sizeof(vol), *_prefs);
+      snprintf(sub, sizeof(sub), "%s, %s", soundctl::modeLabel(soundctl::mode(_prefs)), vol);
+    }
+    listRow(g, LV_SYMBOL_VOLUME_MAX "  Sound", sub, onOpenSchemaPage, (void*)(uintptr_t)settings::PG_SOUND);
+    snprintf(sub, sizeof(sub), "Battery display, shutdown at %s, curve", settingText(*_prefs, SETTING(low_batt_mv), v1, sizeof(v1)));
+    listRow(g, LV_SYMBOL_BATTERY_FULL "  Power", sub, onOpenSchemaPage, (void*)(uintptr_t)PG_POWER);
+    snprintf(sub, sizeof(sub), "%s%s, %s, %s", settingText(*_prefs, SETTING(tz_offset_hours), v1, sizeof(v1)),
+             inSummerTime(*_prefs, rtc_clock.getCurrentTime()) ? " summer" : "", _prefs->clock_12h ? "12 h" : "24 h",
+             _prefs->units_imperial ? "imperial" : "metric");
+    listRow(g, UI_SYMBOL_CLOCK "  Time & units", sub, onOpenSchemaPage, (void*)(uintptr_t)PG_TIME);
+    {
+      static const char* const SCRIPT[] = { "Latin", "Cyrillic", "Greek" };
+      uint8_t ma = _prefs->keyboard_main_alphabet % NodePrefs::KB_ALPHABET_COUNT;
+      uint8_t aa = _prefs->keyboard_alt_alphabet % NodePrefs::KB_ALPHABET_COUNT;
+      snprintf(sub, sizeof(sub), aa == ma ? "%s" : "%s + %s", SCRIPT[ma], SCRIPT[aa]);
+    }
+    listRow(g, LV_SYMBOL_KEYBOARD "  Keyboard", sub, onOpenSchemaPage, (void*)(uintptr_t)PG_KEYBOARD);
     break;
 
   case 3:
-    g = group(body, "SYSTEM");
-    listRow(g, LV_SYMBOL_EDIT "  Name", the_mesh.getNodeName(), onNodeName, NULL);
+    g = group(body, "MESH & DATA");
     if (_prefs) {
-      snprintf(sub, sizeof(sub), "%s%s, %s", settingText(*_prefs, SETTING(tz_offset_hours), v1, sizeof(v1)),
-               inSummerTime(*_prefs, rtc_clock.getCurrentTime()) ? " summer" : "", _prefs->clock_12h ? "12 h" : "24 h");
-      listRow(g, UI_SYMBOL_CLOCK "  Time", sub, onOpenSchemaPage, (void*)(uintptr_t)PG_TIME);
-      schemaRow(g, SETTING(units_imperial));
+      listRow(g, LV_SYMBOL_ENVELOPE "  Messages & contacts", "Resend, adding, expiry, quick messages",
+              onOpenSchemaPage, (void*)(uintptr_t)settings::PG_MESSAGES);
+      listRow(g, UI_SYMBOL_MAP "  Map", "Trail, live sharing, arrival alert",
+              onOpenSchemaPage, (void*)(uintptr_t)settings::PG_NAV);
+      listRow(g, LV_SYMBOL_EYE_CLOSE "  Adverts & privacy", "Auto-advert, position, telemetry",
+              onOpenSchemaPage, (void*)(uintptr_t)settings::PG_PRIVACY);
     }
+    listRow(g, LV_SYMBOL_SD_CARD "  Storage", "SD card, message history", onOpenStorage, NULL);
+    break;
+
+  case 4:
+    g = group(body, "SYSTEM");
     listRow(g, LV_SYMBOL_DOWNLOAD "  Firmware update", FIRMWARE_VERSION, onOpenOta, NULL);
     listRow(g, LV_SYMBOL_LIST "  About", "Node, your contact QR, manual, credits", onOpenSchemaPage, (void*)(uintptr_t)PG_ABOUT);
     break;
 
-  case 4:
+  case 5:
     g = group(body, nullptr);
     actionRow(g, LV_SYMBOL_REFRESH "  Reboot", onPowerRow, (void*)(uintptr_t)1);
     actionRow(g, LV_SYMBOL_POWER "  Power off", onPowerRow, (void*)(uintptr_t)0, theme::FAIL);

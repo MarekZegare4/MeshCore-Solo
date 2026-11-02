@@ -101,9 +101,11 @@ public:
   void otaAction();
   void adminPick(int row);
   void pruneContacts();
-  // Settings > Privacy: the position adverts carry with the GPS off, the
-  // Bluetooth PIN; Settings: factory reset, asked twice (stage 1, 2; 3 erases).
+  // GPS > Options: the position that stands in for the GPS while it's off;
+  // Settings > Bluetooth (a tap on its row): the pairing PIN; Settings: factory
+  // reset, asked twice (stage 1, 2; 3 erases).
   void ownPositionPopup();
+  void ownPositionText(char* sub, size_t n);
   void ownPositionPick(int code);
   void ownPositionDone(bool ok);
   void blePinPopup();
@@ -449,7 +451,7 @@ private:
   void fillFlush();
   int fillPending() const;
   void buildSettings();
-  static const int SETTINGS_GROUPS = 5;
+  static const int SETTINGS_GROUPS = 6;
   void settingsGroup(int i);
   void buildSchemaSettings();
   void schemaRows(lv_obj_t* body, uint8_t page);

@@ -360,7 +360,7 @@ void UITask::storageKeep(int idx) {
 
 void UITask::storageClearHistory() {
   using namespace storeview;
-  if (!tapConfirmed(s_clear_lbl, LV_SYMBOL_TRASH "  Tap again to delete")) return;
+  if (!tapConfirmed(s_clear_lbl, "Tap again to delete")) return;
   s_archive.clearAll();
   _core->history.clearAll();
   _core->markAllRead();
@@ -375,7 +375,7 @@ void UITask::storageLiveCap(int idx) {
 
 void UITask::storageClearLive() {
   using namespace storeview;
-  if (!tapConfirmed(s_live_lbl, LV_SYMBOL_TRASH "  Tap again to delete")) return;
+  if (!tapConfirmed(s_live_lbl, "Tap again to delete")) return;
   mapview::s_live_cache.clearAll();   // a few files per loop (mapDownloadTick)
   showToast("Deleting live map tiles");
 }

@@ -196,7 +196,8 @@ void UITask::advertSend(bool flood) {
 
 // ── Settings > Bluetooth ──────────────────────────────────────────────────────
 // BLE only: the USB link to a computer stays on. Not kept over a reboot
-// (Bluetooth starts on, as on L1).
+// (Bluetooth starts on, as on L1). As WiFi and GPS: the switch turns it on /
+// off, the row opens its details -- here the pairing PIN.
 
 static void bluetoothRow(lv_obj_t* body) {
   char sub[48];
@@ -204,6 +205,13 @@ static void bluetoothRow(lv_obj_t* body) {
   lv_obj_t* sw = switchRow(body, LV_SYMBOL_BLUETOOTH "  Bluetooth", sub, nullptr);
   if (s_ui->isBluetoothEnabled()) lv_obj_add_state(sw, LV_STATE_CHECKED);
   lv_obj_add_event_cb(sw, qview::onBtSwitch, LV_EVENT_VALUE_CHANGED, NULL);
+#ifdef BLE_PIN_CODE
+  lv_obj_t* row = lv_obj_get_parent(sw);
+  rowPressable(row);
+  lv_obj_add_event_cb(row, [](lv_event_t* e) {
+    if (lv_event_get_target(e) == lv_event_get_current_target(e)) onBlePin(e);   // not the switch
+  }, LV_EVENT_CLICKED, NULL);
+#endif
 }
 
 void UITask::setBluetooth(bool on) {

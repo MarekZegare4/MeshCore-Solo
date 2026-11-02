@@ -87,7 +87,7 @@ static void botShowAllowed(NodePrefs* p) {
     if (!off || !botview::s_allowed_lbl) continue;
     char val[16];
     botcmd::shown(*off, botcfg::actionsOn(p, k), val, sizeof(val));
-    lv_label_set_text(botview::s_allowed_lbl, val);
+    pickSet(botview::s_allowed_lbl, val);
   }
 }
 

@@ -17,7 +17,7 @@
 
 namespace gpsview {
 
-enum : uint8_t { TAB_SKY, TAB_SIGNAL, TAB_DETAILS, TAB_COUNT };
+enum : uint8_t { TAB_SKY, TAB_SIGNAL, TAB_DETAILS, TAB_OPTIONS, TAB_COUNT };
 static uint8_t s_tab = TAB_SKY;   // kept across visits
 
 static lv_obj_t* s_sky = nullptr;      // sky plot (drawn)
@@ -258,7 +258,7 @@ void UITask::buildGps() {
   for (lv_obj_t*& p : s_sys_pill) p = nullptr;
   lv_obj_set_style_pad_row(body, 6, 0);
   {   // the tabs first under the title bar, as on every screen with tabs
-    static const char* TABS[] = { "Sky", "Signal", "Details", "" };
+    static const char* TABS[] = { "Sky", "Signal", "Details", "Options", "" };
     lv_obj_t* tabs = segmented(body, TABS, s_tab, LV_PCT(100), theme::TAB_H, theme::SURFACE);
     lv_obj_add_event_cb(tabs, onGpsTab, LV_EVENT_VALUE_CHANGED, NULL);
   }
@@ -351,6 +351,13 @@ void UITask::buildGps() {
       s_sys_pill[k] = p;
     }
     noteLabel(body, "Solid = used in the fix. 30+ is strong; below 25, a fix is unlikely.");
+  } else if (s_tab == TAB_OPTIONS) {   // the GPS's own settings, in one place
+    lv_obj_t* g = group(body, nullptr);
+    schemaRow(g, SETTING(gps_interval));
+    char sub[40];
+    ownPositionText(sub, sizeof(sub));
+    listRow(g, "Fixed position", sub, onOwnPos, NULL);
+    groupNote(body, "The fixed position stands in for the GPS while it's off: on the map and in adverts.");
   } else {   // Details: a row once the receiver reports it
     lv_obj_t* g = infoCard(body);
     s_d_fix = infoRow(g, "Fix", "");

@@ -215,6 +215,9 @@ your position if Settings › Privacy › **Advert pos** is on), so others see y
 and Settings › Sound › **AD sound** set, each device beeps when it hears the
 other: a hands-free "still in range".
 
+> **Wio Tracker L2:** in Settings › Adverts & privacy, and in the Advert
+> popup of the map and Nodes.
+
 ## Repeater
 
 **Tools › Repeater** makes the device relay other people's packets while it
@@ -277,10 +280,12 @@ locator) keeps it on.
 > [!NOTE]
 > **Wio Tracker L2:** the Diagnostics app, with a **Noise** tab that
 > measures the noise floor over time and history charts you can touch for the
-> value at that moment, and the **GPS** app, on three tabs: **Sky** (a plot
+> value at that moment, and the **GPS** app, on four tabs: **Sky** (a plot
 > of the satellites and the fix), **Signal** (a bar per satellite with its
-> strength, and the constellations) and **Details** (position, precision,
-> time to first fix and what the receiver reports).
+> strength, and the constellations), **Details** (position, precision,
+> time to first fix and what the receiver reports) and **Options** (GPS power
+> saving and the **Fixed position**, which stands in for the GPS while it's
+> off).
 > Your contact's QR code and the manual's are in Settings › About.
 
 ## GPIO

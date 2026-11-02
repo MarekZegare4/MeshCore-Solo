@@ -553,8 +553,27 @@ static lv_obj_t* groupLine(lv_obj_t* card, bool tappable) {
   return r;
 }
 
+// A row title led by a symbol ("<symbol>  Text"): the symbol gets a column of
+// its own, the same width on every row, so the titles and hints under them
+// line up whatever the glyph's width. Returns the text after it, or nullptr.
+static const int ICON_COL_W = 22;
+static const char* rowIconSplit(const char* text, char* icon) {
+  const uint8_t* u = (const uint8_t*)text;
+  if (!u || u[0] != 0xEF || !u[1] || !u[2] || u[3] != ' ' || u[4] != ' ') return nullptr;   // U+F000.. symbols
+  memcpy(icon, text, 3);
+  icon[3] = '\0';
+  return text + 5;
+}
+
 // The label (and the hint under it, wrapping) filling a group row's left side.
 static lv_obj_t* groupText(lv_obj_t* row, const char* text, const char* hint, uint32_t col = theme::TEXT) {
+  char icon[4];
+  if (const char* rest = rowIconSplit(text, icon)) {
+    lv_obj_t* i = label(row, icon, THEME_FONT_BODY, col);
+    lv_obj_set_width(i, ICON_COL_W);
+    lv_obj_set_style_text_align(i, LV_TEXT_ALIGN_CENTER, 0);
+    text = rest;
+  }
   lv_obj_t* t = flexBox(row, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_width(t, 1);
   lv_obj_set_flex_grow(t, 1);
@@ -910,11 +929,23 @@ static lv_obj_t* choiceRow(lv_obj_t* parent, const char* text, const char* hint,
 
 // A value picked or typed behind the row: cut to `w`, with a chevron, the whole
 // row is the tap. Returns the value's label.
+// rowPick()'s value: as wide as its text, up to the width it was given (kept
+// as its max width), so a short value leaves the hint beside it room.
+static void pickSet(lv_obj_t* v, const char* text) {
+  lv_label_set_text(v, text);
+  const lv_font_t* f = lv_obj_get_style_text_font(v, LV_PART_MAIN);
+  lv_point_t sz;
+  lv_text_get_size(&sz, text, f, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+  int32_t w = sz.x + 1;
+  int32_t max = lv_obj_get_style_max_width(v, LV_PART_MAIN);
+  lv_obj_set_width(v, w < max ? w : max);   // a px width: LONG_DOT needs one
+}
 static lv_obj_t* rowPick(lv_obj_t* row, const char* text, int w, lv_event_cb_t cb, void* user = nullptr) {
-  lv_obj_t* v = label(row, text, THEME_FONT_BODY, theme::ACCENT);
+  lv_obj_t* v = label(row, "", THEME_FONT_BODY, theme::ACCENT);
   lv_label_set_long_mode(v, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(v, w);   // fixed: LONG_DOT needs a width
+  lv_obj_set_style_max_width(v, w, 0);
   lv_obj_set_style_text_align(v, LV_TEXT_ALIGN_RIGHT, 0);
+  pickSet(v, text);
   label(row, LV_SYMBOL_RIGHT, THEME_FONT_SMALL, theme::TEXT_MUTED);
   rowPressable(row);
   lv_obj_add_event_cb(row, cb, LV_EVENT_CLICKED, user);

@@ -38,7 +38,7 @@ static void wifiHint(char* sub, size_t n) {
   if (!lvport::wifiAllowed()) snprintf(sub, n, "Off");
   else if (saved == 1) snprintf(sub, n, "%s", lvport::wifiSaved(0)->ssid);
   else if (saved > 1) snprintf(sub, n, "%d saved networks", saved);
-  else snprintf(sub, n, "Tap to pick a network");
+  else snprintf(sub, n, "On  -  no network saved yet");   // Settings and the WiFi screen both
 }
 static void onWifiAllowed(lv_event_t* e) {
   lv_obj_t* sw = (lv_obj_t*)lv_event_get_target(e);
@@ -69,14 +69,20 @@ void UITask::buildWifi() {
   lv_obj_t* body = newScreen("WiFi", true);
   s_wifi_forget_btn = nullptr;
   lv_obj_set_style_pad_row(body, 4, 0);
-  label(body, lvport::wifiAllowed() ? "For map downloads, live map tiles and updates." : "WiFi is off (Settings).",
-        THEME_FONT_SMALL, theme::TEXT_MUTED);
+  {   // the same switch as Settings' row
+    char sub[48];
+    wifiHint(sub, sizeof(sub));
+    lv_obj_t* sw = switchRow(group(body, nullptr), LV_SYMBOL_WIFI "  WiFi", sub, nullptr);
+    if (lvport::wifiAllowed()) lv_obj_add_state(sw, LV_STATE_CHECKED);
+    lv_obj_add_event_cb(sw, onWifiAllowed, LV_EVENT_VALUE_CHANGED, NULL);
+    groupNote(body, "For map downloads, live map tiles and updates.");
+  }
 
   // Saved networks: a tap loads one into the form below; Forget takes two taps.
   int n = lvport::wifiSavedCount();
   char joined[33];
   lvport::netSsid(joined, sizeof(joined));
-  lv_obj_t* card = group(body, "Saved networks");
+  lv_obj_t* card = group(body, "SAVED NETWORKS");
   for (int i = 0; i < n; i++) {
     const lvport::WifiNet* w = lvport::wifiSaved(i);
     lv_obj_t* row = groupLine(card, true);
@@ -94,7 +100,7 @@ void UITask::buildWifi() {
   if (!n) groupText(groupLine(card, false), "None yet", "Add one below.", theme::TEXT_MUTED);
   if (n > 1) groupNote(body, "The strongest one in range is used.");
 
-  sectionTitle(body, n >= lvport::WIFI_SAVED_MAX ? "Add a network (replaces the oldest)" : "Add a network");
+  sectionTitle(body, n >= lvport::WIFI_SAVED_MAX ? "ADD A NETWORK (REPLACES THE OLDEST)" : "ADD A NETWORK");
   lv_obj_t* row = lv_obj_create(body);
   styleSurface(row, theme::BG);
   lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
@@ -196,7 +202,7 @@ void UITask::wifiSetAllowed(bool on) {
 
 void UITask::wifiScan() {
   if (_wifi_scanning) return;
-  if (!lvport::wifiAllowed()) { lv_label_set_text(_wifi_status, "Turn WiFi on in Settings first."); return; }
+  if (!lvport::wifiAllowed()) { lv_label_set_text(_wifi_status, "Turn WiFi on first."); return; }
   if (wifiInUse()) { lv_label_set_text(_wifi_status, "WiFi busy (a download or an update) - try later."); return; }
   lvport::scanStart();
   _wifi_scanning = true;
