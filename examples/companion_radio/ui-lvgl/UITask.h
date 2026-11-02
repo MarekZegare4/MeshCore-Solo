@@ -486,7 +486,7 @@ private:
   void mapLoop();
   void rebuildMapMarkers();
   void rebuildNodeMarkers();
-  void addMapMark(uint8_t kind, int idx, int32_t lat_e6, int32_t lon_e6, uint32_t col, const char* text);
+  void addMapMark(uint8_t kind, int idx, int32_t lat_e6, int32_t lon_e6, uint32_t col, const char* text, bool sos = false);
   void mapPointToLatLon(int x, int y, int32_t& lat_e6, int32_t& lon_e6) const;
   double mapCenterBias() const;
   int mapBottomH() const;

@@ -142,7 +142,7 @@ static lv_obj_t* s_imgs[COLS * ROWS];
 static lv_obj_t* s_hint = nullptr;
 static lv_obj_t* s_caption = nullptr;
 static const int MAX_PTS = LiveTrackStore::CAPACITY + 2;
-enum : uint8_t { P_ME, P_LAST, P_TARGET, P_LIVE };   // how a point's dot looks
+enum : uint8_t { P_ME, P_LAST, P_TARGET, P_LIVE, P_SOS };   // how a point's dot looks
 struct Pt { int32_t lat, lon; uint8_t kind; lv_obj_t* obj; };
 static PSRAM_BSS Pt s_pts[MAX_PTS];   // [0] you, then the target, then live shares
 static int s_npts = 0;
@@ -160,6 +160,7 @@ static lv_obj_t* dot(uint8_t kind) {
   const struct { uint8_t d; uint32_t col, border; } LOOK[] = {
     { 14, theme::ACCENT, theme::BG }, { 14, theme::BG, theme::ACCENT },   // you; no fix: the last position, hollow
     { 12, theme::BG, theme::ACCENT }, { 12, theme::OK, theme::BG },       // the target; live shares
+    { 12, theme::FAIL, theme::BG },                                       // someone's SOS, pulsing
   };
   int d = LOOK[kind].d;
   uint32_t col = LOOK[kind].col, border = LOOK[kind].border;
@@ -172,6 +173,7 @@ static lv_obj_t* dot(uint8_t kind) {
   lv_obj_set_style_border_color(o, lv_color_hex(border), 0);
   lv_obj_set_style_border_width(o, 2, 0);
   lv_obj_remove_flag(o, LV_OBJ_FLAG_CLICKABLE);
+  if (kind == P_SOS) mapview::sosPulse(o);
   return o;
 }
 }  // namespace mini
@@ -708,7 +710,7 @@ bool UITask::homeMapFit() {
   for (int i = 0; i < LiveTrackStore::CAPACITY && np < MAX_PTS; i++) {
     if (!lt.isActive(i, now)) continue;
     const LiveTrackStore::Entry& e = lt.slotAt(i);
-    pts[np++] = { e.lat_1e6, e.lon_1e6, P_LIVE, nullptr };
+    pts[np++] = { e.lat_1e6, e.lon_1e6, e.sos ? P_SOS : P_LIVE, nullptr };
     live++;
   }
   bool same = np == s_npts;

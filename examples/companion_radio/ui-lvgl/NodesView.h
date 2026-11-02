@@ -182,7 +182,7 @@ uint32_t UITask::nearbySignature() const {
   for (int i = 0; i < _nearby->count(); i++) {
     const NearbyModel::Entry& e = _nearby->at(i);
     sig = sig * 31 + e.contact_idx + (uint32_t)e.lastmod + (uint32_t)(e.dist_km * 100) + e.rssi + e.fav
-        + e.type * 5 + (e.is_live ? 3 : 0);
+        + e.type * 5 + (e.is_live ? 3 : 0) + (e.is_sos ? 17 : 0);
     for (const char* p = e.name; *p; p++) sig = sig * 31 + (uint8_t)*p;
   }
   // Ages are shown in minutes, so let the list re-render once a minute anyway.
@@ -201,9 +201,9 @@ static void nearbyText(const NearbyModel::Entry& e, uint32_t now, bool imperial,
   if (e.dist_km >= 0.0f) geo::fmtDist(t.right, sizeof(t.right), e.dist_km, imperial);
   else if (age[0]) snprintf(t.right, sizeof(t.right), "%s", age);
   const char* kind = e.contact_idx >= 0 ? NearbyModel::typeName(e.type) : "not a contact";
-  snprintf(t.sub, sizeof(t.sub), "%s%s%s%s", kind, e.is_live ? "  -  live" : "",
+  snprintf(t.sub, sizeof(t.sub), "%s%s%s%s", kind, e.is_sos ? "  -  SOS" : e.is_live ? "  -  live" : "",
            (e.dist_km >= 0.0f && age[0]) ? "  -  " : "", (e.dist_km >= 0.0f && age[0]) ? age : "");
-  t.right_col = e.is_live ? theme::OK : theme::TEXT_MUTED;
+  t.right_col = e.is_sos ? theme::FAIL : e.is_live ? theme::OK : theme::TEXT_MUTED;
 }
 
 // A small arrow towards the node, drawn in the value label's left padding:
@@ -391,7 +391,8 @@ void UITask::refreshNode() {
   int o = 0;
   auto tag = [&](const char* t) { o += snprintf(status + o, sizeof(status) - o, "%s%s", o ? ", " : "", t); };
   if (!known) tag("not a contact");
-  if (e.is_live) tag(e.live_verified ? "live position" : "live position (channel)");
+  if (e.is_sos) tag(e.live_verified ? "SOS position" : "SOS position (channel)");
+  else if (e.is_live) tag(e.live_verified ? "live position" : "live position (channel)");
   if (e.fav) tag("favourite");
   if (status[0] >= 'a' && status[0] <= 'z') status[0] -= 'a' - 'A';
   int32_t lat, lon;

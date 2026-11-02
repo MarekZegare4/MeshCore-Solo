@@ -189,6 +189,7 @@ struct Mark {
   int16_t lx, ly, lw, lh;     // name pill, layer px (lw 0: no room for it)
   uint8_t order;              // 1.. while it is a hop of the route being picked, else 0
   bool vis;                   // inside the view
+  bool sos;                   // someone's SOS: a pulsing ring around the dot (s_sos_rings)
 };
 // What was drawn for a slot last time, to repaint only what changed.
 struct MarkSig { int16_t x, y, lx, ly, lw; uint32_t col, hash; uint8_t order; bool vis; };
@@ -198,6 +199,10 @@ static Mark* s_marks = psramBuf<Mark>(MAX_MARKS);
 static MarkSig* s_sigs = psramBuf<MarkSig>(MAX_MARKS);
 static int  s_sig_n = 0;
 static lv_obj_t* s_mark_layer = nullptr;
+// Rings pulsing out of the SOS markers in view: objects over the drawn layer,
+// so only their small area is repainted each frame, not the layer.
+static const int SOS_RINGS = 4;
+static lv_obj_t* s_sos_rings[SOS_RINGS];
 // The route being picked (Route > Map): its points as lat/lon, and in layer px
 // from the last layout, drawn as a line under the markers.
 static const int ROUTE_PTS = HopRoute::MAX_PTS;   // a picked route has 10 at most
@@ -505,6 +510,27 @@ static void drawFlows(lv_layer_t* layer, const lv_area_t& a) {
 }
 
 static const int MARK_D = 12;   // marker dot diameter
+
+// An SOS marker's ring: an outline round `o` (the dot's size) that grows out
+// of it and fades, over and over. Home's mini map uses it too.
+static void setSosPulse(void* o, int32_t v) {
+  lv_obj_set_style_outline_pad((lv_obj_t*)o, (int32_t)(v * 14 / 1000), 0);
+  lv_obj_set_style_outline_opa((lv_obj_t*)o, (lv_opa_t)(LV_OPA_COVER - v * LV_OPA_COVER / 1000), 0);
+}
+static void sosPulse(lv_obj_t* o) {
+  lv_obj_set_style_outline_color(o, lv_color_hex(theme::FAIL), 0);
+  lv_obj_set_style_outline_width(o, 2, 0);
+  lv_anim_t a;
+  lv_anim_init(&a);
+  lv_anim_set_var(&a, o);
+  lv_anim_set_exec_cb(&a, setSosPulse);
+  lv_anim_set_values(&a, 0, 1000);
+  lv_anim_set_duration(&a, 1200);
+  lv_anim_set_repeat_delay(&a, 300);
+  lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
+  lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
+  lv_anim_start(&a);
+}
 static const int MARK_LABELS_MAX = 20;   // names shown at once: the rest stay dots
 
 // LV_EVENT_DRAW_MAIN of the marker layer: the name pills, then the dots over them.
@@ -830,6 +856,15 @@ void UITask::buildMap() {
   lv_obj_remove_flag(mapview::s_mark_layer, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_remove_flag(mapview::s_mark_layer, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_event_cb(mapview::s_mark_layer, mapview::drawMarks, LV_EVENT_DRAW_MAIN, NULL);
+  for (lv_obj_t*& r : mapview::s_sos_rings) {
+    r = lv_obj_create(mapview::s_mark_layer);
+    lv_obj_remove_style_all(r);
+    lv_obj_set_size(r, mapview::MARK_D + 1, mapview::MARK_D + 1);
+    lv_obj_set_style_radius(r, LV_RADIUS_CIRCLE, 0);
+    lv_obj_remove_flag(r, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_flag(r, LV_OBJ_FLAG_HIDDEN);
+    mapview::sosPulse(r);
+  }
   mapview::s_flow = &_core->flow;
   mapview::s_view_ok = false;
   mapview::s_flow_area_on = false;
@@ -1120,15 +1155,15 @@ void UITask::rebuildNodeMarkers() {
     const NearbyModel::Entry& e = _nearby->at(i);
     if (e.lat_e6 == 0 && e.lon_e6 == 0) continue;
     if (e.is_live && _map_nav) continue;   // the live share's own marker shows it
-    uint32_t col = e.is_live ? theme::OK : e.type == ADV_TYPE_CHAT ? theme::TEXT : theme::TEXT_MUTED;
-    addMapMark(mapview::MK_NODE, i, e.lat_e6, e.lon_e6, col, e.name[0] ? e.name : "?");
+    uint32_t col = e.is_sos ? theme::FAIL : e.is_live ? theme::OK : e.type == ADV_TYPE_CHAT ? theme::TEXT : theme::TEXT_MUTED;
+    addMapMark(mapview::MK_NODE, i, e.lat_e6, e.lon_e6, col, e.name[0] ? e.name : "?", e.is_sos);
   }
 }
 
 // A marker is a record: where it is, its colour and name. Placement and
 // painting are layoutMapMarks() and mapview::drawMarks(). The name's width is
 // measured here, not per pan: a slot whose name is unchanged keeps it.
-void UITask::addMapMark(uint8_t kind, int idx, int32_t lat_e6, int32_t lon_e6, uint32_t col, const char* text) {
+void UITask::addMapMark(uint8_t kind, int idx, int32_t lat_e6, int32_t lon_e6, uint32_t col, const char* text, bool sos) {
   if (!_map_marks || mapview::s_mark_count >= mapview::MAX_MARKS) return;
   uint32_t h = 2166136261u;   // FNV-1a of the name
   for (const char* c = text; *c; c++) h = (h ^ (uint8_t)*c) * 16777619u;
@@ -1136,7 +1171,7 @@ void UITask::addMapMark(uint8_t kind, int idx, int32_t lat_e6, int32_t lon_e6, u
   mapview::Mark& mk = mapview::s_marks[k];
   bool same_name = k < mapview::s_mark_prev && mk.text_hash == h;
   mk.lat_e6 = lat_e6; mk.lon_e6 = lon_e6; mk.idx = idx; mk.kind = kind; mk.col = col; mk.text_hash = h;
-  mk.vis = false; mk.lw = 0; mk.order = 0;
+  mk.vis = false; mk.lw = 0; mk.order = 0; mk.sos = sos;
   if (same_name) return;
   size_t n = strlen(text);
   if (n > (size_t)mapview::MARK_NAME) {   // cut at a character boundary
@@ -1268,6 +1303,14 @@ void UITask::layoutMapMarks(double left, double top, int w, int h) {
     const Mark& m = s_marks[k];
     s_sigs[k] = { m.x, m.y, m.lx, m.ly, m.lw, m.col, m.text_hash, m.order, m.vis };
   }
+  int rings = 0;
+  for (int k = 0; k < s_mark_count && rings < SOS_RINGS; k++) {
+    const Mark& m = s_marks[k];
+    if (!m.vis || !m.sos || !s_sos_rings[rings]) continue;
+    lv_obj_set_pos(s_sos_rings[rings], m.x - half, m.y - half);
+    lv_obj_remove_flag(s_sos_rings[rings++], LV_OBJ_FLAG_HIDDEN);
+  }
+  for (; rings < SOS_RINGS; rings++) if (s_sos_rings[rings]) lv_obj_add_flag(s_sos_rings[rings], LV_OBJ_FLAG_HIDDEN);
   s_sig_n = s_mark_count;
 }
 

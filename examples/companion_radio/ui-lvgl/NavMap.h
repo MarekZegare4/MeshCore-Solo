@@ -306,7 +306,7 @@ void UITask::rebuildNavMarkers() {
     char age[8], t[LiveTrackStore::NAME_LEN + 12];
     geo::fmtAgeShort(age, sizeof(age), now, e.ts);
     snprintf(t, sizeof(t), "%s%s%s", e.name, age[0] ? "  " : "", age);
-    addMapMark(mapview::MK_LIVE, i, e.lat_1e6, e.lon_1e6, theme::OK, t);
+    addMapMark(mapview::MK_LIVE, i, e.lat_1e6, e.lon_1e6, e.sos ? theme::FAIL : theme::OK, t, e.sos);
   }
 
   navTrailSync();
@@ -1550,10 +1550,10 @@ void UITask::navTargetsPopup() {
     const LiveTrackStore::Entry& e = lt.slotAt(i);
     char age[8], sub[40], d[12];
     geo::fmtAgeShort(age, sizeof(age), now, e.ts);
-    snprintf(sub, sizeof(sub), "%s  -  %s ago", e.verified ? "direct" : "channel", age[0] ? age : "0s");
+    snprintf(sub, sizeof(sub), "%s%s  -  %s ago", e.sos ? "SOS, " : "", e.verified ? "direct" : "channel", age[0] ? age : "0s");
     lv_obj_t* row = listRow(list, e.name, sub, onNavPick, (void*)(uintptr_t)navmap::code(navmap::T_LIVE, i));
     dist(e.lat_1e6, e.lon_1e6, d, sizeof(d));
-    if (d[0]) navRowRight(row, d, theme::OK, theme::PAD);
+    if (d[0]) navRowRight(row, d, e.sos ? theme::FAIL : theme::OK, theme::PAD);
     live++;
   }
   if (live == 0) label(list, "Nobody is sharing their position.", THEME_FONT_SMALL, theme::TEXT_MUTED);

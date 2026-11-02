@@ -43,6 +43,7 @@ public:
     // channel (name, best-effort) one.
     bool     is_live;
     bool     live_verified;
+    bool     is_sos;         // the live position came with an SOS (LiveTrackStore::Entry::sos)
     // Favourite (ContactInfo::flags bit 0) -- only a contact carries it.
     bool     fav;
   };
@@ -130,6 +131,7 @@ public:
       e.is_known    = true;
       e.is_live     = false;
       e.live_verified = false;
+      e.is_sos      = false;
     }
 
     mergeLiveTrack();
@@ -161,6 +163,7 @@ public:
       e.contact_idx = -1;
       e.is_live = false;
       e.live_verified = false;
+      e.is_sos = false;
     }
     // strongest first
     for (int i = 0; i < _count - 1; i++) {
@@ -230,6 +233,7 @@ protected:
         if (s.ts > e.lastmod) e.lastmod = s.ts;
         e.is_live       = true;
         e.live_verified = s.verified;
+        e.is_sos        = s.sos;
       } else if (_count < MAX_NEARBY && typeMatchesFilter(ADV_TYPE_CHAT, 0, false)) {
         // A sender we don't have as a contact: treat it as a companion (the only
         // node type that shares position), so the type filter still applies.
@@ -253,6 +257,7 @@ protected:
         e.is_known      = false;
         e.is_live       = true;
         e.live_verified = s.verified;
+        e.is_sos        = s.sos;
       }
     }
   }
@@ -287,6 +292,7 @@ protected:
       e.contact_idx = -1;
       e.is_known    = false;
       e.is_live     = false;
+      e.is_sos      = false;
     }
   }
 
