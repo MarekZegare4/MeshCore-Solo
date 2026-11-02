@@ -264,6 +264,12 @@ TEST(SosText, ComposeNeverOverruns) {
   EXPECT_LT(strlen(t), sizeof(t));
 }
 
+TEST(SosText, ComposeCutsOnACharacter) {
+  char t[17];   // "[SOS] no GPS " + "zżż" cut inside the second "ż"
+  SosEngine::compose(t, sizeof(t), "z\xC5\xBC\xC5\xBC", SosEngine::NOWHERE, 0, 0, nullptr, -1, "", -1);
+  EXPECT_STREQ(t, "[SOS] no GPS z\xC5\xBC");
+}
+
 TEST(SosTargets, ChannelsAndContacts) {
   NodePrefs p;
   EXPECT_FALSE(SosEngine::hasTargets(&p));

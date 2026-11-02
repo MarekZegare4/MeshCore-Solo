@@ -219,6 +219,8 @@ public:
       if (val[0]) put(val, (int)strlen(val));
       else while (*p == ' ') p++;
     }
+    out[o] = '\0';
+    o = mesh::validUtf8PrefixLength(out, o);   // too long: cut on a character
     while (o > 0 && out[o - 1] == ' ') o--;
     out[o] = '\0';
   }
