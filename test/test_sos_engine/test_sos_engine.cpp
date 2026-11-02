@@ -225,6 +225,23 @@ TEST(SosText, NoGpsIsRecognisedOnItsOwn) {
   EXPECT_FALSE(geo::isSos("SOS no GPS"));
 }
 
+// A beacon moves an SOS that's on the table, and nothing else.
+TEST(LiveTrack, AnAdvertMovesOnlyAnSos) {
+  LiveTrackStore t;
+  const uint8_t ann[6] = { 1, 2, 3, 4, 5, 6 }, bob[6] = { 9, 9, 9, 9, 9, 9 };
+  t.update(ann, "SOS Ann", 1, 2, 1000, true, true);     // a DM's
+  t.update(nullptr, "SOS Cy", 1, 2, 1000, false, true);  // a channel's
+  t.update(bob, "Bob", 1, 2, 1000, true);                // a live share
+  EXPECT_TRUE(t.followSos(ann, "Ann", 30, 40, 2000));
+  EXPECT_EQ(t.slotAt(0).lat_1e6, 30);
+  EXPECT_EQ(t.slotAt(0).ts, 2000u);
+  EXPECT_TRUE(t.followSos(nullptr, "Cy", 50, 60, 2000));
+  EXPECT_EQ(t.slotAt(1).lon_1e6, 60);
+  EXPECT_FALSE(t.followSos(bob, "Bob", 70, 80, 2000));
+  EXPECT_EQ(t.slotAt(2).lat_1e6, 1);
+  EXPECT_FALSE(t.followSos(bob, "Ann", 70, 80, 2000));   // a DM's SOS goes by key, not name
+}
+
 TEST(LiveTrack, SosOutlivesAShareAndIsEvictedLast) {
   LiveTrackStore t;
   t.update(nullptr, "SOS Ann", 1, 2, 1000, false, true);
@@ -294,10 +311,8 @@ TEST_F(Sos, FirstFixPastTheLastSendStillGoesOut) {
     now += 60000;
   }
   EXPECT_FALSE(sos.loop(now, false));
-  EXPECT_FALSE(sos.finished());     // the GPS is still wanted
   EXPECT_TRUE(sos.loop(now, true));
   sos.markSent(now, true, true);
-  EXPECT_TRUE(sos.finished());
   EXPECT_FALSE(sos.loop(now + 60000, true));
 }
 
@@ -374,23 +389,66 @@ TEST_F(Sos, ALongAnswerIsCutOnACharacter) {
   EXPECT_EQ((strlen(t) - 4) % 2, 0u);
 }
 
-TEST_F(Sos, FinishedOnAnAnswer) {
+// The messages stop at an answer, the beacon goes on at the Repeat gap.
+TEST_F(Sos, TheBeaconOutlivesTheMessages) {
+  prefs.sos_repeat_idx = 1;   // 1 min
   sos.start(now);
+  EXPECT_FALSE(sos.beaconDue(now + 600000));   // not in the countdown
   now += 10000;
-  ASSERT_TRUE(sos.loop(now, false));
-  sos.markSent(now, false, true);
-  EXPECT_FALSE(sos.finished());
-  sos.onReply("Bob", "ACK");
-  EXPECT_TRUE(sos.finished());
+  ASSERT_TRUE(sos.loop(now, true));
+  sos.markSent(now, true, true);
+  sos.markBeacon(now);
+  EXPECT_FALSE(sos.beaconDue(now + 59000));
+  EXPECT_TRUE(sos.onReply("Bob", "ACK", now));
+  now += 60000;
+  EXPECT_FALSE(sos.loop(now, true));
+  EXPECT_TRUE(sos.beaconDue(now));
+  sos.markBeacon(now);
+  EXPECT_FALSE(sos.beaconDue(now + 1000));
+  sos.stop();
+  EXPECT_FALSE(sos.beaconDue(now + 600000));
 }
 
-TEST_F(Sos, FinishedAfterTheOnlySendWithAPosition) {
+TEST_F(Sos, TheBeaconWithRepeatOffEveryFiveMinutes) {
   prefs.sos_repeat_idx = 0;   // once
   sos.start(now);
   now += 10000;
   ASSERT_TRUE(sos.loop(now, true));
   sos.markSent(now, true, true);
-  EXPECT_TRUE(sos.finished());
+  sos.markBeacon(now);
+  EXPECT_FALSE(sos.beaconDue(now + SosEngine::BEACON_MS - 1000));
+  EXPECT_TRUE(sos.beaconDue(now + SosEngine::BEACON_MS));
+  char b[32];
+  sos.nextLine(b, sizeof(b), now);
+  EXPECT_STREQ(b, "Advert every 5 min");
+}
+
+// Settings changed while one runs count at once, from the last send / beep /
+// advert: not only from the next one, and Repeat off -> on starts it again.
+TEST_F(Sos, ASettingChangedWhileItRunsCountsAtOnce) {
+  activate();
+  const uint32_t sent = now;
+  prefs.sos_repeat_idx = 1;   // 5 min -> 1 min
+  EXPECT_FALSE(sos.loop(sent + 59000, true));
+  EXPECT_TRUE(sos.loop(sent + 60000, true));
+  sos.markSent(sent + 60000, true, true);
+  prefs.sos_repeat_idx = 0;   // off: no more messages
+  EXPECT_FALSE(sos.loop(sent + 10UL * 60000UL, true));
+  EXPECT_EQ(sos.nextSecs(sent + 10UL * 60000UL), -1);
+  prefs.sos_repeat_idx = 2;   // on again, 2 min: overdue, so now
+  EXPECT_TRUE(sos.loop(sent + 10UL * 60000UL, true));
+
+  sos.markBeacon(sent);
+  prefs.sos_repeat_idx = 4;   // 10 min: the advert follows it
+  EXPECT_FALSE(sos.beaconDue(sent + 9UL * 60000UL));
+  prefs.sos_repeat_idx = 1;
+  EXPECT_TRUE(sos.beaconDue(sent + 60000));
+
+  prefs.sos_beep_idx = 3;     // 5 min
+  EXPECT_TRUE(sos.beepDue(sent + SosEngine::BEEP_FIRST_MS));
+  EXPECT_FALSE(sos.beepDue(sent + SosEngine::BEEP_FIRST_MS + 30000));
+  prefs.sos_beep_idx = 1;     // 30 s
+  EXPECT_TRUE(sos.beepDue(sent + SosEngine::BEEP_FIRST_MS + 30000));
 }
 
 TEST_F(Sos, TheStatusLines) {
@@ -414,10 +472,10 @@ TEST_F(Sos, TheStatusLines) {
   prefs.sos_repeat_idx = 0;
   sos.markSent(now, true, true);
   sos.nextLine(b, sizeof(b), now);
-  EXPECT_STREQ(b, "No more repeats");
+  EXPECT_STREQ(b, "Advert every 5 min");
 }
 
-TEST_F(Sos, TheGpsIsWantedUntilNothingMoreGoesOut) {
+TEST_F(Sos, TheGpsIsWantedUntilTheEnd) {
   EXPECT_FALSE(sos.gpsWanted());
   sos.start(now);
   EXPECT_TRUE(sos.gpsWanted());      // the countdown already: a fix for the first send
@@ -426,7 +484,7 @@ TEST_F(Sos, TheGpsIsWantedUntilNothingMoreGoesOut) {
   sos.markSent(now, true, true);
   EXPECT_TRUE(sos.gpsWanted());
   EXPECT_TRUE(sos.onReply("Ann", "ACK", now));
-  EXPECT_FALSE(sos.gpsWanted());     // answered: no more sends, the beep may go on
+  EXPECT_TRUE(sos.gpsWanted());      // answered: the beacon still gives the position
   sos.stop();
   EXPECT_FALSE(sos.gpsWanted());
 }

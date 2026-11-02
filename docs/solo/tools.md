@@ -50,13 +50,16 @@ and without opening a menu. Set it up before you need it:
 | --- | ---- |
 | **Hold Back** | Lets a hold of **Back** start it. Off by default |
 | **Countdown** | 5, 10 or 15 seconds to cancel in |
-| **Repeat** | How often it's sent again: every 1, 2, 5 or 10 minutes, or **Off** for once |
-| **Beep** | Off, or every 30 seconds, 1 or 5 minutes: `... --- ...` on the buzzer at full volume, so someone nearby can find you if you can't answer |
 | **Channels** | Which channels it goes to; **Enter** switches each one |
 | **Contact 1-3** | Up to three direct contacts. **Enter** picks one, **Left / Right** empties the row |
-| **ACK word** | The word that means "received", `ACK` by default |
 | **Message** | What follows `[SOS]`, with placeholders, see below |
+| **Repeat** | How often it's sent again: every 1, 2, 5 or 10 minutes, or **Off** for once |
+| **Beep** | Off, or every 30 seconds, 1 or 5 minutes: `... --- ...` on the buzzer at full volume, so someone nearby can find you if you can't answer |
+| **ACK word** | The word that means "received", `ACK` by default |
 | **Send SOS** | Starts it from here, on devices without a Back button too |
+
+A change made while an SOS runs counts at once: a shorter **Repeat** or
+**Beep** from the last send or beep, and Repeat switched back on sends again.
 
 **Starting:** hold **Back** for 3 seconds. It works with the screen off and on a
 locked device, and needs no PIN. The device beeps every second and counts down,
@@ -88,24 +91,29 @@ Without a fix `{loc}` gives the last position from the past hour, with its age.
 An older one could be far from where you are, so then it says `no GPS`. Either
 way one more goes as soon as the GPS gets a fix.
 
-With a position, each send also goes out as a zero-hop advert carrying it at full
-precision, whatever **Privacy** says for adverts: anyone in direct range sees
-you on their map in any MeshCore app, even if they aren't on your list.
+**The beacon:** each send also goes out as a zero-hop advert with the position
+at full precision, whatever **Privacy** says for adverts, and so does one every
+**Repeat** gap (5 minutes with Repeat off) until you end the SOS, after an
+answer too. The messages are for people and stop once someone answers; the
+beacon is for the map of whoever comes near: anyone in direct range sees you
+in any MeshCore app, even if they aren't on your list. Without a position it
+goes without one, and still tells someone nearby that the node is there.
 
 **Receiving one:** a banner names the sender, also when there's no position.
 A position shows on the map and in Nearby as `SOS name`, even with **Track loc**
-off. It stays for 24 hours,
-or until a restart. **Hold Enter** on the message navigates to it. Other
+off; on the L2 as a red, pulsing dot, and the row in Nodes says `SOS`. Their beacon moves it as they move, while you're in its range. It stays for
+24 hours, or until a restart. **Hold Enter** on the message navigates to it. Other
 firmware and the phone app show it as an ordinary message.
 
 **While it runs**, the status shows how many were sent and when the next goes.
 It's sent up to 12 times, then the device goes on listening, with one more
-send if the GPS gets its first fix after that. **Beep** goes on, even with the
-buzzer off, after an answer too, until you end the SOS.
+send if the GPS gets its first fix after that. The beacon and **Beep** go on,
+the beep even with the buzzer off, after an answer too, until you end the SOS.
 
 To save the battery while it runs, the screen goes off after 30 seconds whatever
-your auto-off says. GPS power saving waits until nothing more will be sent, and
-then a GPS the SOS turned on goes back off. The repeater (and WiFi on the L2)
+your auto-off says. The GPS stays on, past its power saving, until the SOS ends,
+so the beacon gives where you are now: end it once help has found you. A GPS
+the SOS turned on goes back off then. The repeater (and WiFi on the L2)
 rests until the SOS ends, so the message goes out on your own network. During an
 SOS the bot refuses `!gps`.
 

@@ -25,18 +25,20 @@ class SosScreen : public UIScreen {
   enum Kind : uint8_t { K_HOLD, K_COUNTDOWN, K_REPEAT, K_BEEP, K_CHANNELS, K_DM1, K_DM2, K_DM3, K_ACK, K_MSG, K_START };
   struct Row { Kind kind; const char* label; };
   static const int ROW_COUNT = 11;
+  // The L2's order: how it starts, who it goes to and what it says, then
+  // what happens while it runs.
   static Row rows(int i) {
     static const Row R[ROW_COUNT] = {
       { K_HOLD,      "Hold Back" },
       { K_COUNTDOWN, "Countdown" },
-      { K_REPEAT,    "Repeat" },
-      { K_BEEP,      "Beep" },
       { K_CHANNELS,  "Channels" },
       { K_DM1,       "Contact 1" },
       { K_DM2,       "Contact 2" },
       { K_DM3,       "Contact 3" },
-      { K_ACK,       "ACK word" },
       { K_MSG,       "Message" },
+      { K_REPEAT,    "Repeat" },
+      { K_BEEP,      "Beep" },
+      { K_ACK,       "ACK word" },
       { K_START,     "Send SOS" },
     };
     return R[i];

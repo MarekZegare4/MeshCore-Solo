@@ -401,6 +401,19 @@ void MyMesh::onDiscoveredAdvert(bool was_flood) {
   if (_listener) _listener->onAdvertHeard(was_flood);
 }
 
+// The position an advert carries, when it carries one: a contact's stored one
+// may be older than what an SOS already gave. Not from a replay of an older one.
+void MyMesh::onAdvertRecv(mesh::Packet* packet, const mesh::Identity& id, uint32_t timestamp,
+                          const uint8_t* app_data, size_t app_data_len) {
+  const ContactInfo* known = lookupContactByPubKey(id.pub_key, PUB_KEY_SIZE);
+  const bool fresh = !known || timestamp > known->last_advert_timestamp;
+  BaseChatMesh::onAdvertRecv(packet, id, timestamp, app_data, app_data_len);
+  if (!fresh || !_listener) return;
+  AdvertDataParser parser(app_data, app_data_len);
+  if (parser.isValid() && parser.hasLatLon())
+    _listener->onAdvertPosition(id.pub_key, parser.getName(), parser.getIntLat(), parser.getIntLon());
+}
+
 void MyMesh::onDiscoveredContact(ContactInfo &contact, bool is_new, uint8_t path_len, const uint8_t* path) {
   if (_serial->isConnected()) {
     if (is_new) {
@@ -3104,8 +3117,9 @@ bool MyMesh::advertFlood() {
   }
 }
 
-bool MyMesh::advertSos(int32_t lat_1e6, int32_t lon_1e6) {
-  mesh::Packet* pkt = createSelfAdvert(_prefs.node_name, lat_1e6 / 1e6, lon_1e6 / 1e6);
+bool MyMesh::advertSos(bool with_pos, int32_t lat_1e6, int32_t lon_1e6) {
+  mesh::Packet* pkt = with_pos ? createSelfAdvert(_prefs.node_name, lat_1e6 / 1e6, lon_1e6 / 1e6)
+                               : createSelfAdvert(_prefs.node_name);
   if (!pkt) return false;
   sendZeroHop(pkt);
   return true;

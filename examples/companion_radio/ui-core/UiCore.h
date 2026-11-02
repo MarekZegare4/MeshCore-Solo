@@ -247,6 +247,9 @@ public:
 
   void onACKRecv(uint32_t ack_crc) override { history.markDmDelivered(ack_crc); }
   void onAdvertHeard(bool was_flood) override { events.push(UiEventType::AdvertHeard, nullptr, was_flood); }
+  void onAdvertPosition(const uint8_t* pub_key, const char* name, int32_t lat_1e6, int32_t lon_1e6) override {
+    live_share.onAdvertPosition(pub_key, name, lat_1e6, lon_1e6);
+  }
   void onPacketHeard(const mesh::Packet* pkt) override { flow.onHeard(pkt); }
   void onPacketSent(const mesh::Packet* pkt) override { flow.onSent(pkt); }
   bool requestShutdown(bool restart) override { _host->shutdown(restart); return true; }
@@ -419,9 +422,10 @@ private:
   void sosLoop() {
     int32_t lat, lon;
     if (sos.loop(millis(), course.currentLocation(lat, lon))) sendSos();
-    if (_sos_gps_on && sos.finished()) {   // it only ran for the SOS: the battery has better use
-      setGpsEnabled(false, false);
-      _sos_gps_on = false;
+    else if (sos.beaconDue(millis())) {
+      int age_min;
+      const SosEngine::Where where = sosWhere(lat, lon, age_min);
+      sosBeacon(where, lat, lon);
     }
   }
 
@@ -431,29 +435,44 @@ private:
     if (sos.onReply(from, text, millis())) events.push(UiEventType::SosAcked, from, first);
   }
 
-  // One round: every target, with the position as of now.
+  // Where to say we are, as of now. A position nobody can tell the age of
+  // could be anywhere, and is worse than none: only a recent fix, with its
+  // age. Where there's no GPS at all, the position set by hand is the one the
+  // owner chose to give.
+  // age_min: how old a last fix is, -1 for a current one or one set by hand.
+  SosEngine::Where sosWhere(int32_t& lat, int32_t& lon, int& age_min) {
+    lat = lon = 0;
+    age_min = -1;
+    uint32_t age = 0;
+    if (course.currentLocation(lat, lon)) return SosEngine::FIX;
+    if (course.lastFix(lat, lon, age) && age <= SosEngine::LAST_MAX_SECS) { age_min = (int)(age / 60); return SosEngine::LAST_KNOWN; }
+    if (!gpsAvailable() && fixedPosition(lat, lon)) return SosEngine::LAST_KNOWN;
+    return SosEngine::NOWHERE;
+  }
+
+  // The beacon: a zero-hop advert, so the mesh isn't flooded. With the
+  // position anyone in range sees it on their map, in any app; without one it
+  // still says the node is there, for whoever homes in on its signal.
+  void sosBeacon(SosEngine::Where where, int32_t lat, int32_t lon) {
+    the_mesh.advertSos(where != SosEngine::NOWHERE, lat, lon);
+    sos.markBeacon(millis());
+  }
+
+  // One round: every target, with the position as of now, and the beacon.
   void sendSos() {
     const uint32_t now = rtc_clock.getCurrentTime();
-    int32_t lat = 0, lon = 0;
+    int32_t lat, lon;
+    int age_min;
+    const SosEngine::Where where = sosWhere(lat, lon, age_min);
+    const bool fix = where == SosEngine::FIX;
     int16_t alt = 0;
-    uint32_t age = 0;
-    const bool fix = course.currentLocation(lat, lon);
     const bool has_alt = fix && course.currentAltitude(alt);
-    // A position nobody can tell the age of could be anywhere, and is worse than
-    // none: only a recent fix, with its age. Where there's no GPS at all, the
-    // position set by hand is the one the owner chose to give.
-    const bool recent = !fix && course.lastFix(lat, lon, age) && age <= SosEngine::LAST_MAX_SECS;
-    const bool set = !fix && !gpsAvailable() && fixedPosition(lat, lon);
-    SosEngine::Where where = fix ? SosEngine::FIX : recent || set ? SosEngine::LAST_KNOWN : SosEngine::NOWHERE;
     char hhmm[8] = "";
     struct tm ti;
     if (localTm(now, tzHoursAt(_prefs, now), ti)) snprintf(hhmm, sizeof(hhmm), "%02d:%02d", ti.tm_hour, ti.tm_min);
     char text[MAX_TEXT_LEN + 1];
     SosEngine::compose(text, sizeof(text), _prefs->sos_msg, where, lat, lon, has_alt ? &alt : nullptr,
-                       recent ? (int)(age / 60) : -1, hhmm, _host->battPercent());
-    // Anyone in range sees it on their map too, on any app, not only the
-    // targets: an advert, zero-hop so the mesh isn't flooded every round.
-    if (where != SosEngine::NOWHERE) the_mesh.advertSos(lat, lon);
+                       age_min, hhmm, _host->battPercent());
 
     bool ok = false;
     for (int i = 0; i < MAX_GROUP_CHANNELS; i++)
@@ -465,6 +484,7 @@ private:
     }
     const bool first = ok && sos.sent() == 0;
     sos.markSent(millis(), fix, ok);
+    sosBeacon(where, lat, lon);
     events.push(UiEventType::SosSent, nullptr, first);
   }
 

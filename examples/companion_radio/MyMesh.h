@@ -184,6 +184,8 @@ public:
       virtual void onSosPosition(const uint8_t* pub_key, const char* name,
                                  int32_t lat_1e6, int32_t lon_1e6, bool verified) {}
       virtual void onSosNoPosition(const char* name) {}
+      // A fresh advert that carries a position (an SOS beacon among them).
+      virtual void onAdvertPosition(const uint8_t* pub_key, const char* name, int32_t lat_1e6, int32_t lon_1e6) {}
       // A contact / channel slot is gone -- drop references to it.
       virtual void onContactRemoved(const uint8_t* pub_key) { }
       virtual void onChannelRemoved(uint8_t channel_idx) { }
@@ -227,9 +229,10 @@ public:
   // (manual, flood, auto, phone-app and contact export).
   mesh::Packet* createOwnAdvert();
   bool advertFlood();   // flooded (default scope), as the app's "Advert" with flood
-  // Zero-hop, with this position at full precision whatever advert_loc_policy
-  // says: starting an SOS is the consent to give it.
-  bool advertSos(int32_t lat_1e6, int32_t lon_1e6);
+  // An SOS beacon: zero-hop, with this position (when there is one) at full
+  // precision whatever advert_loc_policy says: starting an SOS is the consent
+  // to give it.
+  bool advertSos(bool with_pos, int32_t lat_1e6, int32_t lon_1e6);
   void sendNodeDiscoverReq();
   void enterCLIRescue();
 
@@ -331,6 +334,7 @@ protected:
   void onContactOverwrite(const uint8_t* pub_key) override;
   bool onContactPathRecv(ContactInfo& from, uint8_t* in_path, uint8_t in_path_len, uint8_t* out_path, uint8_t out_path_len, uint8_t extra_type, uint8_t* extra, uint8_t extra_len) override;
   void onDiscoveredContact(ContactInfo &contact, bool is_new, uint8_t path_len, const uint8_t* path) override;
+  void onAdvertRecv(mesh::Packet* packet, const mesh::Identity& id, uint32_t timestamp, const uint8_t* app_data, size_t app_data_len) override;
   void onDiscoveredAdvert(bool was_flood) override;
   void onContactPathUpdated(const ContactInfo &contact) override;
   ContactInfo* processAck(const uint8_t *data) override;

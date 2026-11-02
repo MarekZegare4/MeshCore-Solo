@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 // RAM-only table of positions other nodes have shared via [LOC] messages
@@ -52,6 +53,25 @@ public:
     e.verified = verified;
     e.sos      = sos || was_sos;
     e.used     = true;
+  }
+
+  // An advert from someone whose SOS is on the table moves it: their beacon
+  // (UiCore::sosBeacon). Matched by key (a DM's SOS), or by "SOS <name>" (a
+  // channel's, unverified like the message itself). False when there's none.
+  bool followSos(const uint8_t* key, const char* name, int32_t lat_1e6, int32_t lon_1e6, uint32_t ts) {
+    char label[NAME_LEN];
+    snprintf(label, sizeof(label), "SOS %s", name ? name : "");
+    bool moved = false;
+    for (int i = 0; i < CAPACITY; i++) {
+      Entry& e = _e[i];
+      if (!e.used || !e.sos) continue;
+      if (e.verified ? !(key && memcmp(e.key, key, KEY_LEN) == 0) : strcmp(e.name, label) != 0) continue;
+      e.lat_1e6 = lat_1e6;
+      e.lon_1e6 = lon_1e6;
+      e.ts = ts;
+      moved = true;
+    }
+    return moved;
   }
 
   // Drop entries not refreshed within EXPIRY_SECS. `now` is RTC epoch seconds.

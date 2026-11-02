@@ -3,7 +3,8 @@
 // channels and contacts (UiCore::sendSos()), repeated until someone answers
 // with the ACK word, the sends run out or the user stops it. Once more as soon
 // as the GPS gets a fix, if none has gone with one yet, even past the last
-// send. An optional beep keeps going until it's stopped. Only the timing and the
+// send. A beacon (a zero-hop advert with the position) and an optional beep
+// keep going until it's stopped. Only the timing and the
 // matching live here: no radio, no clock, so it's tested on the host
 // (test/test_sos_engine). Not kept across a restart.
 
@@ -28,6 +29,7 @@ public:
   static const uint32_t LAST_MAX_SECS = 3600; // an older fix isn't sent: you could be anywhere by then
   static const uint32_t SCREEN_MS = 30000UL;  // while one runs the screen goes off by this, whatever auto-off says
   static const uint32_t BEEP_FIRST_MS = 3000UL;   // after the first send's own sound
+  static const uint32_t BEACON_MS = 5UL * 60000UL; // the beacon's gap with Repeat off
 
   void begin(const NodePrefs* prefs) { _prefs = prefs; }
 
@@ -37,12 +39,9 @@ public:
   int   responders() const  { return _responders; }
   const Responder& responder(int i) const { return _resp[i]; }   // the latest first
   uint8_t sent() const      { return _sent; }     // sends that went out
-  // Nothing more will go out: the GPS has done its part.
-  bool  finished() const {
-    return _state == ACTIVE && _sent && (_acked || (_with_fix && (_attempts >= MAX_SENDS || !_next_on)));
-  }
-  // The GPS must stay awake, past any duty cycle.
-  bool  gpsWanted() const { return _state != IDLE && !finished(); }
+  // The GPS must stay awake, past any duty cycle: the beacon gives the
+  // position until the end, and someone on the way needs it current.
+  bool  gpsWanted() const { return _state != IDLE; }
   // The screen's auto-off while one runs. ms: the user's, 0 = never.
   uint32_t screenMs(uint32_t ms) const {
     if (_state != IDLE && (ms == 0 || ms > SCREEN_MS)) return SCREEN_MS;
@@ -58,7 +57,7 @@ public:
   void stop() {
     _state = IDLE;
     _attempts = _sent = _responders = 0;
-    _acked = _with_fix = _next_on = _failed = false;
+    _acked = _with_fix = _failed = _beeped = false;
   }
 
   // Whole seconds left of the countdown, rounded up: 0 when not counting.
@@ -70,7 +69,7 @@ public:
   // Seconds to the next send, -1 when there won't be one.
   int nextSecs(uint32_t now) const {
     if (_state != ACTIVE || !repeating()) return -1;
-    int32_t left = (int32_t)(_next - now);
+    int32_t left = (int32_t)(_sent_at + nextGap() - now);
     return left <= 0 ? 0 : (left + 999) / 1000;
   }
 
@@ -82,7 +81,7 @@ public:
   // `minutes` for a slow panel, where a line ticking every second is a refresh a second.
   void nextLine(char* out, int n, uint32_t now, bool minutes = false) const {
     const int next = nextSecs(now);
-    if (next < 0)       snprintf(out, n, "No more repeats");
+    if (next < 0)       snprintf(out, n, "Advert every %u min", (unsigned)(beaconMs() / 60000UL));
     else if (next < 60) snprintf(out, n, minutes ? "Next in <1 min" : "Next in %d s", next);
     else                snprintf(out, n, "Next in %d min", (next + 59) / 60);
   }
@@ -92,29 +91,36 @@ public:
     if (_state == COUNTDOWN) {
       if (now - _t0 < countdownMs()) return false;
       _state = ACTIVE;
-      _beep_next = now + BEEP_FIRST_MS;
+      _active_at = now;
+      _beeped = false;
       return true;
     }
     if (_state != ACTIVE || _acked) return false;
     if (has_fix && !_with_fix && _sent && !_failed) return true;   // the position they don't have yet
-    return _attempts < MAX_SENDS && _next_on && (int32_t)(now - _next) >= 0;
+    return repeating() && now - _sent_at >= nextGap();
   }
   // True when the beep is due, for whoever lies there unable to answer: past
   // the sends and an ACK too, help still has to find you. Until it's stopped.
+  // The gaps here are the settings' now: one changed while it runs counts at once.
   bool beepDue(uint32_t now) {
     const uint32_t gap = _prefs ? (uint32_t)NodePrefs::sosBeepSecs(_prefs->sos_beep_idx) * 1000UL : 0;
-    if (_state != ACTIVE || gap == 0 || (int32_t)(now - _beep_next) < 0) return false;
-    _beep_next = now + gap;
+    if (_state != ACTIVE || gap == 0) return false;
+    if (_beeped ? now - _beep_at < gap : now - _active_at < BEEP_FIRST_MS) return false;
+    _beep_at = now;
+    _beeped = true;
     return true;
   }
+  // True when the beacon is due: from the first send to the end, past the
+  // sends and an ACK too, the messages for people, it for the map of whoever
+  // is in range. The caller adverts and calls markBeacon(); a send does too.
+  bool beaconDue(uint32_t now) const { return _state == ACTIVE && _attempts && now - _beacon_at >= beaconMs(); }
+  void markBeacon(uint32_t now) { _beacon_at = now; }
   void markSent(uint32_t now, bool with_fix, bool ok) {
     _attempts++;
     if (ok) _sent++;
     if (ok && with_fix) _with_fix = true;
     _failed = !ok;
-    uint32_t gap = _prefs ? (uint32_t)NodePrefs::sosRepeatMins(_prefs->sos_repeat_idx) * 60000UL : 0;
-    _next_on = _failed || gap > 0;
-    _next = now + (_failed ? RETRY_MS : gap);
+    _sent_at = now;
   }
 
   // A message came in. True when it's an answer: one holding the ACK word, from
@@ -244,13 +250,22 @@ private:
   uint32_t countdownMs() const {
     return (uint32_t)NodePrefs::sosCountdownSecs(_prefs ? _prefs->sos_countdown_idx : 1) * 1000UL;
   }
-  bool repeating() const { return !_acked && _attempts < MAX_SENDS && _next_on; }
+  uint32_t repeatMs() const {
+    return _prefs ? (uint32_t)NodePrefs::sosRepeatMins(_prefs->sos_repeat_idx) * 60000UL : 0;
+  }
+  // A send that didn't go out is tried again soon; otherwise Repeat's gap (Off: none).
+  bool repeating() const { return !_acked && _attempts && _attempts < MAX_SENDS && (_failed || repeatMs()); }
+  uint32_t nextGap() const { return _failed ? RETRY_MS : repeatMs(); }
+  uint32_t beaconMs() const {
+    const uint32_t gap = repeatMs();
+    return gap ? gap : BEACON_MS;
+  }
 
   const NodePrefs* _prefs = nullptr;
   State    _state = IDLE;
-  uint32_t _t0 = 0, _next = 0, _beep_next = 0;
+  uint32_t _t0 = 0, _active_at = 0, _sent_at = 0, _beep_at = 0, _beacon_at = 0;   // millis() of each last
   uint8_t  _attempts = 0, _sent = 0;
-  bool     _acked = false, _with_fix = false, _next_on = false, _failed = false;
+  bool     _acked = false, _with_fix = false, _failed = false, _beeped = false;
   Responder _resp[RESPONDERS_MAX];
   uint8_t  _responders = 0;
 };
