@@ -367,6 +367,10 @@ TEST_F(Sos, TheStatusLines) {
   EXPECT_STREQ(b, "Next in 5 min");
   sos.nextLine(b, sizeof(b), now + 5UL * 60000UL - 30000UL);
   EXPECT_STREQ(b, "Next in 30 s");
+  sos.nextLine(b, sizeof(b), now + 5UL * 60000UL - 30000UL, true);
+  EXPECT_STREQ(b, "Next in <1 min");
+  sos.nextLine(b, sizeof(b), now, true);
+  EXPECT_STREQ(b, "Next in 5 min");
   prefs.sos_repeat_idx = 0;
   sos.markSent(now, true, true);
   sos.nextLine(b, sizeof(b), now);

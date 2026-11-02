@@ -78,10 +78,11 @@ public:
     if (_sent) snprintf(out, n, "Sent %u x", (unsigned)_sent);
     else       snprintf(out, n, "Not sent");
   }
-  void nextLine(char* out, int n, uint32_t now) const {
+  // `minutes` for a slow panel, where a line ticking every second is a refresh a second.
+  void nextLine(char* out, int n, uint32_t now, bool minutes = false) const {
     const int next = nextSecs(now);
     if (next < 0)       snprintf(out, n, "No more repeats");
-    else if (next < 60) snprintf(out, n, "Next in %d s", next);
+    else if (next < 60) snprintf(out, n, minutes ? "Next in <1 min" : "Next in %d s", next);
     else                snprintf(out, n, "Next in %d min", (next + 59) / 60);
   }
 

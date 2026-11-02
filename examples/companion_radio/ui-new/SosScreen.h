@@ -207,10 +207,13 @@ public:
   }
 
   // The countdown, then what has been sent and who answered. Returns the delay
-  // to the next frame.
+  // to the next frame. On e-ink only the countdown ticks: a send or an answer
+  // redraws the view anyway (UITask::openSosView).
   int renderStatus(DisplayDriver& d) {
     SosEngine& s = _task->core().sos;
     const uint32_t now = millis();
+    const bool eink = d.isEink();
+    const int status_ms = eink ? 15000 : 1000;
     const int cx = d.width() / 2;
     const int foot = d.height() - d.getLineHeight() - 1;
     char buf[40];
@@ -244,16 +247,16 @@ public:
       }
       if (mins) { snprintf(buf, sizeof(buf), "%u min ago", (unsigned)mins); d.drawTextCentered(cx, y, buf); }
       d.drawTextCentered(cx, foot, "Hold Enter: end");
-      return 1000;
+      return status_ms;
     }
     s.sentLine(buf, sizeof(buf));
     d.drawTextCentered(cx, y, buf);
     y += d.lineStep();
-    s.nextLine(buf, sizeof(buf), now);
+    s.nextLine(buf, sizeof(buf), now, eink);
     d.drawTextCentered(cx, y, buf);
     int32_t lat, lon;
     if (!_task->currentLocation(lat, lon)) d.drawTextCentered(cx, y + d.lineStep(), "No GPS fix");
     d.drawTextCentered(cx, foot, "Hold Enter: stop");
-    return 1000;
+    return status_ms;
   }
 };
