@@ -73,6 +73,7 @@ public:
   void botSetGPS(bool on) override;
   void applySoundPrefs() override;
   void onSosRunning(bool running) override;
+  int battPercent() override;
   bool cliCommand(const char* command, char* reply, int n) override;
 
   // ── Navigation (called from LVGL event callbacks) ────────────────────────

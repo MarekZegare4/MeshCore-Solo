@@ -163,20 +163,19 @@ static inline void fmtLocShare(char* buf, int n, int32_t lat_1e6, int32_t lon_1e
   if (name && name[0]) { size_t l = strlen(buf); snprintf(buf + l, n - l, " %s", name); }
 }
 
-// An SOS with a position ("SOS 50.06143,19.93658 ...", "SOS last ...", see
-// ui-core/SosEngine.h): `text` without the sender's name in front. Only at the
-// very start, so a message that mentions SOS isn't taken for one.
-static inline bool parseSos(const char* text, int32_t& lat_1e6, int32_t& lon_1e6) {
-  if (!text || strncmp(text, "SOS ", 4) != 0) return false;
-  const char* p = text + 4;
-  if (strncmp(p, "last ", 5) == 0) p += 5;
-  if (*p != '-' && !isdigit((unsigned char)*p)) return false;
-  return parseLatLon(p, lat_1e6, lon_1e6);
+// Tag starting an SOS: "[SOS] <the sender's own text, built from placeholders>"
+// (ui-core/SosEngine.h). Only at the very start of `text` (without the
+// sender's name in front), so a message that mentions one isn't taken for it.
+#define SOS_MSG_TAG "[SOS]"
+
+static inline bool isSos(const char* text) {
+  return text && strncmp(text, SOS_MSG_TAG, strlen(SOS_MSG_TAG)) == 0;
 }
 
-// The same without a position to give: the one a receiver mustn't miss either.
-static inline bool isSosNoGps(const char* text) {
-  return text && strncmp(text, "SOS no GPS", 10) == 0 && (text[10] == '\0' || text[10] == ' ');
+// An SOS with a position: its first coordinate (the sender's {loc}, which goes
+// first unless the text puts it elsewhere).
+static inline bool parseSos(const char* text, int32_t& lat_1e6, int32_t& lon_1e6) {
+  return isSos(text) && parseLatLon(text + strlen(SOS_MSG_TAG), lat_1e6, lon_1e6);
 }
 
 // True if `text` carries a LOCATION_MSG_TAG share; fills lat/lon (1e6-scaled)

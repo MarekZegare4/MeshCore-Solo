@@ -375,6 +375,10 @@ uint32_t UITask::autoOffMillis() const {
   return _core->sos.screenMs(_node_prefs ? (uint32_t)_node_prefs->auto_off_secs * 1000UL : 0);
 }
 
+int UITask::battPercent() {
+  return _batt_mv ? battery::percent(_batt_mv, _node_prefs ? (int)_node_prefs->low_batt_mv : 0) : -1;
+}
+
 void UITask::onSosRunning(bool running) {
 #ifdef PIN_BUZZER
   if (!_node_prefs) return;

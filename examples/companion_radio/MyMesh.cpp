@@ -684,7 +684,7 @@ void MyMesh::noteSos(const uint8_t* pub_key, const char* name, const char* body,
   int32_t lat, lon;
   if (!_listener) return;
   if (geo::parseSos(body, lat, lon)) _listener->onSosPosition(pub_key, name, lat, lon, verified);
-  else if (geo::isSosNoGps(body)) _listener->onSosNoPosition(name);
+  else if (geo::isSos(body)) _listener->onSosNoPosition(name);
 }
 
 void MyMesh::onMessageRecv(const ContactInfo &from, mesh::Packet *pkt, uint32_t sender_timestamp,
@@ -1488,6 +1488,7 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   _prefs.sos_countdown_idx = 1;   // 10 s
   _prefs.sos_repeat_idx = 3;      // every 5 minutes
   strcpy(_prefs.sos_ack, "ACK");
+  strcpy(_prefs.sos_msg, "{loc} {alt} {time}");
   _prefs.dm_show_all = 1;        // show all contacts by default
   _prefs.fav_sort = 1;           // favourites first in lists
   _prefs.msg_wake = 1;           // a new message turns the screen on
@@ -3101,6 +3102,13 @@ bool MyMesh::advertFlood() {
   } else {
     return false;
   }
+}
+
+bool MyMesh::advertSos(int32_t lat_1e6, int32_t lon_1e6) {
+  mesh::Packet* pkt = createSelfAdvert(_prefs.node_name, lat_1e6 / 1e6, lon_1e6 / 1e6);
+  if (!pkt) return false;
+  sendZeroHop(pkt);
+  return true;
 }
 
 // To check if there is pending work

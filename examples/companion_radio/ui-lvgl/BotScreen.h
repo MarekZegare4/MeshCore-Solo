@@ -58,6 +58,24 @@ static void botChip(const char* ph, void* parent) {
   lv_obj_add_event_cb(b, onBotPlaceholder, LV_EVENT_CLICKED, NULL);
   lv_obj_center(label(b, ph, THEME_FONT_SMALL, theme::TEXT));
 }
+// Placeholder buttons in place of a text entry's title, typing into `ta` (no
+// room for another row above the keyboard; the field says what it is).
+// botChip() them onto what this returns.
+static lv_obj_t* placeholderChips(lv_obj_t* panel, lv_obj_t* ta) {
+  lv_obj_t* hdr = lv_obj_get_child(panel, 0);
+  lv_obj_add_flag(lv_obj_get_child(hdr, 0), LV_OBJ_FLAG_HIDDEN);
+  lv_obj_t* chips = lv_obj_create(hdr);
+  lv_obj_remove_style_all(chips);
+  lv_obj_set_size(chips, 240, 28);
+  lv_obj_align(chips, LV_ALIGN_LEFT_MID, 0, 0);
+  lv_obj_set_flex_flow(chips, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(chips, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_gap(chips, 4, 0);
+  lv_obj_set_scroll_dir(chips, LV_DIR_HOR);   // swipe for the rest
+  lv_obj_set_scrollbar_mode(chips, LV_SCROLLBAR_MODE_OFF);
+  s_chip_ta = ta;
+  return chips;
+}
 static void onOpenBot(lv_event_t* e) { (void)e; s_ui->showBot(); }
 
 static lv_obj_t* botHourButton(lv_obj_t* parent, const char* text, uint8_t act, bool accent) {
@@ -224,20 +242,7 @@ void UITask::botRow(int row) {
     te.hint = botcfg::isTrigger(r.kind) ? "e.g. !hi, or * for any message" : "Reply text";
     lv_obj_t* panel = navTextEntry(te);
     if (reply) {
-      // Placeholders the bot fills in, as buttons in place of the title (no
-      // room for another row above the keyboard; the field says "Reply").
-      lv_obj_t* hdr = lv_obj_get_child(panel, 0);
-      lv_obj_add_flag(lv_obj_get_child(hdr, 0), LV_OBJ_FLAG_HIDDEN);
-      lv_obj_t* chips = lv_obj_create(hdr);
-      lv_obj_remove_style_all(chips);
-      lv_obj_set_size(chips, 240, 28);
-      lv_obj_align(chips, LV_ALIGN_LEFT_MID, 0, 0);
-      lv_obj_set_flex_flow(chips, LV_FLEX_FLOW_ROW);
-      lv_obj_set_flex_align(chips, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-      lv_obj_set_style_pad_gap(chips, 4, 0);
-      lv_obj_set_scroll_dir(chips, LV_DIR_HOR);   // swipe for the rest
-      lv_obj_set_scrollbar_mode(chips, LV_SCROLLBAR_MODE_OFF);
-      s_chip_ta = _nav_ta;
+      lv_obj_t* chips = placeholderChips(panel, _nav_ta);   // the ones the bot fills in
       for (int i = 0; i < botcfg::REPLY_PLACEHOLDER_COUNT; i++) botChip(botcfg::REPLY_PLACEHOLDERS[i], chips);
       msgtext::sensorPlaceholders(&sensors, board.getMCUTemperature(), [](const char* ph, void* c) {
         if (strcmp(ph, "{batt}") != 0) botChip(ph, c);   // already there

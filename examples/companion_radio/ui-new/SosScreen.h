@@ -22,7 +22,7 @@ class SosScreen : public UIScreen {
   int     _ch_sel = 0, _ch_scroll = 0, _ch_count = 0;
   uint8_t _ch_idx[MAX_GROUP_CHANNELS];
 
-  enum Kind : uint8_t { K_HOLD, K_COUNTDOWN, K_REPEAT, K_BEEP, K_CHANNELS, K_DM1, K_DM2, K_DM3, K_ACK, K_NOTE, K_START };
+  enum Kind : uint8_t { K_HOLD, K_COUNTDOWN, K_REPEAT, K_BEEP, K_CHANNELS, K_DM1, K_DM2, K_DM3, K_ACK, K_MSG, K_START };
   struct Row { Kind kind; const char* label; };
   static const int ROW_COUNT = 11;
   static Row rows(int i) {
@@ -36,7 +36,7 @@ class SosScreen : public UIScreen {
       { K_DM2,       "Contact 2" },
       { K_DM3,       "Contact 3" },
       { K_ACK,       "ACK word" },
-      { K_NOTE,      "Note" },
+      { K_MSG,       "Message" },
       { K_START,     "Send SOS" },
     };
     return R[i];
@@ -72,7 +72,7 @@ class SosScreen : public UIScreen {
         break;
       }
       case K_ACK:  snprintf(buf, n, "%s", _prefs->sos_ack[0] ? _prefs->sos_ack : "-"); break;
-      case K_NOTE: snprintf(buf, n, "%s", _prefs->sos_note[0] ? _prefs->sos_note : "-"); break;
+      case K_MSG: snprintf(buf, n, "%s", _prefs->sos_msg[0] ? _prefs->sos_msg : "-"); break;
       case K_START: snprintf(buf, n, "%s", _task->core().sos.idle() ? "" : "Running"); break;
     }
   }
@@ -141,13 +141,14 @@ class SosScreen : public UIScreen {
         if (enter) { _picking = true; _task->pickSosContact(k - K_DM1); }
         else { memset(_prefs->sos_dm[k - K_DM1], 0, NodePrefs::FAVOURITE_PREFIX_LEN); _dirty = true; }
         break;
-      case K_ACK: case K_NOTE:
+      case K_ACK: case K_MSG:
         if (enter) {
           bool ack = k == K_ACK;
           _kb_row = _sel;
-          _kb->begin(ack ? _prefs->sos_ack : _prefs->sos_note, (ack ? sizeof(_prefs->sos_ack) : sizeof(_prefs->sos_note)) - 1);
-          _kb->prompt = ack ? "ACK word" : "Note";
-          _kb->clearPlaceholders();   // sent as it is
+          _kb->begin(ack ? _prefs->sos_ack : _prefs->sos_msg, (ack ? sizeof(_prefs->sos_ack) : sizeof(_prefs->sos_msg)) - 1);
+          _kb->prompt = ack ? "ACK word" : "Message";
+          _kb->clearPlaceholders();   // the ACK word is matched as it is
+          if (!ack) for (int i = 0; i < SosEngine::PLACEHOLDER_COUNT; i++) _kb->addPlaceholder(SosEngine::placeholder(i));
         }
         break;
       case K_START:
@@ -190,8 +191,8 @@ public:
       auto res = _kb->handleInput(c);
       if (res == KeyboardWidget::DONE) {
         bool ack = rows(_kb_row).kind == K_ACK;
-        char* dst = ack ? _prefs->sos_ack : _prefs->sos_note;
-        snprintf(dst, ack ? sizeof(_prefs->sos_ack) : sizeof(_prefs->sos_note), "%s", _kb->buf);
+        char* dst = ack ? _prefs->sos_ack : _prefs->sos_msg;
+        snprintf(dst, ack ? sizeof(_prefs->sos_ack) : sizeof(_prefs->sos_msg), "%s", _kb->buf);
         _dirty = true;
         _kb_row = -1;
       } else if (res == KeyboardWidget::CANCELLED) {

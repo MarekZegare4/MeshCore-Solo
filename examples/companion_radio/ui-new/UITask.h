@@ -569,6 +569,7 @@ public:
   void applyDisplayPrefs() override { applyBrightness(); applyUiScale(); _next_refresh = 0; }
   void applySoundPrefs() override;
   void onSosRunning(bool running) override;
+  int battPercent() override;
   bool cliCommand(const char* command, char* reply, int n) override;
   void setBuzzerVolumeLevel(uint8_t level);
   void applyTxPower();

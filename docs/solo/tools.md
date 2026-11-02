@@ -55,25 +55,42 @@ and without opening a menu. Set it up before you need it:
 | **Channels** | Which channels it goes to; **Enter** switches each one |
 | **Contact 1-3** | Up to three direct contacts. **Enter** picks one, **Left / Right** empties the row |
 | **ACK word** | The word that means "received", `ACK` by default |
-| **Note** | Added to the end of the message, for example your blood group |
+| **Message** | What follows `[SOS]`, with placeholders, see below |
 | **Send SOS** | Starts it from here, on devices without a Back button too |
 
 **Starting:** hold **Back** for 3 seconds. It works with the screen off and on a
 locked device, and needs no PIN. The device beeps every second and counts down,
 even with the buzzer off. **Any key** cancels.
 
-**The message** is short, to reach as far as possible:
+**The message** starts with `[SOS]`, like the other special messages (`[LOC]`,
+`[WAY]`), so a receiver knows it for an SOS whatever follows. What follows is
+the **Message** row, `{loc} {alt} {time}` by default:
 
 ```
-SOS 50.06143,19.93658 ALT 212m sent 14:32
+[SOS] 50.06143,19.93658 212m 14:32
 ```
+
+| Placeholder | Gives |
+| ----------- | ----- |
+| `{loc}` | The position, `last 50.06143,19.93658 12min ago`, or `no GPS` |
+| `{alt}` | The altitude from the GPS, with a fix only |
+| `{time}` | When it was sent, if the clock is set |
+| `{batt}` | The battery, as a percentage: how long the device will last |
+
+Anything else is sent as written, for example `{loc} {batt} blood group 0+`,
+or in your own language. The position always goes: without `{loc}` it comes
+straight after `[SOS]`. A placeholder with nothing to give leaves no gap.
+There's no accuracy (`±3m`): with few satellites the GPS can't estimate it
+well, and a wrong figure would mislead a search more than none.
 
 The GPS is turned on for it, if it was off, and back off when the SOS ends.
-Without a fix it gives the last position from the past hour, with its age
-(`SOS last 50.06143,19.93658 12min ago`). An older one could be far from where
-you are, so then it says `SOS no GPS`. Either way one more goes as soon as the
-GPS gets a fix. The **Note** comes last. The format isn't final, see
-[below](#the-message-is-open-for-discussion).
+Without a fix `{loc}` gives the last position from the past hour, with its age.
+An older one could be far from where you are, so then it says `no GPS`. Either
+way one more goes as soon as the GPS gets a fix.
+
+With a position, each send also goes out as a zero-hop advert carrying it at full
+precision, whatever **Privacy** says for adverts: anyone in direct range sees
+you on their map in any MeshCore app, even if they aren't on your list.
 
 **Receiving one:** a banner names the sender, also when there's no position.
 A position shows on the map and in Nearby as `SOS name`, even with **Track loc**
@@ -119,25 +136,14 @@ this each time it wakes.
 
 ### The message is open for discussion
 
-The text above is a first version, and a change is easy to make while SOS is
-experimental. Only its start is fixed for receivers: `SOS` followed by a
-position, `SOS last` followed by a position, or `SOS no GPS`. That's what the
-map and the banner read, so a change there needs both sides updated. Everything
-after it is for people to read.
+SOS is experimental, so the format can still change. For receivers only the
+start is fixed: `[SOS]`, and the first position after it. That's what the map
+and the banner read; everything else is for people to read and is yours to set.
 
 Open questions, for [issue #56](https://github.com/MarekZegare4/MeshCore-Solo/issues/56):
 
-- **Accuracy:** the request asked for `±3m` after the position. It isn't sent
-  yet. The GPS reports HDOP, which is only a rough guide to metres, and not
-  every module gives it. Is an estimate worth the extra bytes?
 - **Digits:** the position has 5 decimals, about 1 metre. 4 decimals, about
   11 metres, saves 2 bytes.
-- **Labels:** `ALT 212m sent 14:32` reads easily. Commas, or dropping `sent`,
-  would change little in length. Is the time useful at all, given that a
-  repeat can arrive late?
-- **Anything missing:** the battery level would tell a rescuer how long the
-  device will last, at a few more bytes.
-- **Own language:** the note can be anything, but the rest stays in English.
 
 ### On the Wio Tracker L2
 

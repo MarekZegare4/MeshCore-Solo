@@ -449,8 +449,11 @@ private:
     struct tm ti;
     if (localTm(now, tzHoursAt(_prefs, now), ti)) snprintf(hhmm, sizeof(hhmm), "%02d:%02d", ti.tm_hour, ti.tm_min);
     char text[MAX_TEXT_LEN + 1];
-    SosEngine::compose(text, sizeof(text), where, lat, lon, has_alt ? &alt : nullptr, recent ? (int)(age / 60) : -1,
-                       hhmm, _prefs->sos_note);
+    SosEngine::compose(text, sizeof(text), _prefs->sos_msg, where, lat, lon, has_alt ? &alt : nullptr,
+                       recent ? (int)(age / 60) : -1, hhmm, _host->battPercent());
+    // Anyone in range sees it on their map too, on any app, not only the
+    // targets: an advert, zero-hop so the mesh isn't flooded every round.
+    if (where != SosEngine::NOWHERE) the_mesh.advertSos(lat, lon);
 
     bool ok = false;
     for (int i = 0; i < MAX_GROUP_CHANNELS; i++)

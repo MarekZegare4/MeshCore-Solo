@@ -140,23 +140,35 @@ TEST(SosText, WordOnItsOwn) {
 TEST(SosText, Compose) {
   char t[128];
   int16_t alt = 212;
-  SosEngine::compose(t, sizeof(t), SosEngine::FIX, 50061430, 19936580, &alt, -1, "14:32", "");
-  EXPECT_STREQ(t, "SOS 50.06143,19.93658 ALT 212m sent 14:32");
-  SosEngine::compose(t, sizeof(t), SosEngine::FIX, -33868800, 151209300, nullptr, -1, "", "broken leg");
-  EXPECT_STREQ(t, "SOS -33.86880,151.20930 broken leg");
-  SosEngine::compose(t, sizeof(t), SosEngine::LAST_KNOWN, 50061430, 19936580, &alt, 12, "14:32", "");
-  EXPECT_STREQ(t, "SOS last 50.06143,19.93658 12min ago sent 14:32");
-  SosEngine::compose(t, sizeof(t), SosEngine::LAST_KNOWN, 50061430, 19936580, nullptr, -1, "14:32", "");
-  EXPECT_STREQ(t, "SOS last 50.06143,19.93658 sent 14:32");
-  SosEngine::compose(t, sizeof(t), SosEngine::NOWHERE, 0, 0, nullptr, -1, "14:32", "");
-  EXPECT_STREQ(t, "SOS no GPS sent 14:32");
+  const char* def = "{loc} {alt} {time}";
+  SosEngine::compose(t, sizeof(t), def, SosEngine::FIX, 50061430, 19936580, &alt, -1, "14:32", -1);
+  EXPECT_STREQ(t, "[SOS] 50.06143,19.93658 212m 14:32");
+  SosEngine::compose(t, sizeof(t), def, SosEngine::FIX, -33868800, 151209300, nullptr, -1, "", -1);
+  EXPECT_STREQ(t, "[SOS] -33.86880,151.20930");   // what has nothing to give takes its space
+  SosEngine::compose(t, sizeof(t), def, SosEngine::LAST_KNOWN, 50061430, 19936580, &alt, 12, "14:32", -1);
+  EXPECT_STREQ(t, "[SOS] last 50.06143,19.93658 12min ago 14:32");
+  SosEngine::compose(t, sizeof(t), def, SosEngine::LAST_KNOWN, 50061430, 19936580, nullptr, -1, "14:32", -1);
+  EXPECT_STREQ(t, "[SOS] last 50.06143,19.93658 14:32");
+  SosEngine::compose(t, sizeof(t), def, SosEngine::NOWHERE, 0, 0, nullptr, -1, "14:32", -1);
+  EXPECT_STREQ(t, "[SOS] no GPS 14:32");
+  SosEngine::compose(t, sizeof(t), "Help! {loc}, batt {batt} {x}", SosEngine::FIX, 50061430, 19936580, &alt, -1, "", 18);
+  EXPECT_STREQ(t, "[SOS] Help! 50.06143,19.93658, batt 18% {x}");
+}
+
+// Taking {loc} out doesn't take the position out.
+TEST(SosText, PositionAlwaysGoes) {
+  char t[128];
+  SosEngine::compose(t, sizeof(t), "broken leg", SosEngine::FIX, 50061430, 19936580, nullptr, -1, "", -1);
+  EXPECT_STREQ(t, "[SOS] 50.06143,19.93658 broken leg");
+  SosEngine::compose(t, sizeof(t), "", SosEngine::NOWHERE, 0, 0, nullptr, -1, "14:32", -1);
+  EXPECT_STREQ(t, "[SOS] no GPS");
 }
 
 // What a receiver's Navigate reads out of it, on a channel with the sender in front.
 TEST(SosText, PositionCanBeReadBack) {
   char t[128], msg[160];
   int16_t alt = 212;
-  SosEngine::compose(t, sizeof(t), SosEngine::FIX, 50061430, -19936580, &alt, -1, "14:32", "");
+  SosEngine::compose(t, sizeof(t), "{loc} {alt} {time}", SosEngine::FIX, 50061430, -19936580, &alt, -1, "14:32", -1);
   snprintf(msg, sizeof(msg), "Hiker: %s", t);
   int32_t lat = 0, lon = 0;
   ASSERT_TRUE(geo::parseLatLon(msg, lat, lon));
@@ -166,14 +178,14 @@ TEST(SosText, PositionCanBeReadBack) {
 
 TEST(SosText, OnlyAnSosWithAPositionIsTakenForOne) {
   int32_t lat = 0, lon = 0;
-  EXPECT_TRUE(geo::parseSos("SOS 50.06143,19.93658 ALT 212m", lat, lon));
+  EXPECT_TRUE(geo::parseSos("[SOS] 50.06143,19.93658 212m", lat, lon));
   EXPECT_EQ(lat, 50061430);
-  EXPECT_TRUE(geo::parseSos("SOS last -33.86880,151.20930 12min ago", lat, lon));
+  EXPECT_TRUE(geo::parseSos("[SOS] last -33.86880,151.20930 12min ago", lat, lon));
   EXPECT_EQ(lat, -33868800);
-  EXPECT_FALSE(geo::parseSos("SOS no GPS sent 14:32", lat, lon));
-  EXPECT_FALSE(geo::parseSos("I got your SOS 50.06143,19.93658", lat, lon));
-  EXPECT_FALSE(geo::parseSos("SOS meet at 50.06143,19.93658", lat, lon));
-  EXPECT_FALSE(geo::parseSos("SOSNA 50.06143,19.93658", lat, lon));
+  EXPECT_TRUE(geo::parseSos("[SOS] Help! 50.06143,19.93658 14:32", lat, lon));
+  EXPECT_FALSE(geo::parseSos("[SOS] no GPS 14:32", lat, lon));
+  EXPECT_FALSE(geo::parseSos("I got your [SOS] 50.06143,19.93658", lat, lon));
+  EXPECT_FALSE(geo::parseSos("SOS 50.06143,19.93658", lat, lon));
 }
 
 // The [LOC] share every sender builds, and what the receiver reads back.
@@ -205,11 +217,12 @@ TEST(GeoText, TurnIsTheShortWayRound) {
 
 TEST(SosText, NoGpsIsRecognisedOnItsOwn) {
   char t[64];
-  SosEngine::compose(t, sizeof(t), SosEngine::NOWHERE, 0, 0, nullptr, -1, "14:32", "");
-  EXPECT_TRUE(geo::isSosNoGps(t));
-  EXPECT_TRUE(geo::isSosNoGps("SOS no GPS"));
-  EXPECT_FALSE(geo::isSosNoGps("SOS no GPSfoo"));
-  EXPECT_FALSE(geo::isSosNoGps("no SOS no GPS"));
+  int32_t lat = 0, lon = 0;
+  SosEngine::compose(t, sizeof(t), "{loc} {time}", SosEngine::NOWHERE, 0, 0, nullptr, -1, "14:32", -1);
+  EXPECT_TRUE(geo::isSos(t));
+  EXPECT_FALSE(geo::parseSos(t, lat, lon));
+  EXPECT_FALSE(geo::isSos("no [SOS]"));
+  EXPECT_FALSE(geo::isSos("SOS no GPS"));
 }
 
 TEST(LiveTrack, SosOutlivesAShareAndIsEvictedLast) {
@@ -230,7 +243,7 @@ TEST(LiveTrack, SosOutlivesAShareAndIsEvictedLast) {
 
 TEST(SosText, ComposeNeverOverruns) {
   char t[12];
-  SosEngine::compose(t, sizeof(t), SosEngine::NOWHERE, 0, 0, nullptr, -1, "14:32", "a long note");
+  SosEngine::compose(t, sizeof(t), "a long note {time}", SosEngine::NOWHERE, 0, 0, nullptr, -1, "14:32", -1);
   EXPECT_LT(strlen(t), sizeof(t));
 }
 

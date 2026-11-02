@@ -227,6 +227,9 @@ public:
   // (manual, flood, auto, phone-app and contact export).
   mesh::Packet* createOwnAdvert();
   bool advertFlood();   // flooded (default scope), as the app's "Advert" with flood
+  // Zero-hop, with this position at full precision whatever advert_loc_policy
+  // says: starting an SOS is the consent to give it.
+  bool advertSos(int32_t lat_1e6, int32_t lon_1e6);
   void sendNodeDiscoverReq();
   void enterCLIRescue();
 

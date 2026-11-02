@@ -351,7 +351,7 @@ struct NodePrefsFields {
   uint64_t sos_ch_mask;
   uint8_t  sos_dm[SOS_DM_MAX][6];
   char     sos_ack[16];          // the word a reply must hold; "" = none is recognised
-  char     sos_note[48];         // added to the end of the message
+  char     sos_msg[72];          // after the [SOS] tag, with SosEngine::compose()'s placeholders
   // ui-new's new-message alert: the banner from the top, an envelope with a
   // count in the corner, or nothing (the sound and the wake still happen).
   static const uint8_t MSG_ALERT_NORMAL = 0, MSG_ALERT_COMPACT = 1, MSG_ALERT_OFF = 2;
@@ -954,7 +954,7 @@ class NodePrefs : public NodePrefsFields, public ConfigSerializer {
   void sosSolo(Section& s) {
     s.def("en", sos_enabled); s.def("count", sos_countdown_idx); s.def("repeat", sos_repeat_idx); s.def("beep", sos_beep_idx);
     s.hex("ch", sos_ch_mask); s.hex("dm", sos_dm);
-    s.def("ack", sos_ack, sizeof(sos_ack)); s.def("note", sos_note, sizeof(sos_note));
+    s.def("ack", sos_ack, sizeof(sos_ack)); s.def("msg", sos_msg, sizeof(sos_msg));
   }
   void gpioSolo(Section& s) {
     s.def("m1", gpio1_mode); s.def("m2", gpio2_mode); s.def("m3", gpio3_mode); s.def("m4", gpio4_mode);

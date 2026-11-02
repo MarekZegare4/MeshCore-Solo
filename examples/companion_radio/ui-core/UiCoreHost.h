@@ -33,6 +33,8 @@ public:
   // An SOS began or ended (the UI's own startSos() / stopSos() calls): what only
   // the frontend can rest or raise. May touch the status bar.
   virtual void onSosRunning(bool running) {}
+  // The battery as the status bar shows it, for an SOS's {batt}; -1 unknown.
+  virtual int battPercent() { return -1; }
   virtual void botBuzz(int seconds) {}
   virtual bool botSetGPIO(int idx, bool on) { return false; }
   virtual bool botGetGPIO(int idx, bool& is_output, bool& value) { return false; }

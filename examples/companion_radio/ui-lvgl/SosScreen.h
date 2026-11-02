@@ -30,7 +30,7 @@ static uint32_t s_until = 0, s_next = 0;
 static int s_left = 0;                   // the countdown second last beeped
 static int s_edit = -1;                  // the row a popup is editing
 
-enum Row : uint8_t { R_CHANNELS, R_DM1, R_DM2, R_DM3, R_ACK, R_NOTE };
+enum Row : uint8_t { R_CHANNELS, R_DM1, R_DM2, R_DM3, R_ACK, R_MSG };
 enum Pref : uint8_t { P_COUNTDOWN, P_REPEAT, P_BEEP };
 
 static const char* COUNTDOWNS[NodePrefs::SOS_COUNTDOWN_COUNT + 1] = { "5s", "10s", "15s", "" };
@@ -253,6 +253,10 @@ void UITask::sosTick() {
 
 // The battery goes to the SOS: WiFi rests until it ends. Its switch is saved, so
 // a restart mid-SOS leaves it off.
+int UITask::battPercent() {
+  return _batt_mv ? battery::percent(_batt_mv, _prefs ? (int)_prefs->low_batt_mv : 0) : -1;
+}
+
 void UITask::onSosRunning(bool running) {
   using namespace sosview;
   if (running) {
@@ -300,7 +304,7 @@ void UITask::buildSos() {
     snprintf(name, sizeof(name), "Contact %d", i + 1);
     sosValueRow(g, name, nullptr, c ? c->name : "-", R_DM1 + i);
   }
-  sosValueRow(g, "Note", "Added to the message", p->sos_note[0] ? p->sos_note : "-", R_NOTE);
+  sosValueRow(g, "Message", "After [SOS]; the position always goes", p->sos_msg[0] ? p->sos_msg : "-", R_MSG);
 
   g = group(list, "WHILE IT RUNS");   // until someone answers, and after
   seg = segmented(settingRow(g, "Repeat", nullptr), REPEATS, p->sos_repeat_idx, 200, 32);
@@ -337,12 +341,16 @@ void UITask::sosRow(int row) {
   NodePrefs* p = _prefs;
   if (!p) return;
   s_edit = row;
-  if (row == R_ACK || row == R_NOTE) {
-    TextEntry te = { row == R_ACK ? "ACK word" : "Note", onSosTextKb };
-    te.text = row == R_ACK ? p->sos_ack : p->sos_note;
-    te.max_bytes = (row == R_ACK ? sizeof(p->sos_ack) : sizeof(p->sos_note)) - 1;
-    te.hint = row == R_ACK ? "e.g. ACK" : "e.g. blood group";
-    navTextEntry(te);
+  if (row == R_ACK || row == R_MSG) {
+    TextEntry te = { row == R_ACK ? "ACK word" : "Message", onSosTextKb };
+    te.text = row == R_ACK ? p->sos_ack : p->sos_msg;
+    te.max_bytes = (row == R_ACK ? sizeof(p->sos_ack) : sizeof(p->sos_msg)) - 1;
+    te.hint = row == R_ACK ? "e.g. ACK" : "{loc} {alt} {time} blood group 0+";
+    lv_obj_t* panel = navTextEntry(te);
+    if (row == R_MSG) {
+      lv_obj_t* chips = placeholderChips(panel, _nav_ta);
+      for (int i = 0; i < SosEngine::PLACEHOLDER_COUNT; i++) botChip(SosEngine::placeholder(i), chips);
+    }
     return;
   }
   lv_obj_t* list = scrollList(navPopupPanel(row == R_CHANNELS ? "SOS channels" : "SOS contact", true));
@@ -375,9 +383,9 @@ void UITask::sosContact(int idx) {
 
 void UITask::sosTextDone(bool ok) {
   using namespace sosview;
-  if (ok && _nav_ta && _prefs && (s_edit == R_ACK || s_edit == R_NOTE)) {
+  if (ok && _nav_ta && _prefs && (s_edit == R_ACK || s_edit == R_MSG)) {
     if (s_edit == R_ACK) snprintf(_prefs->sos_ack, sizeof(_prefs->sos_ack), "%s", lv_textarea_get_text(_nav_ta));
-    else                 snprintf(_prefs->sos_note, sizeof(_prefs->sos_note), "%s", lv_textarea_get_text(_nav_ta));
+    else                 snprintf(_prefs->sos_msg, sizeof(_prefs->sos_msg), "%s", lv_textarea_get_text(_nav_ta));
     prefsSave();
   }
   navClosePopup();

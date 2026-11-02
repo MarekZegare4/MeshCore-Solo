@@ -13,6 +13,7 @@
 #include <strings.h>
 #include <helpers/UTF8Helpers.h>
 #include "../NodePrefs.h"
+#include "../GeoUtils.h"   // SOS_MSG_TAG
 
 class SosEngine {
 public:
@@ -160,22 +161,60 @@ public:
   }
 
   enum Where : uint8_t { FIX, LAST_KNOWN, NOWHERE };
-  // "SOS 50.06143,19.93658 ALT 212m sent 14:32 note": short, and the position is
-  // what a receiver's Navigate and map read (geo::parseSos). alt: nullptr without
-  // one, age_min: how old a LAST_KNOWN is, -1 not given, time: "" when the clock
-  // isn't set.
-  static void compose(char* out, int n, Where where, int32_t lat, int32_t lon,
-                      const int16_t* alt, int age_min, const char* time, const char* note) {
+  // What the message text may hold (NodePrefs::sos_msg), offered by the editors.
+  static const int PLACEHOLDER_COUNT = 4;
+  static const char* placeholder(int i) {
+    static const char* const PH[PLACEHOLDER_COUNT] = { "{loc}", "{alt}", "{time}", "{batt}" };
+    return PH[i];
+  }
+
+  // "[SOS] 50.06143,19.93658 212m 14:32": the tag (geo::SOS_MSG_TAG), then
+  // `tmpl` with its placeholders filled. The position goes first when `tmpl`
+  // has no {loc}: an SOS never goes without it, and it's what a receiver's
+  // Navigate and map read (geo::parseSos).
+  //   {loc}  "50.06143,19.93658", "last 50.06143,19.93658 12min ago", "no GPS"
+  //   {alt}  "212m", with a fix only     {time} "14:32"     {batt} "18%"
+  // One that has nothing to give takes a space with it. alt: nullptr without
+  // one, age_min: how old a LAST_KNOWN is, -1 not given, time: "" when the
+  // clock isn't set, batt_pct: -1 unknown. An unknown {x} stays as written.
+  static void compose(char* out, int n, const char* tmpl, Where where, int32_t lat, int32_t lon,
+                      const int16_t* alt, int age_min, const char* time, int batt_pct) {
+    if (n <= 0) return;
+    char loc[48];
+    if (where == NOWHERE) snprintf(loc, sizeof(loc), "no GPS");
+    else {
+      int l = snprintf(loc, sizeof(loc), "%s%.5f,%.5f", where == LAST_KNOWN ? "last " : "", lat / 1e6, lon / 1e6);
+      if (where == LAST_KNOWN && age_min >= 0) snprintf(loc + l, sizeof(loc) - l, " %dmin ago", age_min);
+    }
+    char alt_s[8] = "", batt_s[8] = "";
+    if (alt && where == FIX) snprintf(alt_s, sizeof(alt_s), "%dm", (int)*alt);
+    if (batt_pct >= 0) snprintf(batt_s, sizeof(batt_s), "%d%%", batt_pct);
+    if (!time) time = "";
+    if (!tmpl) tmpl = "";
+
     int o = 0;
-    // snprintf answers with what it would have written: never past the buffer.
-    auto left = [&](int wrote) { o = o + wrote < n ? o + wrote : n - 1; return n - o; };
-    left(snprintf(out, n, "SOS"));
-    if (where == NOWHERE) left(snprintf(out + o, n - o, " no GPS"));
-    else left(snprintf(out + o, n - o, "%s %.5f,%.5f", where == LAST_KNOWN ? " last" : "", lat / 1e6, lon / 1e6));
-    if (alt && where == FIX) left(snprintf(out + o, n - o, " ALT %dm", (int)*alt));
-    if (where == LAST_KNOWN && age_min >= 0) left(snprintf(out + o, n - o, " %dmin ago", age_min));
-    if (time && time[0]) left(snprintf(out + o, n - o, " sent %s", time));
-    if (note && note[0]) snprintf(out + o, n - o, " %s", note);
+    auto put = [&](const char* s, int len) {
+      while (len-- > 0 && o < n - 1) out[o++] = *s++;
+    };
+    put(SOS_MSG_TAG, (int)strlen(SOS_MSG_TAG));
+    put(" ", 1);
+    if (!strstr(tmpl, "{loc}")) { put(loc, (int)strlen(loc)); put(" ", 1); }
+    for (const char* p = tmpl; *p; ) {
+      const char* val = nullptr;
+      int skip = 0;
+      if (*p == '{') {
+        if      (!strncmp(p, "{loc}", 5))  { val = loc;    skip = 5; }
+        else if (!strncmp(p, "{alt}", 5))  { val = alt_s;  skip = 5; }
+        else if (!strncmp(p, "{time}", 6)) { val = time;   skip = 6; }
+        else if (!strncmp(p, "{batt}", 6)) { val = batt_s; skip = 6; }
+      }
+      if (!val) { put(p++, 1); continue; }
+      p += skip;
+      if (val[0]) put(val, (int)strlen(val));
+      else while (*p == ' ') p++;
+    }
+    while (o > 0 && out[o - 1] == ' ') o--;
+    out[o] = '\0';
   }
 
   // Anywhere to send to. A channel or a contact that has gone clears its own

@@ -63,7 +63,7 @@ void fill(NodePrefs& p) {
   text(p.bot_reply_room, sizeof(p.bot_reply_room));
   text(p.locator_label, sizeof(p.locator_label));
   text(p.sos_ack, sizeof(p.sos_ack));
-  text(p.sos_note, sizeof(p.sos_note));
+  text(p.sos_msg, sizeof(p.sos_msg));
   for (auto& m : p.custom_msgs) text(m, sizeof(m));
   for (int i = 0; i < NodePrefs::USER_RADIO_PRESET_MAX; i++) {
     auto& r = p.user_radio_presets[i];
