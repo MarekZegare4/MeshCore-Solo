@@ -169,7 +169,8 @@ Symbols opens the keyboard's symbols page while a text field is open.
   the card; eject it on the computer and the device restarts. With a screen
   PIN set, it doesn't ask until the screen is unlocked.
 - **WiFi**: used only for map downloads, live tiles and updates, and off the
-  rest of the time. Settings › WiFi saves several networks and joins the
+  rest of the time. While it's connected the clock is set from the internet
+  (the router's time server first). Settings › WiFi saves several networks and joins the
   strongest; the WiFi switch in Settings forbids it entirely.
 
 ## Build flags
