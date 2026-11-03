@@ -19,7 +19,7 @@ runs:
     - name: Install PlatformIO
       shell: bash
       run: |
-        pip install --upgrade platformio
+        pip install platformio==6.2.0   # 6.2.0.post1 reads as below 6.2.0, which pioarduino requires
 
     # a git tag of "room-server-v1.2.3" should set "v1.2.3" as GIT_TAG_VERSION
     # a git tag of "wio-tracker-v1.15-plus.1.3" should set "v1.15-plus.1.3" as GIT_TAG_VERSION
