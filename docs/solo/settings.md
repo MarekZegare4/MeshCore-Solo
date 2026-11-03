@@ -36,16 +36,16 @@ A few notes:
   doesn't follow the usual LiPo curve: **Left / Right** move a point by
   10 mV, **Reset** goes back to LiPo. The current voltage is shown, so a point
   can be set against what the battery reads.
-- **Keep messages** (Wio Tracker L1) saves messages on the flash, across a
+- **Keep messages** (Wio Tracker L1, Watch13, Heltec V3 / V4, Cardputer ADV) saves messages on the flash, across a
   power-off and past what fits in memory (see
   [How much is kept](./messages.md#how-much-is-kept)): **Off**, 500, 1000 or
   2500 in total. When the limit is reached the oldest go, in batches. **Off**
   stops saving at once and deletes what was saved at the next start, so turn it
   back on before then to keep it. **Delete history** deletes right away.
-- **Delete after** (Wio Tracker L1) removes saved messages older than 7, 30 or
+- **Delete after** (the same boards) removes saved messages older than 7, 30 or
   90 days, or **Never**. They go in batches too, so some stay a little longer,
   and nothing goes while the clock isn't set.
-- **Delete history** (Wio Tracker L1) deletes every message, saved and in
+- **Delete history** (the same boards) deletes every message, saved and in
   memory, after asking.
 - **Factory reset** erases contacts, channels, messages, settings and the
   node's keys, then restarts as a new node. It asks twice. On the Wio Tracker

@@ -1,11 +1,14 @@
 #pragma once
-// Message history on the QSPI flash, for a board without an SD card (the L1s,
-// HIST_FLASH): Settings > Messages > Keep messages, NodePrefs::msg_keep. Two
+// Message history on flash, for a board without an SD card (HIST_FLASH):
+// Settings > Messages > Keep messages, NodePrefs::msg_keep. On an nRF52 the
+// QSPI flash (DataStore's secondary FS: the L1s, Watch13) -- never the 28 KB
+// internal one, which the contacts need. On an ESP32 the "spiffs" partition. Two
 // append-only logs, channels and direct messages (a busy channel must not push
 // the DMs out), each a run of SEGMENTS segments of which the oldest is dropped
 // whole. The limit is a total: 2/3 of it for channels, 1/3 for DMs and rooms.
 //
-// Shaped by LittleFS 1.x, unlike the SD card's HistoryStore.h:
+// Shaped by LittleFS 1.x, unlike the SD card's HistoryStore.h (SPIFFS has no
+// directories: the same paths are flat names there, see the file helpers):
 // - Changing a file in the middle rewrites everything after that point, so
 //   records are only ever appended.
 // - Every file commit erases one of its directory's two blocks, and those stay
@@ -51,12 +54,16 @@ public:
     _prefs = prefs;
     _history = history;
     DataStore* ds = the_mesh.getDataStore();
+#if defined(ESP32)
+    _fs = ds ? ds->getPrimaryFS() : nullptr;
+#else
     _fs = ds ? ds->getSecondaryFS() : nullptr;
+#endif
     _on = _fs && prefs && prefs->msg_keep;
     if (_on) {
       scan();
       restore();
-    } else if (_fs && _fs->exists(ROOT)) {
+    } else if (_fs && hasLog()) {
       forget();   // Keep messages off since the last start, see loop()
     }
     _next_prune = millis() + SAVE_DELAY_MS;
@@ -155,14 +162,14 @@ public:
     char p[24];
     for (uint32_t seg = _hi.seg; seg && seg <= _pg->last && seg <= _ceil.seg && got < PAGE; seg++) {
       filePath(*_pg, seg, p, sizeof(p));
-      File f = _fs->open(p, FILE_O_READ);
+      File f = openRead(p);
       if (!f) continue;
       uint32_t size = f.size(), pos = seg == _hi.seg ? _hi.pos : 0;
       uint32_t stop = seg == _ceil.seg && _ceil.pos < size ? _ceil.pos : size;
       while (pos < stop && got < PAGE) {
         uint8_t buf[REC_MAX];
         Rec r;
-        if (!f.seek(pos) || f.read(&r, sizeof(r)) != (int)sizeof(r) || !readBody(f, pos, r, buf)) break;
+        if (!f.seek(pos) || f.read((uint8_t*)&r, sizeof(r)) != (int)sizeof(r) || !readBody(f, pos, r, buf)) break;
         uint32_t next = pos + sizeof(r) + pathBytes(r.path_len) + r.text_len + 1;
         if (mine(r, cutoff())) {
           if (!got) first = { seg, pos };
@@ -258,7 +265,7 @@ private:
   }
 
   bool flushCh(bool all) {
-    File f(*_fs);
+    File f = noFile();
     bool more = false;
     uint32_t now = rtc_clock.getCurrentTime();
     for (int j = _history->chHistCount() - 1; j >= 0; j--) {
@@ -275,7 +282,7 @@ private:
   }
 
   bool flushDm(bool all) {
-    File f(*_fs);
+    File f = noFile();
     bool more = false;
     for (int j = _history->dmHistCount() - 1; j >= 0; j--) {
       const DmHistEntry& e = _history->dmAtPos(_history->dmHistPosNewest(j));
@@ -298,7 +305,7 @@ private:
       if (!l.last || l.in_last >= segRecords(l)) nextSegment(l);
       char p[24];
       filePath(l, l.last, p, sizeof(p));
-      f = _fs->open(p, FILE_O_WRITE);   // at the end of the file
+      f = openAppend(p);
       if (!f) return false;
     }
     uint8_t buf[REC_MAX];
@@ -319,29 +326,22 @@ private:
     l.last++;
     if (!l.first) l.first = l.last;
     l.in_last = 0;
-    _fs->mkdir(ROOT);
-    dirPath(l, l.last, p, sizeof(p));
-    _fs->mkdir(p);
-    while (l.last - l.first >= SEGMENTS) {
-      dirPath(l, l.first++, p, sizeof(p));
-      _fs->rmdir_r(p);
-    }
+    makeSegment(l, l.last);
+    while (l.last - l.first >= SEGMENTS) dropSegment(l, l.first++);
   }
 
   // Drops the segments that have gone past Delete after, never the newest.
   void prune(Log& l) {
     uint32_t cut = cutoff();
-    char p[24];
     while (cut && l.first && l.first < l.last) {
       Rec r;
       if (lastRec(l, l.first, r) && r.timestamp >= cut) break;
-      dirPath(l, l.first++, p, sizeof(p));
-      _fs->rmdir_r(p);
+      dropSegment(l, l.first++);
     }
   }
 
   void forget() {
-    _fs->rmdir_r(ROOT);
+    dropAll();
     _dirty = false;
     _newest = 0;
     _ch = { 'c', 0, 0, 0 };
@@ -349,24 +349,108 @@ private:
     _ch_done = _dm_done = 0;   // on again: what the rings hold goes back in
   }
 
+  // ── Files ──────────────────────────────────────────────────────────────────
+  // A segment is ROOT/<kind><n>/l. LittleFS (Adafruit's on the nRF52) has a
+  // directory per segment; SPIFFS has no directories, so there the path is
+  // just the file's name, and dropping a segment is removing that file.
+#if defined(ESP32)
+  static File noFile() { return File(); }
+  File openRead(const char* p) { return _fs->open(p, "r"); }
+#ifdef ESP32_LITTLEFS
+  File openAppend(const char* p) { return _fs->open(p, "a", true); }   // create: makes the directory
+  void rmdir(const char* p) { _fs->rmdir(p); }
+#else
+  File openAppend(const char* p) { return _fs->open(p, "a"); }
+  void rmdir(const char*) {}   // SPIFFS has none (and logs an error for trying)
+#endif
+  void makeSegment(const Log&, uint32_t) {}
+  void dropSegment(const Log& l, uint32_t seg) {
+    char p[24];
+    filePath(l, seg, p, sizeof(p));
+    _fs->remove(p);
+    dirPath(l, seg, p, sizeof(p));
+    rmdir(p);
+  }
+  // fn(kind, seg) for each segment file, by its full path: SPIFFS lists every
+  // file under "/" flat, LittleFS a level at a time.
+  template <class F> void eachSegment(F fn) {
+    File dir = _fs->open("/");
+    if (dir) walk(dir, fn, 0);
+  }
+  template <class F> void walk(File& dir, F fn, int depth) {
+    for (File e = dir.openNextFile(); e; e = dir.openNextFile()) {
+      const char* path = e.path();
+      if (e.isDirectory()) {
+        if (depth < 2 && underRoot(path, true)) walk(e, fn, depth + 1);
+      } else if (underRoot(path, false)) {
+        const char* s = path + (path[0] == '/') + strlen(ROOT);   // "c12/l"
+        char* end = nullptr;
+        uint32_t seg = strtoul(s + 1, &end, 10);
+        if (seg && end && strcmp(end, "/l") == 0) fn(s[0], seg);
+      }
+      e.close();
+    }
+  }
+  // path is ROOT itself or below it ("/h", "/h/c1", "/h/c1/l"; "h/..." too).
+  static bool underRoot(const char* path, bool dir_ok) {
+    if (path[0] == '/') path++;
+    const size_t n = strlen(ROOT) - 1;   // "h"
+    if (strncmp(path, ROOT + 1, n) != 0) return false;
+    return path[n] == '/' || (dir_ok && path[n] == '\0');
+  }
+  bool hasLog() {
+    bool any = false;
+    eachSegment([&](char, uint32_t) { any = true; });
+    return any;
+  }
+  void dropAll() {
+    struct Seg { char kind; uint32_t seg; } segs[2 * SEGMENTS + 8];
+    int n = 0;
+    eachSegment([&](char kind, uint32_t seg) {
+      if (n < (int)(sizeof(segs) / sizeof(segs[0])) && (kind == 'c' || kind == 'd')) segs[n++] = { kind, seg };
+    });
+    for (int i = 0; i < n; i++) dropSegment(segs[i].kind == 'c' ? _ch : _dm, segs[i].seg);
+    rmdir(ROOT);
+  }
+#else
+  File noFile() { return File(*_fs); }
+  File openRead(const char* p) { return _fs->open(p, FILE_O_READ); }
+  File openAppend(const char* p) { return _fs->open(p, FILE_O_WRITE); }   // at the end of the file
+  void makeSegment(const Log& l, uint32_t seg) {
+    char p[24];
+    _fs->mkdir(ROOT);
+    dirPath(l, seg, p, sizeof(p));
+    _fs->mkdir(p);
+  }
+  void dropSegment(const Log& l, uint32_t seg) {
+    char p[24];
+    dirPath(l, seg, p, sizeof(p));
+    _fs->rmdir_r(p);
+  }
+  template <class F> void eachSegment(F fn) {
+    File dir = _fs->open(ROOT, FILE_O_READ);
+    if (!dir) return;
+    for (File e = dir.openNextFile(FILE_O_READ); e; e = dir.openNextFile(FILE_O_READ)) {
+      const char* name = e.name();
+      uint32_t seg = strtoul(name + 1, nullptr, 10);
+      if (seg) fn(name[0], seg);
+      e.close();
+    }
+    dir.close();
+  }
+  bool hasLog() { return _fs->exists(ROOT); }
+  void dropAll() { _fs->rmdir_r(ROOT); }
+#endif
+
   // ── Reading ────────────────────────────────────────────────────────────────
   // Finds each log's segments in ROOT.
   void scan() {
-    File dir = _fs->open(ROOT, FILE_O_READ);
-    if (!dir) return;
-    File e = dir.openNextFile(FILE_O_READ);
-    while (e) {
-      const char* name = e.name();
-      Log* l = name[0] == 'c' ? &_ch : name[0] == 'd' ? &_dm : nullptr;
-      uint32_t seg = l ? strtoul(name + 1, nullptr, 10) : 0;
-      if (seg) {
-        if (!l->first || seg < l->first) l->first = seg;
-        if (seg > l->last) l->last = seg;
-      }
-      e.close();
-      e = dir.openNextFile(FILE_O_READ);
-    }
-    dir.close();
+    eachSegment([&](char kind, uint32_t seg) {
+      Log* l = kind == 'c' ? &_ch : kind == 'd' ? &_dm : nullptr;
+      if (!l) return;
+      if (!l->first || seg < l->first) l->first = seg;
+      if (seg > l->last) l->last = seg;
+    });
     _ch.in_last = countLast(_ch);
     _dm.in_last = countLast(_dm);
   }
@@ -375,7 +459,7 @@ private:
     if (!l.last) return 0;
     char p[24];
     filePath(l, l.last, p, sizeof(p));
-    File f = _fs->open(p, FILE_O_READ);
+    File f = openRead(p);
     if (!f) return 0;
     uint16_t n = 0;
     uint8_t len;
@@ -390,12 +474,12 @@ private:
   bool lastRec(const Log& l, uint32_t seg, Rec& r) {
     char p[24];
     filePath(l, seg, p, sizeof(p));
-    File f = _fs->open(p, FILE_O_READ);
+    File f = openRead(p);
     if (!f) return false;
     uint32_t pos = f.size();
     uint8_t len;
     bool ok = pos > 0 && stepBack(f, pos, len) && f.seek(pos - len) &&
-              f.read(&r, sizeof(r)) == (int)sizeof(r) && sane(r, len);
+              f.read((uint8_t*)&r, sizeof(r)) == (int)sizeof(r) && sane(r, len);
     f.close();
     return ok;
   }
@@ -429,14 +513,14 @@ private:
     int got = 0;
     for (uint32_t seg = l.last; seg >= l.first && got < want; seg--) {
       filePath(l, seg, p, sizeof(p));
-      File f = _fs->open(p, FILE_O_READ);
+      File f = openRead(p);
       if (!f) continue;
       uint32_t pos = f.size();
       uint8_t len;
       while (pos > 0 && got < want && stepBack(f, pos, len)) {
         pos -= len;
         Rec r;
-        if (!f.seek(pos) || f.read(&r, sizeof(r)) != (int)sizeof(r) || !sane(r, len)) { pos += len; break; }
+        if (!f.seek(pos) || f.read((uint8_t*)&r, sizeof(r)) != (int)sizeof(r) || !sane(r, len)) { pos += len; break; }
         if ((!keys || chSlot(keys, r.key) >= 0) && r.timestamp >= cut) got++;
       }
       seg0 = seg;
@@ -445,13 +529,13 @@ private:
     }
     for (uint32_t seg = seg0; seg <= l.last; seg++) {
       filePath(l, seg, p, sizeof(p));
-      File f = _fs->open(p, FILE_O_READ);
+      File f = openRead(p);
       if (!f) continue;
       uint32_t size = f.size();
       for (uint32_t pos = seg == seg0 ? off0 : 0; pos < size; ) {
         uint8_t buf[REC_MAX];
         Rec r;
-        if (!f.seek(pos) || f.read(&r, sizeof(r)) != (int)sizeof(r)) break;
+        if (!f.seek(pos) || f.read((uint8_t*)&r, sizeof(r)) != (int)sizeof(r)) break;
         int rest = pathBytes(r.path_len) + r.text_len + 1;
         if (r.text_len >= MSG_TEXT_BUF || f.read(buf, rest) != rest) break;
         if (buf[rest - 1] != (uint8_t)(sizeof(r) + rest)) break;
@@ -527,7 +611,7 @@ private:
     char p[24];
     for (uint32_t seg = from.seg; seg && seg >= l.first; seg--) {
       filePath(l, seg, p, sizeof(p));
-      File f = _fs->open(p, FILE_O_READ);
+      File f = openRead(p);
       if (!f) continue;
       uint32_t pos = f.size();
       if (seg == from.seg && from.pos < pos) pos = from.pos;
@@ -535,7 +619,7 @@ private:
       while (pos > 0 && stepBack(f, pos, len)) {
         pos -= len;
         Rec r;
-        if (!f.seek(pos) || f.read(&r, sizeof(r)) != (int)sizeof(r) || !sane(r, len)) break;
+        if (!f.seek(pos) || f.read((uint8_t*)&r, sizeof(r)) != (int)sizeof(r) || !sane(r, len)) break;
         if (mine(r, cut) && !fn(f, seg, pos, r)) {
           f.close();
           return { seg, pos };

@@ -58,16 +58,19 @@ haven't read, its unread count gets a **+** (for example `48+`).
 > scrolls back through everything on the card.
 
 > [!NOTE]
-> **Wio Tracker L1:** with **Keep messages** on (Settings › Messages, off by
-> default) messages are also saved on the flash, 500, 1000 or 2500 in total:
+> **Wio Tracker L1, GAT562 Watch13, Heltec V3 / V4, Cardputer ADV:** with
+> **Keep messages** on (Settings › Messages, off by default) messages are also saved on the flash, 500, 1000 or 2500 in total:
 > two thirds for channels, one third for direct messages and rooms. The newest
 > come back after a power-off. Scrolling past the oldest message of a
 > conversation goes on to the saved ones, twelve at a time; **Back** returns
 > to the newest.
 >
-> Messages are saved within a minute of arriving, or sooner in a burst. The
-> power switch cuts the power at once, so it can lose that last minute;
-> hibernating and the low-battery shutdown save first.
+> Messages are saved within a minute of arriving, or sooner in a burst.
+> Cutting the power (the L1's switch, a pulled cable) can lose that last
+> minute; hibernating and the low-battery shutdown save first.
+>
+> The other boards have no room for it: an nRF52 without a flash chip has
+> only the 28 KB that holds its contacts.
 
 ## Writing
 
@@ -144,7 +147,7 @@ correctly whatever the keyboard is set to.
 | Mark all read | Clears its unread count |
 | Notif, Melody | Its own notification and sound, instead of the global ones |
 | Fav | Marks it as a favourite (shared with the app) |
-| Save | Wio Tracker L1, with Keep messages on: whether its new messages go on the flash. Off for a busy channel you only read live, so it leaves the room to the others; what's already saved stays until the limit or Delete after removes it |
+| Save | With Keep messages on (the boards that have it): whether its new messages go on the flash. Off for a busy channel you only read live, so it leaves the room to the others; what's already saved stays until the limit or Delete after removes it |
 | Scope | The region its messages are tagged with: **Default** follows the list's default, `*` sends none; the list is in Settings › Radio › Scope |
 | Pin to dial | Puts it on the Favourites page |
 | Edit, Delete | Renames it or changes its secret; removes it |
