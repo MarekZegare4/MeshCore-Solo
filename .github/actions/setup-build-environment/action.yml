@@ -20,6 +20,11 @@ runs:
       shell: bash
       run: |
         pip install platformio==6.2.0   # 6.2.0.post1 reads as below 6.2.0, which pioarduino requires
+        # The ESP32 platform (pioarduino) runs a second PlatformIO from its own
+        # ~/.platformio/penv, installing the latest "pioarduino" there unless one
+        # >= 6.2.0 is in it already: made here with 6.2.0, for the same reason.
+        python -m venv ~/.platformio/penv
+        ~/.platformio/penv/bin/pip install --quiet pioarduino==6.2.0
 
     # a git tag of "room-server-v1.2.3" should set "v1.2.3" as GIT_TAG_VERSION
     # a git tag of "wio-tracker-v1.15-plus.1.3" should set "v1.15-plus.1.3" as GIT_TAG_VERSION
