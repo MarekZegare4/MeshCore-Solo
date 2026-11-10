@@ -318,6 +318,11 @@ static void onDiagTab(lv_event_t* e) {
 static void onDiagReset(lv_event_t* e)   { (void)e; s_ui->diagResetPopup(); }
 static void onDiagResetGo(lv_event_t* e) { (void)e; s_ui->diagReset(); }
 
+void UITask::showDiagTab(int tab) {
+  if (tab >= 0 && tab < diagview::TAB_COUNT) diagview::s_tab = (uint8_t)tab;
+  showDiag();
+}
+
 void UITask::showDiag() {
   _screen = SCR_DIAG;
   buildDiag();

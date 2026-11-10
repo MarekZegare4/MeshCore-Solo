@@ -91,6 +91,8 @@ public:
   void quickPanelRefresh();
   void quickPanelTile(int t, bool hold);
   void homeFieldSet(int slot, int field);
+  void homeFieldOpen(int slot);      // a tap on a clock-page field: where its value comes from
+  void homeSensorsPopup();
   void showChats();
   void showContacts();
   void showSettings();
@@ -379,6 +381,7 @@ public:
   void accentRow(lv_obj_t* body);   // Settings > Display > Accent colour
   void setAccent(int idx);
   void showDiag();
+  void showDiagTab(int tab);   // diagview TAB_*
   void diagTab(int tab);
   void diagResetPopup();
   void diagReset();

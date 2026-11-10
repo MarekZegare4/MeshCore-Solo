@@ -1518,6 +1518,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_open(const char* name) {
   if (!strncmp(name, "channel@", 8)) { s_ui->openChannel(atoi(name + 8)); return; }
   if (!strcmp(name, "chanedit")) { s_ui->showChannelEdit(-1); return; }   // a new channel
   if (!strncmp(name, "compose@", 8)) { s_ui->simCompose(name + 8); return; }
+  if (!strncmp(name, "field@", 6)) { s_ui->homeFieldSet(atoi(name + 6), atoi(name + 8)); return; }   // "field@0:1": slot 0 = Battery (V)
   if (!strcmp(name, "dm")) { s_ui->simDm(); return; }
   if (!strcmp(name, "send")) { s_ui->simSend(); return; }
   if (!strcmp(name, "unread")) { s_ui->simUnread(); return; }

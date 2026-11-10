@@ -4,7 +4,8 @@
 //   favourites   -- the 3x2 card of favourite chats (DeviceScreen.h)
 //   clock        -- where Home opens and the side button returns: the time
 //                   (tap: Clock), the date, and three telemetry fields the
-//                   user picks (hold one), as on L1 (NodePrefs::dashboard_fields)
+//                   user picks (hold one), as on L1 (NodePrefs::dashboard_fields);
+//                   a tap on one opens where its value comes from
 //   map          -- a minimap round your position, framing anyone sharing
 //                   theirs and the target; tap for the Navigation map
 //   apps         -- the tools, 3x2 to a page, in the user's order with some
@@ -124,6 +125,7 @@ static void onFieldHold(lv_event_t* e) {
   lv_indev_wait_release(lv_indev_active());   // the hold isn't also a tap
   pickerOpen(s_field_pick[(int)(uintptr_t)lv_event_get_user_data(e)]);
 }
+static void onFieldTap(lv_event_t* e) { s_ui->homeFieldOpen((int)(uintptr_t)lv_event_get_user_data(e)); }
 static void onFieldPicked(lv_event_t* e) {
   s_ui->homeFieldSet((int)(uintptr_t)lv_event_get_user_data(e), choiceSelected((lv_obj_t*)lv_event_get_target(e)));
 }
@@ -593,6 +595,7 @@ void UITask::buildHomeClock(lv_obj_t* box) {
     lv_obj_add_event_cb(s_field_pick[i], onFieldPicked, LV_EVENT_VALUE_CHANGED, (void*)(uintptr_t)i);
     if (f) {
       lv_obj_add_event_cb(c, onFieldHold, LV_EVENT_LONG_PRESSED, (void*)(uintptr_t)i);
+      lv_obj_add_event_cb(c, onFieldTap, LV_EVENT_CLICKED, (void*)(uintptr_t)i);
       label(c, telemetry::NAME[f], THEME_FONT_SMALL, theme::TEXT_MUTED);
       s_field_val[i] = label(c, "--", THEME_FONT_TITLE, theme::TEXT);
     } else {   // a tap is enough on an empty one
@@ -607,6 +610,34 @@ void UITask::homeFieldSet(int slot, int f) {
   _prefs->dashboard_fields[slot] = (uint8_t)f;
   prefsSave();
   setHomePage(home::CLOCK);
+}
+
+// A tap on a filled field: to where its value is shown in full.
+void UITask::homeFieldOpen(int slot) {
+  if (!_prefs || slot < 0 || slot >= home::FIELDS) return;
+  switch (_prefs->dashboard_fields[slot]) {
+    case telemetry::BATT_V: case telemetry::BATT_PCT: showDiagTab(1); return;   // Diagnostics > History
+    case telemetry::GPS: case telemetry::SATS: case telemetry::ALT_GPS: showGps(false); return;
+    case telemetry::NODES: showNearby(); return;
+    case telemetry::MSGS: showChats(); return;   // unread at the top, with their counts
+    default: if (telemetry::isSensor(_prefs->dashboard_fields[slot])) homeSensorsPopup(); return;
+  }
+}
+
+// Every sensor on the bus that reads something, label and value.
+void UITask::homeSensorsPopup() {
+  lv_obj_t* panel = navPopupPanel("Sensors", false);
+  lv_obj_t* card = infoCard(panel);
+  int rows = 0;
+  for (uint8_t f = 0; f < telemetry::COUNT; f++) {
+    if (!telemetry::isSensor(f)) continue;
+    char v[24];
+    homeFieldText(f, v, sizeof(v));
+    if (!strcmp(v, "--")) continue;
+    infoRow(card, telemetry::NAME[f], v);
+    rows++;
+  }
+  if (!rows) infoRow(card, "On the bus", "none reading", theme::TEXT_MUTED);
 }
 
 // One field's value, as short as fits its card.
