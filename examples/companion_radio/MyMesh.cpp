@@ -1510,6 +1510,7 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   memset(_prefs.dm_notif, 0, sizeof(_prefs.dm_notif));
   _prefs.auto_off_secs = 15;    // 15 seconds auto-off by default
   _prefs.clock_hide_seconds = Features::CLOCK_HIDE_SECONDS_DEFAULT ? 1 : 0;
+  _prefs.eink_full_refresh_every = 2;   // e-ink: a full refresh every 10 partials, against ghosting
   _prefs.tz_offset_hours = 0;  // UTC by default
   _prefs.low_batt_mv = 3400;  // auto-shutdown at 3.4V by default
   _prefs.batt_display_mode = 0; // icon by default

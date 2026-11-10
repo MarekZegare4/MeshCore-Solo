@@ -105,12 +105,14 @@ Settings › Display has a few settings of its own:
 - **Rotation** turns the screen upside down; the joystick turns with it.
 - **Joystick** rotation, for a joystick mounted another way.
 - **Full rfsh**: how many partial updates between full ones, against
-  ghosting.
+  ghosting (10 by default).
 - **Text size** and **Icon size** (4.26" only): the text and the status
   bar's icons, larger or smaller.
 
 The panel refreshes only when what it shows changes. Times are shown to the
 minute (no seconds counting up), and clock seconds are hidden by default.
+A second after each refresh the panel goes to sleep: the picture stays, with
+no voltage held on it, so a screen left up for hours doesn't burn in.
 
 ## Simpson
 

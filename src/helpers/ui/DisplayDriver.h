@@ -559,6 +559,7 @@ public:
   virtual bool slideBegin(int y0) { return false; }
   virtual void slideCompose(int dx) { }
   virtual void endFrame() = 0;
+  virtual void idle() { }   // every UI loop pass, between frames: e-ink puts its panel to sleep
   // The whole panel shown inverted, by the controller: no frame to send, so no
   // tear. For this frame only (startFrame() clears it); false where the panel
   // can't, and the caller draws the negative itself.

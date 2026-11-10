@@ -1863,6 +1863,7 @@ void UITask::loop() {
     }
 #endif
   }
+  if (_display != NULL) _display->idle();   // on or off: the panel sleeps a while after its last frame
 
 #ifdef PIN_VIBRATION
   vibration.loop();
