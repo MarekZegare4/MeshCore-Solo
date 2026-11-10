@@ -24,6 +24,7 @@ static uint8_t s_login_key[PUB_KEY_SIZE];
 static bool s_login_wait = false;       // open the room once this login answers
 static lv_obj_t* s_fav_btn = nullptr;
 static int s_msg = -1;                  // s_msg_meta index the message popup is about
+static uint32_t s_msg_key = 0;          // ...and its key: a message coming in moves the rows under an open popup
 // The message popup kept up to date (messagePopupTick): its overlay while
 // open, the message (by time), its "when" line and what else it shows.
 static lv_obj_t* s_msg_overlay = nullptr;
@@ -286,6 +287,7 @@ void UITask::messageMenu(int idx) {
   if (idx < 0 || idx >= s_msg_meta_n) return;
   const MsgMeta& m = s_msg_meta[idx];
   s_msg = idx;
+  s_msg_key = s_th_rows[idx].key;
   lv_obj_t* panel = navPopupPanel(m.own ? "My message" : (m.from[0] ? m.from : "Message"), false);
 
   const MessageHistory& h = _core->history;
@@ -407,7 +409,13 @@ void UITask::messagePopupTick() {
 
 void UITask::messageAction(uint8_t act) {
   using namespace convview;
-  if (s_msg < 0 || s_msg >= s_msg_meta_n) { navClosePopup(); return; }
+  // Found again by its key: with the page full, a message coming in while the
+  // popup was open dropped the oldest off the top, every row moved up one, and
+  // the index alone acted on the message after this one.
+  s_msg = -1;
+  for (int r = 0; r < s_th_rows_n && r < s_msg_meta_n; r++)
+    if (s_th_rows[r].key == s_msg_key) { s_msg = r; break; }
+  if (s_msg < 0) { navClosePopup(); return; }
   const MsgMeta& m = s_msg_meta[s_msg];
   navClosePopup();
   if (act == M_REPLY && _compose_ta) {
