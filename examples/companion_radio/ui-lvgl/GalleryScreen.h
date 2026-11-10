@@ -143,34 +143,60 @@ struct Bmp {
 static PSRAM_BSS uint8_t s_rows[CHUNK_ROWS * ((BMP_MAX_W * 3 + 3) & ~3)];
 
 // File `i` scaled into w x h: each pixel the mean of the 2x2 under its
-// spot (a thumbnail), or the one pixel there (the full view).
-static bool decode(int i, uint16_t* out, int w, int h, bool smooth) {
-  char p[48];
-  path(i, p, sizeof(p));
+// spot (a thumbnail), or the one pixel there (the full view). In steps, so a
+// thumbnail's 72 card reads don't hold the loop up in one go: a tap begun and
+// ended inside one was never seen (the touch is polled), and the tabs stayed
+// deaf until every thumbnail was in.
+struct Decode {
   Bmp b;
-  if (!b.open(p)) return false;
-  b.buf = s_rows;
-  b.ch = smooth ? 2 : CHUNK_ROWS;   // a thumbnail skips rows: just the pair it means
-  for (int k = 0; k < h; k++) {
-    const int ty = b.bottom_up ? h - 1 - k : k;
-    const int sy = ty * b.h / h, sy2 = smooth && sy + 1 < b.h ? sy + 1 : sy;
-    if (!b.load(sy, sy2)) return false;
-    const uint8_t* r1 = b.row(sy);
-    const uint8_t* r2 = b.row(sy2);
-    for (int tx = 0; tx < w; tx++) {
-      const int sx = tx * b.w / w, sx2 = smooth && sx + 1 < b.w ? sx + 1 : sx;
-      const uint8_t* a = r1 + sx * 3; const uint8_t* c = r1 + sx2 * 3;
-      const uint8_t* d = r2 + sx * 3; const uint8_t* e = r2 + sx2 * 3;
-      out[ty * w + tx] = px565((a[2] + c[2] + d[2] + e[2]) / 4, (a[1] + c[1] + d[1] + e[1]) / 4,
-                               (a[0] + c[0] + d[0] + e[0]) / 4);
-    }
+  uint16_t* out = nullptr;
+  int w = 0, h = 0, k = 0;
+  bool smooth = false;
+  bool begin(int i, uint16_t* o, int ow, int oh, bool sm) {
+    end();
+    char p[48];
+    path(i, p, sizeof(p));
+    if (!b.open(p)) { end(); return false; }
+    b.buf = s_rows;
+    b.ch = sm ? 2 : CHUNK_ROWS;   // a thumbnail skips rows: just the pair it means
+    out = o; w = ow; h = oh; k = 0; smooth = sm;
+    return true;
   }
-  return true;
+  void end() { if (b.f) fclose(b.f); b = Bmp(); out = nullptr; }
+  bool active() const { return out != nullptr; }
+  // Rows until `ms` have gone by (0: all of them). 1 done, 0 more to do, -1 failed.
+  int step(uint32_t ms) {
+    const uint32_t t0 = millis();
+    for (; k < h; k++) {
+      if (ms && millis() - t0 >= ms) return 0;
+      const int ty = b.bottom_up ? h - 1 - k : k;
+      const int sy = ty * b.h / h, sy2 = smooth && sy + 1 < b.h ? sy + 1 : sy;
+      if (!b.load(sy, sy2)) { end(); return -1; }
+      const uint8_t* r1 = b.row(sy);
+      const uint8_t* r2 = b.row(sy2);
+      for (int tx = 0; tx < w; tx++) {
+        const int sx = tx * b.w / w, sx2 = smooth && sx + 1 < b.w ? sx + 1 : sx;
+        const uint8_t* a = r1 + sx * 3; const uint8_t* c = r1 + sx2 * 3;
+        const uint8_t* d = r2 + sx * 3; const uint8_t* e = r2 + sx2 * 3;
+        out[ty * w + tx] = px565((a[2] + c[2] + d[2] + e[2]) / 4, (a[1] + c[1] + d[1] + e[1]) / 4,
+                                 (a[0] + c[0] + d[0] + e[0]) / 4);
+      }
+    }
+    end();
+    return 1;
+  }
+};
+static Decode s_dec;   // the grid's thumbnail under way
+
+static bool decode(int i, uint16_t* out, int w, int h, bool smooth) {
+  Decode d;
+  return d.begin(i, out, w, h, smooth) && d.step(0) == 1;
 }
 
 static void onGridDeleted(lv_event_t* e) {
   uint16_t* px = (uint16_t*)lv_event_get_user_data(e);
   if (px != s_thumbs) { free(px); return; }   // an older grid's
+  s_dec.end();   // it was writing into this one
   for (int i = 0; i < s_cells; i++) lv_image_cache_drop(&s_tdsc[i]);
   free(s_thumbs);
   s_thumbs = nullptr;
@@ -284,8 +310,11 @@ void UITask::buildGallery() {
   fillWidth(grid);
   lv_obj_set_height(grid, LV_SIZE_CONTENT);
   lv_obj_set_flex_flow(grid, LV_FLEX_FLOW_ROW_WRAP);
-  lv_obj_set_flex_align(grid, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-  lv_obj_set_style_pad_row(grid, 6, 0);
+  // Edge to edge with the tabs above, the gap between thumbnails the same
+  // both ways and under the tabs: evenly spread, they all but touched.
+  lv_obj_set_flex_align(grid, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+  lv_obj_set_style_pad_row(grid, 8, 0);
+  lv_obj_set_style_pad_top(grid, 4, 0);   // + the body's 4 under the tabs
   lv_obj_add_event_cb(grid, gallery::onGridDeleted, LV_EVENT_DELETE, px);
   for (int i = 0; i < cells; i++) {
     lv_obj_t* c = lv_obj_create(grid);
@@ -316,9 +345,13 @@ void UITask::galleryTick() {
   lv_indev_t* in = lv_indev_get_next(NULL);
   if (in && lv_indev_get_state(in) == LV_INDEV_STATE_PRESSED) return;
   if (lv_display_get_inactive_time(NULL) < 300 || lv_anim_count_running() > 0) return;   // a scroll coasting
-  const int i = s_next++;
+  const int i = s_next;
   uint16_t* px = s_thumbs + (size_t)i * TW * TH;
-  if (!decode(s_page * PAGE + i, px, TW, TH, true)) {
+  int r = s_dec.active() ? 0 : s_dec.begin(s_page * PAGE + i, px, TW, TH, true) ? 0 : -1;
+  if (r == 0) r = s_dec.step(8);   // a few rows a pass: the touch read in between
+  if (r == 0) return;
+  s_next++;
+  if (r < 0) {
     lv_obj_center(label(s_cell[i], "?", THEME_FONT_LARGE, theme::TEXT_MUTED));
     return;
   }
@@ -338,6 +371,7 @@ void UITask::galleryTrail(int idx) {
 void UITask::galleryOpen(int i) {
   using namespace gallery;
   if (i < 0 || i >= s_n) return;
+  s_dec.end();   // the view reads into the same rows: that thumbnail starts again after
   if (!s_full) s_full = (uint16_t*)psramBuf<uint16_t>((size_t)SW * SH);
   if (!s_full) { showToast("Out of memory"); return; }
   if (s_view_img) lv_image_cache_drop(&s_fdsc);
