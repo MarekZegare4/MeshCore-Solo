@@ -857,7 +857,7 @@ void MyMesh::onChannelMessageRecv(const mesh::GroupChannel &channel, mesh::Packe
 
   // hop count for !hops (see onMessageRecv); not the wire path_len above.
   uint8_t ch_hops = pkt->getPathHashCount();
-  if (_prefs.bot_channel_enabled && channel_idx == _prefs.bot_channel_idx) {   // the bot's channel: who's asking
+  if (botChSlotFor(channel_idx) >= 0) {   // a bot's channel: who's asking
     char sender[32];
     const char* msg;
     botChannelSenderSplit(text, sender, sizeof(sender), &msg);
@@ -1416,7 +1416,7 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   _last_relay_seq = 0;
   offline_queue_len = 0;
   app_target_ver = 0;
-  _bot_last_ch_reply_ms = 0;
+  for (unsigned long& t : _bot_last_ch_reply_ms) t = 0;
   _bot_last_room_reply_ms = 0;
   memset(_bot_dm_log, 0, sizeof(_bot_dm_log));
   _bot_reply_count = 0;
@@ -1494,6 +1494,10 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   _prefs.bot_reply_dm[0] = '\0';
   _prefs.bot_reply_ch[0] = '\0';
   _prefs.bot_trigger_ch[0] = '\0';
+  _prefs.bot_ch2_enabled = 0;
+  _prefs.bot_ch2_idx = 0;
+  _prefs.bot_reply_ch2[0] = '\0';
+  _prefs.bot_trigger_ch2[0] = '\0';
   _prefs.bot_commands_enabled = 0;
   _prefs.bot_quiet_start = 0;
   _prefs.bot_quiet_end = 0;       // start==end → quiet hours disabled

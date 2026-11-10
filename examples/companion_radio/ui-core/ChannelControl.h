@@ -280,13 +280,16 @@ static uint8_t scopeFromRow(int row) {
 // CONTRACT: every NodePrefs field that keys on a channel index is cleared
 // here, so a channel re-added at a freed slot can't inherit the old one's
 // settings. Adding such a field: clear it below (and mark it in NodePrefs.h).
-// Covers bot_channel_idx, loc_share_channel_idx, ch_notif_melody_*,
+// Covers bot_channel_idx / bot_ch2_idx, loc_share_channel_idx, ch_notif_melody_*,
 // ch_notif_override / ch_notif_muted, ch_fav_bitmask, ch_no_save, sos_ch_mask, favourite dial
 // slots, ch_scope_idx. True when something changed (caller saves).
 static bool onRemoved(NodePrefs* p, uint8_t idx) {
   if (!p) return false;
   bool changed = false;
-  if (p->bot_channel_enabled && p->bot_channel_idx == idx) { p->bot_channel_enabled = 0; changed = true; }
+  for (int s = 0; s < NodePrefs::BOT_CH_SLOTS; s++) {
+    NodePrefs::BotCh b = p->botCh(s);
+    if (*b.enabled && *b.idx == idx) { *b.enabled = 0; changed = true; }
+  }
   // Fail closed: a share whose channel is gone stops rather than picking another.
   if (p->loc_share_target_type == 0 && p->loc_share_channel_idx == idx) { p->loc_share_enabled = 0; changed = true; }
   uint64_t m = 1ULL << idx;

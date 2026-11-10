@@ -155,6 +155,8 @@ public:
         shown = name;
       } else if (r.kind == botcfg::GAP) {
         shown = botcfg::GAP_LABELS[_prefs->bot_gap_idx];
+      } else if (r.kind == botcfg::CH_SLOT) {
+        shown = botcfg::CH_SLOT_LABELS[botcfg::s_ch_slot];
       } else if (r.kind == botcfg::CHANNEL || r.kind == botcfg::ROOM) {
         bool any = r.kind == botcfg::CHANNEL ? _num_channels > 0 : _num_rooms > 0;
         bool ok = r.kind == botcfg::CHANNEL ? botcfg::channelName(_prefs, name, sizeof(name))
@@ -295,6 +297,9 @@ public:
       case botcfg::GAP:
         _prefs->bot_gap_idx = (_prefs->bot_gap_idx + 1) % NodePrefs::BOT_GAP_COUNT;
         _dirty = true;
+        return true;
+      case botcfg::CH_SLOT:   // the other channel bot: the rows below are its
+        botcfg::s_ch_slot = (botcfg::s_ch_slot + 1) % NodePrefs::BOT_CH_SLOTS;
         return true;
       default: return false;
     }

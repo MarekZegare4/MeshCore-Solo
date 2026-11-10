@@ -5,6 +5,7 @@
 #include "NavView.h"   // navigate to a location shared inside a message
 #include "icons.h"     // scalable mini-icons (delivery markers)
 #include "ChannelsView.h"  // on-device channel add/edit form (Channels tab)
+#include "../ui-core/BotConfig.h"   // which channel bot a channel pick is for
 
 class MessagesScreen : public UIScreen {
   UITask* _task;
@@ -1390,8 +1391,9 @@ public:
   void commitPickBotChannel(int ch_idx) {
     NodePrefs* p = _task->getNodePrefs();
     if (p) {
-      p->bot_channel_enabled = 1;
-      p->bot_channel_idx = (uint8_t)ch_idx;
+      NodePrefs::BotCh b = p->botCh(botcfg::s_ch_slot);   // the one the Bot screen shows
+      *b.enabled = 1;
+      *b.idx = (uint8_t)ch_idx;
       the_mesh.savePrefs();
     }
     _pick_bot_channel = false;

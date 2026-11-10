@@ -59,6 +59,8 @@ void fill(NodePrefs& p) {
   text(p.bot_reply_dm, sizeof(p.bot_reply_dm));
   text(p.bot_reply_ch, sizeof(p.bot_reply_ch));
   text(p.bot_trigger_ch, sizeof(p.bot_trigger_ch));
+  text(p.bot_reply_ch2, sizeof(p.bot_reply_ch2));
+  text(p.bot_trigger_ch2, sizeof(p.bot_trigger_ch2));
   text(p.bot_trigger_room, sizeof(p.bot_trigger_room));
   text(p.bot_reply_room, sizeof(p.bot_reply_room));
   text(p.locator_label, sizeof(p.locator_label));

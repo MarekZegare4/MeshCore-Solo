@@ -327,6 +327,9 @@ static void sanitize(NodePrefs& p) {
   flag(p.bot_commands_room, 0);
   flag(p.bot_actions_dm, 0);
   flag(p.bot_actions_ch, 0);
+  flag(p.bot_ch2_enabled, 0);
+  flag(p.bot_commands_ch2, 0);
+  flag(p.bot_actions_ch2, 0);
   flag(p.bot_actions_room, 0);
   flag(p.bot_dm_scope, 0);
   flag(p.bot_pos_scope, 0);

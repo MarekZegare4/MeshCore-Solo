@@ -177,8 +177,11 @@ of the screen and on the map.
 
 ## Remote bot
 
-**Tools › Bot** answers messages for you. It watches your direct messages, one
-channel and one room, each switched on separately:
+**Tools › Bot** answers messages for you. It watches your direct messages, two
+channels and one room, each switched on separately. The Channel tab's first
+row, **Bot 1 / Bot 2**, picks which channel bot the rows under it set: each has
+its own channel, trigger, reply, commands and actions (for example `test` →
+`ok` on #test, and `!batt !loc` on #bot), and each keeps its own reply gap:
 
 - **Trigger and reply**: when a message contains the trigger (several can be
   separated by commas, `*` matches any message), the bot sends the reply. The

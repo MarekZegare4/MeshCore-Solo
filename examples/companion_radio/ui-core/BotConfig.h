@@ -28,13 +28,19 @@ static bool isLog(int) { return false; }
 enum Kind : uint8_t { ENABLE_DM, DM_SCOPE, COMMANDS_DM, ALLOWED_DM, ACTIONS_DM, TRIGGER_DM, REPLY_DM,
                       ENABLE_CH, CHANNEL, COMMANDS_CH, ALLOWED_CH, ACTIONS_CH, TRIGGER_CH, REPLY_CH,
                       ENABLE_ROOM, ROOM, COMMANDS_ROOM, ALLOWED_ROOM, ACTIONS_ROOM, TRIGGER_ROOM, REPLY_ROOM,
-                      QUIET_FROM, QUIET_TO, ACTIONS_SCOPE, POS_SCOPE, GAP };
+                      QUIET_FROM, QUIET_TO, ACTIONS_SCOPE, POS_SCOPE, GAP, CH_SLOT };
+
+// Which of the two channel bots (NodePrefs::botCh()) the Channel tab's rows
+// are about: its first row (CH_SLOT) switches it. Kept across visits.
+static uint8_t s_ch_slot = 0;
+static const char* const CH_SLOT_LABELS[NodePrefs::BOT_CH_SLOTS] = { "Bot 1", "Bot 2" };
 
 // hint: a one-line explanation for frontends with room for it.
 struct Row { Kind kind; const char* label; const char* hint; };
 
 static const Row CHANNEL_ROWS[] = {
-  { ENABLE_CH,   "Enable",   "Answer on one channel" },
+  { CH_SLOT,     "Bot",      "Two, each its own" },
+  { ENABLE_CH,   "Enable",   "Answer on its channel" },
   { CHANNEL,     "Channel",  nullptr },
   { COMMANDS_CH, "Commands", "!ping, !help, ..." },
   { ALLOWED_CH,  "Allowed",  "Which ones it answers" },
@@ -91,14 +97,14 @@ static const Row& row(int tab, int idx) {
 static uint8_t* flag(NodePrefs* p, Kind k) {
   switch (k) {
     case ENABLE_DM:     return &p->bot_enabled;
-    case ENABLE_CH:     return &p->bot_channel_enabled;
+    case ENABLE_CH:     return p->botCh(s_ch_slot).enabled;
     case ENABLE_ROOM:   return &p->bot_room_enabled;
     case DM_SCOPE:      return &p->bot_dm_scope;          // 1 = favourites only
     case COMMANDS_DM:   return &p->bot_commands_enabled;
-    case COMMANDS_CH:   return &p->bot_commands_ch;
+    case COMMANDS_CH:   return p->botCh(s_ch_slot).commands;
     case COMMANDS_ROOM: return &p->bot_commands_room;
     case ACTIONS_DM:    return &p->bot_actions_dm;
-    case ACTIONS_CH:    return &p->bot_actions_ch;
+    case ACTIONS_CH:    return p->botCh(s_ch_slot).actions;
     case ACTIONS_ROOM:  return &p->bot_actions_room;
     case ACTIONS_SCOPE: return &p->bot_actions_scope;     // 1 = favourites only
     case POS_SCOPE:     return &p->bot_pos_scope;         // 1 = favourites only
@@ -110,7 +116,7 @@ static uint8_t* flag(NodePrefs* p, Kind k) {
 static uint16_t* cmdOff(NodePrefs* p, Kind k) {
   switch (k) {
     case ALLOWED_DM:   return &p->bot_cmd_off_dm;
-    case ALLOWED_CH:   return &p->bot_cmd_off_ch;
+    case ALLOWED_CH:   return p->botCh(s_ch_slot).cmd_off;
     case ALLOWED_ROOM: return &p->bot_cmd_off_room;
     default:           return nullptr;
   }
@@ -118,7 +124,7 @@ static uint16_t* cmdOff(NodePrefs* p, Kind k) {
 
 // That Allowed row's target has its Actions on: the list shows them.
 static bool actionsOn(const NodePrefs* p, Kind k) {
-  return (k == ALLOWED_DM ? p->bot_actions_dm : k == ALLOWED_CH ? p->bot_actions_ch : p->bot_actions_room) != 0;
+  return (k == ALLOWED_DM ? p->bot_actions_dm : k == ALLOWED_CH ? *p->botCh(s_ch_slot).actions : p->bot_actions_room) != 0;
 }
 
 // Text rows: the buffer and its size (incl. NUL); nullptr for other kinds.
@@ -126,8 +132,8 @@ static char* text(NodePrefs* p, Kind k, int& cap) {
   switch (k) {
     case TRIGGER_DM:   cap = sizeof(p->bot_trigger);      return p->bot_trigger;
     case REPLY_DM:     cap = sizeof(p->bot_reply_dm);     return p->bot_reply_dm;
-    case TRIGGER_CH:   cap = sizeof(p->bot_trigger_ch);   return p->bot_trigger_ch;
-    case REPLY_CH:     cap = sizeof(p->bot_reply_ch);     return p->bot_reply_ch;
+    case TRIGGER_CH:   { NodePrefs::BotCh b = p->botCh(s_ch_slot); cap = b.trigger_cap; return b.trigger; }
+    case REPLY_CH:     { NodePrefs::BotCh b = p->botCh(s_ch_slot); cap = b.reply_cap;   return b.reply; }
     case TRIGGER_ROOM: cap = sizeof(p->bot_trigger_room); return p->bot_trigger_room;
     case REPLY_ROOM:   cap = sizeof(p->bot_reply_room);   return p->bot_reply_room;
     default:           cap = 0; return nullptr;
@@ -168,9 +174,9 @@ static const char* shownText(const char* t, bool trigger) {
 }
 
 // Target names: false when none is set / it no longer exists.
-static bool channelName(const NodePrefs* p, char* out, size_t n) {
+static bool channelName(const NodePrefs* p, char* out, size_t n, int slot = -1) {
   ChannelDetails ch;
-  if (!the_mesh.getChannel(p->bot_channel_idx, ch) || !ch.name[0]) return false;
+  if (!the_mesh.getChannel(*p->botCh(slot < 0 ? s_ch_slot : slot).idx, ch) || !ch.name[0]) return false;
   snprintf(out, n, "%s", ch.name);
   return true;
 }

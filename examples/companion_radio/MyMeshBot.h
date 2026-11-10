@@ -208,13 +208,24 @@ void MyMesh::tryBotReplyDM(const ContactInfo& from, const char* text, uint8_t ho
   }
 }
 
+// The channel bot (of NodePrefs::BOT_CH_SLOTS) on for `channel_idx`; the
+// first if both are set to it.
+int MyMesh::botChSlotFor(uint8_t channel_idx) const {
+  for (int s = 0; s < NodePrefs::BOT_CH_SLOTS; s++) {
+    NodePrefs::BotCh b = _prefs.botCh(s);
+    if (*b.enabled && *b.idx == channel_idx) return s;
+  }
+  return -1;
+}
+
 void MyMesh::tryBotReplyChannel(uint8_t channel_idx, const char* text, uint8_t hops) {
-  // bot_channel_enabled is this target's own on/off switch — independent of
-  // bot_enabled (the DM tab's Enable), matching how the commands paths and
+  // A channel bot's Enable is that target's own on/off switch — independent
+  // of bot_enabled (the DM tab's Enable), matching how the commands paths and
   // the tabbed BotScreen UI already treat DM/channel/room as separate targets.
-  if (!(_prefs.bot_channel_enabled && _prefs.bot_reply_ch[0] &&
-        channel_idx == _prefs.bot_channel_idx &&
-        botGapPassed(_bot_last_ch_reply_ms)))
+  const int slot = botChSlotFor(channel_idx);
+  if (slot < 0) return;
+  const NodePrefs::BotCh b = _prefs.botCh(slot);
+  if (!(b.reply[0] && botGapPassed(_bot_last_ch_reply_ms[slot])))
     return;
   if (botInQuietHours()) return;
 
@@ -226,14 +237,14 @@ void MyMesh::tryBotReplyChannel(uint8_t channel_idx, const char* text, uint8_t h
   char sender_name[32];
   botChannelSenderSplit(text, sender_name, sizeof(sender_name), &msg);
 
-  if (!botTriggerMatches(_prefs.bot_trigger_ch, msg, true)) return;  // own trigger; "*" = any msg
+  if (!botTriggerMatches(b.trigger, msg, true)) return;  // own trigger; "*" = any msg
 
   ChannelDetails ch;
   if (!getChannel(channel_idx, ch)) return;
 
   uint32_t ts = getRTCClock()->getCurrentTime();
   char expanded[BOT_SCRATCH];
-  expandMsg(_prefs.bot_reply_ch, expanded, sizeof(expanded),
+  expandMsg(b.reply, expanded, sizeof(expanded),
             sensors.node_lat, sensors.node_lon,
             sensors.node_lat != 0.0 || sensors.node_lon != 0.0,
             ts, tzHoursAt(_prefs, ts),
@@ -245,7 +256,7 @@ void MyMesh::tryBotReplyChannel(uint8_t channel_idx, const char* text, uint8_t h
   if (strcmp(msg, expanded) == 0) return;
   int rlen = strlen(expanded);
   if (sendGroupMessage(ts, ch.channel, _prefs.node_name, expanded, rlen)) {
-    _bot_last_ch_reply_ms = millis();
+    _bot_last_ch_reply_ms[slot] = millis();
     _bot_reply_count++;
     _bot_log.add(ts, BotLog::CHANNEL, sender_name, msg, expanded);
 #ifdef DISPLAY_CLASS
@@ -552,9 +563,10 @@ bool MyMesh::tryBotCommand(const ContactInfo& from, const char* text, uint8_t ho
 // broadcast to everyone on the channel, so unlike DM commands it respects quiet
 // hours and uses the global per-channel cooldown (shared with the trigger reply).
 bool MyMesh::tryBotChannelCommand(uint8_t channel_idx, const char* text, uint8_t hops) {
-  if (!(_prefs.bot_commands_ch && _prefs.bot_channel_enabled &&
-        channel_idx == _prefs.bot_channel_idx))
-    return false;
+  const int slot = botChSlotFor(channel_idx);
+  if (slot < 0) return false;
+  const NodePrefs::BotCh b = _prefs.botCh(slot);
+  if (!*b.commands) return false;
 
   // Skip "sender_name: " prefix so commands are read from the message body only.
   const char* msg;
@@ -563,15 +575,15 @@ bool MyMesh::tryBotChannelCommand(uint8_t channel_idx, const char* text, uint8_t
 
   uint32_t ts = getRTCClock()->getCurrentTime();
   char out[BOT_SCRATCH];
-  if (botScanCommands(msg, hops, ts, out, sizeof(out), sender_name, _prefs.bot_actions_ch != 0 && botActionsFrom(s_bot_sender), _prefs.bot_cmd_off_ch) == 0) return false;  // no commands
+  if (botScanCommands(msg, hops, ts, out, sizeof(out), sender_name, *b.actions != 0 && botActionsFrom(s_bot_sender), *b.cmd_off) == 0) return false;  // no commands
   if (botInQuietHours()) { resetPendingBotActions(); return true; }                                       // quiet hours
-  if (!botGapPassed(_bot_last_ch_reply_ms)) { resetPendingBotActions(); return true; }  // throttled
+  if (!botGapPassed(_bot_last_ch_reply_ms[slot])) { resetPendingBotActions(); return true; }  // throttled
 
   ChannelDetails ch;
   if (!getChannel(channel_idx, ch)) { resetPendingBotActions(); return true; }
   int rlen = strlen(out);
   if (sendGroupMessage(ts, ch.channel, _prefs.node_name, out, rlen)) {
-    _bot_last_ch_reply_ms = millis();
+    _bot_last_ch_reply_ms[slot] = millis();
     _bot_reply_count++;
     _bot_log.add(ts, BotLog::CHANNEL, sender_name, msg, out);
 #ifdef DISPLAY_CLASS
@@ -728,7 +740,8 @@ void MyMesh::sendLocFixResult(const char* msg) {
     if (!getChannel(_loc_fix.channel_idx, ch)) return;
     int mlen = strlen(msg);
     if (sendGroupMessage(ts, ch.channel, _prefs.node_name, msg, mlen)) {
-      _bot_last_ch_reply_ms = millis();
+      const int slot = botChSlotFor(_loc_fix.channel_idx);
+      if (slot >= 0) _bot_last_ch_reply_ms[slot] = millis();
       _bot_reply_count++;
       _bot_log.add(ts, BotLog::CHANNEL, "", "!gps fix", msg);
 #ifdef DISPLAY_CLASS

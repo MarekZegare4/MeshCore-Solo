@@ -624,6 +624,7 @@ private:
   const ContactInfo* botContactByName(const char* name);
   bool botActionsFrom(const ContactInfo* c) const;   // bot_actions_scope
   void tryBotReplyDM(const ContactInfo& from, const char* text, uint8_t hops);
+  int botChSlotFor(uint8_t channel_idx) const;   // the channel bot answering there, -1 none
   void tryBotReplyChannel(uint8_t channel_idx, const char* text, uint8_t hops);
   void tryBotReplyRoom(const ContactInfo& from, const uint8_t* sender_prefix, const char* text, uint8_t hops);
   bool tryBotCommand(const ContactInfo& from, const char* text, uint8_t hops);          // DM commands
@@ -748,7 +749,7 @@ private:
   unsigned long _last_rtc_save_ms = 0;
   bool _path_same = false;                // onContactPathRecv(): the path heard is the one held
   bool _path_kept = false;                // onContactPathRecv(): a kept route, the path heard is dropped
-  unsigned long _bot_last_ch_reply_ms;
+  unsigned long _bot_last_ch_reply_ms[NodePrefs::BOT_CH_SLOTS];   // each channel bot's own gap
   unsigned long _bot_last_room_reply_ms;
   unsigned long _next_auto_advert_ms;
   unsigned long _last_auto_advert_ms = 0;

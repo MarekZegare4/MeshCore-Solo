@@ -35,6 +35,10 @@ static void onBotScope(lv_event_t* e) {
 static void onBotCmd(lv_event_t* e) {
   s_ui->botCmd((int)(uintptr_t)lv_event_get_user_data(e), lv_obj_has_state((lv_obj_t*)lv_event_get_target(e), LV_STATE_CHECKED));
 }
+static void onBotSlot(lv_event_t* e) {   // which channel bot the Channel tab shows
+  botcfg::s_ch_slot = (uint8_t)lv_buttonmatrix_get_selected_button((lv_obj_t*)lv_event_get_target(e)) ? 1 : 0;
+  s_ui->botTab(botcfg::TAB_CHANNEL);
+}
 static void onBotGap(lv_event_t* e) {
   s_ui->botGap((int)lv_buttonmatrix_get_selected_button((lv_obj_t*)lv_event_get_target(e)));
 }
@@ -165,6 +169,14 @@ void UITask::buildBot() {
     }
     uint16_t* cmd_off = botcfg::cmdOff(p, r.kind);
     const bool gap = r.kind == botcfg::GAP;
+    if (r.kind == botcfg::CH_SLOT) {   // Bot 1 | Bot 2, each with its own channel
+      static const char* SLOTS[] = { botcfg::CH_SLOT_LABELS[0], botcfg::CH_SLOT_LABELS[1], "" };
+      lv_obj_t* row = settingRow(g, r.label, r.hint);
+      lv_obj_t* seg = segmented(row, SLOTS, botcfg::s_ch_slot, 160, 32);
+      lv_obj_align(seg, LV_ALIGN_RIGHT_MID, -4, 0);
+      lv_obj_add_event_cb(seg, onBotSlot, LV_EVENT_VALUE_CHANGED, NULL);
+      continue;
+    }
     lv_obj_t* row = settingRow(g, r.label, fl || cmd_off || gap || botcfg::isHour(r.kind) ? r.hint : nullptr);
     if (gap) {
       lv_obj_t* seg = segmented(row, botcfg::GAP_LABELS, p->bot_gap_idx, 160, 32);
@@ -272,7 +284,7 @@ void UITask::botRow(int row) {
         ChannelDetails ch;
         if (!the_mesh.getChannel(i, ch) || !ch.name[0]) continue;
         lv_obj_t* rw = listRow(list, ch.name, NULL, onBotPick, (void*)(uintptr_t)i);
-        if (i == p->bot_channel_idx) styleSelected(rw, true);
+        if (i == *p->botCh(botcfg::s_ch_slot).idx) styleSelected(rw, true);
         n++;
       }
     } else {
@@ -325,7 +337,7 @@ void UITask::botPick(int idx) {
   using namespace botview;
   if (!_prefs || s_row < 0) return;
   botcfg::Kind k = botcfg::row(s_tab, s_row).kind;
-  if (k == botcfg::CHANNEL) _prefs->bot_channel_idx = (uint8_t)idx;
+  if (k == botcfg::CHANNEL) *_prefs->botCh(botcfg::s_ch_slot).idx = (uint8_t)idx;
   else if (k == botcfg::ROOM && idx >= 0 && idx < (int)(sizeof(s_rooms) / sizeof(s_rooms[0]))) botcfg::setRoom(_prefs, s_rooms[idx]);
   prefsSave();
   navClosePopup();

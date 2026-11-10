@@ -440,6 +440,35 @@ struct NodePrefsFields {
   uint16_t bot_cmd_off_room;
   uint8_t  bot_pos_scope;       // who gets the position in a DM: 0 = all, 1 = favourites (the others as if !loc were off)
   uint8_t  bot_gap_idx;         // index into botGapSecs(): between replies on the channel / in the room
+  // A second channel bot: its own channel, trigger, reply, commands and
+  // actions, as the first (bot_channel_*, bot_*_ch above). botCh() gives
+  // either one the same shape.
+  uint8_t  bot_ch2_enabled;
+  uint8_t  bot_ch2_idx;         // [del→onChannelRemoved]
+  char     bot_trigger_ch2[64];
+  char     bot_reply_ch2[140];
+  uint8_t  bot_commands_ch2;
+  uint8_t  bot_actions_ch2;
+  uint16_t bot_cmd_off_ch2;
+
+  static const int BOT_CH_SLOTS = 2;
+  struct BotCh {
+    uint8_t* enabled; uint8_t* idx;
+    char* trigger; int trigger_cap;
+    char* reply; int reply_cap;
+    uint8_t* commands; uint8_t* actions; uint16_t* cmd_off;
+  };
+  // Channel bot `slot` (0 or 1): pointers into these prefs.
+  BotCh botCh(int slot) const {
+    NodePrefsFields* p = const_cast<NodePrefsFields*>(this);
+    if (slot == 1)
+      return { &p->bot_ch2_enabled, &p->bot_ch2_idx, p->bot_trigger_ch2, (int)sizeof(bot_trigger_ch2),
+               p->bot_reply_ch2, (int)sizeof(bot_reply_ch2), &p->bot_commands_ch2, &p->bot_actions_ch2,
+               &p->bot_cmd_off_ch2 };
+    return { &p->bot_channel_enabled, &p->bot_channel_idx, p->bot_trigger_ch, (int)sizeof(bot_trigger_ch),
+             p->bot_reply_ch, (int)sizeof(bot_reply_ch), &p->bot_commands_ch, &p->bot_actions_ch,
+             &p->bot_cmd_off_ch };
+  }
 
   // ── GPS, trail & location sharing ─────────────────────────────────────
   uint8_t  gps_enabled;      // GPS enabled flag (0=disabled, 1=enabled)
@@ -927,6 +956,10 @@ class NodePrefs : public NodePrefsFields, public ConfigSerializer {
     s.def("q_start", bot_quiet_start); s.def("q_end", bot_quiet_end); s.def("act_scope", bot_actions_scope);
     s.def("dm_off", bot_cmd_off_dm); s.def("ch_off", bot_cmd_off_ch); s.def("rm_off", bot_cmd_off_room);
     s.def("pos_scope", bot_pos_scope); s.def("gap", bot_gap_idx);
+    s.def("ch2_en", bot_ch2_enabled); s.def("ch2_idx", bot_ch2_idx);
+    s.def("ch2_trig", bot_trigger_ch2, sizeof(bot_trigger_ch2));
+    s.def("ch2_reply", bot_reply_ch2, sizeof(bot_reply_ch2));
+    s.def("ch2_cmd", bot_commands_ch2); s.def("ch2_act", bot_actions_ch2); s.def("ch2_off", bot_cmd_off_ch2);
   }
   void gpsSolo(Section& s) {
     s.def("imperial", units_imperial);
