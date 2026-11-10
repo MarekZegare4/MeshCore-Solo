@@ -258,6 +258,11 @@ static bool begin() {
   lv_indev_t* indev = lv_indev_create();
   lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
   lv_indev_set_read_cb(indev, touchCb);
+  // Read every 10 ms, not with each frame (LV_DEF_REFR_PERIOD, 20): a key
+  // typed sooner, a quick tap between two reads never missed. The loop
+  // wakes this often anyway (UITask::idleMillis), the GT911's read is short.
+  for (lv_timer_t* t = lv_timer_get_next(NULL); t; t = lv_timer_get_next(t))
+    if (lv_timer_get_user_data(t) == indev) lv_timer_set_period(t, 10);
   return true;
 }
 

@@ -133,8 +133,12 @@ symbols. Cyrillic includes the Ukrainian, Belarusian and Serbian letters
 correctly whatever the keyboard is set to.
 
 > [!NOTE]
-> **Wio Tracker L2:** a phone-style keyboard. Hold a key for its accents; the
-> globe key switches between the two alphabets. **1#** opens digits and
+> **Wio Tracker L2:** a phone-style keyboard. Hold a key for its accents and
+> slide along them, letting go on the one you want; the one you picked last
+> comes first next time, so holding and letting go types it again. Tap shift
+> twice quickly for caps lock (the key turns solid; tap it again to end it).
+> Hold backspace: letters go first, then whole words. The globe key switches
+> between the two alphabets. **1#** opens digits and
 > symbols; **#+=** there opens a second page with brackets `[ ] { } < >`,
 > `` \ | ~ ^ ` $ `` and a few more (`£ ¥ § ° ± × ÷ • … « » –`).
 
