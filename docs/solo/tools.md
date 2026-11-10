@@ -168,7 +168,7 @@ over everything, with the screen off or locked too and without the PIN. **Slide*
 the knob to the end to start: a tap or a short slide does nothing, so a button
 pressed in a pocket can't send one. **Send SOS** in the app opens the same slider.
 
-**Cancel** or either button ends the countdown, while the view pulses red,
+**Cancel** or either button ends the countdown, while the view blinks red,
 faster near the end. While it runs, **Hide** puts the
 view away, and the status bar shows a red `SOS` and a title bar's clock turns
 red; hold the top button again, or tap **Send SOS** in the app, to come back.

@@ -18,6 +18,8 @@ static const uint32_t VIEW_MS = 30000;   // the view stays this long untouched (
 
 static Mode s_mode = NONE;
 static bool s_counting = false;          // the LIVE view was built for the countdown
+static bool s_lit = false;               // the countdown's blink: the backlight up now
+static bool s_blinking = false;          // the countdown has the backlight: given back on closing
 static bool s_wifi_was = false;          // onSosRunning() rested it
 static lv_obj_t* s_view = nullptr;
 static lv_obj_t* s_slider = nullptr;
@@ -65,6 +67,7 @@ void UITask::sosViewClose() {
   s_line[0] = s_line[1] = s_line[2] = s_line[3] = nullptr;
   s_drag = SlideDrag();
   s_mode = NONE;
+  if (s_blinking) { s_blinking = false; applyDisplayPrefs(); }   // the light as it's set
 }
 
 static lv_obj_t* sosPanel() {
@@ -90,7 +93,7 @@ static lv_obj_t* sosText(lv_obj_t* v, const char* text, const lv_font_t* font, u
   lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
   return l;
 }
-static void sosWideButton(lv_obj_t* parent, const char* text, int32_t w, int32_t h, uint32_t bg, uint32_t col, lv_event_cb_t cb) {
+static lv_obj_t* sosWideButton(lv_obj_t* parent, const char* text, int32_t w, int32_t h, uint32_t bg, uint32_t col, lv_event_cb_t cb) {
   lv_obj_t* b = lv_button_create(parent);
   lv_obj_set_size(b, w, h);
   lv_obj_set_style_shadow_width(b, 0, 0);
@@ -98,9 +101,14 @@ static void sosWideButton(lv_obj_t* parent, const char* text, int32_t w, int32_t
   lv_obj_set_style_bg_color(b, lv_color_hex(bg), 0);
   lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, NULL);
   lv_obj_center(label(b, text, THEME_FONT_BODY, col));
+  return b;
 }
+// Under the slider, its twin: as wide, as tall, as round, the same gap above
+// it whatever the view's rows are spaced at.
 static void sosFootButton(lv_obj_t* v, const char* text) {
-  sosWideButton(v, text, SLIDE_W, 40, theme::SURFACE_2, theme::TEXT, onSosButton);
+  lv_obj_t* b = sosWideButton(v, text, SLIDE_W, 48, theme::SURFACE_2, theme::TEXT, onSosButton);
+  lv_obj_set_style_radius(b, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_margin_top(b, 10 - lv_obj_get_style_pad_row(v, LV_PART_MAIN), 0);
 }
 
 // The sheet: what will happen, and the slide that starts it.
@@ -133,8 +141,11 @@ void UITask::sosLive() {
   s_counting = _core->sos.counting();
   s_until = millis() + VIEW_MS;
   s_next = 0;
-  s_title = sosText(s_view, "", THEME_FONT_LARGE, theme::FAIL);
-  if (s_counting) s_digits = sosText(s_view, "", THEME_FONT_CLOCK, theme::TEXT);
+  s_title = sosText(s_view, "", THEME_FONT_LARGE, s_counting ? theme::TEXT : theme::FAIL);
+  if (s_counting) {
+    lv_obj_set_style_bg_color(s_view, lv_color_hex(theme::FAIL), 0);   // red throughout: the backlight blinks
+    s_digits = sosText(s_view, "", THEME_FONT_CLOCK, theme::TEXT);
+  }
   else for (int i = 0; i < 4; i++) {
     // Name and when, then what they said, for the latest two who answered.
     s_line[i] = sosText(s_view, "", THEME_FONT_BODY, i % 2 ? theme::TEXT_MUTED : theme::TEXT);
@@ -158,12 +169,17 @@ void UITask::sosRefresh() {
     const int left = s.secsLeft(now);
     snprintf(buf, sizeof(buf), "%d", left);
     setText(s_digits, buf);
-    // The panel pulses red, to be seen as well as heard, faster near the end.
-    const uint32_t period = left > 10 ? 1000 : left > 5 ? 500 : 250;
-    const uint32_t ph = now % period;
-    const uint32_t tri = ph < period / 2 ? ph : period - ph;   // 0 .. period/2 .. 0
-    const lv_opa_t mix = (lv_opa_t)(tri * 2 * 160 / period);   // up to ~60% red
-    lv_obj_set_style_bg_color(s_view, lv_color_mix(lv_color_hex(theme::FAIL), lv_color_hex(theme::BG), mix), 0);
+    // The red view blinks, to be seen as well as heard, faster near the end:
+    // by the backlight, at once and with nothing redrawn. A colour change is
+    // the whole screen drawn again, in bands, slowly; and pulsed, the bands of
+    // one frame tore over the next.
+    const uint32_t half = left > 10 ? 500 : left > 5 ? 250 : 125;
+    const bool lit = !((now / half) & 1);
+    if (!s_blinking || lit != s_lit) {
+      s_blinking = true;
+      s_lit = lit;
+      lvport::setBacklightPct(lit ? 100 : 10);
+    }
     return;
   }
   setText(s_title, s.acked() ? "Answered" : "SOS");
@@ -252,7 +268,7 @@ void UITask::sosTick() {
   }
   if (s_mode == LIVE && s_counting != s.counting()) sosLive();   // the countdown ended
   if (s_mode == LIVE && (int32_t)(now - s_next) >= 0) {
-    s_next = now + (s_counting ? 40 : 200);   // the countdown's pulse
+    s_next = now + (s_counting ? 50 : 200);   // the countdown's blink
     sosRefresh();
   }
   if (s_mode != NONE && !s.counting()) {
