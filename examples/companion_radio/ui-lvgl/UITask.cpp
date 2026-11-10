@@ -78,6 +78,7 @@ static bool s_chats_stale = false;   // Messages: a refresh waits for a held row
 #include "../ui-core/TrackBack.h"
 #include "../ui-core/TrailProfile.h"
 #include "../ui-core/StatusHistory.h"
+#include "../ui-core/BattLog.h"
 #include "../ui-core/CalendarMath.h"
 #include "../ui-core/RadioControl.h"
 #include "../ui-core/RepeaterControl.h"
@@ -1543,6 +1544,9 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_open(const char* name) {
     }
     for (int i = 0; i < 32; i++) s_hist.snr.push((int16_t)(4 * (8 - (i * 7) % 19)));
     s_hist.version++;
+    s_batt = {};   // 20 h since boot: an hour on USB, then on battery
+    for (unsigned long m = 0; m < 20 * 60; m++)
+      s_batt.tick(m * 60000UL, m < 60 ? 4150 : 4120 - (int)(m - 60) * 300 / (19 * 60) + (int)(m % 7), m < 60);
     s_near.f0 = 869.525f - s_near.step * (s_near.n / 2);   // and a noise sweep
     for (int i = 0; i < s_near.n; i++) s_near.v[i] = (int16_t)(-118 + (i % 9 == 0 ? 7 : (i * 5) % 4));
     s_floor_med = -116; s_floor_lo = -118;

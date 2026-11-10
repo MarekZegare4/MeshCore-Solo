@@ -26,6 +26,12 @@ static int s_rows = 0;
 // The history, a sample every 5 minutes from boot (UITask::sampleHistory()).
 static PSRAM_BSS uicore::StatusHistory<96, 300000UL> s_hist;
 static uint32_t s_hist_shown = 0;   // the history's version the charts show
+// The battery since boot (ui-core/BattLog.h): the Battery chart, the whole
+// time in 64..128 samples, and the time left at the drain on battery.
+static PSRAM_BSS uicore::BattLog<chart::MAX> s_batt;
+static uint32_t s_batt_shown = 0;
+static lv_obj_t* s_batt_est = nullptr;   // "About 8 h left (5.0 %/h)"
+static char s_batt_under[4][12];         // the span along the bottom, as it grows
 static lv_obj_t* s_ch_obj[4];       // History's charts and their values now
 static lv_obj_t* s_ch_now[4];
 
@@ -46,6 +52,19 @@ static void chartOf(int k, const uicore::History<N>& h) {
   for (int i = 0; i < h.n; i++) c.v[i] = h.at(i);
 }
 
+// The battery log as the chart: as wide as it goes back (since boot).
+static void battChart() {
+  chart::Chart& c = s_charts[0];
+  c.n = s_batt.mv.n; c.cap = c.n > 1 ? c.n : 2;
+  for (int i = 0; i < c.n; i++) c.v[i] = s_batt.mv.at(i);
+  const uint32_t span = s_batt.spanMinutes();
+  for (int j = 0; j < 4; j++) {
+    uicore::spanText(span * (4 - j) / 4, s_batt_under[j], sizeof(s_batt_under[j]));
+    c.under[j] = span ? s_batt_under[j] : nullptr;
+  }
+  c.under[4] = "now";
+}
+
 // A sample's age: the charts sample every 5 minutes, SNR every packet.
 static void whenAgo(const chart::Chart& c, int i, char* out, size_t n) {
   chart::ago((uint32_t)(c.n - 1 - i) * (s_hist.INTERVAL_MS / 60000UL), out, n);
@@ -58,8 +77,9 @@ static void setupCharts() {
     c.where = whenAgo;
     for (int j = 0; j < 5; j++) c.under[j] = HOURS[j];
   }
-  Chart& b = s_charts[0];   // mV, in steps of 10 mV and up
+  Chart& b = s_charts[0];   // mV, in steps of 10 mV and up; since boot (battChart())
   b.min_span = 100; b.unit = 10;
+  b.where = [](const Chart& c, int i, char* o, size_t n) { (void)c; chart::ago(s_batt.agoMinutes(i), o, n); };
   b.axis = [](int v, int step, char* o, size_t n) {
     if (step % 100 == 0) snprintf(o, n, "%d.%d V", v / 1000, v % 1000 / 100);
     else snprintf(o, n, "%d.%02d", v / 1000, v % 1000 / 10);
@@ -98,6 +118,7 @@ static void chartCard(lv_obj_t* parent, int k, const char* title) {
   s_ch_now[k] = label(r, "", THEME_FONT_BODY, theme::TEXT);
   lv_obj_align(s_ch_now[k], LV_ALIGN_RIGHT_MID, 0, 0);
   s_ch_obj[k] = chart::create(card, s_charts[k], 96);
+  if (k == 0) s_batt_est = label(card, "", THEME_FONT_SMALL, theme::TEXT_MUTED);
 }
 
 static void extraRow(diag::Row* rows, int& n, const char* lbl, const char* fmt, ...) {
@@ -361,7 +382,7 @@ void UITask::buildDiag() {
   s_noise_status = nullptr;
   if (s_tab == TAB_HISTORY) {
     setupCharts();
-    chartCard(s_list, 0, "Battery");
+    chartCard(s_list, 0, "Battery since boot");
     chartCard(s_list, 1, "Noise floor (dBm)");
     chartCard(s_list, 2, "SNR of the last packets (dB)");
     chartCard(s_list, 3, "Packets heard, per 5 min");
@@ -463,12 +484,20 @@ void UITask::diagSection(int sec) {
 void UITask::fillHistory() {
   using namespace diagview;
   s_hist_shown = s_hist.version;
-  chartOf(0, s_hist.batt);
+  s_batt_shown = s_batt.version;
+  battChart();
   chartOf(1, s_hist.noise);
   chartOf(2, s_hist.snr);
   chartOf(3, s_hist.traffic);
   for (int k = 0; k < 4; k++) lv_obj_invalidate(s_ch_obj[k]);
   setTextFmt(s_ch_now[0], "%.2f V", (_batt_mv ? _batt_mv : getBattMilliVolts()) / 1000.0f);
+  const auto est = s_batt.estimate(_prefs ? _prefs->low_batt_mv : 0);
+  char left[16];
+  uicore::spanText(est.minutes_left, left, sizeof(left));
+  if (est.charging) setText(s_batt_est, "On USB power: no estimate while charging");
+  else if (!est.ok) setText(s_batt_est, "Time left: after 30 min on battery");
+  else if (!est.minutes_left) setText(s_batt_est, "Time left: no drain to measure");
+  else setTextFmt(s_batt_est, "About %s left, at %d.%d %% an hour", left, est.pct_per_h_x10 / 10, est.pct_per_h_x10 % 10);
   const int nf = (int)radio_driver.getNoiseFloor();
   if (nf) setTextFmt(s_ch_now[1], "%d dBm", nf); else setText(s_ch_now[1], "-");
   if (s_hist.snr.n) setTextFmt(s_ch_now[2], "%.1f dB", s_hist.snr.at(s_hist.snr.n - 1) / 4.0f); else setText(s_ch_now[2], "-");
@@ -478,13 +507,14 @@ void UITask::fillHistory() {
 // From loop(): the history's readings (it keeps its own pace).
 void UITask::sampleHistory() {
   using namespace diagview;
-  s_hist.tick(millis(), (int)radio_driver.getNoiseFloor(), _batt_mv ? _batt_mv : getBattMilliVolts(),
-              totalRecv(), radio_driver.getLastSNR());
+  const int mv = _batt_mv ? _batt_mv : getBattMilliVolts();
+  s_hist.tick(millis(), (int)radio_driver.getNoiseFloor(), mv, totalRecv(), radio_driver.getLastSNR());
+  s_batt.tick(millis(), mv, board.isExternalPowered());
 }
 
 void UITask::refreshDiag() {
   using namespace diagview;
-  if (_screen == SCR_DIAG && s_tab == TAB_HISTORY && !_nav_overlay && s_hist.version != s_hist_shown) {
+  if (_screen == SCR_DIAG && s_tab == TAB_HISTORY && !_nav_overlay && (s_hist.version != s_hist_shown || s_batt.version != s_batt_shown)) {
     fillHistory();   // a new sample: the charts in place, the list stays where it was scrolled
     return;
   }

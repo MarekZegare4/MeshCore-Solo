@@ -9,6 +9,7 @@
 #include "TabBar.h"
 #include "../MyMesh.h"
 #include "../ui-core/SiteQr.h"
+#include "../ui-core/BattLog.h"
 #include "../ui-core/ContactQr.h"
 #include "../ui-core/Diagnostics.h"
 #include "../ui-core/Battery.h"
@@ -65,6 +66,8 @@ public:
 private:
   static constexpr const char* HIST_SPAN = Features::IS_EINK ? "8 h ago" : "32 min";
   uicore::StatusHistory<HIST_N, Features::IS_EINK ? 300000UL : 60000UL> _hist;
+  // The battery since boot, for Power's Trend and the time left (ui-core/BattLog.h).
+  uicore::BattLog<64> _batt;
 
   // A chart as a block (e-ink): `title` with the value now on its line, the
   // chart under it.
@@ -229,13 +232,29 @@ private:
     snprintf(a, sizeof(a), "%d.%02d V", mv / 1000, (mv % 1000) / 10);
     row(d, f, rsv, "Battery", a);
     row(d, f, rsv, "Source", board.isExternalPowered() ? "USB" : "Battery");
+    // The time left at the drain since unplugged (BattLog::estimate()).
+    const NodePrefs* np = the_mesh.getNodePrefs();
+    const auto est = _batt.estimate(np ? (int)np->low_batt_mv : 0);
+    if (est.charging) snprintf(a, sizeof(a), "charging");
+    else if (!est.ok) snprintf(a, sizeof(a), "after 30 min");
+    else if (!est.minutes_left) snprintf(a, sizeof(a), "no drain");
+    else { a[0] = '~'; uicore::spanText(est.minutes_left, a + 1, sizeof(a) - 1); }
+    row(d, f, rsv, "Time left", a);
+    // Trend: since boot, the whole width.
+    const int slots = _batt.mv.n;
     if (Features::IS_EINK) {
-      chartBlock(d, f, rsv, "Trend", nullptr, _hist.batt, 20, false, HIST_SPAN, info::axisVolts);
+      char span[20] = "since boot";
+      if (_batt.spanMinutes()) { uicore::spanText(_batt.spanMinutes(), span, sizeof(span) - 4); strcat(span, " ago"); }
+      if (f.place(d.lineStep() + info::chartH(d, 3 * d.getLineHeight()) + 2)) {
+        info::valueRow(d, f.at, "Trend", nullptr, false, rsv, 1);
+        info::chart(d, 1, f.at + d.lineStep(), d.width() - rsv - 3, 3 * d.getLineHeight(), _batt.mv, 20, false,
+                    span, "now", info::axisVolts, slots);
+      }
     } else if (f.place(d.lineStep())) {
       d.setCursor(1, f.at);
       d.print("Trend");
       const int x0 = 1 + d.getTextWidth("Trend") + 6;
-      info::spark(d, x0, f.at, d.width() - rsv - 2 - x0, d.getLineHeight() - 1, _hist.batt, 20);
+      info::spark(d, x0, f.at, d.width() - rsv - 2 - x0, d.getLineHeight() - 1, _batt.mv, 20, slots);
     }
 
     // Sensors: every reading but the battery (above) and the position (GPS).
@@ -417,6 +436,7 @@ public:
   // Called from the UI loop on every pass; the history keeps its own pace.
   void sample() {
     _hist.tick(millis(), (int)radio_driver.getNoiseFloor(), battMv(), totalRx(), radio_driver.getLastSNR());
+    _batt.tick(millis(), battMv(), board.isExternalPowered());
   }
 
   const info::History<HIST_N>& battHistory() const { return _hist.batt; }

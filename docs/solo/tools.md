@@ -291,9 +291,14 @@ Right** between them, **Up / Down** scrolls):
 | **Radio** | Frequency, SF / BW / CR, TX power, the noise floor over the last half hour, the last packet's signal |
 | **GPS** | On / off (**Enter** switches it), fix, satellites, position, altitude, speed, precision, time to first fix |
 | **Sky** | The satellites on a sky plot, or each one's signal as bars (**Enter** swaps them); Wio Tracker L1 |
-| **Power** | Battery level, voltage, source and trend, then the readings of any sensors |
+| **Power** | Battery level, voltage, source, the time left and the trend since the device was switched on, then the readings of any sensors |
 | **Mesh** | Packets received and sent with a traffic line, forwarded, nodes heard, contacts; **hold Enter** resets the counters |
 | **System** | Uptime, firmware, device, memory, the send queue, errors, and a sample of every script the font covers; **Enter** shows your contact as a QR code, which the phone app scans to add you, and **Enter** again a QR code that opens this manual; any other key closes it |
+
+**Time left** is worked out from how fast the battery has gone down on
+battery power since the device was last unplugged (the last six hours of
+it at most), with your battery curve. It shows after half an hour on
+battery; on USB it says **charging**.
 
 **GPS pwr** in Settings › System turns the GPS off between fixes to save
 battery; anything that needs your position (the trail, live share, the
@@ -307,7 +312,8 @@ the last one may be old. SOS doesn't ask: it turns the GPS on itself.
 > [!NOTE]
 > **Wio Tracker L2:** the Diagnostics app, with a **Noise** tab that
 > measures the noise floor over time and history charts you can touch for the
-> value at that moment, and the **GPS** app, on four tabs: **Sky** (a plot
+> value at that moment (the battery's goes back to when the device was
+> switched on, with the time left under it), and the **GPS** app, on four tabs: **Sky** (a plot
 > of the satellites and the fix), **Signal** (a bar per satellite with its
 > strength, and the constellations), **Details** (position, precision,
 > time to first fix and what the receiver reports) and **Options** (GPS power

@@ -260,9 +260,11 @@ using History = uicore::History<N>;
 
 // A history line in a w x h box: a dotted baseline, the samples scaled
 // between their own min and max (at least `min_span` apart, so a flat
-// reading stays flat), newest at the right edge.
+// reading stays flat), newest at the right edge. `slots`: how many samples
+// the width holds (0: N); hs.n spreads a history over all of it.
 template <int N>
-inline void spark(DisplayDriver& d, int x, int y, int w, int h, const History<N>& hs, int min_span = 4) {
+inline void spark(DisplayDriver& d, int x, int y, int w, int h, const History<N>& hs, int min_span = 4, int slots = 0) {
+  if (slots < 2) slots = N;
   const int s = miniIconScale(d);
   for (int i = 0; i < w; i += 3 * s) d.fillRect(x + i, y + h - s, s, s);
   if (hs.n < 2) return;
@@ -271,7 +273,7 @@ inline void spark(DisplayDriver& d, int x, int y, int w, int h, const History<N>
   if (hi - lo < min_span) { int mid = (hi + lo) / 2; lo = mid - min_span / 2; hi = lo + min_span; }
   int px = -1, py = 0;
   for (int i = 0; i < hs.n; i++) {
-    const int cx = x + w - 1 - (hs.n - 1 - i) * (w - 1) / (N - 1);
+    const int cx = x + w - 1 - (hs.n - 1 - i) * (w - 1) / (slots - 1);
     const int cy = y + h - 1 - (hs.at(i) - lo) * (h - 1) / (hi - lo);
     if (px >= 0) {   // a step: across, then up or down
       d.fillRect(px, py, cx - px + 1, s);
@@ -310,7 +312,8 @@ inline int chartH(DisplayDriver& d, int frame_h) { return frame_h + d.getLineHei
 typedef void (*ChartAxisFmt)(char* buf, int n, int v);
 template <int N>
 inline void chart(DisplayDriver& d, int x, int y, int w, int h, const History<N>& hs, int min_span,
-                  bool bars, const char* left, const char* right, ChartAxisFmt axis = nullptr) {
+                  bool bars, const char* left, const char* right, ChartAxisFmt axis = nullptr, int slots = 0) {
+  if (slots < 2) slots = N;   // as spark()
   const bool empty = hs.n < (bars ? 1 : 2);
   int lo = 0, hi = 0;
   if (!empty) {
@@ -341,10 +344,10 @@ inline void chart(DisplayDriver& d, int x, int y, int w, int h, const History<N>
     d.setCursor(tx, ty);
     d.print("no data");
   } else {
-    const int bw = iw / N > 1 ? iw / N : 1;
+    const int bw = iw / slots > 1 ? iw / slots : 1;
     int px = -1, py = 0;
     for (int i = 0; i < hs.n; i++) {
-      const int cx = ix + iw - 1 - (hs.n - 1 - i) * (iw - 1) / (N - 1);
+      const int cx = ix + iw - 1 - (hs.n - 1 - i) * (iw - 1) / (slots - 1);
       const int cy = iy + ih - 1 - (hs.at(i) - lo) * (ih - 1) / (hi - lo);
       if (bars) {
         if (hs.at(i) > lo) d.fillRect(cx - bw + 1, cy, bw, iy + ih - cy);
