@@ -244,6 +244,7 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
   gpio_screen        = new GpioScreen(this, node_prefs);
 #endif
   startCardKBCapture();   // after every screen: an optional task must not starve one
+  startSoundTask();
   applyBrightness();
   applyRotation();
   applyFullRefreshInterval();
@@ -387,7 +388,7 @@ void UITask::onSosRunning(bool running) {
 #endif
 }
 
-void UITask::tickSos() {
+void UITask::sosSounds() {
   SosEngine& s = _core->sos;
   if (s.beepDue(millis())) playMelody(soundctl::MEL_SOS);
   if (s.counting()) {
@@ -397,9 +398,66 @@ void UITask::tickSos() {
       playMelody(soundctl::MEL_SOS_TICK);
       _next_refresh = 0;
     }
-  } else if (sosViewOpen() && (int32_t)(millis() - _sos_view_until) >= 0) {
-    closeSosView();
   }
+}
+
+void UITask::tickSos() {
+  sosSounds();
+  if (!_core->sos.counting() && sosViewOpen() && (int32_t)(millis() - _sos_view_until) >= 0) closeSosView();
+}
+
+void UITask::busyPump() {
+#ifdef UI_SOUND_TASK
+  if (_sound_mutex) return;   // the sound task has the whole frame
+#endif
+  if (!_core) return;
+  sosSounds();
+#ifdef PIN_BUZZER
+  if (buzzer.isPlaying()) buzzer.loop();
+#endif
+}
+
+#ifdef UI_SOUND_TASK
+void UITask::soundTask(void* self) {
+  UITask* t = (UITask*)self;
+  SemaphoreHandle_t m = (SemaphoreHandle_t)t->_sound_mutex;
+  for (;;) {
+    if (t->_sound_bg_active && xSemaphoreTake(m, portMAX_DELAY) == pdTRUE) {
+      if (t->_sound_bg_active) {   // re-check: the frame may have just ended
+        t->sosSounds();
+        if (t->buzzer.isPlaying()) t->buzzer.loop();
+      }
+      xSemaphoreGive(m);
+    }
+    vTaskDelay(ms2tick(5));
+  }
+}
+#endif
+
+// Like startCardKBCapture(): last in begin(), so a short heap costs the task
+// (the buzzer then keeps time between frames only), never a screen.
+void UITask::startSoundTask() {
+#ifdef UI_SOUND_TASK
+  SemaphoreHandle_t m = xSemaphoreCreateMutex();
+  if (!m) return;
+  _sound_mutex = (void*)m;   // before the task: it runs at once, above the loop
+  if (xTaskCreate(&UITask::soundTask, "uisound", 384, this, TASK_PRIO_NORMAL, NULL) == pdPASS) return;
+  _sound_mutex = nullptr;
+  vSemaphoreDelete(m);
+#endif
+}
+
+void UITask::setSoundBackground(bool on) {
+#ifdef UI_SOUND_TASK
+  if (!_sound_mutex) return;
+  if (on) { _sound_bg_active = true; return; }
+  SemaphoreHandle_t m = (SemaphoreHandle_t)_sound_mutex;
+  xSemaphoreTake(m, portMAX_DELAY);   // a tick under way finishes first
+  _sound_bg_active = false;
+  xSemaphoreGive(m);
+#else
+  (void)on;
+#endif
 }
 
 void UITask::drainCoreEvents() {
@@ -1696,6 +1754,7 @@ void UITask::loop() {
 
   if (_display != NULL && _display->isOn()) {
     setCardKBBackground(true);   // keep sampling the keyboard while the frame blocks
+    setSoundBackground(true);    // and keep the buzzer's time
     // Lock-screen password prompt
     if (_locked && _unlock_kb && (int32_t)(millis() - _lock_wake_until) >= 0) {
       cancelUnlockPrompt(); // Cancel unlock attempt on idle
@@ -1775,6 +1834,7 @@ void UITask::loop() {
       PERF_T2();
     }
     setCardKBBackground(false);
+    setSoundBackground(false);
 #if AUTO_OFF_MILLIS > 0
 #ifdef KEEP_DISPLAY_ON_USB
     // Opt-in: refresh the auto-off deadline while externally powered, so the

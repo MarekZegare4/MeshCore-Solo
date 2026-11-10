@@ -20,8 +20,10 @@ static bool g_sim_ready = false;
 // wired in setup() below) so packets landing during a refresh are pulled off
 // the radio as they arrive, and a TX that finishes mid-refresh goes straight
 // back to listening -- see RadioLibWrapper::pumpRecvDuringBlockingWait().
+static void pumpUiDuringDisplayBusyWait();
 static void pumpRadioDuringDisplayBusyWait(void*) {
   radio_driver.pumpRecvDuringBlockingWait();
+  pumpUiDuringDisplayBusyWait();   // and the buzzer: a tick a second keeps its time through a refresh
 }
 #endif
 
@@ -153,6 +155,9 @@ MultiSerialInterface interface_manager;
 #ifdef DISPLAY_CLASS
   #include "UITask.h"
   UITask ui_task(&board, &interface_manager);
+  #ifdef DISPLAY_HAS_BUSY_PUMP
+    static void pumpUiDuringDisplayBusyWait() { ui_task.busyPump(); }
+  #endif
 #endif
 
 StdRNG fast_rng;

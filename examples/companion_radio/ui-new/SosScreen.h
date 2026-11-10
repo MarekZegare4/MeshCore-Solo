@@ -17,6 +17,8 @@ class SosScreen : public UIScreen {
   int  _sel    = 0;
   int  _scroll = 0;
   int  _kb_row = -1;        // >=0: the keyboard is open on that row
+  int  _blink_left = -1;    // e-ink: the countdown second last drawn...
+  bool _blink_lit = false;  // ...and whether it was the negative
 
   bool    _ch_list = false; // the Channels list instead of the rows
   int     _ch_sel = 0, _ch_scroll = 0, _ch_count = 0;
@@ -238,10 +240,13 @@ public:
 
     if (s.counting()) {
       // The screen blinks, to be seen as well as heard (one started in a
-      // pocket), faster near the end. E-ink once a second: it redraws as often.
+      // pocket), faster near the end. E-ink turns over with each new second
+      // drawn, not by the clock: a large panel takes longer than a second to
+      // refresh, and timed, the frame after came on the same side now and then.
       const int left = s.secsLeft(now);
       const uint32_t half = eink ? 1000 : left > 10 ? 500 : left > 5 ? 250 : 125;
-      const bool lit = (now / half) & 1;
+      if (eink && left != _blink_left) { _blink_left = left; _blink_lit = !_blink_lit; }
+      const bool lit = eink ? _blink_lit : (now / half) & 1;
       // An OLED inverts in its controller: the same frame each time, nothing
       // sent but the command (a drawn negative is the whole frame, and tore).
       if (lit && !d.invertFrame()) {

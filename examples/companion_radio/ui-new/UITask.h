@@ -155,6 +155,7 @@ class UITask : public UITaskBase, public UiCoreHost {
   void     sosKey(char c);
   void     renderSosBadge();
   void     tickSos();
+  void     sosSounds();   // the countdown's tick, the beep: tickSos() and busyPump()
   unsigned long _sos_view_until = 0;   // 0 = closed
   int      _sos_left = 0;              // countdown second last beeped
   unsigned long _back_held_at = 0;     // 0 = not held, or already acted on
@@ -248,6 +249,19 @@ private:
 #endif
 #endif
   void pollCardKB();
+#if defined(NRF52_PLATFORM) && defined(EINK_DISPLAY_MODEL) && defined(PIN_BUZZER)
+  // The buzzer through an e-ink frame: drawing it, sending it byte by byte and
+  // the refresh hold the loop up for most of a second on a large panel, and the
+  // SOS countdown's ticks came when the frame let them. A task above the loop
+  // plays them meanwhile, as cardkbTask reads the keyboard; the mutex keeps it
+  // and the loop off the buzzer at the same time.
+  #define UI_SOUND_TASK 1
+  void* _sound_mutex = nullptr;           // SemaphoreHandle_t
+  volatile bool _sound_bg_active = false;
+  static void soundTask(void* self);
+#endif
+  void startSoundTask();
+  void setSoundBackground(bool on);
 #if defined(SIMPSON)
   void pollSimpsonKeypad();
   void handleSimpsonKeypadKey(uint8_t key);
@@ -299,6 +313,10 @@ private:
   void renderMsgBadge();
 
 public:
+  // From the e-ink panel's busy wait (main.cpp): a refresh holds the loop up
+  // for up to a second, and the countdown's ticks and the buzzer's notes kept
+  // time only between them.
+  void busyPump();
   // Lock now, from the Home Power panel (unlocking stays the gesture / PIN prompt).
   void lockScreen() { if (!_locked) toggleLock(); }
   // A new screen PIN (see ui-core/ScreenLock.h); "" clears it. The caller saves the prefs.
