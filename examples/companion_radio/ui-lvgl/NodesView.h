@@ -229,6 +229,7 @@ static void onRowArrowDraw(lv_event_t* e) {
 
 void UITask::refreshNearbyList() {
   if (!_nearby_list) return;
+  _nearby->clearRankOrigin();   // the map's, if it was the last to look
   _nearby->refreshModel();
   uint32_t sig = nearbySignature();
   int n = _nearby->count();

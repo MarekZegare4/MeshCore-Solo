@@ -1073,6 +1073,13 @@ void UITask::mapLoop() {
       if (cx != _map_cx || cy != _map_cy) { _map_cx = cx; _map_cy = cy; layoutMap(); }
     }
   }
+  {  // a pan come to rest: the nodes around where it now looks, without the 3 s wait
+    static uint32_t s_pan_marked = 0;
+    if (mapview::s_last_pan_ms != s_pan_marked && millis() - mapview::s_last_pan_ms > 300) {
+      s_pan_marked = mapview::s_last_pan_ms;
+      _next_map_marks_ms = millis();
+    }
+  }
   if ((int32_t)(millis() - _next_map_marks_ms) >= 0) {
     _next_map_marks_ms = millis() + 3000;
     rebuildMapMarkers();
@@ -1150,6 +1157,12 @@ void UITask::rebuildMapMarkers() {
 }
 
 void UITask::rebuildNodeMarkers() {
+  {  // more nodes than markers: the ones around where the map looks, not around you
+    const double n = (double)(1 << _map_z);
+    const double lon = _map_cx / n * 360.0 - 180.0;
+    const double lat = atan(sinh(M_PI * (1.0 - 2.0 * _map_cy / n))) * 180.0 / M_PI;
+    _nearby->setRankOrigin((int32_t)lround(lat * 1e6), (int32_t)lround(lon * 1e6));
+  }
   _nearby->refreshStored();
   for (int i = 0; i < _nearby->count() && mapview::s_mark_count < mapview::MAX_MARKS; i++) {
     const NearbyModel::Entry& e = _nearby->at(i);

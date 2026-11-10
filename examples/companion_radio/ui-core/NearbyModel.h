@@ -33,6 +33,7 @@ public:
     // stored-source fields
     int32_t  lat_e6, lon_e6;
     float    dist_km;        // -1 = unknown (no own fix or no node position)
+    float    rank_km;        // from the rank origin (setRankOrigin), else dist_km: who makes a full list
     uint32_t lastmod;
     int      contact_idx;    // raw contact-table index, -1 = not a contact
     // scan-source fields
@@ -80,6 +81,10 @@ public:
   void setSource(Source s)            { _source = s; }
   void setFilter(uint8_t f)           { _filter = f < F_COUNT ? f : F_ALL; }
   void setSortMode(uint8_t s)         { _sort = s; }
+  // A full list keeps the rows nearest this point instead (the L2's map: the
+  // middle of the view, wherever it was moved to); cleared, it's the list's order.
+  void setRankOrigin(int32_t lat_e6, int32_t lon_e6) { _rank_set = true; _rank_lat = lat_e6; _rank_lon = lon_e6; }
+  void clearRankOrigin()              { _rank_set = false; }
 
   bool typeMatchesFilter(uint8_t type, uint8_t flags, bool have_flags) const {
     switch (_filter) {
@@ -100,7 +105,11 @@ public:
     _own_gps = _core && _core->course.currentLocation(_own_lat, _own_lon);
 
     int nc = the_mesh.getNumContacts();
-    for (int i = 0; i < nc && _count < MAX_NEARBY; i++) {
+    // More contacts than rows: the rows go to the best by the list's own order
+    // (favourites, then the nearest or the latest), not the first in the table.
+    // Taking the first, a trip to another town showed none of its nodes: the
+    // table's head was the contacts made at home.
+    for (int i = 0; i < nc; i++) {
       ContactInfo ci;
       // getContactByIdx() indexes the RAW contact table, whose first
       // MAX_ANON_CONTACTS slots are reserved for anon-request bookkeeping
@@ -112,7 +121,15 @@ public:
       if (!the_mesh.getContactByIdx(i + MAX_ANON_CONTACTS, ci)) continue;
       if (!typeMatchesFilter(ci.type, ci.flags, true)) continue;
 
-      Entry& e = _entries[_count++];
+      Entry c;
+      c.fav = (ci.flags & 0x01) != 0;
+      c.lastmod = ci.lastmod;
+      c.dist_km = (_own_gps && (ci.gps_lat != 0 || ci.gps_lon != 0))
+                    ? geo::haversineKm(_own_lat, _own_lon, ci.gps_lat, ci.gps_lon) : -1.0f;
+      c.rank_km = rankKm(ci.gps_lat, ci.gps_lon, c.dist_km);
+      Entry* slot = slotFor(c, false);
+      if (!slot) continue;
+      Entry& e = *slot;
       strncpy(e.name, ci.name, sizeof(e.name) - 1);
       e.name[sizeof(e.name) - 1] = '\0';
       memcpy(e.pub_key, ci.id.pub_key, PUB_KEY_SIZE);
@@ -124,6 +141,7 @@ public:
       e.dist_km = (_own_gps && remote_gps)
                     ? geo::haversineKm(_own_lat, _own_lon, ci.gps_lat, ci.gps_lon)
                     : -1.0f;
+      e.rank_km = c.rank_km;
       e.type        = ci.type;
       e.fav         = (ci.flags & 0x01) != 0;
       e.contact_idx = i + MAX_ANON_CONTACTS;   // raw index -- other lookups re-key off this directly
@@ -202,6 +220,8 @@ protected:
   Source  _source = SRC_STORED;
   uint8_t _filter = F_ALL;
   uint8_t _sort = SORT_DIST;
+  bool    _rank_set = false;
+  int32_t _rank_lat = 0, _rank_lon = 0;
 
   // Overlay live [LOC] shares onto the stored list: refresh a matching contact
   // with the fresher shared position, and append senders who aren't contacts so
@@ -230,14 +250,18 @@ protected:
         e.lat_e6  = s.lat_1e6;
         e.lon_e6  = s.lon_1e6;
         e.dist_km = _own_gps ? geo::haversineKm(_own_lat, _own_lon, s.lat_1e6, s.lon_1e6) : -1.0f;
+        e.rank_km = rankKm(s.lat_1e6, s.lon_1e6, e.dist_km);
         if (s.ts > e.lastmod) e.lastmod = s.ts;
         e.is_live       = true;
         e.live_verified = s.verified;
         e.is_sos        = s.sos;
-      } else if (_count < MAX_NEARBY && typeMatchesFilter(ADV_TYPE_CHAT, 0, false)) {
+      } else if (typeMatchesFilter(ADV_TYPE_CHAT, 0, false)) {
         // A sender we don't have as a contact: treat it as a companion (the only
         // node type that shares position), so the type filter still applies.
-        Entry& e = _entries[_count++];
+        // Always listed: a full list gives up its last row that isn't live.
+        Entry* slot = slotFor(Entry(), true);
+        if (!slot) continue;
+        Entry& e = *slot;
         memset(&e, 0, sizeof(e));
         strncpy(e.name, s.name, sizeof(e.name) - 1);
         e.name[sizeof(e.name) - 1] = '\0';
@@ -252,6 +276,7 @@ protected:
         e.lat_e6        = s.lat_1e6;
         e.lon_e6        = s.lon_1e6;
         e.dist_km       = _own_gps ? geo::haversineKm(_own_lat, _own_lon, s.lat_1e6, s.lon_1e6) : -1.0f;
+        e.rank_km       = rankKm(s.lat_1e6, s.lon_1e6, e.dist_km);
         e.lastmod       = s.ts;
         e.contact_idx   = -1;
         e.is_known      = false;
@@ -269,7 +294,7 @@ protected:
     if (_filter != F_ALL) return;
     static AdvertPath heard[8];   // scratch -- refreshStored isn't reentrant
     int n = the_mesh.getRecentlyHeard(heard, 8);
-    for (int i = 0; i < n && _count < MAX_NEARBY; i++) {
+    for (int i = 0; i < n && _count < MAX_NEARBY; i++) {   // only into room left: no position to rank on
       AdvertPath& a = heard[i];
       if (a.name[0] == 0) continue;
       bool dup = false;
@@ -288,6 +313,7 @@ protected:
       e.has_prefix  = true;
       memcpy(e.pub_key, a.pubkey_prefix, sizeof(a.pubkey_prefix));
       e.dist_km     = -1.0f;
+      e.rank_km     = -1.0f;
       e.lastmod     = a.recv_timestamp;
       e.contact_idx = -1;
       e.is_known    = false;
@@ -296,26 +322,54 @@ protected:
     }
   }
 
+  // a before b in the list: favourites first (Settings), then the most recent
+  // or the nearest; an unknown time or distance goes last.
+  bool ranksAbove(const Entry& a, const Entry& b, uint32_t now_ts, bool fav_first) const {
+    if (fav_first && a.fav != b.fav) return a.fav;
+    if (_sort == SORT_TIME) {
+      // lastmod=0 or lastmod>now (RTC not synced) → "unknown" → sort to bottom.
+      uint32_t ta = (a.lastmod > 0 && now_ts >= a.lastmod) ? a.lastmod : 0;
+      uint32_t tb = (b.lastmod > 0 && now_ts >= b.lastmod) ? b.lastmod : 0;
+      return ta > 0 && (tb == 0 || ta > tb);   // descending — most recent first
+    }
+    return a.dist_km >= 0.0f && (b.dist_km < 0.0f || a.dist_km < b.dist_km);   // ascending — closest first
+  }
+
+  // Kept before b when the list is full: with a rank origin, the nearer it
+  // (a map shows what's around where it looks); else the list's own order.
+  bool keepsAbove(const Entry& a, const Entry& b, uint32_t now_ts, bool fav_first) const {
+    if (_rank_set) return a.rank_km >= 0.0f && (b.rank_km < 0.0f || a.rank_km < b.rank_km);
+    return ranksAbove(a, b, now_ts, fav_first);
+  }
+  float rankKm(int32_t lat, int32_t lon, float dist_km) const {
+    if (!_rank_set) return dist_km;
+    return (lat != 0 || lon != 0) ? geo::haversineKm(_rank_lat, _rank_lon, lat, lon) : -1.0f;
+  }
+
+  // Where a new row goes: the next one, or with the list full, the last-kept
+  // row (never a live one) if `c` keeps above it -- or `live`, whatever it is.
+  // nullptr: it doesn't make the list.
+  Entry* slotFor(const Entry& c, bool live) {
+    if (_count < MAX_NEARBY) return &_entries[_count++];
+    uint32_t now_ts = rtc_clock.getCurrentTime();
+    const bool fav_first = (!_prefs || _prefs->fav_sort);
+    int worst = -1;
+    for (int j = 0; j < _count; j++) {
+      if (_entries[j].is_live) continue;
+      if (worst < 0 || keepsAbove(_entries[worst], _entries[j], now_ts, fav_first)) worst = j;
+    }
+    if (worst < 0) return nullptr;
+    if (!live && !keepsAbove(c, _entries[worst], now_ts, fav_first)) return nullptr;
+    return &_entries[worst];
+  }
+
   void sortStored() {
     uint32_t now_ts = rtc_clock.getCurrentTime();
     const bool fav_first = (!_prefs || _prefs->fav_sort);
     for (int i = 0; i < _count - 1; i++) {
       int best = i;
-      for (int j = i + 1; j < _count; j++) {
-        if (fav_first && _entries[j].fav != _entries[best].fav) {
-          if (_entries[j].fav) best = j;   // favourites outrank the time/distance key
-          continue;
-        }
-        if (_sort == SORT_TIME) {
-          // lastmod=0 or lastmod>now (RTC not synced) → "unknown" → sort to bottom.
-          uint32_t tj = (_entries[j].lastmod > 0 && now_ts >= _entries[j].lastmod) ? _entries[j].lastmod : 0;
-          uint32_t tb = (_entries[best].lastmod > 0 && now_ts >= _entries[best].lastmod) ? _entries[best].lastmod : 0;
-          if (tj > 0 && (tb == 0 || tj > tb)) best = j;  // descending — most recent first
-        } else {
-          float dj = _entries[j].dist_km, db = _entries[best].dist_km;
-          if (dj >= 0.0f && (db < 0.0f || dj < db)) best = j;  // ascending — closest first
-        }
-      }
+      for (int j = i + 1; j < _count; j++)
+        if (ranksAbove(_entries[j], _entries[best], now_ts, fav_first)) best = j;
       if (best != i) { Entry tmp = _entries[i]; _entries[i] = _entries[best]; _entries[best] = tmp; }
     }
   }
