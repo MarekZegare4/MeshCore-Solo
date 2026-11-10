@@ -81,7 +81,8 @@ public:
   // `minutes` for a slow panel, where a line ticking every second is a refresh a second.
   void nextLine(char* out, int n, uint32_t now, bool minutes = false) const {
     const int next = nextSecs(now);
-    if (next < 0)       snprintf(out, n, "Advert every %u min", (unsigned)(beaconMs() / 60000UL));
+    if (next < 0 && !advertMode()) snprintf(out, n, "No more sends");
+    else if (next < 0)  snprintf(out, n, "Advert every %u min", (unsigned)(beaconMs() / 60000UL));
     else if (next < 60) snprintf(out, n, minutes ? "Next in <1 min" : "Next in %d s", next);
     else                snprintf(out, n, "Next in %d min", (next + 59) / 60);
   }
@@ -113,7 +114,11 @@ public:
   // True when the beacon is due: from the first send to the end, past the
   // sends and an ACK too, the messages for people, it for the map of whoever
   // is in range. The caller adverts and calls markBeacon(); a send does too.
-  bool beaconDue(uint32_t now) const { return _state == ACTIVE && _attempts && now - _beacon_at >= beaconMs(); }
+  bool beaconDue(uint32_t now) const {
+    return advertMode() && _state == ACTIVE && _attempts && now - _beacon_at >= beaconMs();
+  }
+  // NodePrefs::sos_advert: off, zero-hop (whoever is in range) or flood (the mesh).
+  uint8_t advertMode() const { return _prefs ? _prefs->sos_advert : NodePrefs::SOS_ADVERT_ZERO_HOP; }
   void markBeacon(uint32_t now) { _beacon_at = now; }
   void markSent(uint32_t now, bool with_fix, bool ok) {
     _attempts++;

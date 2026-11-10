@@ -49,11 +49,12 @@ and without opening a menu. Set it up before you need it:
 | Row | Does |
 | --- | ---- |
 | **Hold Back** | Lets a hold of **Back** start it. Off by default |
-| **Countdown** | 5, 10 or 15 seconds to cancel in |
+| **Countdown** | 5, 10, 15 or 30 seconds to cancel in; 30 by default, time to stop one started in a pocket |
 | **Channels** | Which channels it goes to; **Enter** switches each one |
 | **Contact 1-3** | Up to three direct contacts. **Enter** picks one, **Left / Right** empties the row |
 | **Message** | What follows `[SOS]`, with placeholders, see below |
 | **Repeat** | How often it's sent again: every 1, 2, 5 or 10 minutes, or **Off** for once |
+| **Advert** | The beacon, see below: **0-hop** (default), **Flood** or **Off** |
 | **Beep** | Off, or every 30 seconds, 1 or 5 minutes: `... --- ...` on the buzzer at full volume, so someone nearby can find you if you can't answer |
 | **ACK word** | The word that means "received", `ACK` by default |
 | **Send SOS** | Starts it from here, on devices without a Back button too |
@@ -62,8 +63,9 @@ A change made while an SOS runs counts at once: a shorter **Repeat** or
 **Beep** from the last send or beep, and Repeat switched back on sends again.
 
 **Starting:** hold **Back** for 3 seconds. It works with the screen off and on a
-locked device, and needs no PIN. The device beeps every second and counts down,
-even with the buzzer off. **Any key** cancels.
+locked device, and needs no PIN. The device beeps every second at full volume,
+even with the buzzer off, and the screen blinks, faster as it nears the end (on
+e-ink once a second). **Any key** cancels.
 
 **The message** starts with `[SOS]`, like the other special messages (`[LOC]`,
 `[WAY]`), so a receiver knows it for an SOS whatever follows. What follows is
@@ -91,13 +93,17 @@ Without a fix `{loc}` gives the last position from the past hour, with its age.
 An older one could be far from where you are, so then it says `no GPS`. Either
 way one more goes as soon as the GPS gets a fix.
 
-**The beacon:** each send also goes out as a zero-hop advert with the position
-at full precision, whatever **Privacy** says for adverts, and so does one every
+**The beacon:** each send also goes out as an advert with the position at full
+precision, whatever **Privacy** says for adverts, and so does one every
 **Repeat** gap (5 minutes with Repeat off) until you end the SOS, after an
 answer too. The messages are for people and stop once someone answers; the
 beacon is for the map of whoever comes near: anyone in direct range sees you
 in any MeshCore app, even if they aren't on your list. Without a position it
 goes without one, and still tells someone nearby that the node is there.
+**Advert** sets how far it goes: **0-hop** to whoever is in range, **Flood**
+across the mesh (every repeater passes each one on, so it costs the network),
+or **Off** for none. While an SOS runs the automatic advert rests, as its
+position follows Privacy and would move you on others' maps.
 
 **Receiving one:** a banner names the sender, also when there's no position.
 A position shows on the map and in Nearby as `SOS name`, even with **Track loc**
@@ -117,8 +123,9 @@ the SOS turned on goes back off then. The repeater (and WiFi on the L2)
 rests until the SOS ends, so the message goes out on your own network. During an
 SOS the bot refuses `!gps`.
 
-**Back** hides the status and the SOS carries on, with `SOS` in the top line;
-holding **Back** again, or **Send SOS**, brings it back. **Hold Enter** ends it.
+**Back** hides the status and the SOS carries on, with `SOS` in the top line
+and a reminder of the way back: holding **Back** again, or **Send SOS**, brings
+it back. **Hold Enter** ends it.
 A restart ends it too, and doesn't put back what it rested: WiFi stays off, and
 so does the repeater if a setting was saved in the meantime.
 
@@ -161,7 +168,8 @@ over everything, with the screen off or locked too and without the PIN. **Slide*
 the knob to the end to start: a tap or a short slide does nothing, so a button
 pressed in a pocket can't send one. **Send SOS** in the app opens the same slider.
 
-**Cancel** or either button ends the countdown. While it runs, **Hide** puts the
+**Cancel** or either button ends the countdown, while the view pulses red,
+faster near the end. While it runs, **Hide** puts the
 view away, and the status bar shows a red `SOS` and a title bar's clock turns
 red; hold the top button again, or tap **Send SOS** in the app, to come back.
 **Slide to stop** ends it. A received SOS shows as a short message at the bottom

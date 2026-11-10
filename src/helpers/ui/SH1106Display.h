@@ -28,6 +28,7 @@ class SH1106Display : public DisplayDriver
 {
   SH1106Paged display;
   bool _isOn;
+  bool _inv_want = false, _inv_shown = false;   // invertFrame(): this frame's, and the panel's
   uint8_t _color;
   uint8_t _contrast;
   uint8_t _precharge;
@@ -58,6 +59,7 @@ public:
   bool begin();
 
   bool isOn() override { return _isOn; }
+  bool invertFrame() override { _inv_want = true; return true; }
   void turnOn() override;
   void turnOff() override;
   void clear() override;

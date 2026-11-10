@@ -164,6 +164,7 @@ public:
     if (_sos_gps_on) setGpsEnabled(true, false);
     _sos_repeat_was = _prefs && _prefs->client_repeat;
     if (_sos_repeat_was) rptctl::setEnabled(_prefs, false);
+    the_mesh.holdAutoAdvert(true);   // the beacon is the advert now, at full precision
     sos.start(millis());
     _host->onSosRunning(true);
   }
@@ -174,6 +175,7 @@ public:
     _sos_gps_on = false;
     if (_sos_repeat_was) rptctl::setEnabled(_prefs, true);
     _sos_repeat_was = false;
+    the_mesh.holdAutoAdvert(false);
     _host->onSosRunning(false);
   }
 
@@ -450,11 +452,13 @@ private:
     return SosEngine::NOWHERE;
   }
 
-  // The beacon: a zero-hop advert, so the mesh isn't flooded. With the
-  // position anyone in range sees it on their map, in any app; without one it
-  // still says the node is there, for whoever homes in on its signal.
+  // The beacon: an advert, zero-hop by default (whoever is in range, the mesh
+  // not flooded), or flood, or none (SOS > Advert). With the position anyone
+  // who hears it sees it on their map, in any app; without one it still says
+  // the node is there, for whoever homes in on its signal.
   void sosBeacon(SosEngine::Where where, int32_t lat, int32_t lon) {
-    the_mesh.advertSos(where != SosEngine::NOWHERE, lat, lon);
+    if (sos.advertMode() == NodePrefs::SOS_ADVERT_OFF) return;
+    the_mesh.advertSos(where != SosEngine::NOWHERE, lat, lon, sos.advertMode() == NodePrefs::SOS_ADVERT_FLOOD);
     sos.markBeacon(millis());
   }
 

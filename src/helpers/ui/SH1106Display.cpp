@@ -71,6 +71,7 @@ void SH1106Display::clear()
 
 void SH1106Display::startFrame(ColorVal bkg)
 {
+  _inv_want = false;
   display.clearDisplay(); // TODO: apply 'bkg'
   _color = SH110X_WHITE;
   display.setTextColor(_color);
@@ -209,6 +210,10 @@ void SH1106Paged::sendBlock(uint8_t page, uint8_t col, uint8_t len) {
 
 void SH1106Display::endFrame()
 {
+  if (_inv_want != _inv_shown) {   // ahead of the frame-skip: an inversion alone sends no frame
+    _inv_shown = _inv_want;
+    display.oled_command(_inv_shown ? SH110X_INVERTDISPLAY : SH110X_NORMALDISPLAY);
+  }
   const uint8_t* buf = display.getBuffer();
   const uint8_t per_page = 128 / BLOCK_W;
   bool any = false;

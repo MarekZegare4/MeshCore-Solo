@@ -22,9 +22,9 @@ class SosScreen : public UIScreen {
   int     _ch_sel = 0, _ch_scroll = 0, _ch_count = 0;
   uint8_t _ch_idx[MAX_GROUP_CHANNELS];
 
-  enum Kind : uint8_t { K_HOLD, K_COUNTDOWN, K_REPEAT, K_BEEP, K_CHANNELS, K_DM1, K_DM2, K_DM3, K_ACK, K_MSG, K_START };
+  enum Kind : uint8_t { K_HOLD, K_COUNTDOWN, K_REPEAT, K_ADVERT, K_BEEP, K_CHANNELS, K_DM1, K_DM2, K_DM3, K_ACK, K_MSG, K_START };
   struct Row { Kind kind; const char* label; };
-  static const int ROW_COUNT = 11;
+  static const int ROW_COUNT = 12;
   // The L2's order: how it starts, who it goes to and what it says, then
   // what happens while it runs.
   static Row rows(int i) {
@@ -37,6 +37,7 @@ class SosScreen : public UIScreen {
       { K_DM3,       "Contact 3" },
       { K_MSG,       "Message" },
       { K_REPEAT,    "Repeat" },
+      { K_ADVERT,    "Advert" },
       { K_BEEP,      "Beep" },
       { K_ACK,       "ACK word" },
       { K_START,     "Send SOS" },
@@ -58,6 +59,7 @@ class SosScreen : public UIScreen {
         else   snprintf(buf, n, "Off");
         break;
       }
+      case K_ADVERT: snprintf(buf, n, "%s", NodePrefs::sosAdvertLabel(_prefs->sos_advert)); break;
       case K_BEEP: {
         unsigned s = NodePrefs::sosBeepSecs(_prefs->sos_beep_idx);
         if (!s)        snprintf(buf, n, "Off");
@@ -130,6 +132,9 @@ class SosScreen : public UIScreen {
         _dirty = true; break;
       case K_REPEAT:
         step(_prefs->sos_repeat_idx, NodePrefs::SOS_REPEAT_COUNT, dir);
+        _dirty = true; break;
+      case K_ADVERT:
+        step(_prefs->sos_advert, NodePrefs::SOS_ADVERT_COUNT, dir);
         _dirty = true; break;
       case K_BEEP:
         step(_prefs->sos_beep_idx, NodePrefs::SOS_BEEP_COUNT, dir);
@@ -230,16 +235,31 @@ public:
     char buf[40];
     d.setTextSize(1);
     d.setColor(UIColor::primary_txt);
-    drawScreenHeader(d, s.counting() ? "SOS in" : s.acked() ? "Answered" : "SOS");
 
     if (s.counting()) {
-      snprintf(buf, sizeof(buf), "%d", s.secsLeft(now));
+      // The screen blinks, to be seen as well as heard (one started in a
+      // pocket), faster near the end. E-ink once a second: it redraws as often.
+      const int left = s.secsLeft(now);
+      const uint32_t half = eink ? 1000 : left > 10 ? 500 : left > 5 ? 250 : 125;
+      const bool lit = (now / half) & 1;
+      // An OLED inverts in its controller: the same frame each time, nothing
+      // sent but the command (a drawn negative is the whole frame, and tore).
+      if (lit && !d.invertFrame()) {
+        d.fillRect(0, 0, d.width(), d.height());
+        d.setColor(UIColor::window_bkg);
+        d.drawTextCentered(cx, 0, "SOS in");
+      } else {
+        drawScreenHeader(d, "SOS in");
+      }
+      snprintf(buf, sizeof(buf), "%d", left);
       d.setTextSize(2);
       d.drawTextCentered(cx, d.listStart() + 4, buf);
       d.setTextSize(1);
       d.drawTextCentered(cx, foot, "Any key: cancel");
-      return 250;
+      d.setColor(UIColor::primary_txt);
+      return (int)(half - now % half);
     }
+    drawScreenHeader(d, s.acked() ? "Answered" : "SOS");
 
     int y = d.listStart();
     if (s.acked()) {

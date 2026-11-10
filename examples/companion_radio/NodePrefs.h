@@ -348,6 +348,7 @@ struct NodePrefsFields {
   uint8_t  sos_countdown_idx;    // index into sosCountdownSecs()
   uint8_t  sos_repeat_idx;       // index into sosRepeatMins()
   uint8_t  sos_beep_idx;         // index into sosBeepSecs(): a beep to be found by; 0 = off
+  uint8_t  sos_advert;           // the beacon: SOS_ADVERT_OFF / _ZERO_HOP / _FLOOD
   uint64_t sos_ch_mask;
   uint8_t  sos_dm[SOS_DM_MAX][6];
   char     sos_ack[16];          // the word a reply must hold; "" = none is recognised
@@ -669,10 +670,15 @@ struct NodePrefsFields {
     static const char* L[CONTACT_EXPIRY_COUNT] = { "Off", "7d", "30d", "90d" };
     return L[idx < CONTACT_EXPIRY_COUNT ? idx : 0];
   }
-  static const uint8_t SOS_COUNTDOWN_COUNT = 3;
+  static const uint8_t SOS_COUNTDOWN_COUNT = 4;
   static uint8_t sosCountdownSecs(uint8_t idx) {
-    static const uint8_t S[SOS_COUNTDOWN_COUNT] = { 5, 10, 15 };
-    return S[idx < SOS_COUNTDOWN_COUNT ? idx : 1];
+    static const uint8_t S[SOS_COUNTDOWN_COUNT] = { 5, 10, 15, 30 };
+    return S[idx < SOS_COUNTDOWN_COUNT ? idx : 3];
+  }
+  enum : uint8_t { SOS_ADVERT_OFF, SOS_ADVERT_ZERO_HOP, SOS_ADVERT_FLOOD, SOS_ADVERT_COUNT };
+  static const char* sosAdvertLabel(uint8_t v) {
+    static const char* L[SOS_ADVERT_COUNT] = { "Off", "0-hop", "Flood" };
+    return L[v < SOS_ADVERT_COUNT ? v : 1];
   }
   static const uint8_t SOS_REPEAT_COUNT = 5;
   static uint8_t sosRepeatMins(uint8_t idx) {   // 0 = send once
@@ -952,7 +958,7 @@ class NodePrefs : public NodePrefsFields, public ConfigSerializer {
     s.hex("ch_no_save", ch_no_save);
   }
   void sosSolo(Section& s) {
-    s.def("en", sos_enabled); s.def("count", sos_countdown_idx); s.def("repeat", sos_repeat_idx); s.def("beep", sos_beep_idx);
+    s.def("en", sos_enabled); s.def("count", sos_countdown_idx); s.def("repeat", sos_repeat_idx); s.def("beep", sos_beep_idx); s.def("advert", sos_advert);
     s.hex("ch", sos_ch_mask); s.hex("dm", sos_dm);
     s.def("ack", sos_ack, sizeof(sos_ack)); s.def("msg", sos_msg, sizeof(sos_msg));
   }

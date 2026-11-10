@@ -229,10 +229,13 @@ public:
   // (manual, flood, auto, phone-app and contact export).
   mesh::Packet* createOwnAdvert();
   bool advertFlood();   // flooded (default scope), as the app's "Advert" with flood
-  // An SOS beacon: zero-hop, with this position (when there is one) at full
-  // precision whatever advert_loc_policy says: starting an SOS is the consent
-  // to give it.
-  bool advertSos(bool with_pos, int32_t lat_1e6, int32_t lon_1e6);
+  // An SOS beacon: zero-hop or flood (default scope), with this position (when
+  // there is one) at full precision whatever advert_loc_policy says: starting
+  // an SOS is the consent to give it.
+  bool advertSos(bool with_pos, int32_t lat_1e6, int32_t lon_1e6, bool flood = false);
+  // While an SOS runs: no auto-advert, whose position follows Privacy (coarse,
+  // or none) and would move the SOS on the map of whoever follows it.
+  void holdAutoAdvert(bool hold) { _auto_advert_held = hold; }
   void sendNodeDiscoverReq();
   void enterCLIRescue();
 
@@ -749,7 +752,8 @@ private:
   unsigned long _bot_last_room_reply_ms;
   unsigned long _next_auto_advert_ms;
   unsigned long _last_auto_advert_ms = 0;
-  uint32_t _auto_advert_sec = UINT32_MAX;   // the interval _next_auto_advert_ms was set with (MAX: not yet)
+  uint32_t _auto_advert_sec = UINT32_MAX;   // the interval _next_auto_advert_ms was set with
+  bool _auto_advert_held = false;           // holdAutoAdvert(): an SOS runs (MAX: not yet)
 
   // Per-contact DM reply throttle: a small ring of the most recent recipients so
   // one chatty contact can't be spammed while a different sender is still served.

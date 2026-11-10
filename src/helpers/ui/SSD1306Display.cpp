@@ -62,6 +62,7 @@ void SSD1306Display::clear() {
 }
 
 void SSD1306Display::startFrame(ColorVal bkg) {
+  _inv_want = false;
   display.clearDisplay();  // TODO: apply 'bkg'
   _color = SSD1306_WHITE;
   display.setTextColor(_color);
@@ -136,6 +137,10 @@ void SSD1306Paged::sendBlock(uint8_t page, uint8_t col, uint8_t len) {
 }
 
 void SSD1306Display::endFrame() {
+  if (_inv_want != _inv_shown) {   // ahead of the frame-skip: an inversion alone sends no frame
+    _inv_shown = _inv_want;
+    display.invertDisplay(_inv_shown);
+  }
   const uint8_t* buf = display.getBuffer();
   const uint8_t per_page = 128 / BLOCK_W;
   bool any = false;

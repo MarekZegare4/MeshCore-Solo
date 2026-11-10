@@ -31,11 +31,12 @@ static int s_left = 0;                   // the countdown second last beeped
 static int s_edit = -1;                  // the row a popup is editing
 
 enum Row : uint8_t { R_CHANNELS, R_DM1, R_DM2, R_DM3, R_ACK, R_MSG };
-enum Pref : uint8_t { P_COUNTDOWN, P_REPEAT, P_BEEP };
+enum Pref : uint8_t { P_COUNTDOWN, P_REPEAT, P_BEEP, P_ADVERT };
 
-static const char* COUNTDOWNS[NodePrefs::SOS_COUNTDOWN_COUNT + 1] = { "5s", "10s", "15s", "" };
+static const char* COUNTDOWNS[NodePrefs::SOS_COUNTDOWN_COUNT + 1] = { "5s", "10s", "15s", "30s", "" };
 static const char* REPEATS[NodePrefs::SOS_REPEAT_COUNT + 1] = { "Off", "1m", "2m", "5m", "10m", "" };
 static const char* BEEPS[NodePrefs::SOS_BEEP_COUNT + 1] = { "Off", "30s", "1m", "5m", "" };
+static const char* ADVERTS[NodePrefs::SOS_ADVERT_COUNT + 1] = { "Off", "0-hop", "Flood", "" };
 
 }  // namespace sosview
 
@@ -154,8 +155,15 @@ void UITask::sosRefresh() {
   char buf[48];
   if (s_counting) {
     setText(s_title, "SOS in");
-    snprintf(buf, sizeof(buf), "%d", s.secsLeft(now));
+    const int left = s.secsLeft(now);
+    snprintf(buf, sizeof(buf), "%d", left);
     setText(s_digits, buf);
+    // The panel pulses red, to be seen as well as heard, faster near the end.
+    const uint32_t period = left > 10 ? 1000 : left > 5 ? 500 : 250;
+    const uint32_t ph = now % period;
+    const uint32_t tri = ph < period / 2 ? ph : period - ph;   // 0 .. period/2 .. 0
+    const lv_opa_t mix = (lv_opa_t)(tri * 2 * 160 / period);   // up to ~60% red
+    lv_obj_set_style_bg_color(s_view, lv_color_mix(lv_color_hex(theme::FAIL), lv_color_hex(theme::BG), mix), 0);
     return;
   }
   setText(s_title, s.acked() ? "Answered" : "SOS");
@@ -205,11 +213,13 @@ void UITask::sosButtonHeld() {
 // Cancel / Hide, or either physical button: anything ends the sheet and the
 // countdown; after that it only hides the view.
 void UITask::sosButton() {
+  const bool hide = sosview::s_mode == sosview::LIVE && !_core->sos.counting() && !_core->sos.idle();
   if (_core->sos.counting()) {
     _core->stopSos();
     showToast("SOS cancelled");
   }
   sosViewClose();
+  if (hide) showToast("SOS goes on. Hold the top button to come back");   // the way back, which was not obvious
 }
 
 // The sliders. Driven from the loop like the lock screen's.
@@ -237,12 +247,12 @@ void UITask::sosTick() {
     const int left = s.secsLeft(now);
     if (left != s_left) {   // a beep a second, past the buzzer's mute
       s_left = left;
-      playMelody(soundctl::MEL_TICK);
+      playMelody(soundctl::MEL_SOS_TICK);
     }
   }
   if (s_mode == LIVE && s_counting != s.counting()) sosLive();   // the countdown ended
   if (s_mode == LIVE && (int32_t)(now - s_next) >= 0) {
-    s_next = now + 200;
+    s_next = now + (s_counting ? 40 : 200);   // the countdown's pulse
     sosRefresh();
   }
   if (s_mode != NONE && !s.counting()) {
@@ -266,7 +276,7 @@ void UITask::onSosRunning(bool running) {
     wifiSetAllowed(true);
   }
 #ifdef PIN_BUZZER
-  if (_prefs) _buzzer.setVolume(running && _prefs->sos_beep_idx ? 4 : _prefs->buzzer_volume);   // to be heard, not to be polite
+  if (_prefs) _buzzer.setVolume(running ? 4 : _prefs->buzzer_volume);   // the countdown and the beep: to be heard, not to be polite
 #endif
   refreshStatusBar();
 }
@@ -290,7 +300,7 @@ void UITask::buildSos() {
   lv_obj_t* list = scrollList(body);
   lv_obj_t* g = group(list, "START");   // how it begins
   switchRow(g, "Top button", "Hold 5 s for the SOS slider", &p->sos_enabled);
-  lv_obj_t* seg = segmented(settingRow(g, "Countdown", nullptr), COUNTDOWNS, p->sos_countdown_idx, 130, 32);
+  lv_obj_t* seg = segmented(settingRow(g, "Countdown", nullptr), COUNTDOWNS, p->sos_countdown_idx, 170, 32);
   lv_obj_add_event_cb(seg, onSosSeg, LV_EVENT_VALUE_CHANGED, (void*)(uintptr_t)P_COUNTDOWN);
 
   g = group(list, "SENT TO");   // where it goes, and what it says
@@ -309,6 +319,9 @@ void UITask::buildSos() {
   g = group(list, "WHILE IT RUNS");   // until someone answers, and after
   seg = segmented(settingRow(g, "Repeat", nullptr), REPEATS, p->sos_repeat_idx, 200, 32);
   lv_obj_add_event_cb(seg, onSosSeg, LV_EVENT_VALUE_CHANGED, (void*)(uintptr_t)P_REPEAT);
+  seg = segmented(settingRow(g, "Advert", "With each send, and each Repeat gap (5 min with it off)"),
+                  ADVERTS, p->sos_advert, 170, 32);
+  lv_obj_add_event_cb(seg, onSosSeg, LV_EVENT_VALUE_CHANGED, (void*)(uintptr_t)P_ADVERT);
   seg = segmented(settingRow(g, "Beep", "To be found by"), BEEPS, p->sos_beep_idx, 170, 32);
   lv_obj_add_event_cb(seg, onSosSeg, LV_EVENT_VALUE_CHANGED, (void*)(uintptr_t)P_BEEP);
   sosValueRow(g, "ACK word", "The reply that means received", p->sos_ack[0] ? p->sos_ack : "-", R_ACK);
@@ -322,6 +335,7 @@ void UITask::sosSet(int what, int val) {
   if (what == P_COUNTDOWN && val >= 0 && val < NodePrefs::SOS_COUNTDOWN_COUNT) _prefs->sos_countdown_idx = (uint8_t)val;
   else if (what == P_REPEAT && val >= 0 && val < NodePrefs::SOS_REPEAT_COUNT) _prefs->sos_repeat_idx = (uint8_t)val;
   else if (what == P_BEEP && val >= 0 && val < NodePrefs::SOS_BEEP_COUNT) _prefs->sos_beep_idx = (uint8_t)val;
+  else if (what == P_ADVERT && val >= 0 && val < NodePrefs::SOS_ADVERT_COUNT) _prefs->sos_advert = (uint8_t)val;
   prefsSave();
 }
 

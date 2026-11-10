@@ -18,6 +18,7 @@ static const char* const MEL_ALARM  = "alarm:d=8,o=6,b=125:c,c,c,c,p,c,c,c,c,p";
 static const char* const MEL_ARRIVE = "locarr:d=8,o=6,b=140:c,e,g";   // arrival alert: reached the target
 static const char* const MEL_LEAVE  = "loclv:d=8,o=6,b=140:g,e,c";    // ... left its radius
 static const char* const MEL_TICK   = "locp:d=32,o=7,b=200:c";        // proximity beeper tick
+static const char* const MEL_SOS_TICK = "sostick:d=16,o=7,b=200:e";   // the SOS countdown: higher and longer than a tick, near a piezo's loudest
 static const char* const MEL_SOS    = "sos:d=16,o=7,b=200:e,p,e,p,e,8p,8e,p,8e,p,8e,8p,e,p,e,p,e";   // ... --- ... : to be found by
 static const char* const MEL_VOLUME = "Vol:d=16,o=6,b=120:c";         // volume preview
 

@@ -1498,7 +1498,8 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   _prefs.bot_quiet_start = 0;
   _prefs.bot_quiet_end = 0;       // start==end → quiet hours disabled
   _prefs.bot_actions_scope = 0;   // actions by everyone
-  _prefs.sos_countdown_idx = 1;   // 10 s
+  _prefs.sos_countdown_idx = 3;   // 30 s: time to stop one started in a pocket
+  _prefs.sos_advert = NodePrefs::SOS_ADVERT_ZERO_HOP;
   _prefs.sos_repeat_idx = 3;      // every 5 minutes
   strcpy(_prefs.sos_ack, "ACK");
   strcpy(_prefs.sos_msg, "{loc} {alt} {time}");
@@ -3060,7 +3061,8 @@ void MyMesh::loop() {
   }
   if (_prefs.advert_auto_interval_sec > 0 && millisHasNowPassed(_next_auto_advert_ms)) {
     // The position only where Privacy lets adverts carry it, at its precision.
-    mesh::Packet* pkt = createOwnAdvert();
+    // Skipped (not put off) while an SOS adverts its own.
+    mesh::Packet* pkt = _auto_advert_held ? nullptr : createOwnAdvert();
     if (pkt) sendZeroHop(pkt);
     _last_auto_advert_ms = _ms->getMillis();
     _next_auto_advert_ms = futureMillis(_prefs.advert_auto_interval_sec * 1000UL);
@@ -3117,11 +3119,12 @@ bool MyMesh::advertFlood() {
   }
 }
 
-bool MyMesh::advertSos(bool with_pos, int32_t lat_1e6, int32_t lon_1e6) {
+bool MyMesh::advertSos(bool with_pos, int32_t lat_1e6, int32_t lon_1e6, bool flood) {
   mesh::Packet* pkt = with_pos ? createSelfAdvert(_prefs.node_name, lat_1e6 / 1e6, lon_1e6 / 1e6)
                                : createSelfAdvert(_prefs.node_name);
   if (!pkt) return false;
-  sendZeroHop(pkt);
+  if (flood) sendFloodScoped(_scope_list.key(_scope_list.default_idx), pkt, 0);   // as the app's flood advert
+  else sendZeroHop(pkt);
   return true;
 }
 

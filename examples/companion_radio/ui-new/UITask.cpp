@@ -366,6 +366,7 @@ void UITask::sosKey(char c) {
     closeSosView();
   } else if (c == KEY_CANCEL) {
     closeSosView();
+    showAlert("Hold Back: SOS view", 2500);   // the way back, which was not obvious
   } else {
     openSosView(SOS_VIEW_MS);
   }
@@ -382,7 +383,7 @@ int UITask::battPercent() {
 void UITask::onSosRunning(bool running) {
 #ifdef PIN_BUZZER
   if (!_node_prefs) return;
-  buzzer.setVolume(running && _node_prefs->sos_beep_idx ? 4 : _node_prefs->buzzer_volume);   // to be heard, not to be polite
+  buzzer.setVolume(running ? 4 : _node_prefs->buzzer_volume);   // the countdown and the beep: to be heard, not to be polite
 #endif
 }
 
@@ -393,7 +394,7 @@ void UITask::tickSos() {
     int left = s.secsLeft(millis());
     if (left != _sos_left) {   // a beep a second, past the buzzer's mute
       _sos_left = left;
-      playMelody(soundctl::MEL_TICK);
+      playMelody(soundctl::MEL_SOS_TICK);
       _next_refresh = 0;
     }
   } else if (sosViewOpen() && (int32_t)(millis() - _sos_view_until) >= 0) {

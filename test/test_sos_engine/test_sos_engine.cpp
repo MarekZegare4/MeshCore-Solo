@@ -21,6 +21,7 @@ protected:
   void SetUp() override {
     prefs.sos_countdown_idx = 1;   // 10 s
     prefs.sos_repeat_idx = 3;      // 5 min
+    prefs.sos_advert = NodePrefs::SOS_ADVERT_ZERO_HOP;
     strcpy(prefs.sos_ack, "ACK");
     sos.begin(&prefs);
   }
@@ -455,6 +456,25 @@ TEST_F(Sos, ASettingChangedWhileItRunsCountsAtOnce) {
   EXPECT_FALSE(sos.beepDue(sent + SosEngine::BEEP_FIRST_MS + 30000));
   prefs.sos_beep_idx = 1;     // 30 s
   EXPECT_TRUE(sos.beepDue(sent + SosEngine::BEEP_FIRST_MS + 30000));
+}
+
+TEST_F(Sos, AdvertOffSendsNoBeacon) {
+  prefs.sos_advert = NodePrefs::SOS_ADVERT_OFF;
+  prefs.sos_repeat_idx = 0;
+  activate();
+  sos.markBeacon(now);
+  EXPECT_FALSE(sos.beaconDue(now + SosEngine::BEACON_MS));
+  char b[32];
+  sos.nextLine(b, sizeof(b), now);
+  EXPECT_STREQ(b, "No more sends");
+  prefs.sos_advert = NodePrefs::SOS_ADVERT_FLOOD;   // on again: due, by the same gap
+  EXPECT_TRUE(sos.beaconDue(now + SosEngine::BEACON_MS));
+}
+
+TEST(SosPrefs, CountdownGoesTo30s) {
+  EXPECT_EQ(NodePrefs::sosCountdownSecs(3), 30);
+  EXPECT_EQ(NodePrefs::sosCountdownSecs(9), 30);   // out of range: the longest, the safe one
+  EXPECT_STREQ(NodePrefs::sosAdvertLabel(NodePrefs::SOS_ADVERT_FLOOD), "Flood");
 }
 
 TEST_F(Sos, TheStatusLines) {
