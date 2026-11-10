@@ -90,10 +90,28 @@ void UITask::applyDisplayPrefs() {
   else if (_display) _display->setBrightness(_prefs->display_brightness);
 }
 
-// Brightness slider: live while dragging, saved on release.
+// Brightness sliders (Settings > Display, the quick panel), saved on release.
+// The knob moves with the finger at once; the backlight (four writes to the
+// LP5814 on the I2C bus the touch panel is read on) follows at most every
+// BRIGHT_MS, the latest value only -- set on every touch read, they made the
+// knob stutter. Let go: set and saved at once.
+static const uint32_t BRIGHT_MS = 40;
+static lv_timer_t* s_bright_tmr = nullptr;
+static int32_t s_bright_want = -1;
+static void brightApply(lv_timer_t* t) {   // once, BRIGHT_MS after a change
+  lv_timer_delete(t);
+  s_bright_tmr = nullptr;
+  if (s_bright_want >= 0) s_ui->setBrightnessPct((uint8_t)s_bright_want, false);
+}
 static void onBrightnessSlider(lv_event_t* e) {
   lv_obj_t* sl = (lv_obj_t*)lv_event_get_target(e);
-  s_ui->setBrightnessPct((uint8_t)lv_slider_get_value(sl), lv_event_get_code(e) == LV_EVENT_RELEASED);
+  s_bright_want = lv_slider_get_value(sl);
+  if (lv_event_get_code(e) == LV_EVENT_RELEASED) {
+    if (s_bright_tmr) { lv_timer_delete(s_bright_tmr); s_bright_tmr = nullptr; }
+    s_ui->setBrightnessPct((uint8_t)s_bright_want, true);
+    return;
+  }
+  if (!s_bright_tmr) s_bright_tmr = lv_timer_create(brightApply, BRIGHT_MS, NULL);
 }
 
 void UITask::setBrightnessPct(uint8_t pct, bool save) {

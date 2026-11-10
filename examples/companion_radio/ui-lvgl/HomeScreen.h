@@ -501,9 +501,10 @@ void UITask::homeSwipePoll() {
   if (!home::s_touching) {
     home::s_touching = true;
     home::s_start = p;
-    // A touch on the top layer (the quick panel's slider, the status bar) isn't
+    // A touch on the top layer (the status bar), or anywhere while the quick
+    // panel is out (it's on the screen then, QuickPanel.h: its slider), isn't
     // Home's: a sideways drag there would end it and turn the page under it.
-    home::s_swiped = lv_indev_search_obj(lv_layer_top(), &p) != nullptr;
+    home::s_swiped = quickPanelOpen() || lv_indev_search_obj(lv_layer_top(), &p) != nullptr;
     return;
   }
   if (home::s_swiped || home::s_drag_pos >= 0) return;   // a tile being dragged isn't a swipe

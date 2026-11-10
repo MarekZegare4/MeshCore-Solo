@@ -465,7 +465,7 @@ void UITask::favGrid(lv_obj_t* grid) {
     bool used = contactctl::favName(_prefs, s, name, sizeof(name), &c);
     bool chan = favslots::kind(_prefs, s) == NodePrefs::FAV_KIND_CHANNEL;
     lv_obj_t* b = lv_button_create(grid);
-    lv_obj_set_size(b, w, homeTileH(2, lv_font_get_line_height(THEME_FONT_SMALL) + theme::GAP));   // the hint under them
+    lv_obj_set_size(b, w, homeTileH(2));   // two rows fill the page, as the apps
     lv_obj_set_style_pad_all(b, 4, 0);
     lv_obj_set_style_radius(b, theme::RADIUS, 0);
     lv_obj_set_style_shadow_width(b, 0, 0);
@@ -490,9 +490,6 @@ void UITask::favGrid(lv_obj_t* grid) {
       tileBadge(b, unread);
     }
   }
-  lv_obj_t* hint = label(grid, "Tap to open. Hold to change or remove.", THEME_FONT_SMALL, theme::TEXT_MUTED);
-  lv_obj_set_width(hint, LV_PCT(100));
-  lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
 }
 
 // A slot changed: the card redrawn if it's up.

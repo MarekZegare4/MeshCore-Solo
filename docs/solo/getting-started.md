@@ -62,7 +62,7 @@ Settings and Messages are always shown.
 > Nodes, unread: Messages, a sensor: all sensor readings); hold it to pick
 > another.
 >
-> Pull down from the status bar (or tap it) for the quick panel: Bluetooth,
+> Pull down from the status bar for the quick panel (a short flick is enough): Bluetooth,
 > WiFi, GPS, sound, trail and live share switch at a tap, Advert sends an
 > advert or sets the automatic one, Lock locks the screen, and the slider
 > sets the brightness. Hold a tile for its settings. Swipe it up, or tap
