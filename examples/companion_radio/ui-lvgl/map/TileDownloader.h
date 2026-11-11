@@ -194,6 +194,7 @@ public:
     _lv_state = LV_IDLE;
   }
   bool liveOn() const { return _live; }
+  bool liveNet() const { return _live && _lv_state != LV_IDLE; }   // live tiles hold the WiFi
   bool liveConnecting() const { return _live && _lv_state == LV_CONNECTING; }
   int  liveQueued() const { return _live ? _lv_n + (_lv_fetching ? 1 : 0) : 0; }
   // A tile the map is missing (duplicates, recent failures and a full queue ignored).

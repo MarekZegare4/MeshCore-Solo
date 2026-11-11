@@ -217,7 +217,10 @@ static void wifiTestPoll(UITask* ui, bool in_use) {
     if (k >= 0) lvport::forgetWifi(k);
     snprintf(msg, sizeof(msg), LV_SYMBOL_WARNING "  %s turned the password down - not saved.", s_wifi_test_ssid);
   }
-  if (!in_use) lvport::netEnd();
+  // Connected: kept on until the clock has heard from the network (or
+  // half a minute), see wifiClockTick(); else the radio goes now.
+  if (ns == lvport::NET_UP) ui->wifiClockHold();
+  else if (!in_use) lvport::netEnd();
   bool failed = ns != lvport::NET_UP && !lvport::netNotFound();
   ui->showWifi();   // the saved list may have changed
   ui->wifiTestShow(msg, failed ? s_wifi_test_ssid : nullptr, s_wifi_test_pass);
@@ -318,24 +321,66 @@ void UITask::wifiSave() {
 // The first answer of a connection says so when it moved the clock --
 // judged against the clock a tick before: without a clock chip rtc_clock is
 // the system time, which SNTP has set already by the time we hear of it.
+//
+// A connection that was only there to check a password (Settings > WiFi)
+// is held for the clock: SNTP waits up to 5 s before its first request and
+// 15 s for a router that names an NTP server it doesn't run, so the radio
+// stays on until the answer, or WIFI_CLOCK_HOLD_MS -- then it goes, unless
+// something else took the WiFi meanwhile.
+//
+// And once after boot (WIFI_CLOCK_BOOT_MS in, so the start isn't slowed),
+// with WiFi allowed and a network saved: joined for the clock alone, held
+// the same way, the join included (WIFI_CLOCK_JOIN_MS). WiFi off then (or
+// no network saved yet): tried when it's switched on. Once per boot,
+// answered or not -- the radio isn't kept trying.
+static const uint32_t WIFI_CLOCK_HOLD_MS = 30000;
+static const uint32_t WIFI_CLOCK_JOIN_MS = 50000;
+static const uint32_t WIFI_CLOCK_BOOT_MS = 15000;
+static uint32_t s_ntp_hold_for = WIFI_CLOCK_HOLD_MS;
+static bool s_ntp_hold_up = false;    // the held connection was up at some point
+static bool s_ntp_boot_done = false;  // the boot-time join made (or not needed)
+void UITask::wifiClockHold() { _ntp_hold_ms = (millis() - 1) | 1; s_ntp_hold_for = WIFI_CLOCK_HOLD_MS; s_ntp_hold_up = true; }
+
 void UITask::wifiClockTick() {
   static uint32_t next_ms = 0, ref_wall = 0, ref_ms = 0;
   static bool first = false;
   if ((int32_t)(millis() - next_ms) < 0) return;
   next_ms = millis() + 1000;
+  const bool idle = !wifiInUse() && !mapview::s_dl.liveNet() && !_wifi_scanning && !s_wifi_test_ms;
+  if (!s_ntp_boot_done && !_ntp_hold_ms && millis() > WIFI_CLOCK_BOOT_MS && lvport::wifiAllowed() && idle &&
+      lvport::netRadio() != lvport::NET_UP) {
+    char ssid[33], pass[65];
+    if (lvport::loadWifi(ssid, sizeof(ssid), pass, sizeof(pass))) {
+      s_ntp_boot_done = true;
+      lvport::netBegin(ssid, pass);
+      _ntp_hold_ms = (millis() - 1) | 1;
+      s_ntp_hold_for = WIFI_CLOCK_JOIN_MS;
+      s_ntp_hold_up = false;
+    }
+  }
+  bool join_failed = false;   // a join in progress: its scan picks the network
+  if (_ntp_hold_ms && !s_ntp_hold_up && idle) join_failed = lvport::netState() == lvport::NET_FAILED;
   const bool up = lvport::netRadio() == lvport::NET_UP;
+  if (up) s_ntp_hold_up = true;
   if (up != _ntp_on) {
     _ntp_on = up;
     if (up) lvport::ntpStart(); else lvport::ntpStop();
     first = up;
   }
   const uint32_t t = lvport::ntpTake();
+  const bool held = _ntp_hold_ms != 0;
   if (t > 1700000000UL) {
     const uint32_t now = rtc_clock.getCurrentTime();
     if (t > now + 1 || now > t + 1) rtc_clock.setCurrentTime(t);   // a clock chip: SNTP set only the system time
     const uint32_t was = ref_wall + (millis() - ref_ms) / 1000;
-    if (first && (t > was + 2 || was > t + 2) && !_asleep) showToast("Clock set from the network");
+    const bool moved = t > was + 2 || was > t + 2;
+    if (first && !_asleep && (moved || (held && s_ntp_hold_for == WIFI_CLOCK_HOLD_MS))) showToast(moved ? "Clock set from the network" : "Clock checked: on time");
     first = false;
+  }
+  if (t > 1700000000UL) s_ntp_boot_done = true;   // the clock is set this boot: no join for it
+  if (held && (t > 1700000000UL || (s_ntp_hold_up && !up) || join_failed || millis() - _ntp_hold_ms > s_ntp_hold_for)) {
+    _ntp_hold_ms = 0;
+    if (idle) lvport::netEnd();
   }
   ref_wall = rtc_clock.getCurrentTime();
   ref_ms = millis();

@@ -218,6 +218,7 @@ public:
   void wifiPick(int idx);
   void wifiOpenSaved(int idx);   // a saved network into the fields, to change its password
   void wifiTestShow(const char* msg, const char* ssid, const char* pass);   // a password check's outcome
+  void wifiClockHold();   // keep a just-joined WiFi on until the clock hears from the network
   void wifiForget(int idx);      // (its button asks first: WifiScreen.h)
   void wifiSave();
   void wifiEdit(lv_obj_t* ta);
@@ -519,6 +520,7 @@ private:
   void mapDownloadTick();
   void wifiClockTick();             // the clock from NTP while WiFi is up (LvglPort.h ntpStart())
   bool _ntp_on = false;
+  uint32_t _ntp_hold_ms = 0;        // a password check's connection kept for the clock (wifiClockHold)
   void mapLiveBegin();
   void refreshDownloadPopup();
   void buildWifi();

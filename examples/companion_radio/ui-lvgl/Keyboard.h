@@ -428,6 +428,13 @@ static void onReleased(lv_event_t* e) {
   s_bs_count = 0;   // (not on PRESSED: lv_keyboard types the first one before that reaches us)
   if (s_var_sel >= 0) typeVariant(s_var_sel);
 }
+// The finger taken off the keyboard (no RELEASED): the same reset, nothing
+// typed -- a backspace held until then would leave the next tap deleting a word.
+static void onPressLost(lv_event_t* e) {
+  (void)e;
+  s_suppress_release = false;
+  s_bs_count = 0;
+}
 
 static void onEvent(lv_event_t* e) {
   lv_obj_t* kbd = (lv_obj_t*)lv_event_get_target(e);
@@ -472,6 +479,7 @@ static lv_obj_t* create(lv_obj_t* parent, NodePrefs* prefs) {
   lv_obj_add_event_cb(kbd, onLongPress, LV_EVENT_LONG_PRESSED, NULL);
   lv_obj_add_event_cb(kbd, onPressing, LV_EVENT_PRESSING, NULL);
   lv_obj_add_event_cb(kbd, onReleased, LV_EVENT_RELEASED, NULL);
+  lv_obj_add_event_cb(kbd, onPressLost, LV_EVENT_PRESS_LOST, NULL);
   lv_obj_add_event_cb(kbd, onDrawTask, LV_EVENT_DRAW_TASK_ADDED, NULL);
   lv_obj_add_flag(kbd, LV_OBJ_FLAG_SEND_DRAW_TASK_EVENTS);
   lv_obj_add_event_cb(kbd, onDelete, LV_EVENT_DELETE, NULL);
