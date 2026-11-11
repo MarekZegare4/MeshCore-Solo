@@ -19,8 +19,9 @@ the seconds (Settings › Display › Clock seconds), the date, and up to three
 fields you choose (hold Enter): battery, temperature, humidity, pressure, altitude
 (barometric or GPS), light, CO₂, GPS position, satellites, contacts, unread
 messages. The time comes from GPS or the phone app (on the Wio Tracker L2
-also from the internet whenever WiFi is connected); the time zone and summer
-time are in Settings.
+also from the internet: whenever WiFi is connected, and once after the device
+starts, when WiFi is on and a network is saved, it joins just for the time and
+goes off again); the time zone and summer time are in Settings.
 
 **Enter** on the clock opens the clock tools:
 

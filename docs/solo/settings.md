@@ -114,7 +114,7 @@ if your mesh agrees on it.
 > - At the top: **Name** and **Radio** (with **Advanced** at the bottom).
 > - **Connections**: Bluetooth, WiFi and GPS, their switches side by side.
 >   A tap on a row opens its details: Bluetooth the **Pairing PIN**, WiFi the
->   saved networks, GPS the satellites and an **Options** tab with GPS power
+>   saved networks (saving one checks its password and sets the clock), GPS the satellites and an **Options** tab with GPS power
 >   saving and the **Fixed position**.
 > - **Device**: Display (including the lock, **Tap to wake**, the **Theme**,
 >   dark or light, which restarts the device, and the accent colour), Sound
