@@ -101,11 +101,13 @@ newer. Options: `--port PORT`.
 ## Planned routes
 
 A route planned beforehand (a GPX from any planner) to follow on the device:
-**Tools › Trail › Hold Enter › Routes**. The device points the way to the next
-bend, shows how far is left, and beeps when you leave the route and when you
-reach its end. Needs Solo 2.3 or newer on a board that keeps messages on flash
-(Wio Tracker L1, Watch13, Heltec V3/V4, Cardputer): 8 routes, up to 4000 points
-each.
+**Tools › Trail › Hold Enter › Routes** (on the Wio Tracker L2: **Map ›
+tools › Route**). The device points the way to the next bend, shows how far is
+left, and beeps when you leave the route and when you reach its end. Needs
+Solo 2.3 or newer on a Wio Tracker L1, Watch13, Heltec V3/V4, Cardputer (8
+routes, up to 4000 points each) or Wio Tracker L2 (up to 10 000 points; it
+also imports a .gpx straight from its SD card, from `/routes` or the card's top
+folder).
 
 ```sh
 uv run tools/route.py upload walk.gpx                       # as many points as the device holds

@@ -352,6 +352,7 @@ void UITask::loop() {
   if ((int32_t)(millis() - _next_trackback_ms) >= 0) {   // walking the trail back, on any screen
     _next_trackback_ms = millis() + 1000;
     navPollTrackBack();
+    navPollRoute();   // following a planned route: the map and bar keep up
   }
 
   uint32_t lv_next = 0;
@@ -514,8 +515,11 @@ void UITask::drainCoreEvents() {
       sosOpen();
       playMelody(ev.flag ? soundctl::MEL_ALARM : soundctl::MEL_ARRIVE);
       break;
-    case UiEventType::RouteAlert:   // following a planned route (none on the L2 yet)
+    case UiEventType::RouteAlert:   // following a planned route: off it, back on, at its end
       showToast(ev.text, 4000);
+#ifdef PIN_BUZZER
+      if (!_buzzer.isQuiet()) playMelody(ev.flag ? soundctl::MEL_ARRIVE : soundctl::MEL_LEAVE);
+#endif
       break;
     case UiEventType::SosHeard: {
       char text[48];
@@ -1423,6 +1427,7 @@ static void onFactoryReset(lv_event_t* e) { s_ui->factoryResetStep((int)(uintptr
 #include "Chart.h"
 #include "ProfileView.h"
 #include "NavMap.h"
+#include "RouteMap.h"
 #include "GalleryScreen.h"
 #include "MapAreas.h"
 #include "MapRegions.h"
@@ -1499,6 +1504,18 @@ void UITask::simUnread() {
 
 extern "C" EMSCRIPTEN_KEEPALIVE void sim_nav_target(int lat_1e6, int lon_1e6) { if (s_ui) s_ui->simNavTarget(lat_1e6, lon_1e6); }
 
+// Sim tests: the route guide's state as JSON (as ui-new's).
+extern "C" EMSCRIPTEN_KEEPALIVE const char* sim_route_info() {
+  static char out[160];
+  if (!s_ui) return "{}";
+  const RouteGuide& g = s_ui->core().guide;
+  int32_t la = 0, lo = 0;
+  bool t = g.target(la, lo);
+  snprintf(out, sizeof(out), "{\"state\":%d,\"slot\":%d,\"left\":%lu,\"off\":%lu,\"t\":%d,\"tlat\":%ld,\"tlon\":%ld}",
+           (int)g.state(), g.slot(), (unsigned long)g.remainingM(), (unsigned long)g.offM(), t ? 1 : 0, (long)la, (long)lo);
+  return out;
+}
+
 // Sim tests: straight to a screen by name.
 extern "C" EMSCRIPTEN_KEEPALIVE void sim_open(const char* name) {
   if (!s_ui) return;
@@ -1532,6 +1549,10 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_open(const char* name) {
   if (!strcmp(name, "unlock")) { s_ui->simLock(false); return; }
   if (!strcmp(name, "vector")) { s_ui->setVectorMap(true); return; }
   if (!strcmp(name, "maptools")) { s_ui->navToolsPopup(); return; }
+  if (!strcmp(name, "routes")) { s_ui->routesPopup(); return; }
+  if (!strcmp(name, "routegpx")) { s_ui->routeGpxPopup(); return; }
+  if (!strncmp(name, "routeimport@", 12)) { routemap::scanGpx(); s_ui->routeImport(atoi(name + 12)); return; }
+  if (!strncmp(name, "routefollow@", 12)) { routemap::s_sel = atoi(name + 12); s_ui->routeAction(routemap::RT_FOLLOW); return; }
   if (!strcmp(name, "areasel")) { s_ui->areaSelectBegin(); return; }
   if (!strcmp(name, "areas")) { s_ui->mapAreasPopup(); return; }
   if (!strcmp(name, "regions")) { s_ui->mapRegionsPopup(); return; }

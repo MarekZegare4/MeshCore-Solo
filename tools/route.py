@@ -17,8 +17,8 @@ Usage:
     uv run tools/route.py delete 2
 
 Firmware side: examples/companion_radio/MyMeshRoutes.h (CMD_ROUTE) and
-PlannedRoute.h. Needs Solo 2.3 or newer on a board that keeps messages on
-flash (Wio Tracker L1, Watch13, Heltec V3/V4, Cardputer).
+PlannedRoute.h. Needs Solo 2.3 or newer on a Wio Tracker L1 / L2, Watch13,
+Heltec V3/V4 or Cardputer.
 """
 
 import argparse

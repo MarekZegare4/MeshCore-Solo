@@ -189,6 +189,7 @@ public:
   void simMapAt(const char* spec);      // Map tools > Live tiles
   void simCompose(const char* text);    // the open thread's field: this text, keyboard up
   void simNavTarget(int32_t lat_1e6, int32_t lon_1e6);   // a waypoint as the navigation target
+  UiCore& core() { return *_core; }   // sim tests
   void simDm();                         // the first chat contact's thread
   void simUnread();                     // read and new messages to open on
   void simSleep(bool on) { if (on) sleep(); else wake(); }
@@ -358,6 +359,17 @@ public:
   void savedTrailPopup(int idx);      // -1 = the device's own slot
   void savedTrailAction(uint8_t act);
   void navFrameTrail();
+  // Planned routes (RouteMap.h)
+  void routesPopup();
+  void routePopup(int slot);
+  void routeGpxPopup();
+  void routeImport(int idx);
+  void routeAction(uint8_t act);
+  void navFrameRoute();
+  void navPollRoute();
+  void buildRouteLayer();
+  void layoutRoute(double scale);
+  void refreshRouteTools();
   // Settings > Storage (StorageScreen.h)
   void showStorage();
   void showGps(bool from_settings);
@@ -769,6 +781,7 @@ private:
   lv_obj_t* _nav_rec = nullptr;       // "REC 1.2 km  LIVE 58m" pill
   lv_obj_t* _nav_avg_pill = nullptr;  // GPS averaging progress (tap: cancel)
   lv_obj_t* _nav_trail_lbl = nullptr; // tools panel
+  lv_obj_t* _nav_route_lbl = nullptr; // tools panel: the route followed (RouteMap.h)
   lv_obj_t* _nav_trail_btn = nullptr;
   lv_obj_t* _nav_reset_lbl = nullptr;
   lv_obj_t* _nav_share_lbl = nullptr;

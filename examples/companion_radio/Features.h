@@ -49,7 +49,8 @@
 // Planned routes (PlannedRoute.h, ui-core/RouteGuide.h): a GPX route uploaded
 // from the site over USB and followed. Where there is room for them on flash:
 // the boards that keep messages there (HIST_FLASH: the QSPI of the L1s and the
-// Watch13, an ESP32's spiffs), and the sim.
+// Watch13, an ESP32's spiffs), and the sim; the L2 turns it on itself
+// (-D FEAT_ROUTES=1, with GPX import from its card).
 #ifndef FEAT_ROUTES
   #if defined(HIST_FLASH) || defined(SIM_PLATFORM)
     #define FEAT_ROUTES 1

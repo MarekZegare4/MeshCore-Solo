@@ -184,6 +184,7 @@ static void onNavRenameKb(lv_event_t* e) { s_ui->navRenameDone(lv_event_get_code
 // ── Layers and controls (built by buildMap in nav mode) ───────────────────────
 
 void UITask::buildNavLayers() {
+  buildRouteLayer();   // the planned route, under the trail walked
   lv_obj_t* tr = lv_obj_create(_map_marks);
   lv_obj_remove_style_all(tr);
   lv_obj_set_size(tr, LV_PCT(100), LV_PCT(100));   // clip to the view, whatever the points
@@ -421,6 +422,7 @@ static void layoutNavTrail(double scale) {
 void UITask::layoutNav() {
   if (!navmap::s_target_line) return;
   double scale = (double)(1 << _map_z) * mapview::TILE_PX;
+  layoutRoute(scale);
   layoutNavTrail(scale);
 
   int32_t tlat, tlon, mlat, mlon;
@@ -491,7 +493,8 @@ void UITask::refreshNavBar() {
     if (navmap::s_ready) layoutMap();   // the names and markers clear of it, or not
   }
   if (!set) return;
-  setTextFmt(_nav_title, "%s %s", navmap::s_tb.active() ? LV_SYMBOL_LOOP : person ? UI_SYMBOL_USERS : UI_SYMBOL_FLAG,
+  const bool route = !navmap::s_tb.active() && _core->guide.active();
+  setTextFmt(_nav_title, "%s %s", navmap::s_tb.active() ? LV_SYMBOL_LOOP : route ? LV_SYMBOL_SHUFFLE : person ? UI_SYMBOL_USERS : UI_SYMBOL_FLAG,
                         name);
   if (!pos) {
     if (navmap::s_dial) lv_obj_add_flag(navmap::s_dial, LV_OBJ_FLAG_HIDDEN);
@@ -507,7 +510,9 @@ void UITask::refreshNavBar() {
   }
   bool imperial = _prefs->units_imperial;
   float km = geo::haversineKm(lat, lon, tlat, tlon);
-  navmap::s_eta.update(km, millis());
+  // On a route the ETA is to its end (the target is only the next bend); none off it.
+  const float eta_km = route ? (_core->guide.offRoute() ? -1.0f : _core->guide.remainingM() / 1000.0f) : km;
+  if (eta_km >= 0) navmap::s_eta.update(eta_km, millis());
   char dist[12], eta[12], what[20];
   geo::fmtDist(dist, sizeof(dist), km, imperial);
   int to = geo::bearingDeg(lat, lon, tlat, tlon);
@@ -522,7 +527,7 @@ void UITask::refreshNavBar() {
   } else {
     snprintf(what, sizeof(what), "%d\xC2\xB0 %s", to, geo::bearingCardinal(to));
   }
-  if (navmap::s_eta.eta(km, eta, sizeof(eta)))
+  if (eta_km >= 0 && navmap::s_eta.eta(eta_km, eta, sizeof(eta)))
     setTextFmt(_nav_info, "%s  %s  -  ETA %s", dist, what, eta);
   else
     setTextFmt(_nav_info, "%s  %s", dist, what);
@@ -542,6 +547,14 @@ bool UITask::navCurrentTarget(int32_t& lat, int32_t& lon, char* name, int n, boo
     lat = ts.at(navmap::s_tb.index()).lat_1e6;
     lon = ts.at(navmap::s_tb.index()).lon_1e6;
     return true;
+  }
+  const RouteGuide& g = _core->guide;
+  if (g.active()) {   // following a planned route: its next bend, or back to it
+    set = true;
+    char l[28];
+    g.label(l, sizeof(l), _prefs && _prefs->units_imperial);
+    snprintf(name, n, "%s", l);
+    return g.target(lat, lon);
   }
   set = _prefs && _prefs->locator_has_target;
   if (!set) return false;
@@ -614,6 +627,7 @@ void UITask::navFrameTrail() {
 
 void UITask::navSetTarget(uint8_t kind, const uint8_t* key, int32_t lat, int32_t lon, const char* name) {
   navmap::s_tb.stop();   // a chosen target replaces walking the trail back
+  _core->guide.stop();   // and following a route
   _core->locator.setTarget(kind, key, lat, lon, name);
   prefsSave();
   navmap::s_eta.reset();
@@ -628,6 +642,7 @@ void UITask::navPick(int code) {
   switch (type) {
     case navmap::T_CLEAR:
       if (navmap::s_tb.active()) { navmap::s_tb.stop(); showToast("Track back stopped"); break; }
+      if (_core->guide.active()) { _core->guide.stop(); showToast("Route stopped"); break; }
       _core->locator.clearTarget();
       prefsSave();
       break;
@@ -690,7 +705,7 @@ void UITask::navClosePopup() {
   areaPreviewEnd();   // a map area's popup: the map goes back where it was
   if (_nav_overlay) lv_obj_delete_async(_nav_overlay);   // may be closing from its own button
   _nav_overlay = _nav_ta = _nav_kb = _nav_del_lbl = nullptr;
-  _nav_trail_lbl = _nav_trail_btn = _nav_reset_lbl = _nav_share_lbl = _nav_share_btn = _nav_tb_btn = nullptr;
+  _nav_trail_lbl = _nav_trail_btn = _nav_reset_lbl = _nav_share_lbl = _nav_share_btn = _nav_tb_btn = _nav_route_lbl = nullptr;
   navmap::s_tools_list = nullptr;
 }
 
@@ -889,6 +904,7 @@ enum : uint8_t { TL_TRAIL_TOGGLE, TL_TRAIL_SAVE, TL_TRAIL_LOAD, TL_TRAIL_RESET, 
                  TL_WP_HERE, TL_WP_COORDS, TL_SPOT_ADD, TL_SPOT_GO,
                  TL_ST_LOAD, TL_ST_GPX, TL_ST_DELETE,
                  TL_OPT_TRAIL, TL_OPT_SHARE, TL_OPT_ALERT };
+static const uint8_t TL_ROUTE_BASE = 100;   // RouteMap.h's actions from here: Routes, Stop
 
 // Live-share targets offered in the dropdown: channels, then favourite contacts.
 static const int SHARE_TARGETS = MAX_GROUP_CHANNELS + 16;
@@ -1026,6 +1042,12 @@ void UITask::navToolsPopup(bool back) {
   listRow(group(list, nullptr), "Trail options", "Point spacing, auto-pause, low battery", onNavTool,
           (void*)(uintptr_t)navmap::TL_OPT_TRAIL);
 
+  sectionTitle(list, "ROUTE");   // a planned route to follow (RouteMap.h)
+  _nav_route_lbl = label(list, "", THEME_FONT_SMALL, theme::TEXT);
+  r = buttonBar(list);
+  toolButton(r, LV_SYMBOL_LIST " Routes", navmap::TL_ROUTE_BASE, _core->guide.slot() < 0);
+  if (_core->guide.slot() >= 0) toolButton(r, LV_SYMBOL_STOP " Stop", navmap::TL_ROUTE_BASE + 1, false);
+
   // What the map shows, right under the trail: used more than what follows.
   lv_obj_t* g = group(list, "LAYERS");
   choiceRow(g, "Map", "Topo, light, dark or satellite", mapview::LAYER_OPTS, mapview::s_layer, onMapLayer);
@@ -1112,6 +1134,7 @@ void UITask::refreshNavTools() {
   else setTextFmt(_nav_trail_lbl, "%s  -  %s, %s, %d points", state, dist, dur, ts.count());
   setText(_nav_trail_btn, ts.isActive() ? LV_SYMBOL_STOP " Stop" : LV_SYMBOL_PLAY " Record");
   setText(_nav_tb_btn, navmap::s_tb.active() ? LV_SYMBOL_STOP " Stop back" : LV_SYMBOL_LOOP " Track back");
+  refreshRouteTools();
 
   if (_prefs->loc_share_enabled) {
     char left[12];
@@ -1349,6 +1372,7 @@ void UITask::savedTrailAction(uint8_t act) {
 }
 
 void UITask::navToolAction(uint8_t act) {
+  if (act >= navmap::TL_ROUTE_BASE) { routeAction(act); return; }
   TrailEngine& tr = _core->trail;
   switch (act) {
     case navmap::TL_TRAIL_TOGGLE:
@@ -1400,6 +1424,7 @@ void UITask::navToolAction(uint8_t act) {
       int32_t lat = 0, lon = 0;
       bool fix = _core->course.currentLocation(lat, lon);
       if (!navmap::s_tb.start(tr.store(), fix, lat, lon)) { showToast("No trail to walk back"); break; }
+      _core->guide.stop();   // one thing to follow at a time
       navmap::s_eta.reset();
       if (!fix) ensureGps(GA_TRACKBACK);   // says it's waiting
       navClosePopup();
