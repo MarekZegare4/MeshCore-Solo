@@ -111,8 +111,6 @@ Settings › Display has a few settings of its own:
 
 The panel refreshes only when what it shows changes. Times are shown to the
 minute (no seconds counting up), and clock seconds are hidden by default.
-A second after each refresh the panel goes to sleep: the picture stays, with
-no voltage held on it, so a screen left up for hours doesn't burn in.
 
 ## Simpson
 

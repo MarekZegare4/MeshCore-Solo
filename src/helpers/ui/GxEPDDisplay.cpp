@@ -49,8 +49,6 @@ bool GxEPDDisplay::begin() {
   display.setPartialWindow(0, 0, display.width(), display.height());
   display.fillScreen(GxEPD_WHITE);
   display.display(true);
-  _awake = true;
-  _refreshed_at = millis();
 #if DISP_BACKLIGHT
   digitalWrite(DISP_BACKLIGHT, LOW);
   pinMode(DISP_BACKLIGHT, OUTPUT);
@@ -127,22 +125,5 @@ void GxEPDDisplay::endFrame() {
     // is a separate job and stays with the periodic full refresh above.
     if (partial) display.writeInverseForRedrive();
     display.display(partial);
-    _awake = true;
-    _refreshed_at = millis();
-  }
-}
-
-// A partial refresh leaves the panel's high voltage on (GxEPD2's _Update_Part;
-// only a full one turns it off), and the UI keeps the last frame up for hours:
-// held driven like that, a static screen burns into the glass. So a second
-// after the last refresh the controller goes into deep sleep; the image stays,
-// and the next frame's write resets and re-inits it on its own. Straight after
-// the frame was fine on the 4.2" too, but each frame then paid the wake-up:
-// the second keeps scrolling through a list awake.
-void GxEPDDisplay::idle() {
-  static const unsigned long SLEEP_AFTER_MS = 1000;
-  if (_awake && millis() - _refreshed_at >= SLEEP_AFTER_MS) {
-    _awake = false;
-    display.hibernate();
   }
 }
