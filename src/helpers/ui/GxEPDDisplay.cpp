@@ -125,5 +125,18 @@ void GxEPDDisplay::endFrame() {
     // is a separate job and stays with the periodic full refresh above.
     if (partial) display.writeInverseForRedrive();
     display.display(partial);
+    // A full refresh ends with the controller turning the high voltage off
+    // (GxEPD2's _Update_Full, 0x22 0xF7), and on this panel a picture left
+    // without it fades to grey within a while -- a full one too, not only a
+    // partial: the full refresh clears what earlier screens left behind, it
+    // doesn't make the picture keep. Seen on 0213BN-B74 "V4" panels; others
+    // keep it, as the maker's datasheet says (deep sleep after each refresh).
+    // A colder forced temperature (0x1A, a longer OTP waveform, down to 0 C)
+    // didn't help. So the same frame once more as a redriven
+    // partial, which leaves the voltage on as after any other frame.
+    if (!partial) {
+      display.writeInverseForRedrive();
+      display.display(true);
+    }
   }
 }
