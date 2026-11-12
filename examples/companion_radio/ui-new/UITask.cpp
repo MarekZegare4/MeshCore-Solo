@@ -373,8 +373,12 @@ void UITask::sosKey(char c) {
   }
 }
 
+// begin() asks before _core exists: no SOS runs yet then. Reading through the null
+// _core only went unnoticed on the nRF52 (address 0x3c1c is flash there); an ESP32
+// faulted on it at every start (issue #58).
 uint32_t UITask::autoOffMillis() const {
-  return _core->sos.screenMs(_node_prefs ? (uint32_t)_node_prefs->auto_off_secs * 1000UL : 0);
+  const uint32_t ms = _node_prefs ? (uint32_t)_node_prefs->auto_off_secs * 1000UL : 0;
+  return _core ? _core->sos.screenMs(ms) : ms;
 }
 
 int UITask::battPercent() {
@@ -1863,7 +1867,6 @@ void UITask::loop() {
     }
 #endif
   }
-  if (_display != NULL) _display->idle();   // on or off: the panel sleeps a while after its last frame
 
 #ifdef PIN_VIBRATION
   vibration.loop();
