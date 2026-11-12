@@ -407,6 +407,8 @@ public:
   void galleryStep(int d);
   void galleryViewAction(uint8_t act);
   void galleryTrail(int idx);        // -1 = the device's own slot
+  void galleryRoute(int slot);       // a planned route: its card on the map
+  void galleryGpx(int idx);          // a .gpx on the card: imported, then its card
   void showFlashlight();   // Flashlight.h
   void flashlightClose();
   bool flashlightOn() const;

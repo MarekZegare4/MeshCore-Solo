@@ -1,5 +1,5 @@
 #pragma once
-// Home > Gallery. Two tabs:
+// Home > Gallery. Three tabs:
 //   Screenshots -- the card's screenshots/ (takeScreenshot(): side + top
 //                  button), newest first, as a grid of thumbnails PAGE at a
 //                  time; built one per loop pass while nothing is touched,
@@ -7,6 +7,9 @@
 //                  for the next / previous, tap for its name, Delete and close.
 //   Trails      -- the saved trails, the list Map tools > Load shows; a tap
 //                  opens the map with that trail's Load / GPX / Delete.
+//   Routes      -- the planned routes on the device (RouteMap.h), then the
+//                  .gpx files on the card; a tap opens the map with the
+//                  route's Follow / Delete, or imports the file first.
 //
 // Single-TU fragment: included by ui-lvgl/UITask.cpp after NavMap.h.
 
@@ -19,7 +22,7 @@ static const int TW = 96, TH = 72;         // a thumbnail: 3 to a row
 static const int SW = 320, SH = 240;       // the full view (what takeScreenshot() writes)
 static const int BMP_MAX_W = 640;          // wider files aren't ours: not shown
 
-enum : uint8_t { T_SHOTS, T_TRAILS };
+enum : uint8_t { T_SHOTS, T_TRAILS, T_ROUTES };
 enum : uint8_t { V_DELETE, V_CLOSE };
 
 static PSRAM_BSS char s_names[SHOTS_MAX][16];
@@ -219,6 +222,8 @@ static void onGalleryTab(lv_event_t* e) {
 static void onGalleryShot(lv_event_t* e) { s_ui->galleryOpen((int)(intptr_t)lv_event_get_user_data(e)); }
 static void onGalleryPage(lv_event_t* e) { s_ui->galleryPage((int)(intptr_t)lv_event_get_user_data(e)); }
 static void onGalleryTrail(lv_event_t* e) { s_ui->galleryTrail((int)(intptr_t)lv_event_get_user_data(e)); }
+static void onGalleryRoute(lv_event_t* e) { s_ui->galleryRoute((int)(intptr_t)lv_event_get_user_data(e)); }
+static void onGalleryGpx(lv_event_t* e)   { s_ui->galleryGpx((int)(intptr_t)lv_event_get_user_data(e)); }
 static void onGalleryViewBtn(lv_event_t* e) { s_ui->galleryViewAction((uint8_t)(uintptr_t)lv_event_get_user_data(e)); }
 // The full view: a swipe steps, a tap shows / hides the bar.
 static void onGalleryViewTouch(lv_event_t* e) {
@@ -242,7 +247,7 @@ void UITask::showGallery() {
 }
 
 void UITask::galleryTab(int tab) {
-  if (tab != gallery::T_SHOTS && tab != gallery::T_TRAILS) return;
+  if (tab != gallery::T_SHOTS && tab != gallery::T_TRAILS && tab != gallery::T_ROUTES) return;
   gallery::s_tab = (uint8_t)tab;
   buildGallery();
 }
@@ -256,12 +261,43 @@ void UITask::buildGallery() {
   using namespace gallery;
   lv_obj_t* body = newScreen("Gallery", true);
   lv_obj_set_style_pad_row(body, 4, 0);
-  static const char* TABS[] = { "Screenshots", "Trails", "" };
+  static const char* TABS[] = { "Screenshots", "Trails", "Routes", "" };
   lv_obj_t* tabs = segmented(body, TABS, s_tab, lv_pct(100), theme::TAB_H);
   lv_obj_set_style_bg_color(tabs, lv_color_hex(theme::SURFACE), LV_PART_ITEMS);
   lv_obj_add_event_cb(tabs, onGalleryTab, LV_EVENT_VALUE_CHANGED, NULL);
   lv_obj_t* list = scrollList(body);
   const bool card = lvport::mountStorage();
+
+  if (s_tab == T_ROUTES) {
+    const bool imperial = _prefs && _prefs->units_imperial;
+    const int followed = _core->guide.slot();
+    RouteInfo ri;
+    for (int s = 0; s < PlannedRoutes::SLOTS; s++) {
+      if (!PlannedRoutes::info(s, ri)) continue;
+      char title[ROUTE_NAME_LEN + 8], sub[48], d[12];
+      snprintf(title, sizeof(title), "%s%s", s == followed ? LV_SYMBOL_GPS " " : "", ri.name[0] ? ri.name : "Route");
+      geo::fmtDist(d, sizeof(d), ri.length_m / 1000.0f, imperial);
+      snprintf(sub, sizeof(sub), "%s  -  %u points%s", d, (unsigned)ri.count, s == followed ? "  -  following" : "");
+      listRow(list, title, sub, onGalleryRoute, (void*)(intptr_t)s);
+    }
+    if (lv_obj_get_child_count(list) == 0)
+      noteLabel(list, "No routes yet. Put a .gpx in /routes on the card, or send one over USB from the Solo site.", THEME_FONT_BODY);
+    if (card) {
+      routemap::scanGpx();
+      if (routemap::s_gpx_n) {
+        lv_obj_t* g = group(list, "GPX ON THE CARD - TAP TO IMPORT");
+        for (int i = 0; i < routemap::s_gpx_n; i++) {
+          const char* p = routemap::s_gpx[i];
+          struct stat st;
+          char sub[32];
+          snprintf(sub, sizeof(sub), "%s  -  %ld KB", strncmp(p, "/sdcard/routes/", 15) == 0 ? "routes" : "card",
+                   stat(p, &st) == 0 ? (long)(st.st_size + 1023) / 1024 : 0L);
+          listRow(g, strrchr(p, '/') + 1, sub, onGalleryGpx, (void*)(intptr_t)i);
+        }
+      }
+    }
+    return;
+  }
 
   if (s_tab == T_TRAILS) {
     if (card) {
@@ -365,6 +401,16 @@ void UITask::galleryTick() {
 void UITask::galleryTrail(int idx) {
   openMap(true);
   savedTrailPopup(idx);
+}
+
+void UITask::galleryRoute(int slot) {
+  openMap(true);
+  routePopup(slot);
+}
+
+void UITask::galleryGpx(int idx) {
+  openMap(true);
+  routeImport(idx);   // the list routemap::scanGpx() made for the tab; then the route's card
 }
 
 // Screenshot `i` on the whole screen.

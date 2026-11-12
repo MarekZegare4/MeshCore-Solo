@@ -218,7 +218,7 @@ def cmd_upload(args):
             f = dev.ask(bytes([CMD_ROUTE, END]), CMD_ROUTE)
             begun = False
             print(f"\rSent to slot {slot}: {fmt_dist(struct.unpack_from('<I', f, 3)[0])}. "
-                  "On the device: Tools > Trail, hold Enter, Routes.")
+                  "On the device: Tools > Trail, hold Enter, Routes (L2: Map > tools > Route).")
         except DeviceError as e:
             if begun:
                 try:

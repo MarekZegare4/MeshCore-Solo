@@ -1550,6 +1550,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_open(const char* name) {
   if (!strcmp(name, "vector")) { s_ui->setVectorMap(true); return; }
   if (!strcmp(name, "maptools")) { s_ui->navToolsPopup(); return; }
   if (!strcmp(name, "routes")) { s_ui->routesPopup(); return; }
+  if (!strncmp(name, "gallery@", 8)) { s_ui->showGallery(); s_ui->galleryTab(atoi(name + 8)); return; }
   if (!strcmp(name, "routegpx")) { s_ui->routeGpxPopup(); return; }
   if (!strncmp(name, "routeimport@", 12)) { routemap::scanGpx(); s_ui->routeImport(atoi(name + 12)); return; }
   if (!strncmp(name, "routefollow@", 12)) { routemap::s_sel = atoi(name + 12); s_ui->routeAction(routemap::RT_FOLLOW); return; }
