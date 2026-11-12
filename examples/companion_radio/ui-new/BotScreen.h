@@ -201,6 +201,14 @@ public:
     return mq_delay > 0 ? mq_delay : 2000;
   }
 
+  // One button: a click walks the tab's rows, then on to the next tab.
+  char stepKey() override {
+    if (_kb_row >= 0 || _cmd_off || _stepper_row >= 0) return KEY_DOWN;
+    const int n = botcfg::isLog(_tab) ? the_mesh.botLog().count() : botcfg::rowCount(_tab);
+    return _sel + 1 < n ? KEY_DOWN : KEY_RIGHT;
+  }
+  uint8_t editMode() override { return _stepper_row >= 0 && _kb_row < 0 ? EDIT_VALUE : EDIT_NONE; }
+
   bool handleInput(char c) override {
     bool up    = (c == KEY_UP);
     bool down  = (c == KEY_DOWN);
@@ -226,8 +234,8 @@ public:
 
     if (_stepper_row >= 0) {
       uint8_t& h = botcfg::hour(_prefs, tabRow(_tab, _stepper_row).kind);
-      if (up)   { h = (h + 1) % 24;  _dirty = true; return true; }
-      if (down) { h = (h + 23) % 24; _dirty = true; return true; }
+      if (up || keyIsNext(c))   { h = (h + 1) % 24;  _dirty = true; return true; }   // left/right: one button's edit
+      if (down || keyIsPrev(c)) { h = (h + 23) % 24; _dirty = true; return true; }
       if (enter || cancel) { _stepper_row = -1; return true; }
       return true;  // swallow LEFT/RIGHT etc. while stepping
     }

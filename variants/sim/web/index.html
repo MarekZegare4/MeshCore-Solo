@@ -132,6 +132,12 @@
     <button data-key="0xF1">Next (n)</button>
     <button id="btn-reset" class="reset-btn">Reset</button>
   </div>
+  <div class="row">
+    <!-- A one-button board (bare Heltec, Watch13): pressed and let go as the
+         real one, its gestures timed by the firmware (ui-new/OneButton.h):
+         click next, double back, hold OK, hold 2 s menu, 5 s SOS. -->
+    <button id="btn-one">One button</button>
+  </div>
 
   <div class="panel">
     <span>GPS:</span>
@@ -417,6 +423,14 @@
         // page reload instead. Identity/prefs already persist across this
         // via IDBFS (see this file's own header comment) -- same proof
         // Phase 2 established.
+        {
+          const one = document.getElementById('btn-one');
+          let down = false;
+          const press = (d) => { if (d === down) return; down = d; ensureAudio(); if (Module && Module._sim_button) Module._sim_button(d ? 1 : 0); };
+          one.addEventListener('pointerdown', (e) => { e.preventDefault(); one.setPointerCapture(e.pointerId); press(true); });
+          one.addEventListener('pointerup', () => press(false));
+          one.addEventListener('pointercancel', () => press(false));
+        }
         document.getElementById('btn-reset').addEventListener('click', () => {
           location.reload();
         });

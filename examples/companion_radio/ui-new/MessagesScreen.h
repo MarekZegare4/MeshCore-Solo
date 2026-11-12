@@ -2104,6 +2104,14 @@ public:
     return (mq_delay > 0 && mq_delay < 2000) ? mq_delay : 2000;
   }
 
+  // One button: a message opened full screen is scrolled, then the next one.
+  char stepKey() override {
+    if (_ch_view.active() || _ctx_menu.active) return KEY_DOWN;
+    if (_phase == DM_HIST && _dm_fs.active) return _dm_fs.stepKey();
+    if (_phase == CHANNEL_HIST && _fs.active) return _fs.stepKey();
+    return KEY_DOWN;
+  }
+
   bool handleInput(char c) override {
     // Channel Add/Edit form consumes all input while active.
     if (_ch_view.active()) return _ch_view.handleInput(c);

@@ -69,5 +69,19 @@ public:
   // Default no-op for screens that keep state across visits. Because it's
   // invoked centrally, a new screen can't "forget" to be reset on show.
   virtual void onShow() { }
+  // One-button boards (ui-new/OneButton.h): the key a click stands for here --
+  // the next row by default (lists wrap); a screen with tabs or pages says
+  // KEY_RIGHT on its last row, so one click walks through everything.
+  virtual char stepKey() { return KEY_DOWN; }
+  // One-button boards: the selected row is a value changed with left/right, so
+  // a long press edits it (click +1, double -1, long done) instead of Enter.
+  virtual bool valueRow() { return false; }
+  // One-button boards: the screen is in an edit mode of its own --
+  //   EDIT_VALUE   left/right change it, Enter keeps it, Cancel drops it:
+  //                click +1, double -1, long keeps, very long drops;
+  //   EDIT_DIGITS  a DigitEditor: click the digit +1, double -1, long on to
+  //                the next digit (KEY_NEXT; past the last, done), very long drops.
+  enum EditMode : uint8_t { EDIT_NONE, EDIT_VALUE, EDIT_DIGITS };
+  virtual uint8_t editMode() { return EDIT_NONE; }
 };
 

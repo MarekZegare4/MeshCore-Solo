@@ -744,6 +744,20 @@ public:
     return (mq_delay > 0 && mq_delay < 2000) ? mq_delay : 2000;
   }
 
+  // One button: a long press on a value with more than two options (or a
+  // number) edits it; a switch or an action takes it as Enter.
+  bool valueRow() override {
+    if (_scope_mgmt_active || _editor.active() || _picker.menu.active || _pos_menu.active ||
+        _reset_confirm.active || _prune_confirm.active || !_task->getNodePrefs()) return false;
+    const int item = currentItem();
+    if (item >= SCHEMA_ITEM) {
+      const settings::Setting& st = settings::ALL[item - SCHEMA_ITEM];
+      return isBar(st) || (st.option && st.count > 2);
+    }
+    return item == TX_POWER || item == CUSTOM_SF || item == CUSTOM_BW || item == CUSTOM_CR;
+  }
+  uint8_t editMode() override { return _editor.active() ? EDIT_DIGITS : EDIT_NONE; }
+
   bool handleInput(char c) override {
     NodePrefs* p = _task->getNodePrefs();
 

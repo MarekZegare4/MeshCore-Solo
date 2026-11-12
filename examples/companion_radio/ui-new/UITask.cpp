@@ -8,6 +8,10 @@
 #include "../MsgExpand.h"
 #include "../Features.h"
 #include "../GeoUtils.h"
+
+// One button's click, queued as this and turned into the screen's stepKey() as
+// it is handed over: the screen decides then, from where its selection is.
+static const char KEY_STEP = (char)0xF4;
 #include "target.h"
 
 #include "CardKB.h"
@@ -174,6 +178,9 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
 
 #if defined(PIN_USER_BTN)
   user_btn.begin();
+#endif
+#if UI_ONE_BUTTON && defined(PIN_BACK_BTN)
+  back_btn.begin();   // a second button beside the one (the Watch13): Back
 #endif
 #if UI_HAS_JOYSTICK
   // The directional joystick + Back share the same MomentaryButton machinery as
@@ -367,7 +374,7 @@ void UITask::sosKey(char c) {
     closeSosView();
   } else if (c == KEY_CANCEL) {
     closeSosView();
-    showAlert("Hold Back: SOS view", 2500);   // the way back, which was not obvious
+    showAlert(oneButtonUi() ? "Hold 5 s: SOS view" : "Hold Back: SOS view", 2500);   // the way back, which was not obvious
   } else {
     openSosView(SOS_VIEW_MS);
   }
@@ -986,6 +993,7 @@ void UITask::setCurrScreen(UIScreen* c) {
   if (!c) return;
   if (flashlight && curr == flashlight && c != flashlight) applyBrightness();   // its full brightness goes with it
   curr = c;
+  _ob_edit = false;     // a value being edited stays with its screen
   c->onShow();          // central per-visit reset hook (see UIScreen::onShow)
   _next_refresh = 0;
 }
@@ -1235,6 +1243,12 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_message(const char* text, int style) {
 // follow on release.
 extern "C" EMSCRIPTEN_KEEPALIVE void sim_enqueue_key_longpress(char c) {
   if (g_sim_ui_task_for_js) g_sim_ui_task_for_js->injectSimKeyLongPress(c);
+}
+
+// A one-button board: the page's button pressed (1) / let go (0). The gestures
+// are timed by the firmware's own OneButton, as on a bare Heltec.
+extern "C" EMSCRIPTEN_KEEPALIVE void sim_button(int down) {
+  if (g_sim_ui_task_for_js) g_sim_ui_task_for_js->injectSimButton(down != 0);
 }
 
 #ifdef PIN_BUZZER
@@ -1504,6 +1518,9 @@ void UITask::loop() {
     _display_was_on = on;
   }
   if (status_screen) ((StatusScreen*)status_screen)->sample();   // Status history lines, once a minute
+#if defined(SIM_PLATFORM) && defined(__EMSCRIPTEN__)
+  if (_ob_used) oneButtonGesture(_one_btn.update(_sim_btn_down, millis()));   // the page's one button
+#endif
 #if UI_HAS_JOYSTICK
   uint8_t joy_rot = _node_prefs ? _node_prefs->joystick_rotation : JOYSTICK_ROTATION;
 #if FEAT_DISPLAY_ROTATION_SETTING && defined(JOYSTICK_UPRIGHT_ROTATION)
@@ -1608,16 +1625,18 @@ void UITask::loop() {
     if (!_locked) enqueueKey(handleTripleClick(KEY_SELECT));
   }
 #elif defined(PIN_USER_BTN)
-  int ev = user_btn.check();
-  if (ev == BUTTON_EVENT_CLICK) {
-    enqueueKey(checkDisplayOn(KEY_NEXT));
-  } else if (ev == BUTTON_EVENT_LONG_PRESS) {
-    enqueueKey(handleLongPress(KEY_ENTER));
-  } else if (ev == BUTTON_EVENT_DOUBLE_CLICK) {
-    enqueueKey(handleDoubleClick(KEY_PREV));
-  } else if (ev == BUTTON_EVENT_TRIPLE_CLICK) {
-    if (!_locked) enqueueKey(handleTripleClick(KEY_SELECT));
+  // One button: its gestures timed here from the raw state (OneButton.h), not
+  // the MomentaryButton's events.
+  oneButtonGesture(_one_btn.update(user_btn.isPressed(), millis()));
+#if defined(PIN_BACK_BTN)
+  // A second button (the Watch13): Back, as the double click is -- leaving an
+  // edit too. Locked, it only wakes the screen or shows the hint.
+  if (back_btn.check() == BUTTON_EVENT_CLICK) {
+    _ob_used = true;
+    if (_ob_edit) { _ob_edit = false; checkDisplayOn(0); _next_refresh = 0; }
+    else enqueueKey(checkDisplayOn(_locked ? KEY_STEP : KEY_CANCEL));
   }
+#endif
 #elif defined(SIM_PLATFORM) && !defined(__EMSCRIPTEN__)
   // Native terminal input ONLY -- this branch previously had no
   // __EMSCRIPTEN__ exclusion, so it also compiled into the wasm build
@@ -1780,7 +1799,7 @@ void UITask::loop() {
       // Apply the whole queued burst, then redraw once — N taps captured during
       // a blocking refresh become N navigation steps at the cost of one refresh.
       char k;
-      while (dequeueKey(k)) curr->handleInput(k);
+      while (dequeueKey(k)) curr->handleInput(k == KEY_STEP ? curr->stepKey() : k);
       { uint32_t aoff = autoOffMillis(); if (aoff > 0) _auto_off = millis() + aoff; }  // extend auto-off timer
       // Note timing no longer depends on render cadence (TIMER1 IRQ advances
       // notes directly — see buzzer.cpp), so a redraw right after a keypress
@@ -1866,6 +1885,7 @@ void UITask::loop() {
       _badge_in_bar = false;
       _kb.beginFrame();
       int delay_millis = curr->render(*_display);
+      if (_ob_edit || (oneButtonUi() && curr->editMode() == UIScreen::EDIT_VALUE)) renderEditCue();
       if (tabbar::endFrame(*_display) && delay_millis > 15) delay_millis = 15;   // a tab turn sliding
       if (!_core->sos.idle() && !_kb.isVisible()) renderSosBadge();
       // Skip the alert overlay (new-message toast) while the keyboard is the
@@ -2118,6 +2138,68 @@ char UITask::handleLongPress(char c) {
   }
   if (c == KEY_ENTER) return KEY_CONTEXT_MENU;
   return c;
+}
+
+// One button's gestures (OneButton.h), into keys. Locked: a very long hold
+// unlocks, anything else wakes the screen or shows the hint. Editing a value:
+// click +1, double -1, long (or very long) done. Otherwise click the next row
+// (KEY_STEP: the screen's stepKey()), double back, long OK -- or, on a value
+// row, the edit mode -- very long the context menu.
+void UITask::oneButtonGesture(OneButton::Gesture g) {
+  if (g == OneButton::NONE) return;
+  _ob_used = true;
+  if (g == OneButton::HOLD_SOS) { checkDisplayOn(0); onBackHeld(); return; }   // as Back held on a joystick board
+  if (_locked && !_unlock_kb) {
+    if (g == OneButton::VERY_LONG) {
+      checkDisplayOn(0);
+      _lock_wake_until = millis() + 5000;
+      toggleLock();
+    } else {
+      enqueueKey(checkDisplayOn(KEY_STEP));   // eaten while locked: wakes, or the hint
+    }
+    return;
+  }
+  const uint8_t em = curr && !_kb.isVisible() ? curr->editMode() : UIScreen::EDIT_NONE;
+  if (em == UIScreen::EDIT_DIGITS) {
+    enqueueKey(checkDisplayOn(g == OneButton::CLICK ? KEY_UP : g == OneButton::DOUBLE ? KEY_DOWN
+                            : g == OneButton::LONG ? KEY_NEXT : KEY_CANCEL));
+    return;
+  }
+  if (_ob_edit || em == UIScreen::EDIT_VALUE) {
+    char k = g == OneButton::CLICK ? KEY_RIGHT : g == OneButton::DOUBLE ? KEY_LEFT
+           : g == OneButton::LONG ? KEY_ENTER : KEY_CANCEL;
+    if (_ob_edit && (g == OneButton::LONG || g == OneButton::VERY_LONG)) { _ob_edit = false; k = 0; }   // ours: just done
+    if (k) enqueueKey(checkDisplayOn(k));
+    else checkDisplayOn(0);
+    _next_refresh = 0;
+    return;
+  }
+  switch (g) {
+    case OneButton::CLICK:  enqueueKey(checkDisplayOn(KEY_STEP)); break;
+    case OneButton::DOUBLE: enqueueKey(checkDisplayOn(KEY_CANCEL)); break;
+    case OneButton::LONG: {
+      const char c = checkDisplayOn(KEY_ENTER);
+      if (c && curr && _kq_head == _kq_tail && !_kb.isVisible() && curr->valueRow()) { _ob_edit = true; _next_refresh = 0; }
+      else enqueueKey(c);
+      break;
+    }
+    default: enqueueKey(handleLongPress(KEY_ENTER)); break;   // very long: the context menu (CLI rescue at boot)
+  }
+}
+
+// The edit mode's cue: "-/+" in a box at the bottom right, over the screen.
+void UITask::renderEditCue() {
+  DisplayDriver& d = *_display;
+  d.setTextSize(1);
+  const char* t = "-/+";
+  const int w = d.getTextWidth(t) + 4, h = d.getLineHeight() + 2;
+  const int x = d.width() - w, y = d.height() - h;
+  d.setColor(UIColor::primary_txt);
+  d.fillRect(x, y, w, h);
+  d.setColor(UIColor::window_bkg);
+  d.setCursor(x + 2, y + 1);
+  d.print(t);
+  d.setColor(UIColor::primary_txt);
 }
 
 char UITask::handleDoubleClick(char c) {

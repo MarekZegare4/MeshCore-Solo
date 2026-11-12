@@ -218,7 +218,7 @@ class ClockToolsScreen : public UIScreen {
         d.drawTextCentered(cx, d.listStart() + 4, buf);
         d.setTextSize(1);
       }
-      d.drawTextCentered(cx, d.height() - d.getLineHeight() - 1, "Ent=stop");
+      d.drawTextCentered(cx, d.height() - d.getLineHeight() - 1, _task->oneButtonUi() ? "Hold=stop" : "Ent=stop");
       return liveTickMs(d, 1000);
     }
     // Setting mode: big HH:MM:SS with the digit under the cursor underlined.
@@ -226,7 +226,7 @@ class ClockToolsScreen : public UIScreen {
     char buf[12];
     snprintf(buf, sizeof(buf), "%02u:%02u:%02u", _timer_h, _timer_m, _timer_s);
     if (bigDigits(d, buf, _timer_cur + (_timer_cur / 2))) {
-      d.drawTextCentered(cx, d.height() - d.getLineHeight() - 1, "Up/Dn=set Ent=start");
+      d.drawTextCentered(cx, d.height() - d.getLineHeight() - 1, _task->oneButtonUi() ? "Clk+ Dbl- Hold=next" : "Up/Dn=set Ent=start");
       return 60000;
     }
     d.setTextSize(2);
@@ -238,7 +238,7 @@ class ClockToolsScreen : public UIScreen {
     const int char_idx = _timer_cur + (_timer_cur / 2);   // skip the two colons
     d.fillRect(sx + char_idx * cw, ty + lh2, cw - 1, 2);
     d.setTextSize(1);
-    d.drawTextCentered(cx, d.height() - d.getLineHeight() - 1, "Up/Dn=set Ent=start");
+    d.drawTextCentered(cx, d.height() - d.getLineHeight() - 1, _task->oneButtonUi() ? "Clk+ Dbl- Hold=next" : "Up/Dn=set Ent=start");
     return 60000;
   }
 
@@ -253,7 +253,8 @@ class ClockToolsScreen : public UIScreen {
       d.drawTextCentered(cx, d.listStart() + 4, buf);
       d.setTextSize(1);
     }
-    const char* hint = _sw_running ? "Ent=stop" : "Ent=start Dn=reset";
+    const char* hint = _task->oneButtonUi() ? (_sw_running ? "Hold=stop" : "Hold=start Clk=reset")
+                                            : (_sw_running ? "Ent=stop" : "Ent=start Dn=reset");
     d.drawTextCentered(cx, d.height() - d.getLineHeight() - 1, hint);
     return _sw_running ? liveTickMs(d, 100) : 60000;
   }
@@ -326,6 +327,7 @@ class ClockToolsScreen : public UIScreen {
     // rollback — every step already writes straight to alarm_hour/min and
     // reschedules, same as the old per-field editor did).
     if (_alarm_editing) {
+      if (c == KEY_NEXT && _alarm_cur == 3) { _alarm_editing = false; return true; }   // one button: past the last digit, done
       if (keyIsPrev(c)) { _alarm_cur = (_alarm_cur + 3) % 4; return true; }
       if (keyIsNext(c)) { _alarm_cur = (_alarm_cur + 1) % 4; return true; }
       if (c == KEY_UP)   { stepAlarmDigit(+1); return true; }
@@ -373,6 +375,7 @@ class ClockToolsScreen : public UIScreen {
       return true;   // any other key just forces a refresh (e-ink)
     }
     if (c == KEY_CANCEL) { _view = V_MENU; _sel = 0; return true; }
+    if (c == KEY_NEXT && _timer_cur == 5) c = KEY_ENTER;   // one button: past the last digit, start
     if (keyIsPrev(c)) { _timer_cur = (_timer_cur + 5) % 6; return true; }  // cursor ←
     if (keyIsNext(c)) { _timer_cur = (_timer_cur + 1) % 6; return true; }  // cursor →
     if (c == KEY_UP)   { stepTimerDigit(+1); return true; }
@@ -406,6 +409,13 @@ class ClockToolsScreen : public UIScreen {
   }
 
 public:
+  // One button: the alarm's time and the timer's duration are digit editors.
+  uint8_t editMode() override {
+    if (_view == V_ALARM && _alarm_editing) return EDIT_DIGITS;
+    if (_view == V_TIMER && !_task->isTimerRunning()) return EDIT_DIGITS;
+    return EDIT_NONE;
+  }
+
   ClockToolsScreen(UITask* task, NodePrefs* prefs) : _task(task), _prefs(prefs) {}
 
   void onShow() override {

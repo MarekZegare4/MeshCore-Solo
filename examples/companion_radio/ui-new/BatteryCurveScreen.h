@@ -57,6 +57,9 @@ public:
     return 1000;   // "Now" follows the cell
   }
 
+  // One button: a curve point is a number to edit.
+  bool valueRow() override { return _prefs && _sel >= 1 && _sel <= PTS; }
+
   bool handleInput(char c) override {
     if (c == KEY_CANCEL) {
       _task->savePrefsIfDirty(_dirty);
@@ -64,7 +67,7 @@ public:
       return true;
     }
     if (c == KEY_UP)   { if (_sel > 0) _sel--; return true; }
-    if (c == KEY_DOWN) { if (_sel < ROWS - 1) _sel++; return true; }
+    if (c == KEY_DOWN) { _sel = (_sel < ROWS - 1) ? _sel + 1 : 0; return true; }   // wraps, as the lists do
     if (!_prefs) return false;
     if (_sel >= 1 && _sel <= PTS && (keyIsNext(c) || keyIsPrev(c))) {
       nudge(_sel - 1, keyIsNext(c) ? 1 : -1);

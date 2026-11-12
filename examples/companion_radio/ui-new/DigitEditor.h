@@ -42,6 +42,12 @@ struct DigitEditor {
 
   Result handleInput(char c) {
     if (!active) return CANCELLED;
+    // One button (UIScreen::EDIT_DIGITS): its long press, the next digit; past the last, done.
+    if (c == KEY_NEXT) {
+      if (cursor < totalDigits() - 1) { cursor++; return NONE; }
+      active = false;
+      return DONE;
+    }
     if (keyIsPrev(c)) { if (cursor > 0) cursor--; return NONE; }
     if (keyIsNext(c)) { if (cursor < totalDigits() - 1) cursor++; return NONE; }
     if (c == KEY_UP || c == KEY_DOWN) {

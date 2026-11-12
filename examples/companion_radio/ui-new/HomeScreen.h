@@ -178,6 +178,7 @@ class HomeScreen : public UIScreen {
     _page = navPage(_page, dir);
     if (_page == from) return;
     _quick_sel = 0;   // a quick panel starts on its first row
+    if (_task->oneButtonUi()) _fav_sel = 0;   // and the tiles on the first, walked by clicks
     DisplayDriver* d = _task->getDisplay();
     // Pages with the header slide below it; the full-screen clock slides whole.
     const bool whole = from == CLOCK || _page == CLOCK;
@@ -1151,6 +1152,7 @@ public:
 #else
       const char* first = "Hold Back + 3xEnter";
 #endif
+      if (_task->oneButtonUi()) first = "Hold 2 s to unlock";
       snprintf(pill, sizeof(pill), "%s", n == 0 ? first : n == 1 ? "Enter x2 more..." : "Enter x1 more...");
     }
     if (!pill[0]) return;
@@ -1634,7 +1636,23 @@ public:
     return (mq_delay > 0 && mq_delay < ret) ? mq_delay : ret;
   }
 
+  // One button: a click walks the page's rows (the quick panels, the
+  // Favourites tiles one by one), then on to the next page.
+  char stepKey() override {
+    if (_tile_menu.active) return KEY_DOWN;
+    if (_page == HomePage::FAVOURITES && _fav_sel + 1 < NodePrefs::FAVOURITES_COUNT) return KEY_NEXT;
+    if (isQuickPage(_page)) {
+      QRow rows[QUICK_MAX];
+      if (_quick_sel + 1 < buildQuick(_page, rows)) return KEY_DOWN;
+    }
+    return KEY_RIGHT;
+  }
+
+  uint8_t editMode() override { return isQuickPage(_page) && _quick_edit ? EDIT_VALUE : EDIT_NONE; }
+
   bool handleInput(char c) override {
+    // One button: a double click is back a page (Home has nowhere else to go back to).
+    if (c == KEY_CANCEL && _task->oneButtonUi() && !_tile_menu.active && !_quick_edit) { turnPage(-1); return true; }
     // Map page: "GPS is off" before a share (the tile menu, free on this page).
     if (_page == HomePage::MAP && _tile_menu.active) {
       if (_tile_menu.handleInput(c) == PopupMenu::SELECTED && _tile_menu.selectedIndex() == 0) {
@@ -1669,6 +1687,7 @@ public:
       int row = _fav_sel / cols;
       if ((c == KEY_LEFT  || c == KEY_PREV) && col > 0)        { _fav_sel--;        return true; }
       if ((c == KEY_RIGHT || c == KEY_NEXT) && col < cols - 1) { _fav_sel++;        return true; }
+      if (c == KEY_NEXT && _fav_sel + 1 < NodePrefs::FAVOURITES_COUNT) { _fav_sel++; return true; }   // one button: on to the next row
       if (c == KEY_UP    && row > 0)                            { _fav_sel -= cols; return true; }
       if (c == KEY_DOWN  && row < rows - 1)                     { _fav_sel += cols; return true; }
       if (c == KEY_CONTEXT_MENU) {

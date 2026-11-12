@@ -164,6 +164,19 @@ public:
   // sample independently of the render cadence (slow on e-ink).
   void poll() override { _wp.poll(); }
 
+  // One button: a click scrolls the view, then on to the next view.
+  char stepKey() override {
+    if (_wp.active()) return KEY_DOWN;
+#if FEAT_ROUTES
+    if (_routes.active()) return KEY_DOWN;
+#endif
+    if (_action_menu.active) return KEY_DOWN;
+    if (_view == V_SUMMARY) return _summary_scroll < _summary_max_scroll ? KEY_DOWN : KEY_RIGHT;
+    if (_view == V_LIST)    return _list_scroll < _list_max_scroll ? KEY_DOWN : KEY_RIGHT;
+    return KEY_RIGHT;
+  }
+  uint8_t editMode() override { return _wp.active() ? _wp.editMode() : EDIT_NONE; }
+
   bool handleInput(char c) override {
     // Waypoint management UI consumes all input while active.
     if (_wp.active()) return _wp.handleInput(c);
@@ -291,7 +304,7 @@ public:
       // Short Enter intentionally does nothing destructive — both start and
       // stop go through the Hold-Enter popup so a stray tap can't change the
       // tracking state.
-      _task->showAlert("Hold Enter for menu", 1000);
+      _task->showAlert(_task->oneButtonUi() ? "Hold 2 s for menu" : "Hold Enter for menu", 1000);
       return true;
     }
     return false;

@@ -1459,8 +1459,8 @@ public:
       } else {
         const char* hint;
         if (_pick_admin_target && !flt) { snprintf(empty, sizeof(empty), "Nothing to admin"); hint = "Repeaters & rooms"; }
-        else if (flt) { snprintf(empty, sizeof(empty), "No %s contacts", flt); hint = "Left/Right: filter"; }
-        else          { snprintf(empty, sizeof(empty), "No contacts found");   hint = "Enter: discover";}
+        else if (flt) { snprintf(empty, sizeof(empty), "No %s contacts", flt); hint = _task->oneButtonUi() ? "Click: next filter" : "Left/Right: filter"; }
+        else          { snprintf(empty, sizeof(empty), "No contacts found");   hint = _task->oneButtonUi() ? "Hold: discover" : "Enter: discover";}
         display.drawTextCentered(display.width() / 2, display.height() / 2 - display.lineStep() / 2, empty);
         display.drawTextCentered(display.width() / 2, display.height() / 2 + display.lineStep() / 2, hint);
       }
@@ -1560,6 +1560,15 @@ public:
     _detail = true;
     memcpy(_route_key, pub_key, PUB_KEY_SIZE);
     return true;
+  }
+
+  // One button: a click walks the list, then on to the next filter; on the map
+  // it goes from node to node.
+  char stepKey() override {
+    if (_confirm.active || _ping_menu.active || _menu.active || _detail) return KEY_DOWN;
+    if (_map) return KEY_RIGHT;
+    if (_route_pick || _pick_admin_target) return KEY_DOWN;
+    return _sel + 1 < _count ? KEY_DOWN : KEY_RIGHT;
   }
 
   bool handleInput(char c) override {
@@ -1665,7 +1674,7 @@ public:
     }
     if (_route_pick) return true;   // the filter stays on repeaters
     if (keyIsPrev(c)) { tabbar::turn(_task->getDisplay(), filterLabels(), _filter, -1); _filter = (_filter + F_COUNT - 1) % F_COUNT; refresh(); return true; }
-    if (keyIsNext(c)) { tabbar::turn(_task->getDisplay(), filterLabels(), _filter, +1); _filter = (_filter + 1) % F_COUNT;          refresh(); return true; }
+    if (keyIsNext(c)) { tabbar::turn(_task->getDisplay(), filterLabels(), _filter, +1); _filter = (_filter + 1) % F_COUNT;          refresh(); if (_task->oneButtonUi()) _sel = _scroll = 0; return true; }   // one button walks a filter from its top
     return false;
   }
 };

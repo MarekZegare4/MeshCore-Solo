@@ -173,6 +173,14 @@ public:
     return (_picker.menu.active || _editor.active() || _scope_picker_active) ? 50 : 500;
   }
 
+  // One button: a long press on a number edits it; Freq is a digit editor.
+  bool valueRow() override {
+    if (_editor.active() || _picker.menu.active || _sel >= _item_count) return false;
+    const int it = _items[_sel];
+    return it == IT_RSF || it == IT_RBW || it == IT_RCR || it == IT_HOPS || it == IT_YIELD || it == IT_SNR;
+  }
+  uint8_t editMode() override { return _editor.active() ? EDIT_DIGITS : EDIT_NONE; }
+
   bool handleInput(char c) override {
     NodePrefs* p = _task->getNodePrefs();
 

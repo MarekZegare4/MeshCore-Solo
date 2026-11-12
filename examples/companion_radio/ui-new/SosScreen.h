@@ -189,7 +189,8 @@ public:
       char val[64], shown[64];
       valueLabel(r.kind, val, sizeof(val));
       display.translateUTF8ToBlocks(shown, val, sizeof(shown));
-      int mqr = info::listRow(display, y, r.label, shown, sel, reserve);
+      const char* label = r.kind == K_HOLD && _task->oneButtonUi() ? "Hold 5 s" : r.label;   // the button held, not Back
+      int mqr = info::listRow(display, y, label, shown, sel, reserve);
       if (mqr > 0) mq_delay = mqr;
     });
     return (mq_delay > 0 && mq_delay < 500) ? mq_delay : 500;
@@ -282,7 +283,7 @@ public:
         y += d.lineStep();
       }
       if (mins) { snprintf(buf, sizeof(buf), "%u min ago", (unsigned)mins); d.drawTextCentered(cx, y, buf); }
-      d.drawTextCentered(cx, foot, "Hold Enter: end");
+      d.drawTextCentered(cx, foot, _task->oneButtonUi() ? "Hold 2 s: end" : "Hold Enter: end");
       return status_ms;
     }
     s.sentLine(buf, sizeof(buf));
@@ -292,7 +293,7 @@ public:
     d.drawTextCentered(cx, y, buf);
     int32_t lat, lon;
     if (!_task->currentLocation(lat, lon)) d.drawTextCentered(cx, y + d.lineStep(), "No GPS fix");
-    d.drawTextCentered(cx, foot, "Hold Enter: stop");
+    d.drawTextCentered(cx, foot, _task->oneButtonUi() ? "Hold 2 s: stop" : "Hold Enter: stop");
     return status_ms;
   }
 };

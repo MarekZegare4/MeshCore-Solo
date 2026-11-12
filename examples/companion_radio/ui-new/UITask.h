@@ -45,6 +45,7 @@
 #include "../Waypoint.h"
 #include "../LiveTrack.h"
 #include "KeyboardWidget.h"
+#include "OneButton.h"
 #include "../ui-core/UiCoreHost.h"
 #include "../ui-core/Favourites.h"
 
@@ -53,6 +54,14 @@ struct UiEvent;
 
 // ui-new is the lite frontend of the UI Core: MyMesh talks to the Core (see
 // meshListener()), the Core calls back through UiCoreHost and UiEventQueue.
+// A board whose only input is its one button (a bare Heltec V3/V4, the
+// Watch13): the gestures of OneButton.h drive the whole UI.
+#if !UI_HAS_JOYSTICK && defined(PIN_USER_BTN) && !defined(SIMPSON)
+  #define UI_ONE_BUTTON 1
+#else
+  #define UI_ONE_BUTTON 0
+#endif
+
 class UITask : public UITaskBase, public UiCoreHost {
   DisplayDriver* _display;
   SensorManager* _sensors;
@@ -171,6 +180,13 @@ class UITask : public UITaskBase, public UiCoreHost {
   char handleDoubleClick(char c);
   char handleTripleClick(char c);
 
+  // One button (OneButton.h): the gestures, into keys.
+  OneButton _one_btn;
+  bool _ob_edit = false;   // a value row being edited: click +1, double -1, long done
+  bool _ob_used = false;   // gestures came in (the sim; a one-button build always)
+  void oneButtonGesture(OneButton::Gesture g);
+  void renderEditCue();
+
   // Key FIFO: a burst of taps captured during a blocking refresh (e-ink) is
   // drained from the buttons into this queue, then all keys are applied before
   // a single redraw — so rapid navigation steps neither get lost nor cost one
@@ -201,6 +217,9 @@ public:
   // never open the context menu at all -- injectSimKey() alone has no way
   // to signal "this press was held".
   void injectSimKeyLongPress(char c);
+  // The one button, pressed (1) or let go (0): its gestures timed as on a board.
+  void injectSimButton(bool down) { _ob_used = true; _sim_btn_down = down; }
+  bool _sim_btn_down = false;
 #ifdef PIN_BUZZER
   // Lets a host page poll the buzzer's current state every frame to drive a
   // Web Audio oscillator (see sim_buzzer_is_playing()/sim_buzzer_freq_hz()
@@ -549,6 +568,9 @@ public:
   int  lockSeqCount() const { return _lock_seq_count; }
   // The lock screen shows the unlock hint for a few seconds after a key press
   // (and all through the Back + 3x Enter sequence).
+  // The UI is driven by one button: hints say "hold", "double-click".
+  bool oneButtonUi() const { return UI_ONE_BUTTON || _ob_used; }
+  bool oneButtonEditing() const { return _ob_edit; }
   bool lockHintShown() const { return _lock_seq_count > 0 || (_lock_hint_ms && millis() - _lock_hint_ms < 3000); }
   bool hasCardKB() const {
 #if defined(CARDKB_I2C)

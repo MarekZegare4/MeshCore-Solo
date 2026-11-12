@@ -327,7 +327,7 @@ private:
     row(d, f, rsv, "Firmware", a);
     row(d, f, rsv, "Built", FIRMWARE_BUILD_DATE);
     row(d, f, rsv, "Device", board.getManufacturerName());
-    row(d, f, rsv, "QR codes", "Enter: you, manual");
+    row(d, f, rsv, "QR codes", _task->oneButtonUi() ? "Hold: you, manual" : "Enter: you, manual");
     uint32_t heap_free, heap_total;
     DeviceDiag::getHeapStats(heap_free, heap_total);
     if (heap_total) snprintf(a, sizeof(a), "%lu of %lu KB", (unsigned long)(heap_free / 1024), (unsigned long)(heap_total / 1024));
@@ -489,6 +489,9 @@ public:
     if (_reset_menu.active) { _reset_menu.render(display); return 50; }
     return next;
   }
+
+  // One button: a click scrolls the tab, then on to the next tab.
+  char stepKey() override { return _reset_menu.active || _qr || _more ? KEY_DOWN : KEY_RIGHT; }
 
   bool handleInput(char c) override {
     if (_reset_menu.active) {

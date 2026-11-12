@@ -13,6 +13,9 @@
   extern DISPLAY_CLASS display;
   #include <helpers/ui/MomentaryButton.h>
   extern MomentaryButton user_btn;
+  #ifdef PIN_BACK_BTN
+  extern MomentaryButton back_btn;
+  #endif
 #endif
 
 #ifdef PIN_VIBRATION

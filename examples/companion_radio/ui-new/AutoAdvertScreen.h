@@ -41,6 +41,9 @@ public:
     return 5000;
   }
 
+  // One button: the screen is one value; a click steps it.
+  char stepKey() override { return KEY_RIGHT; }
+
   bool handleInput(char c) override {
     if (c == KEY_CANCEL) {
       _task->savePrefsIfDirty(_dirty);

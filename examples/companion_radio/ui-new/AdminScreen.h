@@ -219,6 +219,20 @@ public:
     return (mq_delay > 0 && mq_delay < 2000) ? mq_delay : 2000;
   }
 
+  // One button: a click walks the tab's rows, then on to the next tab.
+  bool listInFront() { return !_login_kb && !_kb_active && !_value_editing && !_showing_reply && !_confirm.active &&
+                              S().state() != AdminSession::IDLE && S().state() != AdminSession::NEED_PASSWORD &&
+                              S().state() != AdminSession::LOGGING_IN && S().state() != AdminSession::WAITING; }
+  char stepKey() override {
+    if (!listInFront()) return KEY_DOWN;
+    return _row_sel + 1 < admin::rowCount(_tab) ? KEY_DOWN : KEY_RIGHT;
+  }
+  uint8_t editMode() override {
+    if (!_value_editing || _kb_active) return EDIT_NONE;
+    const admin::Field* f = S().currentField();
+    return f && f->kind == admin::K_RADIO_FREQ ? EDIT_DIGITS : EDIT_VALUE;
+  }
+
   bool handleInput(char c) override {
     if (_login_kb) {
       auto r = kb().handleInput(c);

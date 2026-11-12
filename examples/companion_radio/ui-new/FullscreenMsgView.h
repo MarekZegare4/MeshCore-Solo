@@ -177,6 +177,9 @@ struct FullscreenMsgView {
     return 2000;
   }
 
+  // One button: a click scrolls the message, then on to the newer one.
+  char stepKey() const { return scroll < _max_scroll ? KEY_DOWN : KEY_RIGHT; }
+
   Result handleInput(char c) {
     if (c == KEY_UP)          { if (scroll > 0) scroll--; return NONE; }
     if (c == KEY_DOWN)        { if (scroll < _max_scroll) scroll++; return NONE; }
