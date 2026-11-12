@@ -40,3 +40,4 @@ CLAUDE.md
 /sdkconfig.*
 /dependencies.lock
 /managed_components/
+__pycache__/
