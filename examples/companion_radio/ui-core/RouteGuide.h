@@ -151,8 +151,12 @@ public:
         _next_full = millis() + FULL_SEARCH_MS;
         Cand all, all_ahead;
         scan(f, 0, nseg - 1, all, all_ahead);
-        // The nearest, unless a place further on is nearly as near.
-        Cand pick = (all_ahead.seg >= 0 && all_ahead.d <= all.d + SHORTCUT_SLACK_M) ? all_ahead : all;
+        // The nearest (the earliest of equals: a loop's start, not its end), unless
+        // a place further on is nearly as near -- a shortcut, but never past half
+        // the route, and not on the first fix: where you start is the start.
+        const bool shortcut = !_snap && all_ahead.seg >= 0 && all_ahead.d <= all.d + SHORTCUT_SLACK_M
+                              && all_ahead.along - _along < _info.length_m / 2.0f;
+        Cand pick = shortcut ? all_ahead : all;
         if (pick.seg >= 0 && (best.seg < 0 || pick.d < best.d)) best = pick;
       }
     }
