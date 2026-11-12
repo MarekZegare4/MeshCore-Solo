@@ -33,11 +33,17 @@ public:
 
   enum State : uint8_t { OFF, ON_ROUTE, OFF_ROUTE, FINISHED };
 
-  void begin(const CourseEngine* course, UiEventQueue* events) { _course = course; _events = events; }
+  // Picks up the route followed before a restart (NodePrefs::route_follow).
+  void begin(NodePrefs* prefs, const CourseEngine* course, UiEventQueue* events) {
+    _prefs = prefs; _course = course; _events = events;
+    if (_prefs && _prefs->route_follow && !start((_prefs->route_follow & 0x7F) - 1, _prefs->route_follow & 0x80))
+      remember(-1, false);   // gone since
+  }
 
   bool start(int slot, bool reversed) {
     RouteInfo ri;
     if (!PlannedRoutes::info(slot, ri)) return false;
+    remember(slot, reversed);
     _info = ri;
     _slot = slot;
     buildOverview();
@@ -53,7 +59,7 @@ public:
     _state = ON_ROUTE;
     return true;
   }
-  void stop() { _state = OFF; _have_target = false; }
+  void stop() { _state = OFF; _have_target = false; remember(-1, false); }
 
   bool  active() const    { return _state == ON_ROUTE || _state == OFF_ROUTE; }
   State state() const     { return _state; }
@@ -110,7 +116,7 @@ public:
     if (_gen != PlannedRoutes::generation()) {   // replaced or deleted under us
       RouteInfo ri;
       if (!PlannedRoutes::info(_slot, ri) || ri.count != _info.count || ri.length_m != _info.length_m) {
-        _state = OFF;
+        stop();
         if (_events) _events->push(UiEventType::RouteAlert, "Route removed", false);
         return;
       }
@@ -183,11 +189,21 @@ public:
     if (_state == ON_ROUTE && remainingM() <= (uint32_t)ARRIVE_M) {
       _state = FINISHED;
       _have_target = false;
+      remember(-1, false);   // done: a restart doesn't start it over
       if (_events) _events->push(UiEventType::RouteAlert, "Route finished", true);
     }
   }
 
 private:
+  void remember(int slot, bool reversed) {
+    if (!_prefs) return;
+    const uint8_t v = slot < 0 ? 0 : (uint8_t)((slot + 1) | (reversed ? 0x80 : 0));
+    if (_prefs->route_follow == v) return;
+    _prefs->route_follow = v;
+    the_mesh.savePrefs();
+  }
+
+  NodePrefs* _prefs = nullptr;
   static const int OVERVIEW = 256;
   struct OvPoint { uint16_t la, lo; };   // 0..65535 across the route's bounding box
 

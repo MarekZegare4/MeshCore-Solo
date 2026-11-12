@@ -322,6 +322,7 @@ static void sanitize(NodePrefs& p) {
   p.locator_label[sizeof(p.locator_label) - 1] = '\0';
   if (p.trail_autopause_idx >= NodePrefs::TRAIL_AUTOPAUSE_COUNT) p.trail_autopause_idx = 0;
   flag(p.trail_autosave_lowbatt, 0);
+  if ((p.route_follow & 0x7F) > 32) p.route_follow = 0;   // a slot; RouteGuide checks it's there
   if (p.gps_avg_idx >= NodePrefs::GPS_AVG_COUNT) p.gps_avg_idx = 0;
   flag(p.alarm_on, 0);
   if (p.alarm_hour > 23) p.alarm_hour = 0;

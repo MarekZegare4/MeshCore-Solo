@@ -58,7 +58,7 @@ public:
     trail.begin(prefs, &course);
     sos.begin(prefs);
 #if FEAT_ROUTES
-    guide.begin(&course, &events);
+    guide.begin(prefs, &course, &events);
 #endif
     waypoints.begin(&locator);   // loads /waypoints
 #ifdef HIST_FLASH
