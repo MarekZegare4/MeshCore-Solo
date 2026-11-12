@@ -76,6 +76,9 @@
 #define CMD_GET_DEFAULT_FLOOD_SCOPE   64
 #define CMD_SEND_RAW_PACKET           65
 #define CMD_RUN_CLI_COMMAND           66  // v14+
+#if FEAT_ROUTES
+#define CMD_ROUTE                      0x7D   // planned routes: list, upload, delete (Solo; MyMeshRoutes.h)
+#endif
 #ifdef ENABLE_SCREENSHOT
 #define CMD_GET_SCREENSHOT             0x7E   // Request screenshot from display (Solo; 66 is upstream's CLI)
 #endif
@@ -2766,6 +2769,10 @@ void MyMesh::handleCmdFrame(size_t len) {
     } else {
       writeErrFrame(ERR_CODE_TABLE_FULL);
     }
+#if FEAT_ROUTES
+  } else if (cmd_frame[0] == CMD_ROUTE) {
+    handleRouteCommand(cmd_frame, len);
+#endif
 #ifdef ENABLE_SCREENSHOT
   } else if (cmd_frame[0] == CMD_GET_SCREENSHOT) {
     handleScreenshotRequest();
@@ -3143,5 +3150,6 @@ bool MyMesh::hasPendingWork() const {
 #include "MyMeshPing.h"
 #include "MyMeshApc.h"
 #include "MyMeshScreenshot.h"
+#include "MyMeshRoutes.h"
 #include "MyMeshBot.h"
 #include "MyMeshCli.h"

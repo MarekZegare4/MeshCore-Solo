@@ -190,6 +190,14 @@ bool DataStore::commitFile(const char* tmp_path, const char* final_path) {
   return commitTempFile(_fs, tmp_path, final_path);
 }
 
+File DataStore::openWrite(FILESYSTEM* fs, const char* filename) {
+  return ::openWrite(fs, filename);
+}
+
+bool DataStore::commitFile(FILESYSTEM* fs, const char* tmp_path, const char* final_path) {
+  return commitTempFile(fs, tmp_path, final_path);
+}
+
 bool DataStore::removeFile(const char* filename) {
   return _fs->remove(filename);
 }

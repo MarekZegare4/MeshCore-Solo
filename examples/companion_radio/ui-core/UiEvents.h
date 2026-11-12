@@ -21,6 +21,7 @@ enum class UiEventType : uint8_t {
   SosSent,        // a round of an SOS was tried; flag = the first that went out
   SosAcked,       // someone answered: text = who; flag = the first of this SOS
   SosHeard,       // someone else's SOS: text = who
+  RouteAlert,     // following a planned route: off it, back on, finished, removed; flag = good news
 };
 
 struct UiEvent {

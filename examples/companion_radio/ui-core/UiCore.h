@@ -38,6 +38,9 @@
 #include "RadioControl.h"
 #include "RepeaterControl.h"
 #include "SosEngine.h"
+#if FEAT_ROUTES
+#include "RouteGuide.h"
+#endif
 
 class UiCore : public MyMesh::Listener {
 public:
@@ -54,6 +57,9 @@ public:
     locator.begin(prefs, &course, &live_share, &events);
     trail.begin(prefs, &course);
     sos.begin(prefs);
+#if FEAT_ROUTES
+    guide.begin(&course, &events);
+#endif
     waypoints.begin(&locator);   // loads /waypoints
 #ifdef HIST_FLASH
     history_log.begin(prefs, &history);
@@ -74,6 +80,9 @@ public:
     live_share.loop();
     locator.loop();
     trail.loop();
+#if FEAT_ROUTES
+    guide.loop();
+#endif
     admin.loop();
     rooms.loop();
     if (!sos.idle()) sosLoop();
@@ -94,6 +103,9 @@ public:
   AdminSession admin;       // remote repeater / room admin: login + CLI round trips
   RoomSessions rooms;       // room server logins for posting (messages screens)
   SosEngine    sos;         // countdown, repeats, the ACK word
+#if FEAT_ROUTES
+  RouteGuide   guide;       // following a planned route (Tools > Trail > Routes)
+#endif
 
   // ── Models ────────────────────────────────────────────────────────────────
   MessageHistory history;   // channel + DM rings, delivery state, channel unread

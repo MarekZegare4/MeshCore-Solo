@@ -31,6 +31,9 @@ public:
   bool formatFileSystem();
   FILESYSTEM* getPrimaryFS() const { return _fs; }
   FILESYSTEM* getSecondaryFS() const { return _fsExtra; }
+  // Where bulk files go (planned routes): the QSPI flash where there is one,
+  // else the board's own FS (an ESP32's spiffs partition, the sim's disk).
+  FILESYSTEM* getBulkFS() const { return _fsExtra ? _fsExtra : _fs; }
   bool loadMainIdentity(mesh::LocalIdentity &identity);
   bool saveMainIdentity(const mesh::LocalIdentity &identity);
   void loadPrefs(NodePrefs& prefs, double& node_lat, double& node_lon);
@@ -72,6 +75,8 @@ public:
   // as contacts/channels: write everything to a .tmp, then commit. Returns
   // false if the swap fails (the previous good file is left untouched).
   bool commitFile(const char* tmp_path, const char* final_path);
+  File openWrite(FILESYSTEM* fs, const char* filename);
+  bool commitFile(FILESYSTEM* fs, const char* tmp_path, const char* final_path);
   bool removeFile(const char* filename);
   bool removeFile(FILESYSTEM* fs, const char* filename);
   uint32_t getStorageUsedKb() const;

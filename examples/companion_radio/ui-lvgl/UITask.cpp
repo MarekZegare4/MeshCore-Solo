@@ -514,6 +514,9 @@ void UITask::drainCoreEvents() {
       sosOpen();
       playMelody(ev.flag ? soundctl::MEL_ALARM : soundctl::MEL_ARRIVE);
       break;
+    case UiEventType::RouteAlert:   // following a planned route (none on the L2 yet)
+      showToast(ev.text, 4000);
+      break;
     case UiEventType::SosHeard: {
       char text[48];
       snprintf(text, sizeof(text), "SOS: %s", ev.text);

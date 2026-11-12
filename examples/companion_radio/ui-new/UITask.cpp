@@ -498,6 +498,11 @@ void UITask::drainCoreEvents() {
       if (ev.flag) { openSosView(SOS_VIEW_MS); playMelody(soundctl::MEL_ARRIVE); }
       _next_refresh = 0;
       break;
+    case UiEventType::RouteAlert:   // following a planned route: off it, back on, at the end
+      showAlert(ev.text, 3000);
+      if (!isBuzzerQuiet()) playMelody(ev.flag ? soundctl::MEL_ARRIVE : soundctl::MEL_LEAVE);
+      _next_refresh = 0;
+      break;
     case UiEventType::SosHeard: {
       char text[48];
       snprintf(text, sizeof(text), "SOS: %s", ev.text);
@@ -643,6 +648,33 @@ void UITask::simTrail() {
   }
   waypoints().add((int32_t)(50.0560f * 1e6f), (int32_t)(19.9250f * 1e6f), now, "Car");
   waypoints().add((int32_t)(50.0680f * 1e6f), (int32_t)(19.9600f * 1e6f), now, "Hut");
+}
+
+// Sim tests: a planned route, an L of 2 km from the simNodes() fix east and
+// then north, written as an upload would (PlannedRoute.h), and followed.
+void UITask::simRoute(int what) {
+#if FEAT_ROUTES
+  if (what == 0) {
+    PlannedRoutes up;
+    const int N = 21;
+    if (!up.begin(0, N, 0, "Test loop")) return;
+    for (int i = 0; i < N; i++) {
+      float la = 50.0614f, lo = 19.9372f;
+      if (i <= 10) lo += 0.0014f * i;                       // ~100 m a step east
+      else { lo += 0.014f; la += 0.0009f * (i - 10); }      // then ~100 m a step north
+      up.add((int32_t)(la * 1e6f), (int32_t)(lo * 1e6f), ROUTE_ELE_NONE);
+    }
+    if (!up.finish()) return;
+    _core->guide.start(0, false);
+    what = 2;
+  }
+  setCurrScreen(trail_screen);
+  if (what == 3) ((TrailScreen*)trail_screen)->showMapView();
+  else ((TrailScreen*)trail_screen)->simRoutes(what == 2);
+  _next_refresh = 0;
+#else
+  (void)what;
+#endif
 }
 
 void UITask::simDisplay(bool on) {
@@ -1157,6 +1189,27 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_nav_waypoint(int row) {
 
 extern "C" EMSCRIPTEN_KEEPALIVE void sim_trail() {
   if (g_sim_ui_task_for_js) g_sim_ui_task_for_js->simTrail();
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE void sim_route(int what) {
+  if (g_sim_ui_task_for_js) g_sim_ui_task_for_js->simRoute(what);
+}
+
+// Sim tests: the guide's state as JSON.
+extern "C" EMSCRIPTEN_KEEPALIVE const char* sim_route_info() {
+  static char out[160];
+#if FEAT_ROUTES
+  if (!g_sim_ui_task_for_js) return "{}";
+  const RouteGuide& g = g_sim_ui_task_for_js->core().guide;
+  int32_t la = 0, lo = 0;
+  bool t = g.target(la, lo);
+  snprintf(out, sizeof(out), "{\"state\":%d,\"slot\":%d,\"left\":%lu,\"off\":%lu,\"placed\":%d,\"tlat\":%ld,\"tlon\":%ld,\"t\":%d}",
+           (int)g.state(), g.slot(), (unsigned long)g.remainingM(), (unsigned long)g.offM(), g.placed() ? 1 : 0,
+           (long)la, (long)lo, t ? 1 : 0);
+#else
+  snprintf(out, sizeof(out), "{}");
+#endif
+  return out;
 }
 
 // Sim tests: the display off (0) or on (1), as the auto-off and a key press do.
@@ -1933,6 +1986,9 @@ void UITask::loop() {
         _core->trail.isRecording()
         || (_node_prefs && _node_prefs->loc_share_enabled)
         || _core->sos.gpsWanted()
+#if FEAT_ROUTES
+        || _core->guide.active()
+#endif
         || (_node_prefs && _node_prefs->locator_enabled && _node_prefs->locator_has_target)
         || curr == compass_screen
         || (curr == status_screen && ((StatusScreen*)status_screen)->wantsLiveGps())

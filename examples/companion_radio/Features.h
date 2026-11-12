@@ -46,6 +46,18 @@
 // would split the build the day this is flipped to 1.
 #define FEAT_RX_POWERSAVE 0
 
+// Planned routes (PlannedRoute.h, ui-core/RouteGuide.h): a GPX route uploaded
+// from the site over USB and followed. Where there is room for them on flash:
+// the boards that keep messages there (HIST_FLASH: the QSPI of the L1s and the
+// Watch13, an ESP32's spiffs), and the sim.
+#ifndef FEAT_ROUTES
+  #if defined(HIST_FLASH) || defined(SIM_PLATFORM)
+    #define FEAT_ROUTES 1
+  #else
+    #define FEAT_ROUTES 0
+  #endif
+#endif
+
 // The display rotation at which the joystick's own up reads as up. An e-ink
 // panel turned from it turns the joystick with it (UITask), on top of the
 // Joystick setting. Unset, the build's own rotation: only a flip turns it.

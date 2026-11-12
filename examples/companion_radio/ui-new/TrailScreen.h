@@ -13,6 +13,7 @@
 #include "icons.h"     // scalable mini-icons (map markers, north arrow, grid dots)
 #include "NavView.h"
 #include "WaypointsView.h"
+#include "RoutesView.h"
 #include <helpers/StreamUtils.h>
 #include <math.h>
 
@@ -68,6 +69,9 @@ class TrailScreen : public UIScreen {
   // Waypoint management UI (list / nav / add / mark / rename / delete / send)
   // lives in its own component; TrailScreen delegates to it while it's active.
   WaypointsView _wp;
+#if FEAT_ROUTES
+  RoutesView _routes;   // Routes: the planned routes, following one
+#endif
 
   // Action popup (Hold Enter / KEY_CONTEXT_MENU). Carries both settings rows
   // (Min dist, Units — cycled with LEFT/RIGHT while focused) and actions
@@ -75,7 +79,7 @@ class TrailScreen : public UIScreen {
   // the labels live in member buffers that get refreshed in openActionMenu()
   // and after every LEFT/RIGHT cycle.
   enum ActionId { ACT_MIN_DIST, ACT_UNITS, ACT_GRID, ACT_AUTOPAUSE, ACT_MARK_AVG, ACT_AUTOSAVE, ACT_TOGGLE, ACT_SAVE, ACT_LOAD, ACT_RESET, ACT_EXPORT, ACT_EXPORT_SAVED, ACT_MARK, ACT_WAYPOINTS, ACT_FILE, ACT_SETTINGS,
-                 ACT_SHARE_NOW, ACT_TRACKBACK };
+                 ACT_SHARE_NOW, ACT_TRACKBACK, ACT_ROUTES, ACT_ROUTE_GUIDE };
   // The action popup is multi-level: a short main menu, plus "Trail file…" and
   // "Settings…" submenus. _menu_level tracks which is open so input is routed
   // correctly (settings rows cycle with LEFT/RIGHT; everything else is Enter).
@@ -97,7 +101,11 @@ class TrailScreen : public UIScreen {
 
 public:
   TrailScreen(UITask* task, TrailStore* store)
-    : _task(task), _store(store), _wp(task, store) {}
+    : _task(task), _store(store), _wp(task, store)
+#if FEAT_ROUTES
+    , _routes(task)
+#endif
+    {}
 
   void onShow() override {
     _view = V_SUMMARY;
@@ -108,6 +116,9 @@ public:
     _menu_level     = ML_MAIN;
     _return_home    = false;
     _wp.reset();
+#if FEAT_ROUTES
+    _routes.reset();
+#endif
   }
 
   // Switch straight into the Map view (used by the Home "Map" page). Layered on
@@ -118,6 +129,9 @@ public:
   // Forwarded to UITask's GPS duty-cycle hold — see WaypointsView::needsLiveGps().
   bool wpNeedsLiveGps() const { return _wp.needsLiveGps(); }
   void simWaypointNav(int row) { _wp.simNav(row); }   // sim tests
+#if FEAT_ROUTES
+  void simRoutes(bool guide) { if (guide) _routes.openGuide(); else _routes.openList(); }   // sim tests
+#endif
 
   int render(DisplayDriver& display) override {
     display.setTextSize(1);
@@ -125,6 +139,9 @@ public:
 
     // Waypoint management UI owns the screen while active.
     if (_wp.active()) return _wp.render(display);
+#if FEAT_ROUTES
+    if (_routes.active()) return _routes.render(display);
+#endif
 
     // The title bar carries the view dots so the bottom hint row can be
     // reclaimed for content.
@@ -150,6 +167,9 @@ public:
   bool handleInput(char c) override {
     // Waypoint management UI consumes all input while active.
     if (_wp.active()) return _wp.handleInput(c);
+#if FEAT_ROUTES
+    if (_routes.active()) return _routes.handleInput(c);
+#endif
 
     // Action popup overrides everything else.
     if (_action_menu.active) {
@@ -220,6 +240,13 @@ public:
           case ACT_MARK:          _wp.markHere();      break;
           case ACT_WAYPOINTS:     _wp.openList();      break;
           case ACT_TRACKBACK:     _wp.startTrackBack(); break;
+#if FEAT_ROUTES
+          case ACT_ROUTES:        _routes.openList();  break;
+          case ACT_ROUTE_GUIDE:   _routes.openGuide(); break;
+#else
+          case ACT_ROUTES:
+          case ACT_ROUTE_GUIDE:   break;
+#endif
           case ACT_SAVE:          handleSave();        break;
           case ACT_LOAD:          handleLoad();        break;
           case ACT_RESET:         buildResetConfirmMenu(); return true;
@@ -375,6 +402,10 @@ private:
     _menu_level = ML_MAIN;
     _act_count  = 0;
     _action_menu.begin("Trail", 4);
+#if FEAT_ROUTES
+    // Following a route: its guide first, the way back to it from anywhere.
+    if (_task->core().guide.slot() >= 0) pushAction(ACT_ROUTE_GUIDE, "Route guide");
+#endif
     pushAction(ACT_TOGGLE,    _act_toggle_label);
     pushAction(ACT_MARK,      "Mark here");
     // "Waypoints" opens the nav list — always available; it hosts the list,
@@ -382,6 +413,9 @@ private:
     pushAction(ACT_WAYPOINTS, "Waypoints...");
     // Track back retraces the recorded route to its start; needs ≥2 points.
     if (_store->count() >= 2) pushAction(ACT_TRACKBACK, "Track back");
+#if FEAT_ROUTES
+    pushAction(ACT_ROUTES,    "Routes...");
+#endif
     pushAction(ACT_SHARE_NOW,  "Share my pos");
     if (fileMenuHasItems()) pushAction(ACT_FILE, "Trail file...");
     pushAction(ACT_SETTINGS,  "Settings...");
@@ -707,6 +741,12 @@ private:
       for (int i = 0; i < LiveTrackStore::CAPACITY; i++)
         if (lt.isActive(i, now)) fold(lt.slotAt(i).lat_1e6, lt.slotAt(i).lon_1e6);
     }
+#if FEAT_ROUTES
+    if (_task->core().guide.slot() >= 0) {   // the route followed, whole
+      const RouteInfo& ri = _task->core().guide.info();
+      fold(ri.min_lat, ri.min_lon); fold(ri.max_lat, ri.max_lon);
+    }
+#endif
     // Fold in the active target too, so a destination you set never sits off-frame.
     { int32_t tla, tlo; if (_task->activeTargetPos(tla, tlo)) fold(tla, tlo); }
     return init;
@@ -785,7 +825,13 @@ private:
     int32_t tgt_lat, tgt_lon;
     const bool have_tgt = _task->activeTargetPos(tgt_lat, tgt_lon);
 
-    if (!have_trail && nwp == 0 && !have_gps && !have_live && !have_tgt) {
+#if FEAT_ROUTES
+    const RouteGuide& guide = _task->core().guide;
+    const bool have_route = guide.slot() >= 0;
+#else
+    const bool have_route = false;
+#endif
+    if (!have_trail && nwp == 0 && !have_gps && !have_live && !have_tgt && !have_route) {
       display.drawTextCentered(display.width() / 2, (top + bottom) / 2, "No GPS / no trail");
       return;
     }
@@ -842,6 +888,32 @@ private:
     proj.area_w = area_w;  proj.area_h = area_h;
 
     if (_map_grid) renderGrid(display, proj);
+
+#if FEAT_ROUTES
+    // The route being followed, dashed under the trail walked; its end marked.
+    // From the guide's overview in RAM: a full route read off the flash each
+    // frame made the map lag a second behind every key.
+    if (have_route) {
+      int px = 0, py = 0;
+      const gfx::Dash dash = { 0x3, 4 };
+      const int n = guide.overviewCount();
+      for (int i = 0; i < n; i++) {
+        int32_t la, lo;
+        guide.overviewPoint(i, la, lo);
+        int x, y;
+        proj.project(la, lo, x, y);
+        if (i > 0) gfx::drawLine(display, px, py, x, y, dash);
+        px = x; py = y;
+      }
+      if (n > 0) {   // the end in the direction followed
+        int32_t la, lo;
+        guide.overviewPoint(guide.reversed() ? 0 : n - 1, la, lo);
+        int ex, ey;
+        proj.project(la, lo, ex, ey);
+        drawTargetMarker(display, ex, ey);
+      }
+    }
+#endif
 
     if (have_trail) {
       int x0, y0;

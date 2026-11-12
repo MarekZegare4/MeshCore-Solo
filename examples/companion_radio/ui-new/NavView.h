@@ -18,13 +18,16 @@ namespace navview {
 // cog_valid : is there a stable course-over-ground (UITask::currentCourse)
 // eta       : optional closing-speed/ETA tracker; when supplied a third line is
 //             shown with the approach speed and estimated time of arrival
+// eta_km    : what the ETA is to, when not the target itself (a route's end:
+//             the target is only the next bend); < 0 = the target
 inline void draw(DisplayDriver& d,
                  bool own_valid, int32_t own_lat, int32_t own_lon,
                  int32_t tgt_lat, int32_t tgt_lon,
                  const char* label,
                  bool cog_valid, int cog_deg,
                  bool imperial,
-                 EtaTracker* eta = nullptr) {
+                 EtaTracker* eta = nullptr,
+                 float eta_km = -1.0f) {
   const int cx  = d.width() / 2;
   const int hdr = d.headerH();
 
@@ -135,9 +138,10 @@ inline void draw(DisplayDriver& d,
   // Optional ETA / closing-speed line. Approaching only — a receding or
   // stationary target shows "ETA: --" rather than a misleading time.
   if (eta) {
-    eta->update(dist_km, millis());
+    const float to_km = eta_km >= 0 ? eta_km : dist_km;
+    eta->update(to_km, millis());
     char eta_s[12];
-    if (eta->eta(dist_km, eta_s, sizeof(eta_s))) {
+    if (eta->eta(to_km, eta_s, sizeof(eta_s))) {
       float spd = imperial ? eta->closing_kmh * 0.621371f : eta->closing_kmh;
       snprintf(line, sizeof(line), "ETA: %s @%d%s", eta_s, (int)(spd + 0.5f), imperial ? "mph" : "kmh");
     } else {

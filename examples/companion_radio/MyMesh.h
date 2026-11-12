@@ -678,6 +678,9 @@ private:
   bool handleCommand(const char* text, uint32_t sender_timestamp, char* reply);
   void checkSerialInterface();
   bool isValidClientRepeatFreq(uint32_t f) const;
+#if FEAT_ROUTES
+  void handleRouteCommand(const uint8_t* frame, size_t len);   // MyMeshRoutes.h
+#endif
 #ifdef ENABLE_SCREENSHOT
   void handleScreenshotRequest();
   void sendScreenshotResponse(uint8_t displayType, uint8_t rotation, uint16_t width, uint16_t height,

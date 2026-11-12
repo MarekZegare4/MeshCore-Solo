@@ -491,6 +491,18 @@ void loop() {
 
 #if defined(SIM_PLATFORM) && defined(__EMSCRIPTEN__)
 #include <emscripten.h>
+// Sim tests: a companion frame to the firmware (handled on the next loop), and
+// the frames it wrote since, each as [len_lo len_hi payload].
+extern "C" EMSCRIPTEN_KEEPALIVE int sim_frame_send(const uint8_t* f, int len) {
+  return sim_serial_interface.queueIn(f, (size_t)len) ? 1 : 0;
+}
+extern "C" EMSCRIPTEN_KEEPALIVE int sim_frame_recv(uint8_t* out, int cap) {
+  return (int)sim_serial_interface.takeOut(out, (size_t)cap);
+}
+#endif
+
+#if defined(SIM_PLATFORM) && defined(__EMSCRIPTEN__)
+#include <emscripten.h>
 // Phase 3 sim test hooks -- a browser test harness (no real phone app, no
 // on-device keyboard-driven compose flow in this sim yet) needs SOME way
 // to trigger "send a flood advert" / "send a DM" from JS. Every one of

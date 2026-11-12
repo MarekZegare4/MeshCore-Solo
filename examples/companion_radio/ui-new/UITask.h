@@ -357,6 +357,7 @@ public:
   void simNodes();                     // sim tests: you and nodes with positions, Nodes open
   void simNavWaypoint(int row);        // sim tests: the navigate view of a waypoint (after simTrail)
   void simTrail();                     // sim tests: a trail and two waypoints for the maps
+  void simRoute(int what);             // sim tests: 0 load a route + follow it, 1 the list, 2 the guide, 3 the map
 #endif
   void openContactDM(const ContactInfo& ci);
   void openChannelHistory(uint8_t channel_idx);   // Favourites dial: open a pinned channel
