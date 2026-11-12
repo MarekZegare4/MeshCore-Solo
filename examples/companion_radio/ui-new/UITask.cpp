@@ -1867,6 +1867,7 @@ void UITask::loop() {
     }
 #endif
   }
+  if (_display != NULL) _display->idle();   // on or off: an e-ink panel sleeps a while after its last frame (Panel sleep)
 
 #ifdef PIN_VIBRATION
   vibration.loop();
@@ -2337,6 +2338,7 @@ void UITask::applyFullRefreshInterval() {
     uint8_t idx = _node_prefs->eink_full_refresh_every;
     if (idx >= OPTS_COUNT) idx = 0;
     _display->setFullRefreshInterval(OPTS[idx]);
+    _display->setPanelSleep(_node_prefs->eink_panel_sleep != 0);
   }
 }
 

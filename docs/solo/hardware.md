@@ -106,6 +106,10 @@ Settings › Display has a few settings of its own:
 - **Joystick** rotation, for a joystick mounted another way.
 - **Full rfsh**: how many partial updates between full ones, against
   ghosting (10 by default).
+- **Panel sleep**: On puts the panel to sleep a second after its last
+  refresh: no voltage held on it, so nothing burns in and the battery lasts
+  longer. Off by default, as some 2.13" panels (marked 0213BN-B74 V4) go grey
+  within seconds without that voltage; if yours stays crisp, turn it on.
 - **Text size** and **Icon size** (4.26" only): the text and the status
   bar's icons, larger or smaller.
 

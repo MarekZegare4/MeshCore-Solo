@@ -78,6 +78,9 @@ class GxEPDDisplay : private GxEPDPanel, public EinkGfxDisplay {
   bool _isOn = false;
   uint8_t _full_refresh_interval = 0;
   uint8_t _partial_count = 0;
+  bool _panel_sleep = false;        // Settings > Display > Panel sleep
+  bool _awake = false;              // controller out of deep sleep: a refresh since the last idle() sleep
+  unsigned long _refreshed_at = 0;
 
   // GxEPD2_EPD::setBusyCallback() wants a plain function pointer with a
   // void* param, not a member function -- this trampolines back into the
@@ -113,5 +116,7 @@ public:
   void clear() override;
   void setDisplayRotation(uint8_t rot) override;
   void setFullRefreshInterval(uint8_t n) override { _full_refresh_interval = n; _partial_count = 0; }
+  void setPanelSleep(bool on) override { _panel_sleep = on; }
   void endFrame() override;
+  void idle() override;
 };

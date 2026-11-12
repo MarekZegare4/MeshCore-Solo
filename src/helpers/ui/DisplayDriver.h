@@ -549,6 +549,8 @@ public:
   virtual void setBrightness(uint8_t level) { }  // level 0-4 (min to max), no-op default
   virtual void setDisplayRotation(uint8_t rot) { }  // 0-3, no-op for fixed-orientation displays
   virtual void setFullRefreshInterval(uint8_t n) { }  // e-ink: do full refresh every n partial refreshes (0=never)
+  virtual void setPanelSleep(bool on) { }   // e-ink: the panel sleeps a second after its last refresh
+  virtual void idle() { }   // every UI loop pass, between frames: e-ink puts its panel to sleep
   virtual void setUiScale(uint8_t font_scale) { }    // e-ink: text pixel multiplier, 0 = build default
   // Sideways slide between two frames, for screens that page left/right.
   // slideBegin() keeps rows y0.. of the frame on screen now; call it before the

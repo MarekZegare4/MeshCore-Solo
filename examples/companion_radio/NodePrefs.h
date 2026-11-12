@@ -202,6 +202,8 @@ struct NodePrefsFields {
   uint8_t  display_rotation;    // 0-3; only used on e-ink displays
   uint8_t  joystick_rotation;   // 0-3 steps CW; independent of display_rotation
   uint8_t  eink_full_refresh_every; // index into {0,5,10,20,30}: full refresh every N partials (0=off)
+  uint8_t  eink_panel_sleep;     // 1: the e-ink panel sleeps a second after its last refresh (no voltage held);
+                                 // 0 (default): held on, for panels whose picture greys without it
   // Text and icon size (ui-new, big e-ink panels): Settings > Display, only on
   // builds that opt in (EINK_FONT_SCALE / STATUS_ICON_SCALE). ui_text_scale:
   // the font's pixel multiplier, 1-5; 0 is the build's own (DataStore sanitize
@@ -915,7 +917,7 @@ class NodePrefs : public NodePrefsFields, public ConfigSerializer {
     s.def("auto_off", auto_off_secs); s.def("auto_lock", auto_lock);
     s.def("lock_compact", lock_compact);
     s.def("rot", display_rotation); s.def("joy_rot", joystick_rotation);
-    s.def("eink_full", eink_full_refresh_every);
+    s.def("eink_full", eink_full_refresh_every); s.def("eink_sleep", eink_panel_sleep);
     s.def("text_scale", ui_text_scale); s.def("icon_scale", ui_icon_scale);
     s.def("pages", home_pages_mask); s.hex("dash", dashboard_fields);
     s.hex("order", page_order); s.def("order_set", page_order_set);

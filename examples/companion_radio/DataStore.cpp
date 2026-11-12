@@ -265,6 +265,7 @@ public:
 // Every value inside its range, whatever the file held: a damaged byte reads
 // as the default rather than as a setting no screen can show.
 static void sanitize(NodePrefs& p) {
+  if (p.eink_panel_sleep > 1) p.eink_panel_sleep = 0;
 #if !FEAT_JOYSTICK_ROTATION_SETTING
   p.joystick_rotation = 0;   // no setting for it on this build
 #endif

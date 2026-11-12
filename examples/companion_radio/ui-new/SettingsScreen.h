@@ -27,6 +27,7 @@ class SettingsScreen : public UIScreen {
 #endif
 #if FEAT_FULL_REFRESH_SETTING
     EINK_FULL_REFRESH,
+    EINK_PANEL_SLEEP,
 #endif
     // Sound section
     SECTION_SOUND,
@@ -579,6 +580,8 @@ class SettingsScreen : public UIScreen {
       uint8_t idx = p ? p->eink_full_refresh_every : 0;
       if (idx >= EINK_FULL_REFRESH_COUNT) idx = 0;
       val("Full rfsh", EINK_FULL_REFRESH_LABELS[idx]);
+    } else if (item == EINK_PANEL_SLEEP) {
+      val("Panel sleep", (p && p->eink_panel_sleep) ? "On" : "Off");
 #endif
     } else if (item == DM_FILTER) {
       val("DMs", (p && p->dm_show_all) ? "All" : "Fav");
@@ -1223,6 +1226,12 @@ public:
       idx = (idx + (left ? EINK_FULL_REFRESH_COUNT - 1 : 1)) % EINK_FULL_REFRESH_COUNT;
       p->eink_full_refresh_every = idx;
       _task->applyFullRefreshInterval();
+      _dirty = true;
+      return true;
+    }
+    if (_selected == EINK_PANEL_SLEEP && p && (left || right || enter)) {
+      p->eink_panel_sleep = p->eink_panel_sleep ? 0 : 1;
+      _task->applyFullRefreshInterval();   // also hands the display Panel sleep
       _dirty = true;
       return true;
     }

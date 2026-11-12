@@ -49,6 +49,8 @@ bool GxEPDDisplay::begin() {
   display.setPartialWindow(0, 0, display.width(), display.height());
   display.fillScreen(GxEPD_WHITE);
   display.display(true);
+  _awake = true;
+  _refreshed_at = millis();
 #if DISP_BACKLIGHT
   digitalWrite(DISP_BACKLIGHT, LOW);
   pinMode(DISP_BACKLIGHT, OUTPUT);
@@ -132,11 +134,27 @@ void GxEPDDisplay::endFrame() {
     // doesn't make the picture keep. Seen on 0213BN-B74 "V4" panels; others
     // keep it, as the maker's datasheet says (deep sleep after each refresh).
     // A colder forced temperature (0x1A, a longer OTP waveform, down to 0 C)
-    // didn't help. So the same frame once more as a redriven
-    // partial, which leaves the voltage on as after any other frame.
-    if (!partial) {
+    // didn't help. So, unless the panel is to sleep anyway
+    // (Panel sleep, idle()), the same frame once more as a redriven partial,
+    // which leaves the voltage on as after any other frame.
+    if (!partial && !_panel_sleep) {
       display.writeInverseForRedrive();
       display.display(true);
     }
+    _awake = true;
+    _refreshed_at = millis();
+  }
+}
+
+// Panel sleep on: a second after the last refresh the controller goes into deep
+// sleep (the maker's flow: power off after each refresh). The picture stays on a
+// panel that keeps it without voltage, nothing is held on the glass for hours
+// (no burn-in), and the booster stops drawing; the next frame's write resets and
+// re-inits it on its own. The second keeps scrolling through a list awake.
+void GxEPDDisplay::idle() {
+  static const unsigned long SLEEP_AFTER_MS = 1000;
+  if (_panel_sleep && _awake && millis() - _refreshed_at >= SLEEP_AFTER_MS) {
+    _awake = false;
+    display.hibernate();
   }
 }
