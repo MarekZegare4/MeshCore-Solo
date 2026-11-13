@@ -1529,7 +1529,7 @@ void UITask::loop() {
     _display_was_on = on;
   }
   if (status_screen) ((StatusScreen*)status_screen)->sample();   // Status history lines, once a minute
-  _kb.one_button = oneButtonUi();   // the keyboard as the strip (KeyboardWidget::stripKey)
+  _kb.one_button = oneButtonUi() && !hasCardKB();   // the keyboard as the strip (KeyboardWidget::stripKey); a CardKB types instead
 #if defined(SIM_PLATFORM) && defined(__EMSCRIPTEN__)
   if (_ob_used) oneButtonGesture(_one_btn.update(_sim_btn_down, millis()));   // the page's one button
 #endif
@@ -1633,6 +1633,19 @@ void UITask::loop() {
     } else {
       enqueueKey(checkDisplayOn(KEY_CANCEL));
     }
+  } else if (ev == BUTTON_EVENT_TRIPLE_CLICK) {
+    if (!_locked) enqueueKey(handleTripleClick(KEY_SELECT));
+  }
+#elif defined(PIN_USER_BTN) && !UI_ONE_BUTTON
+  // A board with a button beside other input (the Simpson's keypad): the
+  // MomentaryButton's events, as before one-button boards.
+  int ev = user_btn.check();
+  if (ev == BUTTON_EVENT_CLICK) {
+    enqueueKey(checkDisplayOn(KEY_NEXT));
+  } else if (ev == BUTTON_EVENT_LONG_PRESS) {
+    enqueueKey(handleLongPress(KEY_ENTER));
+  } else if (ev == BUTTON_EVENT_DOUBLE_CLICK) {
+    enqueueKey(handleDoubleClick(KEY_PREV));
   } else if (ev == BUTTON_EVENT_TRIPLE_CLICK) {
     if (!_locked) enqueueKey(handleTripleClick(KEY_SELECT));
   }
@@ -2538,6 +2551,8 @@ static bool homePagesCli(NodePrefs* p, const char* cmd, char* reply, int n) {
   auto have = [&](uint8_t b) { for (int i = 0; i < cnt; i++) if (order[i] == b) return true; return false; };
   auto known = [&](uint8_t b) { for (int i = 0; i < CLI_PAGE_N; i++) if (CLI_PAGES[i] == b) return true; return false; };
   uint16_t mask = p->home_pages_mask ? p->home_pages_mask : NodePrefs::HP_ALL;
+  int o = 0;   // the reply so far, never past its end
+  auto add = [&](const char* a, const char* b) { if (o < n - 1) { const int w = snprintf(reply + o, n - o, "%s%s", a, b); o = w < n - o ? o + w : n - 1; } };
   if (!set) {
     if (p->page_order_set == NodePrefs::PAGE_ORDER_MAGIC)
       for (int i = 0; i < NodePrefs::PAGE_ORDER_LEN; i++) {
@@ -2546,14 +2561,14 @@ static bool homePagesCli(NodePrefs* p, const char* cmd, char* reply, int n) {
         if (known(v - 1) && !have(v - 1)) order[cnt++] = v - 1;
       }
     for (int i = 0; i < CLI_PAGE_N; i++) if (!have(CLI_PAGES[i])) order[cnt++] = CLI_PAGES[i];
-    int o = snprintf(reply, n, "> ");
+    add("> ", "");
     for (int pass = 0; pass < 2; pass++) {   // shown, then hidden
       bool first = true;
-      for (int i = 0; i < cnt && o < n - 1; i++) {
+      for (int i = 0; i < cnt; i++) {
         const uint16_t m = cliPageMask(order[i]);
         if ((!m || (mask & m)) != (pass == 0)) continue;
-        if (pass && first) o += snprintf(reply + o, n - o, " | hidden: ");
-        o += snprintf(reply + o, n - o, "%s%s", first ? "" : ", ", NodePrefs::homePageLabel(order[i]));
+        if (pass && first) add(" | hidden: ", "");
+        add(first ? "" : ", ", NodePrefs::homePageLabel(order[i]));
         first = false;
       }
     }
@@ -2570,8 +2585,8 @@ static bool homePagesCli(NodePrefs* p, const char* cmd, char* reply, int n) {
       if ((int)strlen(l) == e - c && !strncasecmp(l, c, e - c)) hit = CLI_PAGES[i];
     }
     if (hit < 0) {
-      int o = snprintf(reply, n, "Error, pages are: ");
-      for (int i = 0; i < CLI_PAGE_N; i++) o += snprintf(reply + o, n - o, "%s%s", i ? ", " : "", NodePrefs::homePageLabel(CLI_PAGES[i]));
+      add("Error, pages are: ", "");
+      for (int i = 0; i < CLI_PAGE_N; i++) add(i ? ", " : "", NodePrefs::homePageLabel(CLI_PAGES[i]));
       return true;
     }
     if (!have((uint8_t)hit)) order[cnt++] = (uint8_t)hit;

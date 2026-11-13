@@ -1687,7 +1687,7 @@ public:
       int row = _fav_sel / cols;
       if ((c == KEY_LEFT  || c == KEY_PREV) && col > 0)        { _fav_sel--;        return true; }
       if ((c == KEY_RIGHT || c == KEY_NEXT) && col < cols - 1) { _fav_sel++;        return true; }
-      if (c == KEY_NEXT && _fav_sel + 1 < NodePrefs::FAVOURITES_COUNT) { _fav_sel++; return true; }   // one button: on to the next row
+      if (c == KEY_NEXT && _task->oneButtonUi() && _fav_sel + 1 < NodePrefs::FAVOURITES_COUNT) { _fav_sel++; return true; }   // one button: on to the next row
       if (c == KEY_UP    && row > 0)                            { _fav_sel -= cols; return true; }
       if (c == KEY_DOWN  && row < rows - 1)                     { _fav_sel += cols; return true; }
       if (c == KEY_CONTEXT_MENU) {

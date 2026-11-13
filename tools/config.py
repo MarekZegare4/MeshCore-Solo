@@ -185,7 +185,11 @@ def cmd_export(args):
         out = {"format": FORMAT, "version": 1, "saved": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
                "device": info}
         progress("name and radio")
-        out["identity"] = {"name": cli.get("get name"), "tz": int(cli.get("get tz.offset"))}
+        try:
+            tz = int(float(cli.get("get tz.offset")))
+        except (DeviceError, ValueError):
+            tz = 0
+        out["identity"] = {"name": cli.get("get name"), "tz": tz}
         try:
             pin = cli.get("get pin")
             if re.fullmatch(r"\d{6}", pin):

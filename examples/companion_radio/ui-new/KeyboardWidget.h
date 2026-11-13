@@ -1126,7 +1126,10 @@ struct KeyboardWidget {
     if (isPin() && pin_kb_mask_enabled) { for (int i = 0; i < len && sl < KB_MAX_LEN; i++) shown[sl++] = '*'; shown[sl] = 0; }
     else { memcpy(shown, buf, len + 1); sl = len; }
     const char* from = shown;
-    while (*from && (int)d.getTextWidth(from) > W - 6) from++;
+    while (*from && (int)d.getTextWidth(from) > W - 6) {   // drop whole letters from the front
+      from++;
+      while ((*from & 0xC0) == 0x80) from++;
+    }
     d.setCursor(2, y);
     d.print(from);
     const int cx = 2 + d.getTextWidth(from) + 1;

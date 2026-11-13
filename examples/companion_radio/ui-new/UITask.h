@@ -55,8 +55,10 @@ struct UiEvent;
 // ui-new is the lite frontend of the UI Core: MyMesh talks to the Core (see
 // meshListener()), the Core calls back through UiCoreHost and UiEventQueue.
 // A board whose only input is its one button (a bare Heltec V3/V4, the
-// Watch13): the gestures of OneButton.h drive the whole UI.
-#if !UI_HAS_JOYSTICK && defined(PIN_USER_BTN) && !defined(SIMPSON)
+// Watch13, a ProMicro): the gestures of OneButton.h drive the whole UI. Not a
+// board with a keypad or keyboard beside its button (the Simpson's keypad, the
+// Cardputer's and the T-Echo Lite shield's TCA8418).
+#if !UI_HAS_JOYSTICK && defined(PIN_USER_BTN) && !defined(SIMPSON) && !defined(ENV_USE_TCA8418)
   #define UI_ONE_BUTTON 1
 #else
   #define UI_ONE_BUTTON 0
