@@ -13,7 +13,8 @@ still connects as with the stock firmware, over Bluetooth or USB.
 - **Messages without a phone**: channels, direct messages and rooms, with
   quick replies, live placeholders (`{loc}`, `{time}`, sensor readings) and
   keyboards for Latin, Cyrillic, Greek and European diacritics.
-- **GPS navigation**: trail recording with GPX export, waypoints, a compass,
+- **GPS navigation**: trail recording with GPX export, routes planned on a
+  computer to follow, waypoints, a compass,
   navigate to any node, waypoint or shared location, live location sharing
   and a geofence alert (Locator).
 - **Nearby nodes**: who's around, signal and distance, ping, and remote
@@ -36,7 +37,8 @@ These docs mark the differences with notes like this:
 
 | Group | Devices | Controls |
 | ----- | ------- | -------- |
-| **Joystick** | Wio Tracker L1 (OLED / e-ink), GAT562 30S, GAT562 Watch13, Heltec V3/V4 with a joystick | Four directions, Enter, Back |
+| **Joystick** | Wio Tracker L1 (OLED / e-ink), GAT562 30S, Heltec V3/V4 with a joystick | Four directions, Enter, Back |
+| **One button** | Heltec V3/V4 on its own, GAT562 Watch13 | Click, double click, hold ([One button](./one-button.md)) |
 | **Keyboard** | M5Stack Cardputer ADV, T-Echo Lite + KeyShield, any board with a CardKB | Keys; arrows or their Fn combinations for the directions |
 | **Touch** | Wio Tracker L2 | Taps, swipes and holds; two side buttons |
 
@@ -44,7 +46,7 @@ These docs mark the differences with notes like this:
 | :---: | :---: | :---: |
 | ![Clock page](./img/oled-clock.png) | ![A channel](./img/eink-channel.png) | ![Home screen](./img/l2-home.png) |
 
-The joystick and keyboard devices share one interface, sized for small OLED
+The joystick, one-button and keyboard devices share one interface, sized for small OLED
 and e-ink screens. The Wio Tracker L2 has its own, built for a 320 × 240
 colour touch screen, with extras its hardware allows: an offline map, message
 history on the SD card and updates over WiFi.
@@ -59,6 +61,8 @@ history on the SD card and updates over WiFi.
 - [Settings](./settings.md): what is where
 - [Screen lock](./lock.md): locking, auto-lock, PIN
 - [Hardware](./hardware.md): external keyboards and joysticks, e-ink, SD card, WiFi
+- [One button](./one-button.md): the whole interface from a single button
+- [Configurator](./configurator.md): settings, Home's pages, quick messages, melodies, routes and a backup, from a computer over USB
 
 For developers: [UI Core](./developer/ui-core.md), [UI framework](./developer/ui-framework.md), [build flags](./developer/build-flags.md), [feature matrix](./developer/feature-matrix.md).
 

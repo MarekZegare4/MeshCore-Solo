@@ -260,7 +260,9 @@ drop duplicates already relayed by someone else, and relay only your
 
 **Tools › Ringtone** composes two melodies of up to 32 notes (pitch, octave,
 length, tempo). Use them for notifications in Settings › Sound, or for a
-single contact or channel from its options.
+single contact or channel from its options. The
+[configurator](./configurator.md#melodies) edits the same two melodies on a
+piano roll, and takes ringtones in RTTTL.
 
 > [!NOTE]
 > **Wio Tracker L2:** the melody editor is under Settings › Sound.

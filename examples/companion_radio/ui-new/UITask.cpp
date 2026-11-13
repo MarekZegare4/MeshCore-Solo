@@ -1529,7 +1529,7 @@ void UITask::loop() {
     _display_was_on = on;
   }
   if (status_screen) ((StatusScreen*)status_screen)->sample();   // Status history lines, once a minute
-  _kb.one_button = oneButtonUi() && !hasCardKB();   // the keyboard as the strip (KeyboardWidget::stripKey); a CardKB types instead
+  _kb.one_button = oneButtonUi();   // the keyboard as the strip (KeyboardWidget::stripKey); not with a CardKB
 #if defined(SIM_PLATFORM) && defined(__EMSCRIPTEN__)
   if (_ob_used) oneButtonGesture(_one_btn.update(_sim_btn_down, millis()));   // the page's one button
 #endif

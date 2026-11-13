@@ -29,11 +29,12 @@ to keep it through a reboot.
 
 ### GPX export
 
-Connect USB, open the [configurator](https://solo.marekzegarek.com/configure.html#screen) on the Solo site in
+Connect USB, open the [configurator](./configurator.md) on the Solo site in
 Chrome or Edge and click **Connect device**, then on the device choose
-**Trail file › Export**. The GPX includes your waypoints. Without a browser,
-`uv run tools/trail_export.py` does the same. Disconnect the phone app first if
-it's connected over USB.
+**Trail file › Export**: the trail opens on its **Routes & trail** tab, to
+save as a GPX (your waypoints included), trim, or send back as a route.
+Without a browser, `uv run tools/trail_export.py` does the same. Disconnect
+the phone app first if it's connected over USB.
 
 > [!NOTE]
 > **Wio Tracker L2:** the trail holds 32,768 points, every GPS fix 5 m or
@@ -45,6 +46,35 @@ it's connected over USB.
 > **Map tools**, the settings in Settings › Map. **GPX** writes the trail to
 > `trails/` on the SD card; take it off with the card as a USB drive
 > ([Hardware](./hardware.md)) and open it in the USB tools for a preview.
+
+## Planned routes
+
+A route planned on a computer (in any planner that saves GPX), put on the
+device to follow. Open the GPX in the [configurator](./configurator.md#routes--trail)
+(or `uv run tools/route.py upload walk.gpx`): it is simplified to what the
+device holds, up to 4,000 points, keeping the bends. The device keeps eight.
+
+**Tools › Trail**, hold Enter, **Routes...** lists them with their length.
+Hold Enter on one: **Follow**, **Follow reversed** (the way back) or
+**Delete**. While you follow it:
+
+- The navigation view points to the next bend, not the end, with the
+  distance left on the route and the time to its end.
+- **Off route** with a tune when you stray more than 50 m, **Back on route**
+  when you return, **Route finished** at the end.
+- It keeps going whatever screen is up, and through a restart.
+
+Hold Enter on the route you follow for **Guide** (the navigation view) or
+**Stop**.
+
+Routes are kept on the flash where messages are: the Wio Tracker L1 (OLED and
+e-ink), the Watch13, the Heltec V3/V4 and the Cardputer.
+
+> [!NOTE]
+> **Wio Tracker L2:** **Map tools › Route**: the routes, Follow / Follow
+> reversed / Delete, and **Import** of a `.gpx` from the SD card (in
+> `/routes` or the card's top folder). The route is drawn on the map under
+> the trail.
 
 ## Waypoints
 

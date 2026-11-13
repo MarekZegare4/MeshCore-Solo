@@ -77,7 +77,8 @@ haven't read, its unread count gets a **+** (for example `48+`).
 Open a conversation and choose **+ Send** (or Enter at the bottom of the
 history). Pick a quick message or **Custom message** for the keyboard.
 
-- **Quick messages**: ten of your own, edited in Settings › Messages.
+- **Quick messages**: ten of your own, edited in Settings › Messages, or
+  typed on a computer in the [configurator](./configurator.md).
 - If a message can't be sent, you stay where you were: the keyboard keeps
   the text (its label reads **Not sent**), so you can send it again.
 - **Placeholders** fill in live data when the message is sent:

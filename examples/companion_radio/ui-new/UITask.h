@@ -572,7 +572,8 @@ public:
   // The lock screen shows the unlock hint for a few seconds after a key press
   // (and all through the Back + 3x Enter sequence).
   // The UI is driven by one button: hints say "hold", "double-click".
-  bool oneButtonUi() const { return UI_ONE_BUTTON || _ob_used; }
+  // Not with a CardKB plugged in: its arrows and Enter drive it, hints as for a joystick.
+  bool oneButtonUi() const { return (UI_ONE_BUTTON || _ob_used) && !hasCardKB(); }
   bool oneButtonEditing() const { return _ob_edit; }
   bool lockHintShown() const { return _lock_seq_count > 0 || (_lock_hint_ms && millis() - _lock_hint_ms < 3000); }
   bool hasCardKB() const {

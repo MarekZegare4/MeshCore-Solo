@@ -16,6 +16,11 @@ Lists wrap around at both ends. Any key wakes a dark screen without acting on it
 
 Keyboard devices use the same controls, from the arrow keys (or their Fn
 combinations), Enter and Esc. [Hardware](./hardware.md) has the key maps.
+A device with only its own button (a bare Heltec, the Watch13) does it all
+with clicks and holds: [One button](./one-button.md).
+
+The [configurator](./configurator.md) sets the device up from a computer
+over USB: settings, Home's pages, quick messages, melodies, routes, backups.
 
 > [!NOTE]
 > **Wio Tracker L2:** tap to open, hold for options, swipe sideways between
