@@ -252,7 +252,14 @@ public:
             break;
           case ACT_MARK:          _wp.markHere();      break;
           case ACT_WAYPOINTS:     _wp.openList();      break;
+#if FEAT_ROUTES
+          case ACT_TRACKBACK:
+            if (_task->core().guide.trackBack()) { _task->core().guide.stop(); _task->showAlert("Track back stopped", 1000); }
+            else _routes.followTrail();
+            break;
+#else
           case ACT_TRACKBACK:     _wp.startTrackBack(); break;
+#endif
 #if FEAT_ROUTES
           case ACT_ROUTES:        _routes.openList();  break;
           case ACT_ROUTE_GUIDE:   _routes.openGuide(); break;
@@ -417,7 +424,10 @@ private:
     _action_menu.begin("Trail", 4);
 #if FEAT_ROUTES
     // Following a route: its guide first, the way back to it from anywhere.
-    if (_task->core().guide.slot() >= 0) pushAction(ACT_ROUTE_GUIDE, "Route guide");
+    const bool tb = _task->core().guide.trackBack();
+    if (_task->core().guide.slot() >= 0) pushAction(ACT_ROUTE_GUIDE, _task->core().guide.slot() == PlannedRoutes::TRAIL_SLOT ? "Track back guide" : "Route guide");
+#else
+    const bool tb = false;
 #endif
     pushAction(ACT_TOGGLE,    _act_toggle_label);
     pushAction(ACT_MARK,      "Mark here");
@@ -425,7 +435,8 @@ private:
     // backtrack (Trail-start row) and the "+ Add by coords" entry.
     pushAction(ACT_WAYPOINTS, "Waypoints...");
     // Track back retraces the recorded route to its start; needs ≥2 points.
-    if (_store->count() >= 2) pushAction(ACT_TRACKBACK, "Track back");
+    if (tb) pushAction(ACT_TRACKBACK, "Stop track back");
+    else if (_store->count() >= 2) pushAction(ACT_TRACKBACK, "Track back");
 #if FEAT_ROUTES
     pushAction(ACT_ROUTES,    "Routes...");
 #endif

@@ -57,7 +57,7 @@ void MyMesh::handleRouteCommand(const uint8_t* frame, size_t len) {
 
   } else if (sub == GET) {
     RouteInfo ri;
-    if (len < 3 || !PlannedRoutes::info(frame[2], ri)) { writeErrFrame(ERR_CODE_NOT_FOUND); return; }
+    if (len < 3 || frame[2] >= PlannedRoutes::SLOTS || !PlannedRoutes::info(frame[2], ri)) { writeErrFrame(ERR_CODE_NOT_FOUND); return; }
     out_frame[i++] = RESP_CODE_ROUTE;
     out_frame[i++] = GET;
     out_frame[i++] = frame[2];
@@ -116,7 +116,7 @@ void MyMesh::handleRouteCommand(const uint8_t* frame, size_t len) {
     _serial->writeFrame(out_frame, i);
 
   } else if (sub == DELETE) {
-    if (len < 3 || !PlannedRoutes::remove(frame[2])) { writeErrFrame(ERR_CODE_NOT_FOUND); return; }
+    if (len < 3 || frame[2] >= PlannedRoutes::SLOTS || !PlannedRoutes::remove(frame[2])) { writeErrFrame(ERR_CODE_NOT_FOUND); return; }
     writeOKFrame();
 
   } else if (sub == ABORT) {

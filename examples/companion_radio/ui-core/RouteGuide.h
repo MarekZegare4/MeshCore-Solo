@@ -8,6 +8,9 @@
 // that crosses itself or comes back the same way doesn't throw you to the
 // other leg). Nothing near enough there: the whole route is searched, and a
 // place further on, within a little of the nearest, wins (a shortcut taken).
+// On the first fix, or when the nearest is a jump ahead, the earliest place
+// within SNAP_SLACK_M of the nearest: a loop's end lies beside its start, and
+// GPS noise mustn't put you at the end.
 // Then the target: the first point at least LOOKAHEAD_M further along, so the
 // arrow leads round the bends; off the route, the nearest point on it.
 //
@@ -28,6 +31,8 @@ public:
   static const int WIN_BACK    = 2;
   static const int WIN_AHEAD   = 40;
   static const int SHORTCUT_SLACK_M = 20;
+  static const int SNAP_SLACK_M = 30;
+  static const int JUMP_M = 100;
   static const uint32_t POLL_MS = 1000;
   static const uint32_t FULL_SEARCH_MS = 10000;   // off route: the whole route at most this often
 
@@ -54,6 +59,7 @@ public:
     _off_m = 0;
     _snap = true;
     _have_target = false;
+    _joined = false;
     _next_full = 0;
     _next_poll = 0;
     _state = ON_ROUTE;
@@ -66,6 +72,8 @@ public:
   bool  offRoute() const  { return _state == OFF_ROUTE; }
   int   slot() const      { return _state == OFF ? -1 : _slot; }
   bool  reversed() const  { return _rev; }
+  // Track back: the trail's copy, followed backwards (UiCore::startTrackBack).
+  bool  trackBack() const { return active() && _slot == PlannedRoutes::TRAIL_SLOT; }
   const char* name() const { return _info.name; }
   const RouteInfo& info() const { return _info; }
   uint32_t totalM() const     { return _info.length_m; }
@@ -97,7 +105,7 @@ public:
   // "4.2 km left", "Off route 80 m", "Finished": a header for the navigate view.
   void label(char* out, int n, bool imperial) const {
     char d[12];
-    if (_state == FINISHED) { snprintf(out, n, "Route finished"); return; }
+    if (_state == FINISHED) { snprintf(out, n, "%s", finishedText()); return; }
     if (_snap) { snprintf(out, n, "Route: no fix"); return; }
     if (_state == OFF_ROUTE) {
       geo::fmtDist(d, sizeof(d), _off_m / 1000.0f, imperial);
@@ -105,7 +113,7 @@ public:
       return;
     }
     geo::fmtDist(d, sizeof(d), remainingM() / 1000.0f, imperial);
-    snprintf(out, n, "%s left", d);
+    snprintf(out, n, _slot == PlannedRoutes::TRAIL_SLOT ? "%s to start" : "%s left", d);
   }
 
   void loop() {
@@ -145,6 +153,7 @@ public:
       if (s0 < 0) s0 = 0;
       if (s1 > nseg - 1) s1 = nseg - 1;
       scan(f, s0, s1, best, ahead);
+      if (best.seg >= 0 && best.along - _along > JUMP_M) earliestNear(f, s0, s1, best);
     }
     if (_snap || best.d > OFF_ENTER_M) {
       if (_snap || (int32_t)(millis() - _next_full) >= 0) {
@@ -157,6 +166,7 @@ public:
         const bool shortcut = !_snap && all_ahead.seg >= 0 && all_ahead.d <= all.d + SHORTCUT_SLACK_M
                               && all_ahead.along - _along < _info.length_m / 2.0f;
         Cand pick = shortcut ? all_ahead : all;
+        if (_snap && all.seg >= 0) { earliestNear(f, 0, nseg - 1, all); pick = all; }
         if (pick.seg >= 0 && (best.seg < 0 || pick.d < best.d)) best = pick;
       }
     }
@@ -170,10 +180,11 @@ public:
       if (_events) _events->push(UiEventType::RouteAlert, "Off route", false);
     } else if (_state == OFF_ROUTE && best.d < OFF_LEAVE_M) {
       _state = ON_ROUTE;
-      if (_events) _events->push(UiEventType::RouteAlert, "Back on route", true);
+      if (_events) _events->push(UiEventType::RouteAlert, _joined ? "Back on route" : "On route", true);
     } else if (was_snap && best.d > OFF_ENTER_M) {
       _state = OFF_ROUTE;   // started away from it: no alarm, the view says so
     }
+    if (_state == ON_ROUTE) _joined = true;
 
     // Progress moves only while on the route: off it, the place it left stays.
     if (_state == ON_ROUTE) {
@@ -194,11 +205,13 @@ public:
       _state = FINISHED;
       _have_target = false;
       remember(-1, false);   // done: a restart doesn't start it over
-      if (_events) _events->push(UiEventType::RouteAlert, "Route finished", true);
+      if (_events) _events->push(UiEventType::RouteAlert, finishedText(), true);
     }
   }
 
 private:
+  const char* finishedText() const { return _slot == PlannedRoutes::TRAIL_SLOT ? "Back at the start" : "Route finished"; }
+
   void remember(int slot, bool reversed) {
     if (!_prefs) return;
     const uint8_t v = slot < 0 ? 0 : (uint8_t)((slot + 1) | (reversed ? 0x80 : 0));
@@ -286,9 +299,19 @@ private:
     y = (float)(p.lat_1e6 - _lat0) * _ky;
   }
 
+  // `best` the nearest of s0..s1: the nearest of the first stretch of them
+  // within SNAP_SLACK_M of it instead.
+  void earliestNear(File& f, int s0, int s1, Cand& best) {
+    Cand first, unused1, unused2;
+    scan(f, s0, s1, unused1, unused2, best.d + SNAP_SLACK_M, &first);
+    if (first.seg >= 0) best = first;
+  }
+
   // Segments s0..s1 (segment s joins points s and s+1): the nearest of all, and
-  // the nearest of those ending past where you were (a step ahead of _along).
-  void scan(File& f, int s0, int s1, Cand& best, Cand& ahead) {
+  // the nearest of those ending past where you were (a step ahead of _along);
+  // with `first`, the nearest of the first run of segments passing within first_max.
+  void scan(File& f, int s0, int s1, Cand& best, Cand& ahead, float first_max = 0, Cand* first = nullptr) {
+    bool run_over = false;
     for (int s = s0; s <= s1; ) {
       int n = load(f, s, BUF);
       if (n < 2) break;
@@ -310,6 +333,10 @@ private:
         c.lat = a.lat_1e6 + (int32_t)lroundf(t * (float)(b.lat_1e6 - a.lat_1e6));
         c.lon = a.lon_1e6 + (int32_t)lroundf(t * (float)(b.lon_1e6 - a.lon_1e6));
         if (d < best.d) best = c;
+        if (first && !run_over) {
+          if (d <= first_max) { if (d < first->d) *first = c; }
+          else if (first->seg >= 0) run_over = true;
+        }
         if (c.along > _along + LOOKAHEAD_M && d < ahead.d) ahead = c;
       }
       s += n - 1;   // the last point read starts the next block's first segment
@@ -348,6 +375,7 @@ private:
   float    _along = 0;
   float    _off_m = 0;
   bool     _have_target = false;
+  bool     _joined = false;   // been on the route since start(): "Back on route", not "On route"
   int32_t  _t_lat = 0, _t_lon = 0;
   int32_t  _p_lat = 0, _p_lon = 0;
   int32_t  _lat0 = 0, _lon0 = 0;

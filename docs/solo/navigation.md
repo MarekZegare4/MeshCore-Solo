@@ -14,8 +14,9 @@ switches between the **Summary** (distance, time, speed or pace), the **Map**
 point **List**.
 
 **Hold Enter** for the trail menu: start / stop, mark a waypoint, the waypoint
-list, **Track back** (retrace the route to where it started), share your
-position, the trail file, and the trail settings:
+list, **Track back** (back along the trail to where it started, guided as a
+[planned route](#planned-routes) is: on any screen, with Off route), share
+your position, the trail file, and the trail settings:
 
 - **Min dist**: how far apart points are recorded.
 - **Auto-pause**: pauses the trail after you stop for 1–5 minutes and resumes
@@ -65,7 +66,7 @@ Hold Enter on one: **Follow**, **Follow reversed** (the way back) or
 - It keeps going whatever screen is up, and through a restart.
 
 Hold Enter on the route you follow for **Guide** (the navigation view) or
-**Stop**.
+**Stop**. One route at a time: following another, or Track back, stops it.
 
 Routes are kept on the flash where messages are: the Wio Tracker L1 (OLED and
 e-ink), the Watch13, the Heltec V3/V4 and the Cardputer.

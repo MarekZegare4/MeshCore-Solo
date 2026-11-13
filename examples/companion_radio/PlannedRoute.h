@@ -9,7 +9,8 @@
 // an ESP32, the sim's disk. Never the nRF52's internal 28 KB.
 //
 // A route is a slot, /rt0 .. /rt<SLOTS-1>, flat names (SPIFFS has no
-// directories). The file is its points and then a trailer, so it's written
+// directories). One more, TRAIL_SLOT, isn't listed or reachable over USB: Track
+// back's copy of the trail, followed backwards as any route is. The file is its points and then a trailer, so it's written
 // start to end with nothing gone back over; it's written as /rt.tmp and
 // renamed over the slot once whole, so a cut-short upload leaves the slot as it
 // was. A file is good when its size is exactly count points + the trailer.
@@ -56,6 +57,8 @@ static_assert(sizeof(RouteInfo) == 52, "RouteInfo is the file's trailer");
 class PlannedRoutes {
 public:
   static const int      SLOTS = ROUTE_SLOTS;
+  static const int      TRAIL_SLOT = ROUTE_SLOTS;   // Track back's (ui-core/UiCore.h)
+  static bool validSlot(int slot) { return slot >= 0 && slot <= TRAIL_SLOT; }
   static const int      MAX_POINTS = ROUTE_MAX_POINTS;
   static const uint32_t MAGIC = 0x31455452;   // "RTE1" little-endian
   static const uint8_t  VERSION = 1;
@@ -91,7 +94,7 @@ public:
 
   // The slot's trailer; false when it's empty or not a whole route.
   static bool info(int slot, RouteInfo& out) {
-    if (slot < 0 || slot >= SLOTS) return false;
+    if (!validSlot(slot)) return false;
     if (!fs()) return false;
     char p[8]; slotPath(slot, p, sizeof(p));
     File f = openRead(p);
@@ -121,7 +124,7 @@ public:
 
   static bool remove(int slot) {
     FILESYSTEM* f = fs();
-    if (!f || slot < 0 || slot >= SLOTS) return false;
+    if (!f || !validSlot(slot)) return false;
     char p[8]; slotPath(slot, p, sizeof(p));
     bool ok = f->remove(p);
     generation()++;
@@ -138,7 +141,7 @@ public:
   // fn(const RoutePoint&, int index) for every point of a slot, a block at a time.
   template <class Fn>
   static bool forEach(int slot, Fn fn) {
-    if (!fs() || slot < 0 || slot >= SLOTS) return false;
+    if (!fs() || !validSlot(slot)) return false;
     char p[8]; slotPath(slot, p, sizeof(p));
     File f = openRead(p);
     if (!f) return false;
@@ -161,8 +164,9 @@ public:
     abort();
     FILESYSTEM* f = fs();
     DataStore* ds = the_mesh.getDataStore();
-    if (!f || !ds || slot < 0 || slot >= SLOTS || count < 2 || count > MAX_POINTS) return false;
-    _file = new File(ds->openWrite(f, TMP));
+    if (!f || !ds || !validSlot(slot) || count < 2 || count > MAX_POINTS) return false;
+    _slot = slot;
+    _file = new File(ds->openWrite(f, tmp()));
     if (!*_file) { delete _file; _file = nullptr; return false; }
     memset(&_info, 0, sizeof(_info));
     _info.magic = MAGIC;
@@ -175,7 +179,6 @@ public:
       while (n > 0 && ((uint8_t)name[n] & 0xC0) == 0x80) n--;   // not mid-letter
     }
     if (n) memcpy(_info.name, name, n);
-    _slot = slot;
     _written = 0;
     _open = true;
     return true;
@@ -213,8 +216,8 @@ public:
     closeFile();
     DataStore* ds = the_mesh.getDataStore();
     char p[8]; slotPath(_slot, p, sizeof(p));
-    if (ok) ok = ds->commitFile(fs(), TMP, p);
-    if (!ok) fs()->remove(TMP);
+    if (ok) ok = ds->commitFile(fs(), tmp(), p);
+    if (!ok) fs()->remove(tmp());
     generation()++;
     return ok;
   }
@@ -222,7 +225,7 @@ public:
   void abort() {
     if (!_open) return;
     closeFile();
-    if (fs()) fs()->remove(TMP);
+    if (fs()) fs()->remove(tmp());
   }
 
   // The first empty slot, else -1.
@@ -234,6 +237,8 @@ public:
 
 private:
   static constexpr const char* TMP = "/rt.tmp";
+  // Track back's own, so it can't meet a USB upload's half-written file.
+  const char* tmp() const { return _slot == TRAIL_SLOT ? "/rtt.tmp" : TMP; }
   void closeFile() {
     if (_file) { _file->close(); delete _file; _file = nullptr; }
     _open = false;

@@ -191,6 +191,7 @@ public:
   void simNavTarget(int32_t lat_1e6, int32_t lon_1e6);   // a waypoint as the navigation target
   UiCore& core() { return *_core; }   // sim tests
   void simDm();                         // the first chat contact's thread
+  void simTrail();                      // a trail to walk back
   void simUnread();                     // read and new messages to open on
   void simSleep(bool on) { if (on) sleep(); else wake(); }
   void simLock(bool on) { if (on) lockScreen(); else unlockScreen(); }
@@ -528,7 +529,6 @@ private:
   void placeCard(lv_obj_t* parent, int32_t lat, int32_t lon);
   void refreshNavTools();
   void navPollAveraging();
-  void navPollTrackBack();
   bool navCurrentTarget(int32_t& lat, int32_t& lon, char* name, int n, bool& person, bool& set);
   bool exportTrailGpx(char* name_out, size_t n);
   void mapDownloadTick();

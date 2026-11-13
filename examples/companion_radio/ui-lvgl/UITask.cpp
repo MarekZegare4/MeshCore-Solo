@@ -75,7 +75,6 @@ static bool s_chats_stale = false;   // Messages: a refresh waits for a held row
 #include "../ui-core/SettingsCli.h"   // the companion CLI's settings keys
 #include "../ui-core/ContactQr.h"
 #include "../ui-core/GpsAverager.h"
-#include "../ui-core/TrackBack.h"
 #include "../ui-core/TrailProfile.h"
 #include "../ui-core/StatusHistory.h"
 #include "../ui-core/BattLog.h"
@@ -349,10 +348,9 @@ void UITask::loop() {
   wifiClockTick();
   otaTick();           // so does a firmware update
   trailJournalTick();   // the live trail's copy on the card, once a minute
-  if ((int32_t)(millis() - _next_trackback_ms) >= 0) {   // walking the trail back, on any screen
+  if ((int32_t)(millis() - _next_trackback_ms) >= 0) {   // following a route or the trail back, on any screen
     _next_trackback_ms = millis() + 1000;
-    navPollTrackBack();
-    navPollRoute();   // following a planned route: the map and bar keep up
+    navPollRoute();   // the map and bar keep up
   }
 
   uint32_t lv_next = 0;
@@ -1497,6 +1495,16 @@ void UITask::simNavTarget(int32_t lat_1e6, int32_t lon_1e6) {
   if (_nav_bar) refreshNavBar();
 }
 
+void UITask::simTrail() {
+  TrailStore& tr = _core->trail.store();
+  const uint32_t now = rtc_clock.getCurrentTime();
+  for (int i = 0; i <= 12; i++) {
+    const float f = (12 - i) / 12.0f;
+    tr.addPoint((int32_t)((50.0614f - 0.010f * f + 0.002f * (i % 3)) * 1e6f),
+                (int32_t)((19.9372f - 0.018f * f * f) * 1e6f), now - (12 - i) * 60, 1);
+  }
+}
+
 void UITask::simUnread() {
   _core->simUnreadDemo();
   if (_screen == SCR_CHATS) refreshChats();
@@ -1541,6 +1549,8 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_open(const char* name) {
   if (!strncmp(name, "compose@", 8)) { s_ui->simCompose(name + 8); return; }
   if (!strncmp(name, "field@", 6)) { s_ui->homeFieldSet(atoi(name + 6), atoi(name + 8)); return; }   // "field@0:1": slot 0 = Battery (V)
   if (!strcmp(name, "dm")) { s_ui->simDm(); return; }
+  if (!strcmp(name, "trail")) { s_ui->simTrail(); return; }   // a 13-point trail, as ui-new's sim_trail
+  if (!strcmp(name, "trackback")) { s_ui->setGps(true); s_ui->navToolAction(navmap::TL_TRACKBACK); return; }   // Map tools' button, GPS on
   if (!strcmp(name, "send")) { s_ui->simSend(); return; }
   if (!strcmp(name, "unread")) { s_ui->simUnread(); return; }
   if (!strcmp(name, "sleep")) { s_ui->simSleep(true); return; }

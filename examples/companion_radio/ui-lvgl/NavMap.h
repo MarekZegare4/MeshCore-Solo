@@ -53,7 +53,6 @@ static lv_obj_t* s_target_dot = nullptr;
 static const int RING_D = 30;   // clear of a 12 px marker dot inside it
 static navview::EtaTracker s_eta;
 static GpsAverager s_avg;   // "mark here" with Settings > Map > Waypoint averaging
-static TrackBack   s_tb;    // walking the trail back: its breadcrumb is the target
 static const uint32_t TRAIL_COLOR = 0x4FA3FF;
 
 static void fmtDuration(char* b, int n, uint32_t secs) {
@@ -493,8 +492,9 @@ void UITask::refreshNavBar() {
     if (navmap::s_ready) layoutMap();   // the names and markers clear of it, or not
   }
   if (!set) return;
-  const bool route = !navmap::s_tb.active() && _core->guide.active();
-  setTextFmt(_nav_title, "%s %s", navmap::s_tb.active() ? LV_SYMBOL_LOOP : route ? LV_SYMBOL_SHUFFLE : person ? UI_SYMBOL_USERS : UI_SYMBOL_FLAG,
+  const bool back = _core->guide.trackBack();
+  const bool route = _core->guide.active();
+  setTextFmt(_nav_title, "%s %s", back ? LV_SYMBOL_LOOP : route ? LV_SYMBOL_SHUFFLE : person ? UI_SYMBOL_USERS : UI_SYMBOL_FLAG,
                         name);
   if (!pos) {
     if (navmap::s_dial) lv_obj_add_flag(navmap::s_dial, LV_OBJ_FLAG_HIDDEN);
@@ -535,19 +535,11 @@ void UITask::refreshNavBar() {
 
 // ── Target selection ──────────────────────────────────────────────────────────
 
-// What the map navigates to: the track-back breadcrumb while walking the trail
-// back, else the Locator target. `set`: there is a target at all; returns
+// What the map navigates to: the route followed (Track back's trail too), else
+// the Locator target. `set`: there is a target at all; returns
 // whether its position is known.
 bool UITask::navCurrentTarget(int32_t& lat, int32_t& lon, char* name, int n, bool& person, bool& set) {
   person = false;
-  TrailStore& ts = _core->trail.store();
-  if (navmap::s_tb.active() && navmap::s_tb.index() < ts.count()) {
-    set = true;
-    navmap::s_tb.label(name, n);
-    lat = ts.at(navmap::s_tb.index()).lat_1e6;
-    lon = ts.at(navmap::s_tb.index()).lon_1e6;
-    return true;
-  }
   const RouteGuide& g = _core->guide;
   if (g.active()) {   // following a planned route: its next bend, or back to it
     set = true;
@@ -561,17 +553,6 @@ bool UITask::navCurrentTarget(int32_t& lat, int32_t& lon, char* name, int n, boo
   person = _prefs->locator_target_kind != 0;
   snprintf(name, n, "%s", _prefs->locator_label[0] ? _prefs->locator_label : "Target");
   return _core->locator.activeTargetPos(lat, lon);
-}
-
-// From loop(), once a second on any screen: advance along the trail.
-void UITask::navPollTrackBack() {
-  if (!navmap::s_tb.active()) return;
-  int32_t lat = 0, lon = 0;
-  bool fix = _core->course.currentLocation(lat, lon);
-  TrackBack::Step st = navmap::s_tb.poll(_core->trail.store(), fix, lat, lon);
-  if (st == TrackBack::ADVANCED) navmap::s_eta.reset();
-  else if (st == TrackBack::ARRIVED) showToast("Back at the trail start", 4000);
-  if (st != TrackBack::NONE && _screen == SCR_MAP && _map_nav) { layoutMap(); refreshNavBar(); }
 }
 
 // Frame own position and the target together (or just centre the target).
@@ -626,8 +607,7 @@ void UITask::navFrameTrail() {
 }
 
 void UITask::navSetTarget(uint8_t kind, const uint8_t* key, int32_t lat, int32_t lon, const char* name) {
-  navmap::s_tb.stop();   // a chosen target replaces walking the trail back
-  _core->guide.stop();   // and following a route
+  _core->guide.stop();   // a chosen target replaces following a route or the trail back
   _core->locator.setTarget(kind, key, lat, lon, name);
   prefsSave();
   navmap::s_eta.reset();
@@ -641,8 +621,11 @@ void UITask::navPick(int code) {
   int idx = code & 0xFF;
   switch (type) {
     case navmap::T_CLEAR:
-      if (navmap::s_tb.active()) { navmap::s_tb.stop(); showToast("Track back stopped"); break; }
-      if (_core->guide.active()) { _core->guide.stop(); showToast("Route stopped"); break; }
+      if (_core->guide.active()) {
+        showToast(_core->guide.trackBack() ? "Track back stopped" : "Route stopped");
+        _core->guide.stop();
+        break;
+      }
       _core->locator.clearTarget();
       prefsSave();
       break;
@@ -1133,7 +1116,7 @@ void UITask::refreshNavTools() {
   if (ts.empty()) setText(_nav_trail_lbl, state);
   else setTextFmt(_nav_trail_lbl, "%s  -  %s, %s, %d points", state, dist, dur, ts.count());
   setText(_nav_trail_btn, ts.isActive() ? LV_SYMBOL_STOP " Stop" : LV_SYMBOL_PLAY " Record");
-  setText(_nav_tb_btn, navmap::s_tb.active() ? LV_SYMBOL_STOP " Stop back" : LV_SYMBOL_LOOP " Track back");
+  setText(_nav_tb_btn, _core->guide.trackBack() ? LV_SYMBOL_STOP " Stop back" : LV_SYMBOL_LOOP " Track back");
   refreshRouteTools();
 
   if (_prefs->loc_share_enabled) {
@@ -1419,12 +1402,12 @@ void UITask::navToolAction(uint8_t act) {
       layoutMap();
       break;
     case navmap::TL_TRACKBACK: {
-      if (navmap::s_tb.active()) { navmap::s_tb.stop(); showToast("Track back stopped"); break; }
+      if (_core->guide.trackBack()) { _core->guide.stop(); showToast("Track back stopped"); break; }
+      if (tr.store().count() < 2) { showToast("No trail to walk back"); break; }
       if (gpsAsked(GA_TRACKBACK)) return;   // its popup in place of this one
       int32_t lat = 0, lon = 0;
       bool fix = _core->course.currentLocation(lat, lon);
-      if (!navmap::s_tb.start(tr.store(), fix, lat, lon)) { showToast("No trail to walk back"); break; }
-      _core->guide.stop();   // one thing to follow at a time
+      if (!_core->startTrackBack()) { showToast("Can't save the trail"); break; }   // replaces a route followed
       navmap::s_eta.reset();
       if (!fix) ensureGps(GA_TRACKBACK);   // says it's waiting
       navClosePopup();

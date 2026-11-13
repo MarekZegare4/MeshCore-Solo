@@ -674,6 +674,25 @@ void UITask::simRoute(int what) {
     if (!up.finish()) return;
     _core->guide.start(0, false);
     what = 2;
+  } else if (what == 4) {   // a loop: round a square, ending 15 m short of the start
+    PlannedRoutes up;
+    const int N = 41;
+    if (!up.begin(1, N, 0, "Test ring")) return;
+    for (int i = 0; i < N; i++) {
+      float la = 50.0614f, lo = 19.9372f;
+      if (i <= 10)      lo += 0.0014f * i;
+      else if (i <= 20) { lo += 0.014f; la += 0.0009f * (i - 10); }
+      else if (i <= 30) { lo += 0.014f - 0.0014f * (i - 20); la += 0.009f; }
+      else              la += 0.009f - 0.0009f * (i - 30);
+      if (i == N - 1) lo -= 0.0002f;   // 15 m west of the start
+      up.add((int32_t)(la * 1e6f), (int32_t)(lo * 1e6f), ROUTE_ELE_NONE);
+    }
+    if (!up.finish()) return;
+    _core->guide.start(1, false);
+    what = 2;
+  } else if (what == 5) {   // Track back along simTrail()'s trail
+    if (!_core->startTrackBack()) return;
+    what = 2;
   }
   setCurrScreen(trail_screen);
   if (what == 3) ((TrailScreen*)trail_screen)->showMapView();

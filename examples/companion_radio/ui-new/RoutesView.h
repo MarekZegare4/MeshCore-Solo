@@ -140,6 +140,13 @@ public:
   bool guiding() const { return _mode == GUIDE; }
 
   void openList() { _mode = LIST; _gen = 0xFFFF; _scroll = 0; }
+  // Track back (UiCore::startTrackBack): the trail backwards, in the guide view.
+  void followTrail() {
+    if (!_task->core().startTrackBack()) { _task->showAlert("Can't save the trail", 1200); return; }
+    if (_task->hasGPS() && !_task->getGPSState()) _task->toggleGPS(false);
+    _eta.reset();
+    _mode = GUIDE;
+  }
   void openGuide() { _mode = GUIDE; _eta.reset(); }
 
   int render(DisplayDriver& display) {

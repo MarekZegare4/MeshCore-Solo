@@ -1,8 +1,10 @@
 #pragma once
 // Track back: retrace the recorded trail in reverse. Snaps onto the route at
 // the recorded point nearest to you, then targets each earlier breadcrumb in
-// turn -- advancing when you come within ARRIVE_M of it -- until the trail's
-// start is reached. The frontend shows the current breadcrumb as a navigate
+// turn -- advancing when you come within ARRIVE_M of it, or of one of the
+// SKIP_AHEAD after it (a corner cut) -- until the trail's start is reached.
+// Where there are planned routes (FEAT_ROUTES) the trail is followed as a
+// route instead (UiCore::startTrackBack); this is for the boards without. The frontend shows the current breadcrumb as a navigate
 // target (ui-new: NavView; ui-lvgl: the Navigation map).
 
 #include "../Trail.h"
@@ -11,6 +13,7 @@
 class TrackBack {
 public:
   static const int ARRIVE_M = 20;
+  static const int SKIP_AHEAD = 8;
   enum Step : uint8_t { NONE, ADVANCED, ARRIVED };
 
   // False when there's no trail to walk back (fewer than 2 points).
@@ -37,8 +40,11 @@ public:
     if (!_active) return NONE;
     if (_idx < 0 || _idx >= s.count()) { _active = false; return NONE; }   // trail reset under us
     if (!have_fix) return NONE;
-    float d_m = geo::haversineKm(lat, lon, s.at(_idx).lat_1e6, s.at(_idx).lon_1e6) * 1000.0f;
-    if (d_m > (float)ARRIVE_M) return NONE;
+    int reached = -1;   // the furthest along the way back within reach
+    for (int i = _idx; i >= 0 && i >= _idx - SKIP_AHEAD; i--)
+      if (geo::haversineKm(lat, lon, s.at(i).lat_1e6, s.at(i).lon_1e6) * 1000.0f <= (float)ARRIVE_M) reached = i;
+    if (reached < 0) return NONE;
+    _idx = reached;
     if (_idx > 0) { _idx--; return ADVANCED; }
     _active = false;
     return ARRIVED;

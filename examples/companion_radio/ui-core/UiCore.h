@@ -90,6 +90,35 @@ public:
 
   UiEventQueue events;      // Core → frontend; drained by the frontend's loop()
 
+#if FEAT_ROUTES
+  // Track back: the trail written as a route (PlannedRoutes::TRAIL_SLOT) and
+  // followed backwards, so it runs as a route does: on any screen, through a
+  // restart, with Off route / Back on route. It replaces a route followed. A
+  // trail longer than a route holds keeps every k-th point (and its ends).
+  // False with no trail to walk back or no room on the flash.
+  bool startTrackBack() {
+    const TrailStore& s = trail.store();
+    TrailPoint last;   // the newest sample, still a candidate (TrailStore::addPoint)
+    const bool pend = s.pendingPoint(last);
+    const int n = s.count();
+    if (!pend && n > 0) last = s.at(n - 1);
+    const int pts = n - (pend ? 0 : 1);   // the stored points before `last`
+    if (pts < 1) return false;
+    guide.stop();
+    const int max = PlannedRoutes::MAX_POINTS;
+    const int stride = (pts + max - 2) / (max - 1);   // ceil(pts / (max - 1))
+    const int m = (pts + stride - 1) / stride + 1;    // 0, stride, 2*stride ... and `last`
+    PlannedRoutes up;
+    if (!up.begin(PlannedRoutes::TRAIL_SLOT, (uint16_t)m, 0, "Track back")) return false;
+    bool ok = true;
+    for (int i = 0; ok && i < pts; i += stride) ok = up.add(s.at(i).lat_1e6, s.at(i).lon_1e6, ROUTE_ELE_NONE);
+    ok = ok && up.add(last.lat_1e6, last.lon_1e6, ROUTE_ELE_NONE);
+    if (!ok) { up.abort(); return false; }
+    if (!up.finish()) return false;
+    return guide.start(PlannedRoutes::TRAIL_SLOT, true);
+  }
+#endif
+
   // ── Engines ───────────────────────────────────────────────────────────────
   ClockEngine clock;        // alarm / countdown / ring
   PingEngine  ping;         // single in-flight ping / trace + last result

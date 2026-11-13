@@ -260,7 +260,6 @@ void UITask::routeAction(uint8_t act) {
     case routemap::RT_FOLLOW:
     case routemap::RT_FOLLOW_REV: {
       if (!g.start(routemap::s_sel, act == routemap::RT_FOLLOW_REV)) { showToast("Can't read the route"); return; }
-      navmap::s_tb.stop();   // one thing to follow at a time
       if (_core->gpsAvailable() && !_core->gpsEnabled()) setGps(true);
       navmap::s_eta.reset();
       routemap::s_last_state = 0xFF;
