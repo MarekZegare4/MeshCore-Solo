@@ -67,4 +67,16 @@ public:
   void drawXbm(int x, int y, const uint8_t* bits, int w, int h) override;
   uint16_t getTextWidth(const char* str) override;
   void endFrame() override;
+
+#ifdef ENABLE_SCREENSHOT
+  // The panel draws from a one-bit buffer in OLED pages (ST7789Spi colours it
+  // on the way out, and turns it in the panel itself), so a screenshot is
+  // that buffer at the panel's own size: 240 x 136 on the Cardputer, the last
+  // page padded to 8 rows.
+  const uint8_t* getBuffer() override { return display.buffer; }
+  uint16_t getBufferSize() override { return (uint16_t)(display.width() * ((display.height() + 7) / 8)); }
+  uint8_t getDisplayType() override { return 0; }
+  int screenshotWidth() override { return display.width(); }
+  int screenshotHeight() override { return (display.height() + 7) / 8 * 8; }
+#endif
 };
