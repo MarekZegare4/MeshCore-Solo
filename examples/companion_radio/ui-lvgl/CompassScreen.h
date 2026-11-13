@@ -134,15 +134,12 @@ void UITask::refreshCompass() {
   int32_t lat, lon;
   int cog = 0;
   const char* hint = nullptr;
-  if (!_core->course.currentLocation(lat, lon))
-    hint = _core->gpsAvailable() && !_core->gpsEnabled() ? "GPS is off - turn it on in Settings" : "Waiting for a GPS fix";
+  const bool here = _core->course.currentLocation(lat, lon);
+  if (!here) hint = _core->gpsAvailable() && !_core->gpsEnabled() ? "GPS is off - turn it on in Settings" : "Waiting for a GPS fix";
   else if (!_core->course.currentCourse(cog)) hint = "Move to set the heading";
   const bool have = hint == nullptr;
-  const bool here = _core->course.currentLocation(lat, lon);
-  // Where to: the route's next bend, else the Locator target.
   int32_t gla = 0, glo = 0;
-  bool goal = here && _core->guide.active() && _core->guide.target(gla, glo);
-  if (here && !goal) goal = _core->locator.activeTargetPos(gla, glo);
+  const bool goal = here && _core->goalPos(gla, glo);
   const int gdeg = goal ? geo::bearingDeg(lat, lon, gla, glo) : -1;
   if (have != s_have || cog != s_cog || gdeg != s_goal) {
     s_have = have;

@@ -106,6 +106,9 @@ class WaypointsView {
   // Open the shared keyboard for a literal field. Waypoint labels and the
   // lat/lon magnitudes are never placeholder-expanded, so {loc}/{time} are
   // cleared (same intent as the bot's literal trigger field).
+  // A mark done or given up: back to the list it was started from, else the trail.
+  void endMark() { _mode = _mark_from_list ? LIST : OFF; _mark_from_list = false; }
+
   void openKb(const char* initial, int max) {
     KeyboardWidget& kb = _task->keyboard();
     kb.begin(initial, max);
@@ -287,6 +290,7 @@ public:
   void openList() { _mode = LIST; _sel = 0; _scroll = 0; }
   void simNav(int row) { _mode = NAV; _sel = row; _scroll = 0; _wp_eta.reset(); }   // sim tests: its navigate view
   void markHere() {
+    _mark_from_list = false;   // from the Trail menu: back to the trail
     int32_t lat, lon;
     if (!ownPos(lat, lon))         { _task->showAlert("No GPS fix", 1000); return; }
     if (_task->waypoints().full()) { _task->showAlert("Waypoints full", 1000); return; }
@@ -322,7 +326,7 @@ public:
     bool fix = ownPos(lat, lon);
     GpsAverager::Step st = _avg.poll(fix, lat, lon, mlat, mlon);
     if (st == GpsAverager::DONE) beginLabel(mlat, mlon);   // window closed: opens the label keyboard
-    else if (st == GpsAverager::NO_FIX) { _task->showAlert("No GPS fix", 1000); _mode = OFF; }
+    else if (st == GpsAverager::NO_FIX) { _task->showAlert("No GPS fix", 1000); endMark(); }
   }
 
   // Advance the track-back target when the current breadcrumb is reached; once
@@ -366,7 +370,7 @@ public:
       } else if (r == KeyboardWidget::CANCELLED) {
         _kb_active = false; _kb_field = -1;
       }
-      if (!_kb_active && _mark_from_list) { _mark_from_list = false; _mode = LIST; }
+      if (!_kb_active && _mark_from_list) endMark();
       return true;
     }
 
@@ -409,7 +413,7 @@ public:
 
     // Averaging window — any cancel aborts the mark; otherwise just wait it out.
     if (_mode == AVG) {
-      if (c == KEY_CANCEL) { _avg.cancel(); _mode = OFF; }
+      if (c == KEY_CANCEL) { _avg.cancel(); endMark(); }
       return true;
     }
 

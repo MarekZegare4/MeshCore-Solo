@@ -173,13 +173,14 @@ def read_settings(cli, progress):
 
 
 def get_waypoints(cli):
-    n = int(cli.get("wpts").split("/")[0])
+    """The device's waypoints and how many it holds."""
+    n, cap = (int(x) for x in cli.get("wpts").split("/"))
     out = []
     for i in range(1, n + 1):
         m = re.match(r"(-?[\d.]+),(-?[\d.]+) ?(.*)$", cli.get(f"get wpt.{i}"))
         if m:
             out.append({"lat": float(m[1]), "lon": float(m[2]), "name": m[3]})
-    return out
+    return out, cap
 
 
 def fit_label(name):
@@ -189,8 +190,7 @@ def fit_label(name):
 
 def add_waypoints(cli, wpts, report):
     """Append those not on the device yet (the same place, to a metre); counts (added, there, full)."""
-    have = get_waypoints(cli)
-    cap = int(cli.get("wpts").split("/")[1])
+    have, cap = get_waypoints(cli)
     added = there = full = 0
     for w in wpts:
         if any(abs(h["lat"] - w["lat"]) < 1e-5 and abs(h["lon"] - w["lon"]) < 1e-5 for h in have):
@@ -207,6 +207,11 @@ def add_waypoints(cli, wpts, report):
         except DeviceError as e:
             report(f"  {name}: {e}")
     return added, there, full, cap
+
+
+def wpt_summary(lead, added, there, full, cap):
+    return (f"{lead} {added}" + (f", {there} already there" if there else "")
+            + (f", {full} didn't fit (the device holds {cap})" if full else "") + ".")
 
 
 def parse_pages(r):
@@ -260,7 +265,7 @@ def cmd_export(args):
             del out["melodies"]
         progress("waypoints")
         try:
-            wp = get_waypoints(cli)
+            wp, _ = get_waypoints(cli)
             if wp:
                 out["waypoints"] = wp
         except DeviceError:
@@ -333,9 +338,7 @@ def cmd_import(args):
                 print(f"  {label or c}: {e}")
         if wpts:
             try:
-                added, there, full, cap = add_waypoints(cli, wpts, print)
-                print(f"Waypoints: {added} added" + (f", {there} already there" if there else "")
-                      + (f", {full} didn't fit (the device holds {cap})" if full else "") + ".")
+                print(wpt_summary("Waypoints added:", *add_waypoints(cli, wpts, print)))
             except DeviceError as e:
                 print(f"  waypoints: {e}")
     print(f"Done: {ok} set" + (f", {bad} not (above)." if bad else "."))
@@ -390,7 +393,10 @@ def gpx_waypoints(path):
         if el.tag.rsplit("}", 1)[-1] != "wpt":
             continue
         name = next((c.text or "" for c in el if c.tag.rsplit("}", 1)[-1] == "name"), "")
-        out.append({"lat": float(el.get("lat")), "lon": float(el.get("lon")), "name": name.strip()})
+        try:
+            out.append({"lat": float(el.get("lat")), "lon": float(el.get("lon")), "name": name.strip()})
+        except (TypeError, ValueError):
+            continue   # a <wpt> without a usable lat/lon
     return out
 
 
@@ -406,11 +412,8 @@ def cmd_waypoints(args):
                 cli.put(f"set wpt.{args.delete}")
                 print(f"Deleted waypoint {args.delete}.")
             if wpts:
-                added, there, full, cap = add_waypoints(cli, wpts, print)
-                print(f"Added {added}" + (f", {there} already there" if there else "")
-                      + (f", {full} didn't fit (the device holds {cap})" if full else "") + ".")
-            have = get_waypoints(cli)
-            cap = cli.get("wpts").split("/")[1]
+                print(wpt_summary("Added", *add_waypoints(cli, wpts, print)))
+            have, cap = get_waypoints(cli)
         except DeviceError as e:
             sys.exit(f"{e} (needs Solo 2.3 or newer)")
     print(f"Waypoints {len(have)}/{cap}:")

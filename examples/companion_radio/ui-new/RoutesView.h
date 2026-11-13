@@ -127,6 +127,9 @@ class RoutesView {
 
   void follow(int slot, bool reversed) {
     if (!guide().start(slot, reversed)) { _task->showAlert("Route unreadable", 1200); return; }
+    enterGuide();
+  }
+  void enterGuide() {
     if (_task->hasGPS() && !_task->getGPSState()) _task->toggleGPS(false);   // a guide without GPS is no guide
     _eta.reset();
     _mode = GUIDE;
@@ -143,9 +146,7 @@ public:
   // Track back (UiCore::startTrackBack): the trail backwards, in the guide view.
   void followTrail() {
     if (!_task->core().startTrackBack()) { _task->showAlert("Can't save the trail", 1200); return; }
-    if (_task->hasGPS() && !_task->getGPSState()) _task->toggleGPS(false);
-    _eta.reset();
-    _mode = GUIDE;
+    enterGuide();
   }
   void openGuide() { _mode = GUIDE; _eta.reset(); }
 

@@ -26,14 +26,7 @@ class CompassScreen : public UIScreen {
   // Where you're headed, if anywhere: its bearing from here.
   bool goalBearing(int& deg) const {
     int32_t la, lo, mla, mlo;
-    if (!_task->currentLocation(mla, mlo)) return false;
-    bool have = false;
-#if FEAT_ROUTES
-    const RouteGuide& g = _task->core().guide;
-    if (g.active()) have = g.target(la, lo);
-#endif
-    if (!have) have = _task->activeTargetPos(la, lo);
-    if (!have) return false;
+    if (!_task->currentLocation(mla, mlo) || !_task->core().goalPos(la, lo)) return false;
     deg = geo::bearingDeg(mla, mlo, la, lo);
     return true;
   }
@@ -113,10 +106,7 @@ public:
 
     // Ticks + cardinal labels every 30°; majors (N/E/S/W) are taller + labelled.
     for (int deg = 0; deg < 360; deg += 30) {
-      int delta = deg - cog;
-      while (delta >  180) delta -= 360;
-      while (delta < -180) delta += 360;
-      int x = cx + (int)(delta * ppd);
+      int x = cx + (int)(geo::turnDeg(deg, cog) * ppd);
       if (x < x_lo || x > x_hi) continue;
       bool major = (deg % 90 == 0);
       display.fillRect(x - s / 2, line_y + sh, s, major ? tickMajor : tickMinor);
@@ -139,11 +129,8 @@ public:
     // The goal's flag, under the baseline at its bearing (in place of the ticks
     // and a letter there); past the tape's reach, at the edge it lies beyond.
     if (have_goal) {
-      int delta = goal - cog;
-      while (delta >  180) delta -= 360;
-      while (delta < -180) delta += 360;
-      int x = cx + (int)(delta * ppd);
-      const int iw = ICON_MAP_TARGET.w * s, ih = ICON_MAP_TARGET.h * s;
+      int x = cx + (int)(geo::turnDeg(goal, cog) * ppd);
+      const int iw = ICON_MAP_TARGET.w * s;
       if (x < x_lo + iw / 2 + 1) x = x_lo + iw / 2 + 1;
       if (x > x_hi - iw / 2 - 1) x = x_hi - iw / 2 - 1;
       const int fy = line_y + sh + 1;

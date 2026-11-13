@@ -115,7 +115,7 @@ public:
   void label(char* out, int n, bool imperial) const {
     char d[12];
     if (_state == FINISHED) { snprintf(out, n, "%s", finishedText()); return; }
-    if (_snap) { snprintf(out, n, "Route: no fix"); return; }
+    if (_snap) { snprintf(out, n, "%s: no fix", _slot == PlannedRoutes::TRAIL_SLOT ? "Track back" : "Route"); return; }
     if (_state == OFF_ROUTE) {
       geo::fmtDist(d, sizeof(d), _off_m / 1000.0f, imperial);
       snprintf(out, n, "Off route %s", d);
@@ -409,9 +409,9 @@ private:
   float    _along = 0;
   float    _off_m = 0;
   bool     _have_target = false;
-  bool     _joined = false;
-  int      _resume = -1;      // the segment saved before a restart, for the first fix
-  float    _saved_along = 0;   // been on the route since start(): "Back on route", not "On route"
+  bool     _joined = false;    // been on the route since start(): "Back on route", not "On route"
+  int      _resume = -1;       // the segment saved before a restart, for the first fix
+  float    _saved_along = 0;   // _along when route_seg was last saved (every SAVE_M)
   int32_t  _t_lat = 0, _t_lon = 0;
   int32_t  _p_lat = 0, _p_lon = 0;
   int32_t  _lat0 = 0, _lon0 = 0;

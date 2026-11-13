@@ -136,6 +136,15 @@ public:
   RouteGuide   guide;       // following a planned route (Tools > Trail > Routes)
 #endif
 
+  // Where you're headed, if anywhere: the next bend of the route followed (or
+  // of Track back), else the Locator target. Both compasses point at it.
+  bool goalPos(int32_t& lat, int32_t& lon) const {
+#if FEAT_ROUTES
+    if (guide.active() && guide.target(lat, lon)) return true;
+#endif
+    return locator.activeTargetPos(lat, lon);
+  }
+
   // ── Models ────────────────────────────────────────────────────────────────
   MessageHistory history;   // channel + DM rings, delivery state, channel unread
 #ifdef HIST_FLASH

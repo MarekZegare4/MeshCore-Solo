@@ -778,23 +778,8 @@ public:
     // Trail as a connected line, matching the full Trail map (shared helper —
     // see gfx::drawTrail); no break marker here, just a silent gap.
 #if FEAT_ROUTES
-    if (have_route) {   // dashed under the trail; its end marked
-      const gfx::Dash dash = { 0x3, 4 };
-      const int n = guide.overviewCount();
-      int px = 0, py = 0;
-      for (int i = 0; i < n; i++) {
-        int32_t la, lo;
-        guide.overviewPoint(i, la, lo);
-        int x, y;
-        project(la, lo, x, y);
-        if (i > 0) gfx::drawLine(display, px, py, x, y, dash);
-        px = x; py = y;
-      }
-      int32_t la, lo;
-      guide.overviewPoint(guide.reversed() ? 0 : n - 1, la, lo);
-      project(la, lo, px, py);
-      miniIconDrawCentered(display, px, py, ICON_MAP_TARGET);
-    }
+    int ex, ey;   // dashed under the trail; its end marked
+    if (have_route && gfx::drawRoute(display, guide, project, ex, ey)) miniIconDrawCentered(display, ex, ey, ICON_MAP_TARGET);
 #endif
     gfx::drawTrail(display, tr, project, [](int, int, int, int) {});
     for (int i = 0; i < LiveTrackStore::CAPACITY; i++) {

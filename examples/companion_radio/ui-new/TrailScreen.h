@@ -425,7 +425,7 @@ private:
 #if FEAT_ROUTES
     // Following a route: its guide first, the way back to it from anywhere.
     const bool tb = _task->core().guide.trackBack();
-    if (_task->core().guide.slot() >= 0) pushAction(ACT_ROUTE_GUIDE, _task->core().guide.slot() == PlannedRoutes::TRAIL_SLOT ? "Track back guide" : "Route guide");
+    if (_task->core().guide.slot() >= 0) pushAction(ACT_ROUTE_GUIDE, tb ? "Track back guide" : "Route guide");
 #else
     const bool tb = false;
 #endif
@@ -915,28 +915,9 @@ private:
 
 #if FEAT_ROUTES
     // The route being followed, dashed under the trail walked; its end marked.
-    // From the guide's overview in RAM: a full route read off the flash each
-    // frame made the map lag a second behind every key.
-    if (have_route) {
-      int px = 0, py = 0;
-      const gfx::Dash dash = { 0x3, 4 };
-      const int n = guide.overviewCount();
-      for (int i = 0; i < n; i++) {
-        int32_t la, lo;
-        guide.overviewPoint(i, la, lo);
-        int x, y;
-        proj.project(la, lo, x, y);
-        if (i > 0) gfx::drawLine(display, px, py, x, y, dash);
-        px = x; py = y;
-      }
-      if (n > 0) {   // the end in the direction followed
-        int32_t la, lo;
-        guide.overviewPoint(guide.reversed() ? 0 : n - 1, la, lo);
-        int ex, ey;
-        proj.project(la, lo, ex, ey);
-        drawTargetMarker(display, ex, ey);
-      }
-    }
+    int ex, ey;
+    if (have_route && gfx::drawRoute(display, guide, [&](int32_t la, int32_t lo, int& x, int& y) { proj.project(la, lo, x, y); }, ex, ey))
+      drawTargetMarker(display, ex, ey);
 #endif
 
     if (have_trail) {

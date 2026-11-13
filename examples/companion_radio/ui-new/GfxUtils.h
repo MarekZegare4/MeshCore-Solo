@@ -111,4 +111,28 @@ static void drawTrail(DisplayDriver& d, TrailStore& tr, Project project, OnBreak
   }
 }
 
+// The route followed, dashed, from the RouteGuide's overview in RAM (a whole
+// route read off the flash each frame made the map lag). Shared by the Trail
+// map and Home's mini-map; `ex, ey` get its end in the direction followed, for
+// the caller's marker. False with nothing to draw.
+template <typename Guide, typename Project>
+static bool drawRoute(DisplayDriver& d, const Guide& g, Project project, int& ex, int& ey) {
+  const int n = g.overviewCount();
+  if (n <= 0) return false;
+  const Dash dash = { 0x3, 4 };
+  int px = 0, py = 0;
+  for (int i = 0; i < n; i++) {
+    int32_t la, lo;
+    g.overviewPoint(i, la, lo);
+    int x, y;
+    project(la, lo, x, y);
+    if (i > 0) drawLine(d, px, py, x, y, dash);
+    px = x; py = y;
+  }
+  int32_t la, lo;
+  g.overviewPoint(g.reversed() ? 0 : n - 1, la, lo);
+  project(la, lo, ex, ey);
+  return true;
+}
+
 }  // namespace gfx
