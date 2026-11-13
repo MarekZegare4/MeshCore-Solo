@@ -67,7 +67,7 @@ Heltec V3/V4 need [a keyboard or joystick wired up](./docs/solo/hardware.md#wiri
 
 [Documentation](./docs/solo/README.md) — getting started, messages, navigation, tools, settings, hardware and developer guides.
 
-**USB tools** — [on the Solo site](https://solo.marekzegarek.com/#pc-tools) (Chrome or Edge, Web Serial): screenshots of the device's screen and the GPS trail as GPX over USB, plus a preview of any GPX file. The same as the local scripts in [tools/](./tools/README.md).
+**Configurator** — [on the Solo site](https://solo.marekzegarek.com/configure.html) (Chrome or Edge, Web Serial): every setting, Home's pages, quick messages, the melodies, routes, screenshots and the GPS trail over USB, and a backup of it all to a file. The same as the local scripts in [tools/](./tools/README.md).
 
 ---
 

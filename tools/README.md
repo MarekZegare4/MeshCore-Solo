@@ -8,7 +8,8 @@ Helper scripts that run on your computer, not on the device.
 | `trail_export.py` | capture a GPX track from the device over USB serial |
 | `console.py` | the device's console (get / set settings, the radio, the name) over USB serial |
 | `route.py` | put a planned GPX route on the device to follow; list and delete routes |
-| `companion.py` | the companion-protocol framing `console.py` and `route.py` share |
+| `config.py` | the whole configuration to a JSON backup and back; the melodies (RTTTL); the order of Home's pages |
+| `companion.py` | the companion-protocol framing `console.py`, `route.py` and `config.py` share |
 | `gpx-downloader/index.html` | the same GPX capture in a browser, via Web Serial |
 | `bdf2gfx.py` | convert a BDF bitmap font to an Adafruit-GFX header |
 
@@ -16,10 +17,11 @@ Python dependencies are managed with [uv](https://docs.astral.sh/uv/) — run th
 scripts with `uv run tools/<script>.py` from the repository root.
 
 > [!TIP]
-> The [USB tools on the Solo site](https://solo.marekzegarek.com/#pc-tools) do all of this
-> (screenshots, GPX export, the console, routes, quick messages) with nothing to install (Chrome
-> or Edge), and are the easiest option for most people. The scripts here are the
-> offline equivalents: everything the site does stays possible without it.
+> The [configurator on the Solo site](https://solo.marekzegarek.com/configure.html) does all of
+> this (settings, Home pages, quick messages, melodies, routes, screenshots, GPX export, the
+> console, a backup) with nothing to install (Chrome or Edge), and is the easiest option for
+> most people. The scripts here are the offline equivalents: everything the site does stays
+> possible without it, and the backup files are the same.
 
 > [!IMPORTANT]
 > USB serial is suspended while a BLE connection is active, so disconnect the
@@ -105,6 +107,40 @@ uv run tools/console.py msgs                          # the slots in use
 uv run tools/console.py set msg.2 "On my way, there by {time}"
 uv run tools/console.py set msg.2                     # empties it
 ```
+
+---
+
+## Configuration: backup, melodies, Home pages
+
+```sh
+uv run tools/config.py export                     # solo-config_<name>_<date>.json
+uv run tools/config.py import backup.json         # radio, settings, Home, quick messages, melodies
+uv run tools/config.py import backup.json --only settings,melodies --dry-run
+uv run tools/config.py import backup.json --identity   # also the name, Bluetooth PIN, time zone
+uv run tools/config.py melody 1                   # melody 1 as RTTTL
+uv run tools/config.py melody 2 "Tune:d=8,o=5,b=120:c,e,g,c6"
+uv run tools/config.py pages                      # Home's pages in order
+uv run tools/config.py pages Clock Messages Status Tools   # that order, the rest hidden
+```
+
+A backup is everything the configurator shows: the settings (by their keys,
+as `keys` lists them), Home's pages, the quick messages, both melodies, the
+radio and, with `--identity`, the name, Bluetooth PIN and time zone. Contacts,
+channels and keys are not in it. Load it back on the same device, or on another
+one to set it up the same way; settings a board doesn't have are skipped.
+
+The melodies are the Ringtone editor's two (Settings › Sound plays them for
+messages and adverts): up to 32 notes, C4 to B6, 1/4 to 1/32, at 60-180 BPM.
+RTTTL in is folded to fit: sharps drop to the note below, octaves to 4-6.
+Home's page order matters most on a one-button board, where it can't be
+changed by hand; the color screen (L2) sets its Home on the device. Needs Solo
+2.3 or newer.
+
+**How it works:** CLI commands (`CMD_RUN_CLI_COMMAND`, as the console):
+`opts <key>` gives a setting's label, value and choices, `get/set melody.N
+<bpm> <hex notes>` a melody (a byte a note, see
+[`SoundControl.h`](../examples/companion_radio/ui-core/SoundControl.h)),
+`pages` / `set pages <names>` Home's order.
 
 ---
 

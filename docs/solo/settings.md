@@ -130,7 +130,7 @@ if your mesh agrees on it.
 ## Console
 
 The phone app's console and the console in the site's
-[USB tools](https://solo.marekzegarek.com/#pc-tools) change settings by
+[configurator](https://solo.marekzegarek.com/configure.html#console) change settings by
 text. The commands are the ones upstream MeshCore's companion firmware has,
 so its documentation applies:
 
@@ -165,3 +165,14 @@ A number works too: the position in the list (`set telemetry.base 2`), or a
 stored value such as seconds or millivolts (`set display.off 60`,
 `set batt.shutdown 3300`). A wrong value answers with the ones that fit.
 Factory reset and the node's keys are not in the console.
+
+`opts <key>` shows where a setting is, its label, its value and every choice
+(`> Display & power/DISPLAY|Screen off after|30 s|Never|5 s|…`); the
+configurator builds its forms from it. And since Solo 2.3, what has no
+settings key:
+
+| Command | Does |
+| --- | --- |
+| `msgs`, `get msg.3`, `set msg.3 …`, `set msg.3` | The quick messages, numbered from 1; the last empties one |
+| `get melody.1`, `set melody.1 120 292a2b` | A melody of the Ringtone editor: BPM and a hex byte a note |
+| `pages`, `set pages Clock, Messages, Status` | Home's pages in order; the ones left out are hidden (not on the L2) |
