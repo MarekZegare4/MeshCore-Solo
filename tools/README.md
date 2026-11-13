@@ -8,7 +8,7 @@ Helper scripts that run on your computer, not on the device.
 | `trail_export.py` | capture a GPX track from the device over USB serial |
 | `console.py` | the device's console (get / set settings, the radio, the name) over USB serial |
 | `route.py` | put a planned GPX route on the device to follow; list and delete routes |
-| `config.py` | the whole configuration to a JSON backup and back; the melodies (RTTTL); the order of Home's pages |
+| `config.py` | the whole configuration to a JSON backup and back; the melodies (RTTTL); the order of Home's pages; waypoints from a GPX |
 | `companion.py` | the companion-protocol framing `console.py`, `route.py` and `config.py` share |
 | `gpx-downloader/index.html` | the same GPX capture in a browser, via Web Serial |
 | `bdf2gfx.py` | convert a BDF bitmap font to an Adafruit-GFX header |
@@ -114,13 +114,16 @@ uv run tools/console.py set msg.2                     # empties it
 
 ```sh
 uv run tools/config.py export                     # solo-config_<name>_<date>.json
-uv run tools/config.py import backup.json         # radio, settings, Home, quick messages, melodies
+uv run tools/config.py import backup.json         # radio, settings, Home, quick messages, melodies, waypoints
 uv run tools/config.py import backup.json --only settings,melodies --dry-run
 uv run tools/config.py import backup.json --identity   # also the name, Bluetooth PIN, time zone
 uv run tools/config.py melody 1                   # melody 1 as RTTTL
 uv run tools/config.py melody 2 "Tune:d=8,o=5,b=120:c,e,g,c6"
 uv run tools/config.py pages                      # Home's pages in order
 uv run tools/config.py pages Clock Messages Status Tools   # that order, the rest hidden
+uv run tools/config.py waypoints                  # the device's waypoints
+uv run tools/config.py waypoints walk.gpx         # add a GPX's waypoints (not those already there)
+uv run tools/config.py waypoints --delete 3
 ```
 
 A backup is everything the configurator shows: the settings (by their keys,

@@ -2,8 +2,8 @@
 
 **[solo.marekzegarek.com/configure.html](https://solo.marekzegarek.com/configure.html)**
 sets up a Solo device from a computer, over a USB cable: the settings, Home's
-pages, quick messages, the melodies, routes to follow, and a backup of all of
-it to a file.
+pages, quick messages, the melodies, routes to follow, waypoints, and a backup
+of all of it to a file.
 
 It needs Chrome or Edge on a computer (the browser talks to the device over
 Web Serial) and Solo 2.3 or newer. Older firmware gets the tabs it can
@@ -25,7 +25,7 @@ a change goes to the device straight away.
 | **Home screen** | The pages Home turns through: drag them into order, untick the ones to hide. Not on the Wio Tracker L2, which arranges its home screen itself |
 | **Quick messages** | The ten messages a conversation offers to send with one press; `{loc}`, `{time}` and `{batt}` fill in when sent |
 | **Melodies** | The two melodies of the Ringtone editor, on a piano roll; play them, or start from a ringtone in RTTTL |
-| **Routes & trail** | A GPX to follow on the device, and the trail exported from it ([Navigation](./navigation.md#planned-routes)) |
+| **Routes & trail** | A GPX to follow on the device, its waypoints, and the trail exported from it ([Navigation](./navigation.md#planned-routes)) |
 | **Screenshots** | What's on the screen, as a PNG |
 | **Console** | The same text commands as the phone app's console ([Settings](./settings.md)) |
 | **Backup** | Everything above to a `.json` file, and back onto this device or another one |
@@ -61,10 +61,17 @@ here by itself. Then:
 A trail sent back as a route (**Reverse** first) leads you home the way you
 came.
 
+Under the routes on the device are its **waypoints**, each with a button to
+delete it. When the open GPX has waypoints, **Add them to the device** puts
+them after the device's own, leaving out any already there and any past what
+the device holds (16, the Wio Tracker L2 64). A name is cut to 11 bytes.
+
 ### Backup
 
-A backup holds the radio, the settings, Home's pages, the quick messages and
-the melodies, and the name, Bluetooth PIN and time zone. Loading one, you
+A backup holds the radio, the settings, Home's pages, the quick messages, the
+melodies and the waypoints, and the name, Bluetooth PIN and time zone.
+Waypoints from a backup are added to those on the device, not put in their
+place. Loading one, you
 pick which parts go back: the name, PIN and time zone are left out unless
 you tick them, so a backup sets up a second device without making it a copy
 of the first. Contacts, channels and keys are not in it.
@@ -76,7 +83,7 @@ firmware's repository:
 
 | Script | Does |
 | ------ | ---- |
-| `tools/config.py` | Backup to the same `.json` and back, a melody from RTTTL, Home's pages |
+| `tools/config.py` | Backup to the same `.json` and back, a melody from RTTTL, Home's pages, waypoints from a GPX |
 | `tools/route.py` | Send, list and delete routes |
 | `tools/trail_export.py` | Receive the trail as GPX |
 | `tools/screenshot.py` | Screenshots |

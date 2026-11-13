@@ -85,7 +85,8 @@ e-ink), the Watch13, the Heltec V3/V4 and the Cardputer.
 A waypoint is a saved spot (the car, a camp, water) with a short label, up to
 16 of them, kept through reboots. Add one with **Mark here** at your position
 (in the trail menu or at the end of the list), or **+ Add by coords** to type
-coordinates. The list starts with **Trail
+coordinates. A GPX's waypoints go onto the device from the
+[configurator](./configurator.md#routes--trail). The list starts with **Trail
 start**, so you can always go back to where the trail began.
 
 **Hold Enter** on a waypoint: Rename, Delete, **Send** (as a message to a

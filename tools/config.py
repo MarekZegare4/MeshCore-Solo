@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 The device's configuration over USB: a backup to a JSON file and back, the
-two melodies and the order of Home's pages. The same as the Solo site's
+two melodies, the order of Home's pages and the waypoints. The same as the Solo site's
 configurator (configure.html), whose backup files this reads and writes.
 Quick messages and single settings: console.py (msgs, set msg.2 ..., get/set <key>).
 
@@ -16,9 +16,12 @@ Usage:
     uv run tools/config.py melody 2 ringtone.txt      # a file holding one RTTTL line
     uv run tools/config.py pages                      # Home's pages, in order
     uv run tools/config.py pages Clock Messages Status Tools Settings   # that order; the rest hidden
+    uv run tools/config.py waypoints                  # the device's waypoints
+    uv run tools/config.py waypoints walk.gpx         # add a GPX's waypoints (those not there yet)
+    uv run tools/config.py waypoints --delete 3       # delete waypoint 3
 
 Firmware side: examples/companion_radio/ui-core/SettingsCli.h (keys, opts,
-melody.N, msg.N) and ui-new UITask.cpp (pages, OLED boards only). Needs Solo
+melody.N, msg.N, wpts, wpt.N) and ui-new UITask.cpp (pages, OLED boards only). Needs Solo
 2.3 or newer.
 """
 
@@ -27,6 +30,7 @@ import datetime
 import json
 import re
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from companion import Companion, DeviceError
@@ -38,7 +42,8 @@ RESP_CLI_REPLY = 29
 CLI_MIN_VER = 14
 
 FORMAT = "meshcore-solo-config"
-PARTS = ["identity", "radio", "settings", "home", "messages", "melodies"]
+PARTS = ["identity", "radio", "settings", "home", "messages", "melodies", "waypoints"]
+WPT_LABEL = 11   # bytes a device waypoint's name holds
 DEFAULT_PARTS = [p for p in PARTS if p != "identity"]
 
 # A melody note (ui-core/SoundControl.h): bits 0-2 pitch (0 rest, 1..7 c d e f
@@ -167,6 +172,43 @@ def read_settings(cli, progress):
     return out
 
 
+def get_waypoints(cli):
+    n = int(cli.get("wpts").split("/")[0])
+    out = []
+    for i in range(1, n + 1):
+        m = re.match(r"(-?[\d.]+),(-?[\d.]+) ?(.*)$", cli.get(f"get wpt.{i}"))
+        if m:
+            out.append({"lat": float(m[1]), "lon": float(m[2]), "name": m[3]})
+    return out
+
+
+def fit_label(name):
+    b = re.sub(r"\s+", " ", name or "").strip().encode()[:WPT_LABEL]
+    return b.decode(errors="ignore").strip()   # a letter cut in two is dropped
+
+
+def add_waypoints(cli, wpts, report):
+    """Append those not on the device yet (the same place, to a metre); counts (added, there, full)."""
+    have = get_waypoints(cli)
+    cap = int(cli.get("wpts").split("/")[1])
+    added = there = full = 0
+    for w in wpts:
+        if any(abs(h["lat"] - w["lat"]) < 1e-5 and abs(h["lon"] - w["lon"]) < 1e-5 for h in have):
+            there += 1
+            continue
+        if len(have) >= cap:
+            full += 1
+            continue
+        name = fit_label(w.get("name")) or f"WP{len(have) + 1}"
+        try:
+            cli.put(f"set wpt.{len(have) + 1} {w['lat']:.6f},{w['lon']:.6f} {name}")
+            have.append({"lat": w["lat"], "lon": w["lon"], "name": name})
+            added += 1
+        except DeviceError as e:
+            report(f"  {name}: {e}")
+    return added, there, full, cap
+
+
 def parse_pages(r):
     shown, _, hidden = r.partition("| hidden:")
     names = lambda s: [x.strip() for x in s.split(",") if x.strip()]
@@ -216,6 +258,13 @@ def cmd_export(args):
                 out["melodies"][str(s)] = {"bpm": bpm, "notes": hex_notes(notes)}
         except DeviceError:
             del out["melodies"]
+        progress("waypoints")
+        try:
+            wp = get_waypoints(cli)
+            if wp:
+                out["waypoints"] = wp
+        except DeviceError:
+            pass
     print("\r".ljust(40), end="\r", file=sys.stderr)
     name = args.file or "solo-config_{}_{}.json".format(
         re.sub(r"[^\w.-]+", "_", out["identity"]["name"] or "device")[:24], datetime.date.today().isoformat())
@@ -259,13 +308,17 @@ def cmd_import(args):
     if "melodies" in want:
         for s, m in (d.get("melodies") or {}).items():
             cmds.append((f"set melody.{s} {m['bpm']} {m.get('notes', '')}".strip(), f"set melody.{s}"))
-    if not cmds:
+    wpts = (d.get("waypoints") or []) if "waypoints" in want else []
+    if not cmds and not wpts:
         sys.exit("Nothing to put back.")
     src = d.get("identity", {}).get("name") or "a device"
-    print(f"{args.file}: from {src}, saved {str(d.get('saved', ''))[:10]}; {len(cmds)} commands.")
+    print(f"{args.file}: from {src}, saved {str(d.get('saved', ''))[:10]}; {len(cmds)} commands"
+          + (f", {len(wpts)} waypoints." if wpts else "."))
     if args.dry_run:
         for c, label in cmds:
             print("  " + (label or c))
+        for w in wpts:
+            print(f"  waypoint {w.get('name', '')} (if not there yet)")
         return
     dev, _ = connect(args.port)
     ok = bad = 0
@@ -278,6 +331,13 @@ def cmd_import(args):
             except DeviceError as e:
                 bad += 1
                 print(f"  {label or c}: {e}")
+        if wpts:
+            try:
+                added, there, full, cap = add_waypoints(cli, wpts, print)
+                print(f"Waypoints: {added} added" + (f", {there} already there" if there else "")
+                      + (f", {full} didn't fit (the device holds {cap})" if full else "") + ".")
+            except DeviceError as e:
+                print(f"  waypoints: {e}")
     print(f"Done: {ok} set" + (f", {bad} not (above)." if bad else "."))
 
 
@@ -320,6 +380,44 @@ def cmd_pages(args):
     print("Home: " + ", ".join(shown) + (f"\nHidden: {', '.join(hidden)}" if hidden else ""))
 
 
+def gpx_waypoints(path):
+    try:
+        root = ET.parse(path).getroot()
+    except (OSError, ET.ParseError) as e:
+        sys.exit(f"Can't read {path}: {e}")
+    out = []
+    for el in root.iter():
+        if el.tag.rsplit("}", 1)[-1] != "wpt":
+            continue
+        name = next((c.text or "" for c in el if c.tag.rsplit("}", 1)[-1] == "name"), "")
+        out.append({"lat": float(el.get("lat")), "lon": float(el.get("lon")), "name": name.strip()})
+    return out
+
+
+def cmd_waypoints(args):
+    wpts = gpx_waypoints(args.gpx) if args.gpx else None
+    if wpts is not None and not wpts:
+        sys.exit(f"{args.gpx} has no waypoints.")
+    dev, _ = connect(args.port)
+    with dev:
+        cli = Cli(dev)
+        try:
+            if args.delete:
+                cli.put(f"set wpt.{args.delete}")
+                print(f"Deleted waypoint {args.delete}.")
+            if wpts:
+                added, there, full, cap = add_waypoints(cli, wpts, print)
+                print(f"Added {added}" + (f", {there} already there" if there else "")
+                      + (f", {full} didn't fit (the device holds {cap})" if full else "") + ".")
+            have = get_waypoints(cli)
+            cap = cli.get("wpts").split("/")[1]
+        except DeviceError as e:
+            sys.exit(f"{e} (needs Solo 2.3 or newer)")
+    print(f"Waypoints {len(have)}/{cap}:")
+    for i, w in enumerate(have, 1):
+        print(f"  {i:2}  {w['lat']:.5f},{w['lon']:.5f}  {w['name']}")
+
+
 def main():
     ap = argparse.ArgumentParser(description="The device's configuration over USB")
     ap.add_argument("--port", "-p", help="serial port (default: auto-detect)")
@@ -336,8 +434,12 @@ def main():
     m.add_argument("rtttl", nargs="?", help="RTTTL text, or a file holding it")
     p = sub.add_parser("pages", help="show Home's pages, or set their order (the rest hidden)")
     p.add_argument("names", nargs="*")
+    w = sub.add_parser("waypoints", help="list the waypoints, add a GPX's, or delete one")
+    w.add_argument("gpx", nargs="?", help="a GPX whose waypoints to add")
+    w.add_argument("--delete", type=int, metavar="N", help="delete waypoint N (from 1)")
     args = ap.parse_args()
-    {"export": cmd_export, "import": cmd_import, "melody": cmd_melody, "pages": cmd_pages}[args.cmd](args)
+    {"export": cmd_export, "import": cmd_import, "melody": cmd_melody, "pages": cmd_pages,
+     "waypoints": cmd_waypoints}[args.cmd](args)
 
 
 if __name__ == "__main__":

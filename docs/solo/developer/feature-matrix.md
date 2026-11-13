@@ -80,8 +80,10 @@ build flag it needs.
 | Trail | 512 points, simplified | same | same | same | 32 768 points, copy on SD |
 | Saved trail view | yes | yes | + map and elevation profile | + map and elevation profile | on the map, profile view |
 | GPX | over USB (USB tools) | same | same | same | to `trails/` on SD |
-| Waypoints, averaging | yes | yes | yes | yes | yes, 64 |
-| Target, navigation view | yes | yes | yes | wide layout | on the map + Compass app |
+| Waypoints, averaging | yes, from a GPX over USB | same | same | same | yes, 64 |
+| Planned routes (`FEAT_ROUTES`) | 8, over USB; boards with `HIST_FLASH` | same | same | same | 8, over USB or from SD |
+| Track back | as a route; without routes, breadcrumbs | same | same | same | as a route |
+| Target, navigation view | yes, + flag on the Compass | yes | yes | wide layout | on the map + Compass app |
 | Live sharing, locator | yes | yes | yes | yes | yes |
 | Map | position, trail, target | same | same | same | offline tiles on SD, download over WiFi |
 

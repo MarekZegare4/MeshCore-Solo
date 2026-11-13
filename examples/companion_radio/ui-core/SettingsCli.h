@@ -166,12 +166,52 @@ static bool melodies(NodePrefs* p, const char* cmd, char* reply, int n) {
   return true;
 }
 
+// The waypoints, for a configurator: "wpts" is "> <count>/<capacity>", "get
+// wpt.N" "> <lat>,<lon> <label>", "set wpt.N <lat>,<lon> <label>" replaces one
+// or, N one past the last, adds one; "set wpt.N" alone deletes it (those after
+// move up). Numbered from 1, as the list shows them.
+static bool waypoints(UiCore& core, const char* cmd, char* reply, int n) {
+  WaypointModel& wm = core.waypoints;
+  if (!strcmp(cmd, "wpts")) { snprintf(reply, n, "> %d/%d", wm.count(), WaypointStore::CAPACITY); return true; }
+  const bool set = !strncmp(cmd, "set wpt.", 8);
+  if (!set && strncmp(cmd, "get wpt.", 8)) return false;
+  char* end = nullptr;
+  const long i = strtol(cmd + 8, &end, 10) - 1;
+  if (end == cmd + 8 || (*end && *end != ' ')) return false;
+  const int cnt = wm.count();
+  if (!set && cnt == 0) { snprintf(reply, n, "Error, no waypoints"); return true; }
+  if (i < 0 || i > cnt || (!set && i == cnt)) { snprintf(reply, n, "Error, wpt.1 to wpt.%d", set ? cnt + 1 : cnt); return true; }
+  if (!set) {
+    const Waypoint& w = wm.at(i);
+    snprintf(reply, n, "> %.6f,%.6f %s", w.lat_1e6 / 1e6, w.lon_1e6 / 1e6, w.label);
+    return true;
+  }
+  if (!*end) {
+    if (i == cnt) { snprintf(reply, n, "Error, no wpt.%ld", i + 1); return true; }
+    wm.remove(i);
+    snprintf(reply, n, "OK");
+    return true;
+  }
+  char tagged[80], label[WAYPOINT_LABEL_LEN + 16];
+  snprintf(tagged, sizeof(tagged), WAYPOINT_MSG_TAG "%s", end + 1);   // "[WAY]lat,lon label", as a message carries it
+  int32_t lat, lon;
+  if (!geo::parseLatLon(tagged, lat, lon, label, sizeof(label))) { snprintf(reply, n, "Error, set wpt.N <lat>,<lon> <label>"); return true; }
+  if (i == cnt) {
+    if (!wm.add(lat, lon, rtc_clock.getCurrentTime(), label)) { snprintf(reply, n, "Error, full (%d)", WaypointStore::CAPACITY); return true; }
+  } else {
+    wm.replace(i, lat, lon, label);
+  }
+  snprintf(reply, n, "OK");
+  return true;
+}
+
 // True when the command was a settings one (reply set either way).
 static bool handle(UiCore& core, const char* cmd, char* reply, int n) {
   NodePrefs* p = core.prefs();
   if (!p) return false;
   if (quickMessages(p, cmd, reply, n)) return true;
   if (melodies(p, cmd, reply, n)) return true;
+  if (waypoints(core, cmd, reply, n)) return true;
   if (!strcmp(cmd, "keys") || !strncmp(cmd, "keys ", 5)) {   // the key names, a frame's worth a page
     int page = cmd[4] ? atoi(cmd + 5) : 1, pg = 1, o = 0;
     bool more = false;

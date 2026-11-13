@@ -49,6 +49,11 @@ public:
     setLabel(_wp[i], label);
   }
 
+  void move(int i, int32_t lat, int32_t lon) {
+    if (i < 0 || i >= _count) return;
+    _wp[i].lat_1e6 = lat; _wp[i].lon_1e6 = lon;
+  }
+
   void clear() { _count = 0; }
 
   // ── persistence ──────────────────────────────────────────────────────────
