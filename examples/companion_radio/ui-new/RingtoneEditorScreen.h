@@ -18,6 +18,9 @@ class RingtoneEditorScreen : public UIScreen {
   uint8_t& _len = _mel.len;
   uint8_t& _bpm_idx = _mel.bpm_idx;
   int     _slot;   // 0=melody1, 1=melody2
+  // One-button boards: a hold on a note edits it (_ob_note), a click then
+  // steps it up the whole scale (rest, C4 .. B6), a double down, a hold done.
+  bool    _ob_note = false;
   int     _cursor;
   int     _scroll;
   PopupMenu _menu;
@@ -57,7 +60,21 @@ public:
     _cursor  = 0;
     _scroll  = 0;
     _menu.active = false;
+    _ob_note = false;
   }
+
+  // The note's place on the one-button scale: 0 a rest, then C4 .. B6.
+  static int scaleIdx(uint8_t b) {
+    return notePitch(b) ? (noteOctave(b) - soundctl::OCT_MIN) * 7 + notePitch(b) : 0;
+  }
+  static uint8_t fromScale(int i, uint8_t b) {
+    if (i <= 0) return packNote(0, noteOctave(b), noteDurIdx(b));
+    return packNote((i - 1) % 7 + 1, soundctl::OCT_MIN + (i - 1) / 7, noteDurIdx(b));
+  }
+  static const int SCALE_N = (soundctl::OCT_MAX - soundctl::OCT_MIN + 1) * 7 + 1;
+
+  char stepKey() override { return _menu.active ? KEY_DOWN : KEY_RIGHT; }   // the menu: its rows
+  uint8_t editMode() override { return _ob_note && !_menu.active ? EDIT_VALUE : EDIT_NONE; }
 
   void openMenu() {
     snprintf(_menu_play_label, sizeof(_menu_play_label), "%s", _task->isMelodyPlaying() ? "Stop" : "Play");
@@ -147,12 +164,16 @@ public:
       display.print(info);
     } else if (_cursor == _len) {
       display.setCursor(display.getCharWidth() + 2, info_y);
-      display.print("U/D to add note");
+      display.print(_task->oneButtonUi() ? "Hold to add a note" : "U/D to add note");
     }
 
     if (wide) drawRoll(display, info_y + lh + 6, bottom_y - 6, cell_w);
     display.setCursor(0, bottom_y);
-    display.print(wide ? "Up/Down: note  Enter: octave  Hold: options" : "ENT:oct MENU:opts");
+    if (_task->oneButtonUi())
+      display.print(_ob_note ? (wide ? "Click: up  Double: down  Hold: done" : "Clk+ Dbl- Hold=ok")
+                             : (wide ? "Click: next  Hold: edit  2 s: options" : "Hold=edit 2s=opts"));
+    else
+      display.print(wide ? "Up/Down: note  Enter: octave  Hold: options" : "ENT:oct MENU:opts");
 
     if (_menu.active) _menu.render(display);
 
@@ -265,13 +286,33 @@ public:
       return true;
     }
 
+    if (_ob_note) {   // one button, a note being edited: up or down the scale
+      if (right || left) {
+        const int i = (scaleIdx(_notes[_cursor]) + (right ? 1 : SCALE_N - 1)) % SCALE_N;
+        _notes[_cursor] = fromScale(i, _notes[_cursor]);
+        previewNote(_notes[_cursor]);
+      } else if (enter || cancel) {
+        _ob_note = false;
+      }
+      return true;
+    }
+    const bool ob = _task->oneButtonUi();
+    // One button: a double click is Back -- the menu, with Save and Discard,
+    // rather than leaving and losing the edits.
+    if (cancel && ob) { openMenu(); return true; }
     if (cancel)   { _task->stopMelody(); _task->leaveTool(); return true; }
     if (menu_key) { openMenu(); return true; }
+    if (enter && ob) {   // a hold: edit this note (a new one on the "+")
+      if (_cursor == _len && _len < MAX_NOTES) { _notes[_len] = packNote(1, 5, 1); _len++; clampScroll(); }
+      if (_cursor < _len) { _ob_note = true; previewNote(_notes[_cursor]); }
+      return true;
+    }
 
     if (left && _cursor > 0) { _cursor--; clampScroll(); return true; }
     if (right) {
       int max_cur = (_len < MAX_NOTES) ? _len : _len - 1;
       if (_cursor < max_cur) { _cursor++; clampScroll(); return true; }
+      if (_task->oneButtonUi()) { _cursor = 0; clampScroll(); return true; }   // clicks go round
     }
 
     if ((up || down) && _cursor == _len && _len < MAX_NOTES) {

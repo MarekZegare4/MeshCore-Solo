@@ -1251,6 +1251,11 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_lock() {
   if (g_sim_ui_task_for_js) g_sim_ui_task_for_js->simLock();
 }
 
+// Sim tests: the Ringtone editor on melody 1 (as Tools > Ringtone).
+extern "C" EMSCRIPTEN_KEEPALIVE void sim_ringtone() {
+  if (g_sim_ui_task_for_js) g_sim_ui_task_for_js->gotoRingtoneEditor(0);
+}
+
 // A one-button board: the page's button pressed (1) / let go (0). The gestures
 // are timed by the firmware's own OneButton, as on a bare Heltec.
 extern "C" EMSCRIPTEN_KEEPALIVE void sim_button(int down) {
@@ -2508,8 +2513,93 @@ void UITask::applySoundPrefs() {
 #endif
 }
 
-// The companion CLI's settings keys (ui-core/SettingsCli.h).
+// Home's pages for the CLI, in the order Settings > Home pages lists them by
+// default: their page_order bits (NodePrefs::HomePageBit). Status stands in the
+// old Radio slot; Settings and Messages have no mask bit (always shown).
+static const uint8_t CLI_PAGES[] = {
+  NodePrefs::HPB_CLOCK, NodePrefs::HPB_FAVOURITES, NodePrefs::HPB_RADIO, NodePrefs::HPB_BLUETOOTH,
+  NodePrefs::HPB_ADVERT, NodePrefs::HPB_SETTINGS, NodePrefs::HPB_MAP, NodePrefs::HPB_TOOLS,
+  NodePrefs::HPB_QUICK_MSG, NodePrefs::HPB_SHUTDOWN };
+static const int CLI_PAGE_N = sizeof(CLI_PAGES) / sizeof(CLI_PAGES[0]);
+static uint16_t cliPageMask(uint8_t bit) {
+  if (bit == NodePrefs::HPB_SETTINGS || bit == NodePrefs::HPB_QUICK_MSG) return 0;
+  if (bit == NodePrefs::HPB_RADIO) return NodePrefs::HP_RADIO | NodePrefs::HP_GPS | NodePrefs::HP_SENSORS;
+  return (uint16_t)(1u << bit);
+}
+
+// "pages": Home's pages in order, then the hidden ones. "set pages Clock,
+// Status, Messages ...": that order, the pages named shown and the rest hidden
+// (Settings and Messages always show: put last when left out).
+static bool homePagesCli(NodePrefs* p, const char* cmd, char* reply, int n) {
+  const bool set = !strncmp(cmd, "set pages", 9) && (!cmd[9] || cmd[9] == ' ');
+  if (!set && strcmp(cmd, "pages") && strcmp(cmd, "get pages")) return false;
+  uint8_t order[CLI_PAGE_N];
+  int cnt = 0;
+  auto have = [&](uint8_t b) { for (int i = 0; i < cnt; i++) if (order[i] == b) return true; return false; };
+  auto known = [&](uint8_t b) { for (int i = 0; i < CLI_PAGE_N; i++) if (CLI_PAGES[i] == b) return true; return false; };
+  uint16_t mask = p->home_pages_mask ? p->home_pages_mask : NodePrefs::HP_ALL;
+  if (!set) {
+    if (p->page_order_set == NodePrefs::PAGE_ORDER_MAGIC)
+      for (int i = 0; i < NodePrefs::PAGE_ORDER_LEN; i++) {
+        const uint8_t v = p->page_order[i];
+        if (v < 1 || v > NodePrefs::HPB_COUNT) break;
+        if (known(v - 1) && !have(v - 1)) order[cnt++] = v - 1;
+      }
+    for (int i = 0; i < CLI_PAGE_N; i++) if (!have(CLI_PAGES[i])) order[cnt++] = CLI_PAGES[i];
+    int o = snprintf(reply, n, "> ");
+    for (int pass = 0; pass < 2; pass++) {   // shown, then hidden
+      bool first = true;
+      for (int i = 0; i < cnt && o < n - 1; i++) {
+        const uint16_t m = cliPageMask(order[i]);
+        if ((!m || (mask & m)) != (pass == 0)) continue;
+        if (pass && first) o += snprintf(reply + o, n - o, " | hidden: ");
+        o += snprintf(reply + o, n - o, "%s%s", first ? "" : ", ", NodePrefs::homePageLabel(order[i]));
+        first = false;
+      }
+    }
+    return true;
+  }
+  for (const char* c = cmd + 9; *c;) {   // names, split at commas or spaces
+    while (*c == ' ' || *c == ',') c++;
+    const char* e = c;
+    while (*e && *e != ' ' && *e != ',') e++;
+    if (e == c) break;
+    int hit = -1;
+    for (int i = 0; i < CLI_PAGE_N; i++) {
+      const char* l = NodePrefs::homePageLabel(CLI_PAGES[i]);
+      if ((int)strlen(l) == e - c && !strncasecmp(l, c, e - c)) hit = CLI_PAGES[i];
+    }
+    if (hit < 0) {
+      int o = snprintf(reply, n, "Error, pages are: ");
+      for (int i = 0; i < CLI_PAGE_N; i++) o += snprintf(reply + o, n - o, "%s%s", i ? ", " : "", NodePrefs::homePageLabel(CLI_PAGES[i]));
+      return true;
+    }
+    if (!have((uint8_t)hit)) order[cnt++] = (uint8_t)hit;
+    c = e;
+  }
+  if (!cnt) { snprintf(reply, n, "Error, set pages <names in order>"); return true; }
+  for (int i = 0; i < CLI_PAGE_N; i++) {   // shown or hidden as named
+    const uint16_t m = cliPageMask(CLI_PAGES[i]);
+    if (have(CLI_PAGES[i])) mask |= m; else mask &= ~m;
+  }
+  mask |= NodePrefs::HP_RECENT;   // a retired page's bit: the mask never 0 (which is "all")
+  const int named = cnt;
+  for (int i = 0; i < CLI_PAGE_N; i++) if (!have(CLI_PAGES[i])) order[cnt++] = CLI_PAGES[i];
+  memset(p->page_order, 0, sizeof(p->page_order));
+  int j = 0;
+  for (int i = 0; i < cnt; i++) p->page_order[j++] = order[i] + 1;
+  const uint8_t retired[] = { NodePrefs::HPB_RECENT, NodePrefs::HPB_GPS, NodePrefs::HPB_SENSORS };
+  for (uint8_t b : retired) if (j < NodePrefs::PAGE_ORDER_LEN) p->page_order[j++] = b + 1;
+  p->page_order_set = NodePrefs::PAGE_ORDER_MAGIC;
+  p->home_pages_mask = mask;
+  the_mesh.savePrefs();
+  snprintf(reply, n, named < cnt ? "OK (the rest hidden)" : "OK");
+  return true;
+}
+
+// The companion CLI's settings keys (ui-core/SettingsCli.h), and Home's pages.
 bool UITask::cliCommand(const char* command, char* reply, int n) {
+  if (_node_prefs && homePagesCli(_node_prefs, command, reply, n)) { _next_refresh = 0; return true; }
   if (!settingscli::handle(*_core, command, reply, n)) return false;
   _next_refresh = 0;   // a screen showing the value draws it anew
   return true;

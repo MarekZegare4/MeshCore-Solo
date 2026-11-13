@@ -125,11 +125,53 @@ static bool quickMessages(NodePrefs* p, const char* cmd, char* reply, int n) {
   return true;
 }
 
+// The two user melodies (the Ringtone editor's), for a configurator: "get
+// melody.1" is "> <bpm> <notes>", the notes a byte each in hex (SoundControl.h:
+// bits 0-2 pitch, 0 a rest, then c d e f g a b; 3-4 octave - 4; 5-6 length
+// 1/4 .. 1/32), "set melody.1 120 2931..." writes one (an empty one with no
+// notes). BPM is one of 60 90 120 150 180.
+static bool melodies(NodePrefs* p, const char* cmd, char* reply, int n) {
+  const bool set = !strncmp(cmd, "set melody.", 11);
+  if (!set && strncmp(cmd, "get melody.", 11)) return false;
+  const char* a = cmd + 11;
+  if ((a[0] != '1' && a[0] != '2') || (a[1] && a[1] != ' ')) return false;   // melody.dm ...: a key
+  const int slot = a[0] - '1';
+  soundctl::Melody m;
+  if (!set) {
+    soundctl::load(p, slot, m);
+    int o = snprintf(reply, n, "> %u ", soundctl::bpm(m.bpm_idx));
+    for (int i = 0; i < m.len && o < n - 2; i++) o += snprintf(reply + o, n - o, "%02x", m.notes[i]);
+    return true;
+  }
+  memset(&m, 0, sizeof(m));
+  char* end = nullptr;
+  const long bpm = a[1] ? strtol(a + 2, &end, 10) : -1;
+  m.bpm_idx = 0xFF;
+  for (uint8_t i = 0; i < soundctl::BPM_COUNT; i++) if (soundctl::bpm(i) == bpm) m.bpm_idx = i;
+  if (m.bpm_idx == 0xFF) { snprintf(reply, n, "Error, set melody.N <bpm 60/90/120/150/180> <hex notes>"); return true; }
+  const char* h = end;
+  while (*h == ' ') h++;
+  for (; h[0] && h[1]; h += 2) {
+    if (m.len >= soundctl::MAX_NOTES) { snprintf(reply, n, "Error, at most %d notes", soundctl::MAX_NOTES); return true; }
+    char b[3] = { h[0], h[1], 0 };
+    char* e;
+    const long v = strtol(b, &e, 16);
+    if (*e || v < 0 || v > 0x7F || ((v >> 3) & 3) > soundctl::OCT_MAX - 4) { snprintf(reply, n, "Error, notes are hex bytes 00-7f"); return true; }
+    m.notes[m.len++] = (uint8_t)v;
+  }
+  if (*h) { snprintf(reply, n, "Error, notes are hex bytes 00-7f"); return true; }
+  soundctl::store(p, slot, m);
+  the_mesh.savePrefs();
+  snprintf(reply, n, "OK");
+  return true;
+}
+
 // True when the command was a settings one (reply set either way).
 static bool handle(UiCore& core, const char* cmd, char* reply, int n) {
   NodePrefs* p = core.prefs();
   if (!p) return false;
   if (quickMessages(p, cmd, reply, n)) return true;
+  if (melodies(p, cmd, reply, n)) return true;
   if (!strcmp(cmd, "keys") || !strncmp(cmd, "keys ", 5)) {   // the key names, a frame's worth a page
     int page = cmd[4] ? atoi(cmd + 5) : 1, pg = 1, o = 0;
     bool more = false;
@@ -148,6 +190,28 @@ static bool handle(UiCore& core, const char* cmd, char* reply, int n) {
     }
     if (more) snprintf(reply + o, n - o, " (more: keys %d)", page + 1);
     else if (pg < page || page < 1) snprintf(reply, n, "No more keys");
+    return true;
+  }
+  // "opts <key>": the key as the Settings screen shows it, for a form:
+  // "> page/SECTION|label|value|choice|choice...", "on|off" for a switch.
+  if (!strncmp(cmd, "opts ", 5)) {
+    for (int k = 0; k < KEY_COUNT; k++) {
+      if (strcmp(KEYS[k].key, cmd + 5)) continue;
+      int i = row(KEYS[k]);
+      if (i < 0) { snprintf(reply, n, "Error, not on this device"); return true; }
+      const settings::Setting& st = settings::ALL[i];
+      char buf[24];
+      int o = snprintf(reply, n, "> %s/%s|%s|%s", settings::pageTitle(settings::sectionPage(st.section)),
+                       settings::sectionTitle(st.section), st.label, settings::text(*p, st, buf, sizeof(buf), "on", "off"));
+      if (!st.option) { snprintf(reply + o, n - o, "|on|off"); return true; }
+      for (int v = 0; v < st.count && o < n - 1; v++) {
+        st.option((uint8_t)v, buf, sizeof(buf), *p);
+        if (o + 1 + (int)strlen(buf) >= n - 1) { snprintf(reply + o, n - o, "|..."); break; }
+        o += snprintf(reply + o, n - o, "|%s", buf);
+      }
+      return true;
+    }
+    snprintf(reply, n, "Error, no key %s (see keys)", cmd + 5);
     return true;
   }
   bool set = !strncmp(cmd, "set ", 4);
