@@ -3,7 +3,9 @@
 // movement (no magnetometer; the Core's CourseEngine, trail or not) on a dial
 // that turns so the heading is up under a fixed pointer, with the degrees and
 // cardinal beside it. Standing still, the heading is undefined: the dial greys
-// out and a hint says to move.
+// out and a hint says to move. With somewhere to go (the next bend of a route
+// or Track back, else the Locator target) a dot on the ring marks its bearing:
+// turn until it's under the pointer. The hint says where it lies and how far.
 //
 // Single-TU fragment: included by ui-lvgl/UITask.cpp after DiagScreen.h.
 
@@ -16,6 +18,7 @@ static lv_obj_t* s_card = nullptr;
 static lv_obj_t* s_hint = nullptr;
 static int s_cog = 0;
 static bool s_have = false;
+static int s_goal = -1;   // the goal's bearing, -1 none
 static const int DIAL = 176;
 
 }  // namespace compassview
@@ -60,6 +63,20 @@ static void onCompassDraw(lv_event_t* e) {
     int32_t px = (int32_t)(cx + sx * lr), py = (int32_t)(cy + sy * lr);
     lv_area_t la = { px - 20, py - h / 2, px + 20, py + h / 2 };
     lv_draw_label(layer, &td, &la);
+  }
+
+  // The goal: a dot on the ring at its bearing.
+  if (s_have && s_goal >= 0) {
+    float ang = (s_goal - s_cog) * (float)M_PI / 180.0f;
+    int32_t gx = (int32_t)(cx + sinf(ang) * (r - 4)), gy = (int32_t)(cy - cosf(ang) * (r - 4));
+    lv_draw_rect_dsc_t rd;
+    lv_draw_rect_dsc_init(&rd);
+    rd.radius = LV_RADIUS_CIRCLE;
+    rd.bg_color = lv_color_hex(theme::OK);
+    rd.border_color = lv_color_hex(theme::BG);
+    rd.border_width = 2;
+    lv_area_t ga = { gx - 8, gy - 8, gx + 8, gy + 8 };
+    lv_draw_rect(layer, &rd, &ga);
   }
 
   // Fixed pointer: points down at the ring, the heading always under it.
@@ -120,21 +137,34 @@ void UITask::refreshCompass() {
   if (!_core->course.currentLocation(lat, lon))
     hint = _core->gpsAvailable() && !_core->gpsEnabled() ? "GPS is off - turn it on in Settings" : "Waiting for a GPS fix";
   else if (!_core->course.currentCourse(cog)) hint = "Move to set the heading";
-  bool have = hint == nullptr;
-  if (have != s_have || cog != s_cog) {
+  const bool have = hint == nullptr;
+  const bool here = _core->course.currentLocation(lat, lon);
+  // Where to: the route's next bend, else the Locator target.
+  int32_t gla = 0, glo = 0;
+  bool goal = here && _core->guide.active() && _core->guide.target(gla, glo);
+  if (here && !goal) goal = _core->locator.activeTargetPos(gla, glo);
+  const int gdeg = goal ? geo::bearingDeg(lat, lon, gla, glo) : -1;
+  if (have != s_have || cog != s_cog || gdeg != s_goal) {
     s_have = have;
+    s_goal = gdeg;
     if (have) s_cog = cog;
     lv_obj_invalidate(s_dial);
   }
+  char d[12] = "";
+  if (goal) geo::fmtDist(d, sizeof(d), geo::haversineKm(lat, lon, gla, glo), _prefs->units_imperial);
   if (have) {
     setTextFmt(s_deg, "%03d", cog);
     setText(s_degsign, "\xC2\xB0");
     setText(s_card, geo::bearingCardinal(cog));
-    setText(s_hint, "Course over ground");
+    const int turn = goal ? geo::turnDeg(gdeg, cog) : 0;
+    if (!goal)                         setText(s_hint, "Course over ground");
+    else if (turn > -10 && turn < 10)  setTextFmt(s_hint, "Target ahead, %s", d);
+    else setTextFmt(s_hint, "Target %d\xC2\xB0 %s, %s", turn > 0 ? turn : -turn, turn > 0 ? "right" : "left", d);
   } else {
     setText(s_deg, "");
     setText(s_degsign, "");
     setText(s_card, "--");
-    setText(s_hint, hint);
+    if (goal) setTextFmt(s_hint, "%s\nTarget %d\xC2\xB0 %s, %s", hint, gdeg, geo::bearingCardinal(gdeg), d);   // standing still: where it lies
+    else      setText(s_hint, hint);
   }
 }

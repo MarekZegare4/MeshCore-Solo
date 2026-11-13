@@ -14,6 +14,9 @@
 // Then the target: the first point at least LOOKAHEAD_M further along, so the
 // arrow leads round the bends; off the route, the nearest point on it.
 //
+// Progress is saved every SAVE_M along (NodePrefs::route_seg): after a restart
+// the first fix is looked for around there before the whole route.
+//
 // Off route past OFF_ENTER_M, back on under OFF_LEAVE_M (no flicker at the
 // edge); the end within ARRIVE_M: finished. Each pushes a RouteAlert event.
 
@@ -33,6 +36,7 @@ public:
   static const int SHORTCUT_SLACK_M = 20;
   static const int SNAP_SLACK_M = 30;
   static const int JUMP_M = 100;
+  static const int SAVE_M = 250;
   static const uint32_t POLL_MS = 1000;
   static const uint32_t FULL_SEARCH_MS = 10000;   // off route: the whole route at most this often
 
@@ -41,14 +45,17 @@ public:
   // Picks up the route followed before a restart (NodePrefs::route_follow).
   void begin(NodePrefs* prefs, const CourseEngine* course, UiEventQueue* events) {
     _prefs = prefs; _course = course; _events = events;
-    if (_prefs && _prefs->route_follow && !start((_prefs->route_follow & 0x7F) - 1, _prefs->route_follow & 0x80))
+    if (_prefs && _prefs->route_follow
+        && !start((_prefs->route_follow & 0x7F) - 1, _prefs->route_follow & 0x80, _prefs->route_seg))
       remember(-1, false);   // gone since
   }
 
-  bool start(int slot, bool reversed) {
+  // `resume`: the segment it was at before a restart (NodePrefs::route_seg).
+  bool start(int slot, bool reversed, int resume = 0) {
     RouteInfo ri;
     if (!PlannedRoutes::info(slot, ri)) return false;
-    remember(slot, reversed);
+    if (resume < 0 || resume >= ri.count - 1) resume = 0;
+    remember(slot, reversed, resume);
     _info = ri;
     _slot = slot;
     buildOverview();
@@ -60,6 +67,8 @@ public:
     _snap = true;
     _have_target = false;
     _joined = false;
+    _resume = resume > 0 ? resume : -1;
+    _saved_along = 0;
     _next_full = 0;
     _next_poll = 0;
     _state = ON_ROUTE;
@@ -148,6 +157,24 @@ public:
 
     Cand best, ahead;
     const int nseg = _info.count - 1;
+    if (_snap && _resume >= 0) {   // after a restart: where it was, if you're still there
+      const int s0 = _resume - WIN_BACK < 0 ? 0 : _resume - WIN_BACK;
+      const int s1 = _resume + WIN_AHEAD > nseg - 1 ? nseg - 1 : _resume + WIN_AHEAD;
+      Cand near, unused;
+      scan(f, s0, s1, near, unused);
+      _resume = -1;
+      if (near.seg >= 0 && near.d <= OFF_ENTER_M) {
+        earliestNear(f, s0, s1, near);
+        _snap = false;
+        _joined = true;
+        _off_m = near.d;
+        _seg = near.seg; _along = _saved_along = near.along;
+        _p_lat = near.lat; _p_lon = near.lon;
+        findTarget(f);
+        f.close();
+        return;
+      }   // else found afresh, as at a start
+    }
     if (!_snap) {
       int s0 = _seg - WIN_BACK, s1 = _seg + WIN_AHEAD;
       if (s0 < 0) s0 = 0;
@@ -191,6 +218,7 @@ public:
       _seg = best.seg;
       _along = best.along;
       _p_lat = best.lat; _p_lon = best.lon;
+      if (fabsf(_along - _saved_along) >= SAVE_M) { _saved_along = _along; saveSeg(_seg); }
     }
 
     if (_state == OFF_ROUTE) {
@@ -212,11 +240,17 @@ public:
 private:
   const char* finishedText() const { return _slot == PlannedRoutes::TRAIL_SLOT ? "Back at the start" : "Route finished"; }
 
-  void remember(int slot, bool reversed) {
+  void remember(int slot, bool reversed, int seg = 0) {
     if (!_prefs) return;
     const uint8_t v = slot < 0 ? 0 : (uint8_t)((slot + 1) | (reversed ? 0x80 : 0));
-    if (_prefs->route_follow == v) return;
+    if (_prefs->route_follow == v && _prefs->route_seg == (uint16_t)seg) return;
     _prefs->route_follow = v;
+    _prefs->route_seg = (uint16_t)seg;
+    the_mesh.savePrefs();
+  }
+  void saveSeg(int seg) {
+    if (!_prefs || _prefs->route_seg == (uint16_t)seg) return;
+    _prefs->route_seg = (uint16_t)seg;
     the_mesh.savePrefs();
   }
 
@@ -375,7 +409,9 @@ private:
   float    _along = 0;
   float    _off_m = 0;
   bool     _have_target = false;
-  bool     _joined = false;   // been on the route since start(): "Back on route", not "On route"
+  bool     _joined = false;
+  int      _resume = -1;      // the segment saved before a restart, for the first fix
+  float    _saved_along = 0;   // been on the route since start(): "Back on route", not "On route"
   int32_t  _t_lat = 0, _t_lon = 0;
   int32_t  _p_lat = 0, _p_lon = 0;
   int32_t  _lat0 = 0, _lon0 = 0;

@@ -63,7 +63,10 @@ Hold Enter on one: **Follow**, **Follow reversed** (the way back) or
   distance left on the route and the time to its end.
 - **Off route** with a tune when you stray more than 50 m, **Back on route**
   when you return, **Route finished** at the end.
-- It keeps going whatever screen is up, and through a restart.
+- It keeps going whatever screen is up, and through a restart, picking up
+  where you were.
+- The Map home page draws it and shows how much is left; the Compass marks
+  the next bend.
 
 Hold Enter on the route you follow for **Guide** (the navigation view) or
 **Stop**. One route at a time: following another, or Track back, stops it.
@@ -80,8 +83,9 @@ e-ink), the Watch13, the Heltec V3/V4 and the Cardputer.
 ## Waypoints
 
 A waypoint is a saved spot (the car, a camp, water) with a short label, up to
-16 of them, kept through reboots. Add one with **Mark here** at your position,
-or **+ Add by coords** to type coordinates. The list starts with **Trail
+16 of them, kept through reboots. Add one with **Mark here** at your position
+(in the trail menu or at the end of the list), or **+ Add by coords** to type
+coordinates. The list starts with **Trail
 start**, so you can always go back to where the trail began.
 
 **Hold Enter** on a waypoint: Rename, Delete, **Send** (as a message to a
@@ -102,13 +106,15 @@ until the two bearings match. The heading comes from your movement, so it
 shows `--` while you stand still.
 
 **Tools › Compass** shows the same heading as a scrolling tape with the
-degrees and direction.
+degrees and direction. Where you're going (the next bend of a route, else the
+Locator target) is a flag on the tape: turn until it's in the middle.
 
 > [!NOTE]
 > **Wio Tracker L2:** the target is drawn on the map with a line to it, and a
 > bar along the bottom shows distance, bearing, heading and time to arrival
 > (without a target the map has the whole screen). The Compass app is a
-> turning dial.
+> turning dial, the target a green dot on it, with how far to turn and how
+> far it is beside.
 
 ## Sharing locations
 
@@ -140,14 +146,16 @@ arriving at a waypoint, leaving it, or a person coming near or moving away.
 - **Beeper**: ticks faster as you get closer, even when the sound is muted.
 
 **Set as target** in Nearby, the waypoint list or a message sets the target
-in one step. The target shows as a flag on the map.
+in one step. The target shows as a flag on the map and the compass;
+**Navigate** under it opens the navigation view.
 
 ## Map
 
 The **Map** home page shows a small map on the left (your position, the
 trail, people sharing their position and the target) and four lines beside
 it: GPS, the trail's distance, live shares, and the distance to the target
-(or the waypoint count when there is none).
+(or the waypoint count when there is none). Following a route or Track back,
+the route is drawn and the last line is how much of it is left.
 **Enter** opens the trail map; **hold Enter** shares your position.
 
 > [!NOTE]

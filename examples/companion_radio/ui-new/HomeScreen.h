@@ -678,6 +678,8 @@ public:
     _quick_sel = 0;
   }
 
+  void showMapPage() { _page = MAP; _quick_sel = 0; }   // sim tests
+
   void showGpsPage() {
     _page = STATUS;
     _quick_sel = 0;
@@ -735,6 +737,11 @@ public:
     int32_t tla, tlo;
     bool have_tgt = _task->activeTargetPos(tla, tlo);   // active Locator/Nav target
     if (have_tgt) fold(tla, tlo);
+#if FEAT_ROUTES
+    const RouteGuide& guide = _task->core().guide;   // the route followed, whole, as on the Trail map
+    const bool have_route = guide.active() && guide.overviewCount() > 0;
+    if (have_route) { const RouteInfo& ri = guide.info(); fold(ri.min_lat, ri.min_lon); fold(ri.max_lat, ri.max_lon); }
+#endif
     if (!init) return false;
 
     // North marker — top-right, the same mini-icon as the full Trail map.
@@ -757,8 +764,10 @@ public:
     float lon_scale = cosf(avg_lat_rad); if (lon_scale < 0.05f) lon_scale = 0.05f;
     float lat_span = (float)(mxla - mnla);
     float lon_span = (float)(mxlo - mnlo) * lon_scale;
-    float slat = (float)ah / (lat_span > 0 ? lat_span : 1.0f);
-    float slon = (float)aw / (lon_span > 0 ? lon_span : 1.0f);
+    // Clear of the frame by a marker's half, so a line along the edge shows.
+    const int m = 3 * miniIconScale(display);
+    float slat = (float)(ah - 2 * m) / (lat_span > 0 ? lat_span : 1.0f);
+    float slon = (float)(aw - 2 * m) / (lon_span > 0 ? lon_span : 1.0f);
     float scale = (slat < slon) ? slat : slon;
     int off_x = ax + (aw - (int)(lon_span * scale)) / 2;
     int off_y = ay + (ah - (int)(lat_span * scale)) / 2;
@@ -768,6 +777,25 @@ public:
     };
     // Trail as a connected line, matching the full Trail map (shared helper —
     // see gfx::drawTrail); no break marker here, just a silent gap.
+#if FEAT_ROUTES
+    if (have_route) {   // dashed under the trail; its end marked
+      const gfx::Dash dash = { 0x3, 4 };
+      const int n = guide.overviewCount();
+      int px = 0, py = 0;
+      for (int i = 0; i < n; i++) {
+        int32_t la, lo;
+        guide.overviewPoint(i, la, lo);
+        int x, y;
+        project(la, lo, x, y);
+        if (i > 0) gfx::drawLine(display, px, py, x, y, dash);
+        px = x; py = y;
+      }
+      int32_t la, lo;
+      guide.overviewPoint(guide.reversed() ? 0 : n - 1, la, lo);
+      project(la, lo, px, py);
+      miniIconDrawCentered(display, px, py, ICON_MAP_TARGET);
+    }
+#endif
     gfx::drawTrail(display, tr, project, [](int, int, int, int) {});
     for (int i = 0; i < LiveTrackStore::CAPACITY; i++) {
       if (!lt.isActive(i, now)) continue;
@@ -831,6 +859,25 @@ public:
       if (nearest_km < 0.0f || d < nearest_km) nearest_km = d;
     }
     return nearest_km;
+  }
+
+  // Following a route (or Track back): what's left of it ("4.2km", "off 80m"),
+  // `wide` with room for "left". False when not following one.
+  bool routeLeft(char* buf, int n, bool wide) {
+#if FEAT_ROUTES
+    const RouteGuide& g = _task->core().guide;
+    if (!g.active()) return false;
+    char d[12];
+    const bool imp = _task->useImperial();
+    if (!g.placed()) { snprintf(buf, n, "no fix"); return true; }
+    if (g.offRoute()) { geo::fmtDist(d, sizeof(d), g.offM() / 1000.0f, imp, true); snprintf(buf, n, "off %s", d); return true; }
+    geo::fmtDist(d, sizeof(d), g.remainingM() / 1000.0f, imp, true);
+    snprintf(buf, n, wide ? "%s left" : "%s", d);
+    return true;
+#else
+    (void)buf; (void)n; (void)wide;
+    return false;
+#endif
   }
 
   // The Map page: the mini-map in a soft frame on the left, what it shows
@@ -897,7 +944,9 @@ public:
     if (live > 0 && km >= 0 && !target) geo::fmtDist(buf, sizeof(buf), km, _task->useImperial(), true);
     else                                snprintf(buf, sizeof(buf), "%d live", live);
     line(ICON_MAP_CONTACT, buf);
-    if (target) {
+    if (routeLeft(buf, sizeof(buf), false)) {
+      line(ICON_MAP_TARGET, buf);
+    } else if (target) {
       if (km >= 0) geo::fmtDist(buf, sizeof(buf), km, _task->useImperial(), true);
       else         strcpy(buf, "-");
       line(ICON_MAP_TARGET, buf);
@@ -961,7 +1010,11 @@ public:
       geo::fmtDist(buf, sizeof(buf), km, _task->useImperial(), true);
       row(nullptr, "Nearest", buf);
     }
-    if (target) {
+    if (routeLeft(buf, sizeof(buf), true)) {
+#if FEAT_ROUTES
+      row(&ICON_MAP_TARGET, _task->core().guide.trackBack() ? "Back" : "Route", buf);
+#endif
+    } else if (target) {
       if (km >= 0) geo::fmtDist(buf, sizeof(buf), km, _task->useImperial(), true);
       else         strcpy(buf, "-");
       row(&ICON_MAP_TARGET, "Target", buf);

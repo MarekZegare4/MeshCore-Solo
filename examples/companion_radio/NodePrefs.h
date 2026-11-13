@@ -496,6 +496,9 @@ struct NodePrefsFields {
   // The planned route being followed (ui-core/RouteGuide.h), so a restart picks
   // it up again: 0 = none, else its slot + 1, | 0x80 = followed reversed.
   uint8_t  route_follow;
+  // How far along it, as a segment index, saved every RouteGuide::SAVE_M, so a
+  // restart picks up there (a loop's end lies beside its start).
+  uint16_t route_seg;
   // GPS averaging for waypoint marking — when set, "Mark here" samples the GPS
   // fix for this many seconds and stores the mean position, for a more accurate
   // mark than a single instantaneous fix. 0 = off (instant mark, the default).
@@ -970,7 +973,7 @@ class NodePrefs : public NodePrefsFields, public ConfigSerializer {
     s.def("imperial", units_imperial);
     s.def("tr_delta", trail_min_delta_idx); s.def("tr_pace", trail_show_pace);
     s.def("tr_pause", trail_autopause_idx); s.def("tr_lowbatt", trail_autosave_lowbatt);
-    s.def("rt_follow", route_follow);
+    s.def("rt_follow", route_follow); s.def("rt_seg", route_seg);
     s.def("avg", gps_avg_idx); s.def("trk_shared", track_shared_loc);
     s.def("adv_auto", advert_auto_interval_sec); s.def("adv_prec", advert_loc_prec);
   }

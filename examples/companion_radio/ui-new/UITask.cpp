@@ -694,6 +694,9 @@ void UITask::simRoute(int what) {
     if (!_core->startTrackBack()) return;
     what = 2;
   }
+  if (what == 6) { gotoCompassScreen(); _next_refresh = 0; return; }
+  if (what == 8) { gotoLocatorScreen(); _next_refresh = 0; return; }
+  if (what == 7) { gotoHomeScreen(); static_cast<HomeScreen*>(home)->showMapPage(); _next_refresh = 0; return; }
   setCurrScreen(trail_screen);
   if (what == 3) ((TrailScreen*)trail_screen)->showMapView();
   else ((TrailScreen*)trail_screen)->simRoutes(what == 2);

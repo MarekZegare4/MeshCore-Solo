@@ -10,6 +10,10 @@
 //
 // Reuses the UI Core's COG ring (currentCourse) — works whether or not a trail is
 // being recorded.
+//
+// With somewhere to go (the next bend of a route followed or of Track back, else
+// the Locator target) its flag sits under the tape at its bearing, or at the
+// edge it lies past; standing still, its bearing is spelled out instead.
 
 #include "../GeoUtils.h"
 #include "icons.h"   // miniIconScale() — keeps the tape ticks/pointer legible on e-ink
@@ -18,6 +22,21 @@ class CompassScreen : public UIScreen {
   UITask* _task;
 
   bool gpsValid() const { int32_t lat, lon; return _task->currentLocation(lat, lon); }
+
+  // Where you're headed, if anywhere: its bearing from here.
+  bool goalBearing(int& deg) const {
+    int32_t la, lo, mla, mlo;
+    if (!_task->currentLocation(mla, mlo)) return false;
+    bool have = false;
+#if FEAT_ROUTES
+    const RouteGuide& g = _task->core().guide;
+    if (g.active()) have = g.target(la, lo);
+#endif
+    if (!have) have = _task->activeTargetPos(la, lo);
+    if (!have) return false;
+    deg = geo::bearingDeg(mla, mlo, la, lo);
+    return true;
+  }
 
   static const char* cardinalLetter(int deg) {
     switch (deg) { case 0: return "N"; case 90: return "E";
@@ -53,9 +72,16 @@ public:
     int cog;
     bool have = _task->currentCourse(cog);
 
+    int goal;
+    const bool have_goal = goalBearing(goal);
     if (!have) {
       display.drawTextCentered(cx, mid - ch, "move to");
       display.drawTextCentered(cx, mid,      "set heading");
+      if (have_goal) {
+        char t[20];
+        snprintf(t, sizeof(t), "Target %d %s", goal, geo::bearingCardinal(goal));
+        display.drawTextCentered(cx, readout_y, t);
+      }
       return 1000;
     }
 
@@ -108,6 +134,23 @@ public:
     for (int i = 0; i < pointerH_units; i++) {
       int half = (pointerH_units - 1 - i) * s;
       display.fillRect(cx - half, block_top + i * s, 2 * half + 1, s);
+    }
+
+    // The goal's flag, under the baseline at its bearing (in place of the ticks
+    // and a letter there); past the tape's reach, at the edge it lies beyond.
+    if (have_goal) {
+      int delta = goal - cog;
+      while (delta >  180) delta -= 360;
+      while (delta < -180) delta += 360;
+      int x = cx + (int)(delta * ppd);
+      const int iw = ICON_MAP_TARGET.w * s, ih = ICON_MAP_TARGET.h * s;
+      if (x < x_lo + iw / 2 + 1) x = x_lo + iw / 2 + 1;
+      if (x > x_hi - iw / 2 - 1) x = x_hi - iw / 2 - 1;
+      const int fy = line_y + sh + 1;
+      display.setColor(UIColor::window_bkg);
+      display.fillRect(x - iw / 2 - s, fy, iw + 2 * s, label_y + ch - fy);   // a letter there goes too
+      display.setColor(UIColor::primary_txt);
+      miniIconDraw(display, x - iw / 2, fy, ICON_MAP_TARGET);
     }
 
     // ── numeric readout ──────────────────────────────────────────────────────

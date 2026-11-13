@@ -43,6 +43,7 @@ class WaypointsView {
   int       _kb_rename_idx = -1;     // -1 = marking new, ≥0 = renaming that index
   int32_t   _mark_lat = 0, _mark_lon = 0;   // pending new-mark position
   uint32_t  _mark_ts  = 0;
+  bool      _mark_from_list = false;   // back to the list after marking, not the trail
 
   // ADD form — enter a waypoint by coordinates. Lat/Lon are numeric, so they use
   // the digit-by-digit scroll editor (same widget as the radio frequency field)
@@ -199,14 +200,14 @@ class WaypointsView {
     drawScreenHeader(display, title);
 
     int n     = wpListCount();
-    int total = n + 1;                    // final row = "+ Add by coords"
+    int total = n + 2;                    // then "+ Mark here" and "+ Add by coords"
     int32_t mylat, mylon; bool have = ownPos(mylat, mylon);
 
     drawList(display, total, _sel, _scroll, [&](int row, int y, bool sel, int reserve) {
       drawRowSelection(display, y, sel, reserve);
 
-      if (row == n) {                     // the synthetic "Add" row
-        display.setCursor(2, y); display.print("+ Add by coords");
+      if (row >= n) {                     // the synthetic "Add" rows
+        display.setCursor(2, y); display.print(row == n ? "+ Mark here" : "+ Add by coords");
         display.setColor(UIColor::primary_txt);
         return;
       }
@@ -365,6 +366,7 @@ public:
       } else if (r == KeyboardWidget::CANCELLED) {
         _kb_active = false; _kb_field = -1;
       }
+      if (!_kb_active && _mark_from_list) { _mark_from_list = false; _mode = LIST; }
       return true;
     }
 
@@ -453,21 +455,23 @@ public:
       return true;
     }
 
-    // List (row 0 is the synthetic "Trail start" when a trail exists; the final
-    // row is "+ Add by coords"). Cancel returns control to the trail views.
+    // List (row 0 is the synthetic "Trail start" when a trail exists; the last
+    // two "+ Mark here" and "+ Add by coords"). Cancel returns control to the
+    // trail views.
     int n = wpListCount();
-    int total = n + 1;                       // + the "Add by coords" row
+    int total = n + 2;
     if (c == KEY_CANCEL) { _mode = OFF; return true; }
     // drawList() reclamps _scroll from _sel every render.
     if (c == KEY_UP)   { _sel = (_sel > 0) ? _sel - 1 : total - 1; return true; }
     if (c == KEY_DOWN) { _sel = (_sel < total - 1) ? _sel + 1 : 0; return true; }
     if (c == KEY_ENTER) {
-      if (_sel == n) openAddForm();          // last row → open the add form
-      else           { _mode = NAV; _wp_eta.reset(); }   // a waypoint / Trail-start row
+      if (_sel == n)          { markHere(); _mark_from_list = _mode != LIST || _kb_active; }
+      else if (_sel == n + 1) openAddForm();
+      else                    { _mode = NAV; _wp_eta.reset(); }   // a waypoint / Trail-start row
       return true;
     }
     // Rename/Delete/Send/Locator apply to saved waypoints only — not Trail-start or Add.
-    if (c == KEY_CONTEXT_MENU && !selIsStart() && _sel != n &&
+    if (c == KEY_CONTEXT_MENU && !selIsStart() && _sel < n &&
         wpIndex() >= 0 && wpIndex() < _task->waypoints().count()) {
       _ctx.begin("Waypoint", 4);
       _ctx.addItem("Rename");

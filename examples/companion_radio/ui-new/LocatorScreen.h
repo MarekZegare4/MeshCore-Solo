@@ -12,7 +12,8 @@
 // live-sharing or just last-advertised, e.g. a repeater; then waypoints).
 // LEFT/RIGHT quick-cycles the same set. The same active target can also be set
 // directly from Nearby Nodes' or Waypoints' own "Set as target" menu item
-// (UITask::setTargetNow()), bypassing this picker entirely.
+// (UITask::setTargetNow()), bypassing this picker entirely. With a target set,
+// a Navigate row opens the navigation view to it (a person's as they move).
 // Included by UITask.cpp after LiveShareScreen.h.
 
 #include "InfoKit.h"
@@ -21,6 +22,7 @@
 #include "../LiveTrack.h"
 #include "../GeoUtils.h"
 #include "icons.h"   // drawList (shared scrolling-list helper)
+#include "NavView.h"
 
 class LocatorScreen : public UIScreen {
   UITask*    _task;
@@ -28,6 +30,8 @@ class LocatorScreen : public UIScreen {
   bool       _dirty  = false;
   int        _sel    = 0;
   int        _scroll = 0;
+  bool       _nav    = false;   // the navigation view to the target
+  navview::EtaTracker _eta;
 
   // Target picker (Enter on the Target row): a flat selectable list of people
   // and places, rebuilt from favourites / known-position contacts / waypoints
@@ -48,13 +52,14 @@ class LocatorScreen : public UIScreen {
   Target _targets[TARGET_MAX];
   int    _target_n = 0;
 
-  enum Kind : uint8_t { K_ENABLE, K_TARGET, K_RADIUS, K_MODE, K_BEEPER };
+  enum Kind : uint8_t { K_ENABLE, K_TARGET, K_NAV, K_RADIUS, K_MODE, K_BEEPER };
   struct Row { Kind kind; const char* label; };
-  static const int ROW_COUNT = 5;
-  static Row rows(int i) {
+  static const int ROW_COUNT = 6;
+  static const Row& rowDef(int i) {
     static const Row R[ROW_COUNT] = {
       { K_ENABLE, "Alert" },
       { K_TARGET, "Target" },
+      { K_NAV,    "Navigate" },
       { K_RADIUS, "Radius" },
       { K_MODE,   "Mode" },
       { K_BEEPER, "Beeper" },
@@ -62,19 +67,48 @@ class LocatorScreen : public UIScreen {
     return R[i];
   }
 
-  // The homing Beeper only makes sense when "arrive" is part of the alert mode —
-  // it guides you toward the target while inside the radius. In pure "leave"
-  // mode (1) it's contradictory (silent outside, slows as you near the exit), so
-  // hide its row. Beeper is the last row, so this is just a shorter visible count;
-  // the beeper engine (UITask::locatorProximityBeeper) is gated on the mode too.
+  // Navigate only with a target. The homing Beeper only makes sense when
+  // "arrive" is part of the alert mode — it guides you toward the target while
+  // inside the radius. In pure "leave" mode (1) it's contradictory (silent
+  // outside, slows as you near the exit), so its row is hidden; the beeper
+  // engine (UITask::locatorProximityBeeper) is gated on the mode too.
+  bool shown(Kind k) const {
+    if (k == K_NAV)    return _prefs && _prefs->locator_has_target;
+    if (k == K_BEEPER) return !(_prefs && _prefs->locator_mode == 1);
+    return true;
+  }
   int visibleRows() const {
-    return (_prefs && _prefs->locator_mode == 1) ? ROW_COUNT - 1 : ROW_COUNT;
+    int n = 0;
+    for (int i = 0; i < ROW_COUNT; i++) if (shown(rowDef(i).kind)) n++;
+    return n;
+  }
+  Row rows(int vis) const {   // the vis-th shown row
+    for (int i = 0; i < ROW_COUNT; i++)
+      if (shown(rowDef(i).kind) && vis-- == 0) return rowDef(i);
+    return rowDef(0);
+  }
+
+  void renderNav(DisplayDriver& display) {
+    int32_t tlat, tlon, mylat, mylon;
+    const char* nm = _prefs->locator_label[0] ? _prefs->locator_label : "Target";
+    if (!_prefs->locator_has_target || !_task->activeTargetPos(tlat, tlon)) {
+      drawScreenHeader(display, nm);
+      display.drawTextCentered(display.width() / 2, display.listStart() + display.lineStep(),
+                               _prefs->locator_has_target ? "Position unknown" : "No target");
+      return;
+    }
+    const bool have = _task->currentLocation(mylat, mylon);
+    int cog;
+    const bool cogv = _task->currentCourse(cog);
+    char label[24];
+    display.translateUTF8ToBlocks(label, nm, sizeof(label));
+    navview::draw(display, have, mylat, mylon, tlat, tlon, label, cogv, cog, _task->useImperial(), &_eta);
   }
 
 public:
   LocatorScreen(UITask* task, NodePrefs* prefs) : _task(task), _prefs(prefs) {}
 
-  void onShow() override { _dirty = false; _sel = 0; _scroll = 0; _picking = false; }
+  void onShow() override { _dirty = false; _sel = 0; _scroll = 0; _picking = false; _nav = false; }
 
   void valueLabel(Kind k, char* buf, int n) {
     switch (k) {
@@ -102,6 +136,13 @@ public:
       case K_BEEPER:
         snprintf(buf, n, "%s", (_prefs && _prefs->locator_beeper) ? "ON" : "OFF");
         break;
+      case K_NAV: {
+        int32_t tla, tlo, mla, mlo;
+        if (_task->activeTargetPos(tla, tlo) && _task->currentLocation(mla, mlo))
+          geo::fmtDist(buf, n, geo::haversineKm(mla, mlo, tla, tlo), _task->useImperial(), true);
+        else buf[0] = 0;
+        break;
+      }
       default: buf[0] = '\0';
     }
   }
@@ -109,6 +150,7 @@ public:
   int render(DisplayDriver& display) override {
     display.setTextSize(1);
     display.setColor(UIColor::primary_txt);
+    if (_nav) { renderNav(display); return 1000; }
     if (_picking) { int mq = renderPicker(display); return (mq > 0 && mq < 400) ? mq : 400; }
     drawScreenHeader(display, "Locator");
 
@@ -140,6 +182,8 @@ public:
       case K_TARGET:
         cycleTarget(dir);
         break;
+      case K_NAV:
+        return;
       case K_RADIUS:
         _prefs->locator_radius_idx = (uint8_t)((_prefs->locator_radius_idx
             + (dir >= 0 ? 1 : NodePrefs::LOCATOR_RADIUS_COUNT - 1)) % NodePrefs::LOCATOR_RADIUS_COUNT);
@@ -296,6 +340,10 @@ public:
       if (c == KEY_CANCEL) { _picking = false; return true; }
       return true;
     }
+    if (_nav) {
+      if (c == KEY_CANCEL) _nav = false;
+      return true;
+    }
     if (c == KEY_CANCEL) {
       _task->savePrefsIfDirty(_dirty);   // engine re-seeded per edit
       _task->leaveTool();
@@ -307,6 +355,7 @@ public:
     if (keyIsNext(c))  { activate(+1); return true; }
     if (c == KEY_ENTER) {
       if (rows(_sel).kind == K_TARGET) { openPicker(); return true; }  // full list picker
+      if (rows(_sel).kind == K_NAV) { _nav = true; _eta.reset(); return true; }
       activate(+1); return true;
     }
     return false;
