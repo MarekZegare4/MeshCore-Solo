@@ -220,6 +220,7 @@ public:
   // The one button, pressed (1) or let go (0): its gestures timed as on a board.
   void injectSimButton(bool down) { _ob_used = true; _sim_btn_down = down; }
   bool _sim_btn_down = false;
+  void simLock() { if (!_locked) toggleLock(); }
 #ifdef PIN_BUZZER
   // Lets a host page poll the buzzer's current state every frame to drive a
   // Web Audio oscillator (see sim_buzzer_is_playing()/sim_buzzer_freq_hz()

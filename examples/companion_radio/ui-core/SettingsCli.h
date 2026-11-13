@@ -90,10 +90,46 @@ static void choices(const NodePrefs& p, const settings::Setting& st, char* out, 
   }
 }
 
+// The quick messages (NodePrefs::custom_msgs, sent from a conversation's
+// message list): "msgs" lists the slots in use, "get msg.3" one of them,
+// "set msg.3 On my way" sets it ({loc}, {time} ... expand when sent),
+// "set msg.3" alone empties it. Numbered from 1, as the device shows them.
+static bool quickMessages(NodePrefs* p, const char* cmd, char* reply, int n) {
+  static const int COUNT = (int)(sizeof(p->custom_msgs) / sizeof(p->custom_msgs[0]));
+  static const int LEN = (int)sizeof(p->custom_msgs[0]);
+  if (!strcmp(cmd, "msgs")) {
+    int o = 0;
+    reply[0] = 0;
+    for (int i = 0; i < COUNT && o < n - 1; i++) {
+      if (!p->custom_msgs[i][0]) continue;
+      const char* m = p->custom_msgs[i];
+      int cut = (int)strlen(m) > 24 ? 24 : (int)strlen(m);
+      while (cut > 0 && ((uint8_t)m[cut] & 0xC0) == 0x80) cut--;   // not inside a UTF-8 character
+      o += snprintf(reply + o, n - o, "%s%d: %.*s%s", o ? " | " : "", i + 1, cut, m, m[cut] ? "..." : "");
+    }
+    if (!o) snprintf(reply, n, "No quick messages (set msg.1 <text>)");
+    return true;
+  }
+  const bool set = !strncmp(cmd, "set msg.", 8);
+  if (!set && strncmp(cmd, "get msg.", 8)) return false;
+  char* end = nullptr;
+  const long i = strtol(cmd + 8, &end, 10) - 1;
+  if (end == cmd + 8 || (*end && *end != ' ')) return false;   // "msg.x": not ours
+  if (i < 0 || i >= COUNT) { snprintf(reply, n, "Error, msg.1 to msg.%d", COUNT); return true; }
+  if (!set) { snprintf(reply, n, "> %s", p->custom_msgs[i]); return true; }
+  const char* text = *end ? end + 1 : "";
+  if ((int)strlen(text) >= LEN) { snprintf(reply, n, "Error, at most %d bytes", LEN - 1); return true; }
+  snprintf(p->custom_msgs[i], LEN, "%s", text);
+  the_mesh.savePrefs();
+  snprintf(reply, n, "OK");
+  return true;
+}
+
 // True when the command was a settings one (reply set either way).
 static bool handle(UiCore& core, const char* cmd, char* reply, int n) {
   NodePrefs* p = core.prefs();
   if (!p) return false;
+  if (quickMessages(p, cmd, reply, n)) return true;
   if (!strcmp(cmd, "keys") || !strncmp(cmd, "keys ", 5)) {   // the key names, a frame's worth a page
     int page = cmd[4] ? atoi(cmd + 5) : 1, pg = 1, o = 0;
     bool more = false;

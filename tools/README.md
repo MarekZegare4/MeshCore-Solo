@@ -17,7 +17,7 @@ scripts with `uv run tools/<script>.py` from the repository root.
 
 > [!TIP]
 > The [USB tools on the Solo site](https://solo.marekzegarek.com/#pc-tools) do all of this
-> (screenshots, GPX export, the console, routes) with nothing to install (Chrome
+> (screenshots, GPX export, the console, routes, quick messages) with nothing to install (Chrome
 > or Edge), and are the easiest option for most people. The scripts here are the
 > offline equivalents: everything the site does stays possible without it.
 
@@ -95,6 +95,16 @@ uv run tools/console.py get radio       # one command
 The same commands as the phone app's console: `get radio`, `set tx 14`,
 `get name`, and every setting by its key (`keys` lists them). Needs Solo 2.0 or
 newer. Options: `--port PORT`.
+
+The ten quick messages a conversation offers (one press to send; on a
+one-button board the way to write a message) are set the same way, numbered
+from 1; `{loc}`, `{time}`, `{batt}` fill in when sent. Needs Solo 2.3 or newer.
+
+```bash
+uv run tools/console.py msgs                          # the slots in use
+uv run tools/console.py set msg.2 "On my way, there by {time}"
+uv run tools/console.py set msg.2                     # empties it
+```
 
 ---
 

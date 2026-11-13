@@ -1055,6 +1055,7 @@ void UITask::handleUnlockKey(char c) {
       _kb.buf[0] = '\0';
       _kb.cursor_pos = 0;
       _kb.page = _kb.row = _kb.col = 0;
+      _kb.strip_sel = 0;   // the lock's wheel back on 0
       _kb.caps = _kb.caps_lock = false;
       _next_refresh = 0;
     }
@@ -1243,6 +1244,11 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_message(const char* text, int style) {
 // follow on release.
 extern "C" EMSCRIPTEN_KEEPALIVE void sim_enqueue_key_longpress(char c) {
   if (g_sim_ui_task_for_js) g_sim_ui_task_for_js->injectSimKeyLongPress(c);
+}
+
+// Sim tests: lock the screen (as Power > Lock screen; the PIN, if set, unlocks it).
+extern "C" EMSCRIPTEN_KEEPALIVE void sim_lock() {
+  if (g_sim_ui_task_for_js) g_sim_ui_task_for_js->simLock();
 }
 
 // A one-button board: the page's button pressed (1) / let go (0). The gestures
@@ -1518,6 +1524,7 @@ void UITask::loop() {
     _display_was_on = on;
   }
   if (status_screen) ((StatusScreen*)status_screen)->sample();   // Status history lines, once a minute
+  _kb.one_button = oneButtonUi();   // the keyboard as the strip (KeyboardWidget::stripKey)
 #if defined(SIM_PLATFORM) && defined(__EMSCRIPTEN__)
   if (_ob_used) oneButtonGesture(_one_btn.update(_sim_btn_down, millis()));   // the page's one button
 #endif
@@ -2159,7 +2166,9 @@ void UITask::oneButtonGesture(OneButton::Gesture g) {
     }
     return;
   }
-  const uint8_t em = curr && !_kb.isVisible() ? curr->editMode() : UIScreen::EDIT_NONE;
+  // The keyboard (or the PIN pad on the lock screen) is the strip: as a digit editor.
+  const uint8_t em = _kb.isVisible() || _unlock_kb ? UIScreen::EDIT_DIGITS
+                   : curr ? curr->editMode() : UIScreen::EDIT_NONE;
   if (em == UIScreen::EDIT_DIGITS) {
     enqueueKey(checkDisplayOn(g == OneButton::CLICK ? KEY_UP : g == OneButton::DOUBLE ? KEY_DOWN
                             : g == OneButton::LONG ? KEY_NEXT : KEY_CANCEL));

@@ -284,6 +284,15 @@ struct KeyboardWidget {
   int (*sent_len)(const char* buf, void* ctx) = nullptr;
   void* sent_ctx = nullptr;
   static const int PIN_MAX_LEN = 16;
+  // One-button boards (ui-new/OneButton.h): the strip instead of the grid --
+  // see stripKey(). Set by UITask every loop.
+  bool one_button = false;
+  int8_t strip_sel = 0;     // the item under the cursor
+  int8_t strip_group = -1;  // a letter group open (its letters on the strip), or -1
+  // A turn of the ring glides (OLED), as Home's page turn: +1 on, -1 back, 0 at rest.
+  static const unsigned long STRIP_SLIDE_MS = 180;
+  int8_t strip_dir = 0;
+  unsigned long strip_t0 = 0;
   int  row, col;
   int  page;        // see totalPages()/scriptAt()/pageIsSymbols() below
   bool caps;
@@ -440,6 +449,9 @@ struct KeyboardWidget {
     caps_lock = false;
     pin_kb_mask_enabled = false;
     pin_mode = false;
+    strip_sel = 0;
+    strip_group = -1;
+    strip_dir = 0;
     prompt = nullptr;
     sent_limit = 0;
     sent_len = nullptr;
@@ -617,6 +629,7 @@ struct KeyboardWidget {
 
   int render(DisplayDriver& display) {
     _visible = true;
+    if (one_button) return renderStrip(display);
     // A stale mid-cycle T9 press (no further input since) finalizes on its own —
     // the character is already committed to buf, this just stops a later Enter
     // on the same cell from being treated as a continued cycle.
@@ -1028,7 +1041,173 @@ struct KeyboardWidget {
     return r;
   }
 
+  // ── One button: the strip ──────────────────────────────────────────────────
+  // One line of items, a click on to the next (a double back), a hold picks.
+  // A PIN is a combination lock: 0-9, then del and OK. Text goes in two steps:
+  // a hold on a letter group opens its letters, a hold on one types it and
+  // closes the group again; 2 s back from a group, or out (cancelled). Keys as
+  // UITask sends them for UIScreen::EDIT_DIGITS: UP next, DOWN back, KEY_NEXT
+  // pick, KEY_CANCEL.
+  enum StripAct : uint8_t { S_CHAR, S_GROUP, S_SPACE, S_SHIFT, S_DEL, S_OK };
+  struct StripItem { const char* label; uint8_t act; };
+  static const StripItem* stripItems(bool pin, int& n) {
+    static const StripItem PIN[] = {
+      {"0", S_CHAR}, {"1", S_CHAR}, {"2", S_CHAR}, {"3", S_CHAR}, {"4", S_CHAR},
+      {"5", S_CHAR}, {"6", S_CHAR}, {"7", S_CHAR}, {"8", S_CHAR}, {"9", S_CHAR},
+      {"del", S_DEL}, {"OK", S_OK} };
+    static const StripItem TEXT[] = {
+      {"abc", S_GROUP}, {"def", S_GROUP}, {"ghi", S_GROUP}, {"jkl", S_GROUP}, {"mno", S_GROUP},
+      {"pqrs", S_GROUP}, {"tuv", S_GROUP}, {"wxyz", S_GROUP}, {"spc", S_SPACE}, {".,?!'-", S_GROUP},
+      {"0-9", S_GROUP}, {"Aa", S_SHIFT}, {"del", S_DEL}, {"OK", S_OK} };
+    n = pin ? (int)(sizeof(PIN) / sizeof(PIN[0])) : (int)(sizeof(TEXT) / sizeof(TEXT[0]));
+    return pin ? PIN : TEXT;
+  }
+  // A group's letters: its label, but "0-9" the ten digits.
+  static const char* groupChars(const char* label) { return strcmp(label, "0-9") ? label : "0123456789"; }
+  int stripCount() const {
+    int n;
+    const StripItem* it = stripItems(isPin(), n);
+    return strip_group >= 0 ? (int)strlen(groupChars(it[strip_group].label)) : n;
+  }
+
+  Result stripKey(char c) {
+    const int n = stripCount();
+    if (c == KEY_UP || c == KEY_DOWN) {   // on, or back, round the ring
+      strip_sel = (int8_t)((strip_sel + (c == KEY_UP ? 1 : n - 1)) % n);
+      strip_dir = c == KEY_UP ? 1 : -1;
+      strip_t0 = millis();
+      return NONE;
+    }
+    strip_dir = 0;   // the ring changes (a group opens or closes): no glide
+    if (c == KEY_CANCEL) {
+      if (strip_group >= 0) { strip_sel = strip_group; strip_group = -1; return NONE; }
+      return CANCELLED;
+    }
+    if (c != KEY_NEXT && c != KEY_ENTER) return NONE;
+    int cnt;
+    const StripItem* it = stripItems(isPin(), cnt);
+    char one[2] = { 0, 0 };
+    if (strip_group >= 0) {   // a letter of the open group
+      one[0] = groupChars(it[strip_group].label)[strip_sel];
+      strip_sel = strip_group;
+      strip_group = -1;
+    } else {
+      const StripItem& sel = it[strip_sel];
+      switch (sel.act) {
+        case S_GROUP: strip_group = strip_sel; strip_sel = 0; return NONE;
+        case S_SHIFT: caps = !caps; caps_lock = false; return NONE;
+        case S_OK:    return DONE;
+        case S_DEL:
+          if (cursor_pos > 0) {
+            int w = kbUtf8LastCharBytes(buf, cursor_pos);
+            memmove(buf + cursor_pos - w, buf + cursor_pos, len - cursor_pos + 1);
+            len -= w;
+            cursor_pos -= w;
+          }
+          return NONE;
+        case S_SPACE: one[0] = ' '; break;
+        default:      one[0] = sel.label[0]; break;
+      }
+    }
+    insertGlyph(one, caps && one[0] >= 'a' && one[0] <= 'z');
+    if (caps && !caps_lock && one[0] >= 'a' && one[0] <= 'z') caps = false;   // one-shot, as Shift
+    return NONE;
+  }
+
+  int renderStrip(DisplayDriver& d) {
+    d.setTextSize(1);
+    d.setColor(UIColor::primary_txt);
+    const int W = d.width(), H = d.height(), lh = d.getLineHeight();
+    // The prompt, then the text so far (its end, as much as fits), a cursor bar after it.
+    int y = 0;
+    if (prompt) { d.drawTextCentered(W / 2, y, prompt); y += lh + 2; }
+    char shown[KB_MAX_LEN + 2];
+    int sl = 0;
+    if (isPin() && pin_kb_mask_enabled) { for (int i = 0; i < len && sl < KB_MAX_LEN; i++) shown[sl++] = '*'; shown[sl] = 0; }
+    else { memcpy(shown, buf, len + 1); sl = len; }
+    const char* from = shown;
+    while (*from && (int)d.getTextWidth(from) > W - 6) from++;
+    d.setCursor(2, y);
+    d.print(from);
+    const int cx = 2 + d.getTextWidth(from) + 1;
+    d.fillRect(cx, y, 2, lh);
+    // The strip: the item under the cursor boxed in the middle, its neighbours either side.
+    int cnt;
+    const StripItem* it = stripItems(isPin(), cnt);
+    const int n = stripCount();
+    auto label = [&](int i, char* b) -> const char* {
+      if (strip_group >= 0) {
+        char ch = groupChars(it[strip_group].label)[i];
+        if (caps && ch >= 'a' && ch <= 'z') ch -= 32;
+        b[0] = ch; b[1] = 0;
+        return b;
+      }
+      if (it[i].act == S_SHIFT) return caps ? "AA" : "Aa";
+      return it[i].label;
+    };
+    const int sy = H - 2 * lh - 6, gap = d.getCharWidth();
+    char b0[2];
+    auto wOf = [&](int i) { return (int)d.getTextWidth(label(i, b0)); };
+    // A ring turn: the items glide under the box (ease-out, quick start and a
+    // soft landing), the box's width easing from the old item's to the new one's.
+    float p = -1;
+    if (strip_dir && !d.isEink()) {
+      const unsigned long el = millis() - strip_t0;
+      if (el < STRIP_SLIDE_MS) { const float t = 1.0f - (float)el / STRIP_SLIDE_MS; p = 1.0f - t * t * t; }
+    }
+    if (p < 0) strip_dir = 0;
+    auto pitch = [&](int a, int b) { return (wOf(a) + wOf(b)) / 2 + gap + 2; };   // centre to centre
+    const int cur_w = wOf(strip_sel);
+    int shift = 0, cw = cur_w + 4;
+    if (p >= 0) {   // the item left sits where it was, the new one comes in from its side
+      const int old = (strip_sel - strip_dir + n) % n;
+      shift = (int)(strip_dir * pitch(old, strip_sel) * (1.0f - p) + (strip_dir > 0 ? 0.5f : -0.5f));
+      const int ow = wOf(old);
+      cw = ow + 4 + (int)((cur_w - ow) * p + 0.5f);
+    }
+    const int box_x = W / 2 - cw / 2;
+    d.fillSoftRect(box_x, sy - 1, cw, lh + 2);
+    // One item, a character at a time (the strip's labels are ASCII): one whose
+    // middle is in the box is knocked out of it, the rest plain -- so an item
+    // half under the box's edge is cut there, as is one gliding in at the
+    // screen's edge. At rest only whole items show: a cut one reads as another.
+    auto item = [&](int i, int cx) {
+      const char* s = label(i, b0);
+      int x = cx - (int)d.getTextWidth(s) / 2;
+      if (p < 0 && (x < 0 || x + (int)d.getTextWidth(s) > W)) return;
+      for (const char* c = s; *c; c++) {
+        const char one[2] = { *c, 0 };
+        const int w = d.getTextWidth(one);
+        if (x >= 0 && x + w <= W) {
+          const int mid = x + w / 2;
+          d.setColor(mid >= box_x && mid < box_x + cw ? UIColor::window_bkg : UIColor::primary_txt);
+          d.setCursor(x, sy);
+          d.print(one);
+        }
+        x += w;
+      }
+    };
+    const int left_n = (n - 1) / 2, right_n = n - 1 - left_n;   // each item once round the ring
+    item(strip_sel, W / 2 + shift);
+    for (int k = 1, cx = W / 2 + shift; k <= right_n; k++) {
+      const int i = (strip_sel + k) % n;
+      cx += pitch((i - 1 + n) % n, i);
+      if (cx - wOf(i) / 2 > W) break;
+      item(i, cx);
+    }
+    for (int k = 1, cx = W / 2 + shift; k <= left_n; k++) {
+      const int i = (strip_sel - k + n) % n;
+      cx -= pitch(i, (i + 1) % n);
+      if (cx + wOf(i) / 2 < 0) break;
+      item(i, cx);
+    }
+    d.setColor(UIColor::primary_txt);
+    d.drawTextCentered(W / 2, H - lh, strip_group >= 0 ? "Hold:type 2s:back" : "Hold:pick 2s:cancel");
+    return strip_dir ? 15 : 1000;
+  }
+
   Result handleKey(char c) {
+    if (one_button) return stripKey(c);
     // placeholder overlay consumes all input
     if (_ph_menu.active) {
       auto res = _ph_menu.handleInput(c);
