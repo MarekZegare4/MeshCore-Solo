@@ -106,8 +106,9 @@ def wait_port(timeout, gone_first=None, board=None, prefer=None):
     with others plugged in; `prefer`: tried first); first waiting for
     `gone_first` to vanish."""
     end = time.time() + timeout
-    if gone_first:
-        while time.time() < end and gone_first in candidate_ports():
+    if gone_first:   # an nRF52's port goes away as it restarts; an ESP32-S3's USB/JTAG port stays
+        gone_by = time.time() + 3
+        while time.time() < gone_by and gone_first in candidate_ports():
             time.sleep(0.3)
     while time.time() < end:
         ports = candidate_ports()
@@ -167,7 +168,7 @@ class Dut:
         self.open()
 
     def open(self):
-        self.dev = Companion(self.port)
+        self.dev = Companion(self.port, timeout=8.0)   # an ESP32 writing its flash can stall for seconds
         self.cli = TaggedCli(self.dev, self)
         self.strays = getattr(self, "strays", [])
         self.current = getattr(self, "current", "-")
@@ -543,13 +544,30 @@ def t_keys(d, out):
     check(r.startswith("Error"), f"a bad key name: {r!r}")
 
 
-def home_to(d, page, key="right", tries=14):
-    """Home's pages stepped with `key` until `page` shows; False if it never does (hidden)."""
+def next_page(d, press, tries=8):
+    """Home's next page: `press` (a key, a click) until the page changes, as
+    Favourites first walks its tiles. The page now."""
+    was = ui_state(d)["screen"]
     for _ in range(tries):
+        press()
+        now = ui_state(d)["screen"]
+        if now != was:
+            return now
+    return was
+
+
+def key_right(d):
+    d.cli.put("key right")
+    time.sleep(0.35)
+
+
+def home_to(d, page, press=None, pages=14):
+    """Home's pages stepped until `page` shows; False if it never does (hidden)."""
+    press = press or (lambda: key_right(d))
+    for _ in range(pages):
         if ui_state(d)["screen"] == f"home/{page}":
             return True
-        d.cli.put(f"key {key}")
-        time.sleep(0.35)
+        next_page(d, press)
     return ui_state(d)["screen"] == f"home/{page}"
 
 
@@ -578,8 +596,7 @@ def t_screens(d, out):
             opened.append(f"{page}>{now}")
             go_home(d)
             home_to(d, page)
-        d.cli.put("key right")
-        time.sleep(0.4)
+        next_page(d, lambda: key_right(d))
     check(len(seen) >= 3, f"Home's pages: {seen}")
     return f"pages {', '.join(seen)}; opened {', '.join(opened) or 'none'}"
 
@@ -893,16 +910,11 @@ def t_one_button(d, out):
         raise Skip("not a one-button board")
     go_home(d)
     p0 = ui_state(d)["screen"]
-    click(d)
-    p1 = ui_state(d)["screen"]
-    check(p1.startswith("home/") and p1 != p0, f"a click on Home: {p0} -> {p1}")
+    p1 = next_page(d, lambda: click(d))   # a page with rows (Favourites, Tools) walks them first
+    check(p1.startswith("home/") and p1 != p0, f"clicks on Home: {p0} -> {p1}")
     double(d)
     check(ui_state(d)["screen"] == p0, f"a double click: not back on {p0} ({ui_state(d)['screen']})")
-    for _ in range(14):
-        if ui_state(d)["screen"] == "home/tools":
-            break
-        click(d)
-    if ui_state(d)["screen"] != "home/tools":
+    if not home_to(d, "tools", press=lambda: click(d)):
         raise Skip("no Tools page on Home")
     btn(d, 0.8)   # LONG: OK
     now = ui_state(d)["screen"]
@@ -1148,6 +1160,15 @@ def suite(d, args, want):
                 continue
             d.current = name
             r, trace = run_one(name, fn, d, out)
+            if r["status"] == "ERROR" and re.search(r"PortNotOpen|SerialException|Errno 6|Device not configured", r["note"]):
+                d.close()   # the link went (a restart gone wrong): back to the same board, if it comes
+                p = wait_port(40, board=d.board, prefer=d.port)
+                if not p:
+                    results.append(r); show(r)
+                    print("  the device is gone: the rest skipped")
+                    break
+                d.port = p
+                d.open()
             if trace:
                 (out / f"{name}.trace.txt").write_text(trace)
             m = None

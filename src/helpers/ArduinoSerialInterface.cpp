@@ -58,6 +58,27 @@ size_t ArduinoSerialInterface::writeFrame(const uint8_t src[], size_t len) {
   // Single deadline shared across header + payload, so a stalled host costs
   // at most SERIAL_WRITE_TIMEOUT_MS total, not that much per write() call.
   uint32_t deadline = millis() + SERIAL_WRITE_TIMEOUT_MS;
+#if defined(ESP32) && ARDUINO_USB_MODE && ARDUINO_USB_CDC_ON_BOOT
+  if (_serial == (Stream*)&Serial) {
+    // The ESP32-S3's USB Serial/JTAG (HWCDC as Serial: the Heltec V4) moves
+    // the bytes to its FIFO 64 at a time and never sends a zero-length packet:
+    // a frame whose last packet came out full stayed with the host until the
+    // next frame (tools/hwtest.py: CLI replies of 67 and 123 bytes never
+    // arrived). Pieces of 63 bytes, each sent before the next, are all short
+    // packets, which end a transfer by themselves. About 1 ms a piece.
+    uint8_t buf[3 + MAX_FRAME_SIZE];
+    memcpy(buf, hdr, 3);
+    memcpy(buf + 3, src, len);
+    size_t sent = 0, total = 3 + len;
+    while (sent < total) {
+      size_t k = total - sent > 63 ? 63 : total - sent;
+      if (streamWriteUntil(*_serial, buf + sent, k, deadline) < k) break;
+      Serial.flush();   // until the ISR has it in the FIFO
+      sent += k;
+    }
+    return sent < 3 ? 0 : sent - 3;
+  }
+#endif
   if (streamWriteUntil(*_serial, hdr, 3, deadline) < 3) return 0;
   return streamWriteUntil(*_serial, src, len, deadline);
 }
