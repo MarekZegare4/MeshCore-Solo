@@ -722,6 +722,7 @@ private:
   uint32_t _most_recent_lastmod;
   uint32_t _active_ble_pin;
   bool _iter_started;
+  int _iter_target = -1;   // the link that asked for the contact list (MultiSerialInterface)
   bool _cli_rescue;
   // The CLI batch (savePrefs above): open, inside a CLI command, a save held
   // back, and when it closes by itself should the page go quiet mid-way.

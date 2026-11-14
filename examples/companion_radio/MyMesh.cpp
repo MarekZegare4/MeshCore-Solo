@@ -1911,6 +1911,7 @@ void MyMesh::handleCmdFrame(size_t len) {
       // start iterator
       _iter = startContactsIterator();
       _iter_started = true;
+      _iter_target = _serial->replyTarget();
       _most_recent_lastmod = 0;
     }
   } else if (cmd_frame[0] == CMD_SET_ADVERT_NAME && len >= 2) {
@@ -2991,6 +2992,9 @@ void MyMesh::checkSerialInterface() {
   } else if (_iter_started              // check if our ContactsIterator is 'running'
              && !_serial->isWriteBusy() // don't spam the Serial Interface too quickly!
   ) {
+    // The list goes on to the link that asked for it, whatever came in since.
+    int prev_target = _serial->replyTarget();
+    _serial->setReplyTarget(_iter_target);
     ContactInfo contact;
     if (_iter.hasNext(this, contact)) {
       if (contact.lastmod > _iter_filter_since) { // apply the 'since' filter
@@ -3006,6 +3010,7 @@ void MyMesh::checkSerialInterface() {
       _serial->writeFrame(out_frame, 5);
       _iter_started = false;
     }
+    _serial->setReplyTarget(prev_target);
   //} else if (!_serial->isWriteBusy()) {
   //  checkConnections();    // TODO - deprecate the 'Connections' stuff
   }

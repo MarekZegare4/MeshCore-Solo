@@ -30,6 +30,10 @@ public:
   virtual bool hasPendingFrames() const { return true; }
 
   virtual bool isWriteBusy() const = 0;
+  // Several links at once (MultiSerialInterface): the one a reply goes back to,
+  // the link the last command came in on. A single link has nothing to choose.
+  virtual int replyTarget() const { return -1; }
+  virtual void setReplyTarget(int target) { }
   virtual size_t writeFrame(const uint8_t src[], size_t len) = 0;
   virtual size_t checkRecvFrame(uint8_t dest[]) = 0;
 };

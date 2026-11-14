@@ -26,6 +26,15 @@ private:
 
   bool _enabled = false;
   RegisteredInterface _interfaces[MAX_INTERFACES] = {};
+  int _reply_to = -1;   // the interface the last command came in on
+
+  // A frame to all of them or to one: true when it went out whole.
+  bool writeTo(int i, const uint8_t src[], size_t len) {
+    return _interfaces[i].instance->writeFrame(src, len) == len;
+  }
+  bool usable(int i) const {
+    return i >= 0 && i < MAX_INTERFACES && _interfaces[i].instance && _interfaces[i].instance->isEnabled();
+  }
 
 public:
   bool addInterface(InterfaceType type, BaseSerialInterface* iface) {
@@ -57,6 +66,7 @@ public:
     for(int i = 0; i < MAX_INTERFACES; i++){
       if(_interfaces[i].instance == iface){
         _interfaces[i] = {};
+        if(_reply_to == i) _reply_to = -1;
         return true;
       }
     }
@@ -189,19 +199,28 @@ public:
     return false;
   }
 
+  int replyTarget() const override { return _reply_to; }
+  void setReplyTarget(int target) override { _reply_to = target; }
+
+  // A reply (a code below 0x80) goes back only to the link whose command it
+  // answers, so an app on Bluetooth and a tool on USB don't read each other's
+  // replies; a push (0x80 and up: a new message, an advert, an ACK) goes to
+  // all of them. With no command seen yet, or that link turned off, to all.
   size_t writeFrame(const uint8_t src[], size_t len) override {
     // don't write when disabled or nothing provided
     if(!_enabled || len == 0){
       return 0;
     }
 
+    if(src[0] < 0x80 && usable(_reply_to)){
+      return writeTo(_reply_to, src, len) ? len : 0;
+    }
+
     // write frame to all enabled interfaces
     bool allSuccessful = true;
-    for(auto iface : _interfaces){
-      if(iface.instance && iface.instance->isEnabled()){
-        if(iface.instance->writeFrame(src, len) != len){
-          allSuccessful = false;
-        }
+    for(int i = 0; i < MAX_INTERFACES; i++){
+      if(usable(i) && !writeTo(i, src, len)){
+        allSuccessful = false;
       }
     }
 
@@ -216,10 +235,11 @@ public:
     }
 
     // try to read a frame from any enabled interface
-    for(auto iface : _interfaces){
-      if(iface.instance && iface.instance->isEnabled()){
-        size_t frameSize = iface.instance->checkRecvFrame(dest);
+    for(int i = 0; i < MAX_INTERFACES; i++){
+      if(usable(i)){
+        size_t frameSize = _interfaces[i].instance->checkRecvFrame(dest);
         if(frameSize > 0){
+          _reply_to = i;
           return frameSize; 
         }
       }
