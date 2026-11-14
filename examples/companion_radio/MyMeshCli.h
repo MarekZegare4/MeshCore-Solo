@@ -12,6 +12,7 @@
 static bool cliOnOff(const char* v) { return strncmp(v, "on", 2) == 0 || strcmp(v, "1") == 0; }
 
 bool MyMesh::handleCliCommand(const char* command, char* reply, int n) {
+  struct InCli { bool& f; InCli(bool& f) : f(f) { f = true; } ~InCli() { f = false; } } in_cli(_in_cli);
   while (*command == ' ') command++;
   if (strlen(command) > 4 && command[2] == '|') {   // optional "xx|" prefix, reflected back
     memcpy(reply, command, 3);
@@ -19,6 +20,21 @@ bool MyMesh::handleCliCommand(const char* command, char* reply, int n) {
     n -= 3;
     *reply = 0;
     command += 3;
+  }
+  if (_cli_batch) _batch_until = futureMillis(CLI_BATCH_IDLE_MS);
+  // "batch on": the sets that follow are saved once, at "batch off" (or
+  // CLI_BATCH_IDLE_MS after the last command). For a configurator's backup.
+  if (strcmp(command, "batch on") == 0) {
+    _cli_batch = true;
+    _batch_until = futureMillis(CLI_BATCH_IDLE_MS);
+    snprintf(reply, n, "OK");
+    return true;
+  }
+  if (strcmp(command, "batch off") == 0) {
+    _in_cli = false;   // the save is this command's point
+    endCliBatch();
+    snprintf(reply, n, "OK");
+    return true;
   }
   if (cliRadioCommand(command, reply, n)) return true;
   if (n >= 64 && board.handleCommand(command, 0, reply)) {   // the board's own (radio.fem.*); short replies
@@ -28,6 +44,8 @@ bool MyMesh::handleCliCommand(const char* command, char* reply, int n) {
 
   if (strcmp(command, "reboot") == 0 || strcmp(command, "poweroff") == 0 || strcmp(command, "shutdown") == 0) {
     bool restart = command[0] == 'r';
+    _in_cli = false;
+    if (_cli_batch) endCliBatch();   // what a batch held back, written before it goes down
     if (!(_listener && _listener->requestShutdown(restart))) {
       flushDirtyContacts();
       savePrefs();

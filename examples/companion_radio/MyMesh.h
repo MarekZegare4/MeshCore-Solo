@@ -488,7 +488,15 @@ public:
     return true;
   }
 
-  void savePrefs() { _store->savePrefs(_prefs, sensors.node_lat, sensors.node_lon); }
+  // A CLI command's save waits while a batch is open (MyMeshCli.h "batch on"):
+  // a configurator's backup sets dozens of keys, and each /prefs.json write
+  // takes about a second on the nRF52. Other callers (the UI, shutdown) still
+  // write at once, taking the batch's changes with them.
+  void savePrefs() {
+    if (_cli_batch && _in_cli) { _batch_dirty = true; return; }
+    _store->savePrefs(_prefs, sensors.node_lat, sensors.node_lon);
+    _batch_dirty = false;
+  }
   // Bluetooth on/off as the user left it (NodePrefs::ble_off), kept over reboots.
   void rememberBle(bool on) {
     if (_prefs.ble_off == (on ? 0 : 1)) return;
@@ -715,6 +723,12 @@ private:
   uint32_t _active_ble_pin;
   bool _iter_started;
   bool _cli_rescue;
+  // The CLI batch (savePrefs above): open, inside a CLI command, a save held
+  // back, and when it closes by itself should the page go quiet mid-way.
+  bool _cli_batch = false, _in_cli = false, _batch_dirty = false;
+  unsigned long _batch_until = 0;
+  static const uint32_t CLI_BATCH_IDLE_MS = 5000;
+  void endCliBatch() { _cli_batch = false; if (_batch_dirty) savePrefs(); }
   int8_t _apc_cur_dbm;       // APC current TX power (≤ tx_power_dbm ceiling) when tx_apc on
   float _apc_margin_ewma;    // APC smoothed reverse-link SNR margin above the SF demod floor
   uint8_t _apc_fail_count;   // APC consecutive lost-confirmation count (graduated ramp-up)

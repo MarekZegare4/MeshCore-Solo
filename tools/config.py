@@ -329,13 +329,19 @@ def cmd_import(args):
     ok = bad = 0
     with dev:
         cli = Cli(dev)
-        for c, label in cmds:
-            try:
-                cli.put(c)
-                ok += 1
-            except DeviceError as e:
-                bad += 1
-                print(f"  {label or c}: {e}")
+        # One save at the end instead of one per key (older firmware: unknown, saves each).
+        batch = cli.run("batch on") == "OK"
+        try:
+            for c, label in cmds:
+                try:
+                    cli.put(c)
+                    ok += 1
+                except DeviceError as e:
+                    bad += 1
+                    print(f"  {label or c}: {e}")
+        finally:
+            if batch:
+                cli.run("batch off")
         if wpts:
             try:
                 print(wpt_summary("Waypoints added:", *add_waypoints(cli, wpts, print)))

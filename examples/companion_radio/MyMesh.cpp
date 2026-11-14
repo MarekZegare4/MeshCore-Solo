@@ -3033,6 +3033,8 @@ void MyMesh::loop() {
 
   tickLocFix();
 
+  if (_cli_batch && millisHasNowPassed(_batch_until)) endCliBatch();   // the page went quiet mid-batch
+
   if (_cli_rescue) {
     checkCLIRescueCmd();
   } else {
