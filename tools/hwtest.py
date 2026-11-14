@@ -266,6 +266,53 @@ def t_radio(d, out):
     return r + f", {tx} dBm"
 
 
+CMD_GET_DEVICE_TIME, CMD_SET_DEVICE_TIME, RESP_CURR_TIME = 5, 6, 9
+
+
+def device_time(d):
+    return struct.unpack_from("<I", d.dev.ask(bytes([CMD_GET_DEVICE_TIME]), RESP_CURR_TIME), 1)[0]
+
+
+def app_set_time(d, t):
+    """CMD_SET_DEVICE_TIME as the phone app sends it: True when taken."""
+    try:
+        d.dev.ask(bytes([CMD_SET_DEVICE_TIME]) + struct.pack("<I", t), 0)
+        return True
+    except DeviceError:
+        return False
+
+
+@test("clock")
+def t_clock(d, out):
+    """The clock set from the CLI (seconds and local time, back too) and from
+    the app (back by an hour at most); the computer's time put back after."""
+    if not d.knows("clock"):
+        raise Skip("no clock command (older firmware)")
+    try:
+        now = int(time.time())
+        r = d.cli.get(f"time {now - 120}")
+        check(abs(device_time(d) - (now - 120)) <= 3, f"time <seconds>: {r!r}, the device at {device_time(d)}")
+        m = re.search(r"UTC([+-]\d+)", r)
+        check(m, f"no UTC offset in {r!r}")
+        tz = int(m.group(1))
+        local = datetime.datetime.fromtimestamp(now - 600, datetime.timezone.utc) + datetime.timedelta(hours=tz)
+        r = d.cli.get("time " + local.strftime("%Y-%m-%d %H:%M"))
+        want = (now - 600) // 60 * 60
+        check(abs(device_time(d) - want) <= 3, f"time <local>: {r!r}, the device at {device_time(d)}, not {want}")
+        check(d.cli.run("time soon").startswith("Error"), "time soon taken")
+        check(d.cli.run("time 2026-02-30 10:00").startswith("Error"), "30 February taken")
+        now = int(time.time())
+        check(app_set_time(d, now), "the app's time (now) refused")
+        check(app_set_time(d, now - 1800), "the app half an hour back: refused")
+        check(abs(device_time(d) - (now - 1800)) <= 3, "the app's time half an hour back not set")
+        check(not app_set_time(d, now - 1800 - 7200), "the app two hours back: taken")
+    finally:
+        app_set_time(d, int(time.time()))
+    drift = device_time(d) - int(time.time())
+    check(abs(drift) <= 3, f"the clock {drift} s off after the test")
+    return f"UTC{tz:+d}, CLI back 2 and 10 min, the app back 30 min taken and 2.5 h refused"
+
+
 def opts(d, key):
     r = d.cli.run(f"opts {key}")
     if not r.startswith("> "):

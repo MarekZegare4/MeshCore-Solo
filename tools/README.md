@@ -206,6 +206,7 @@ failed, so it can stand in a script.
 | `identity`, `unknown-command` | `ver`, `board`, the reply to a command it doesn't know, the `xx\|` prefix |
 | `batch` | a `set` inside `batch on` / `batch off` takes milliseconds, the save once at the end |
 | `radio` | `get radio`, `set radio` and `set tx` to what they are |
+| `clock` | the clock set from the CLI (seconds, local time, back too) and as the app does (an hour back at most); the computer's time put back after |
 | `settings` | every setting set to another of its choices, read back, set back (not the ones that delete messages or contacts, can switch the device off, or send an advert) |
 | `settings-persist` | `--reboot`: a setting changed in a batch the page never closed is there after a restart |
 | `pages`, `quick-messages`, `melodies`, `waypoints`, `routes` | written, read back (a melody through RTTTL too, a waypoint twice is "already there"), put back |
