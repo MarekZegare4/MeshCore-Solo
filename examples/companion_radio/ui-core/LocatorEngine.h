@@ -57,6 +57,11 @@ public:
   // If the active target is exactly this waypoint, clear it and persist (called
   // from waypoint deletion so the Locator can't keep pointing at a spot that no
   // longer exists).
+  // The target is the waypoint at this spot.
+  bool targetsWaypoint(int32_t lat_1e6, int32_t lon_1e6) const {
+    return _prefs && _prefs->locator_has_target && _prefs->locator_target_kind == 0 &&
+           _prefs->locator_lat_1e6 == lat_1e6 && _prefs->locator_lon_1e6 == lon_1e6;
+  }
   void clearTargetIfWaypoint(int32_t lat_1e6, int32_t lon_1e6) {
     if (!_prefs || !_prefs->locator_has_target || _prefs->locator_target_kind != 0) return;
     if (_prefs->locator_lat_1e6 != lat_1e6 || _prefs->locator_lon_1e6 != lon_1e6) return;

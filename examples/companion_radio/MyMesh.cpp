@@ -3155,6 +3155,24 @@ bool MyMesh::advertSos(bool with_pos, int32_t lat_1e6, int32_t lon_1e6, bool flo
   return true;
 }
 
+// Sets the clock and saves it for the next start (/rtc_save).
+void MyMesh::setClock(uint32_t utc) {
+  const bool back = utc < getRTCClock()->getCurrentTime();
+  getRTCClock()->setCurrentTime(utc);
+  saveRTCTime();
+  if (!back) return;
+  // Contacts heard while the clock ran ahead carry those times; left so, the
+  // next start would take the clock forward to them (bootstrapRTCfromContacts).
+  bool any = false;
+  for (int i = 0; i < getNumContacts(); i++) {
+    ContactInfo c;
+    if (!getContactByIdx(i, c) || c.lastmod <= utc) continue;
+    ContactInfo* p = lookupContactByPubKey(c.id.pub_key, PUB_KEY_SIZE);
+    if (p) { p->lastmod = utc; any = true; }
+  }
+  if (any) dirty_contacts_expiry = futureMillis(LAZY_CONTACTS_WRITE_DELAY);
+}
+
 // To check if there is pending work
 bool MyMesh::hasPendingWork() const {
   return _mgr->getOutboundTotal() > 0 || dirty_contacts_expiry != 0;

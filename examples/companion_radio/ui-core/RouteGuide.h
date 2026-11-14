@@ -14,8 +14,9 @@
 // Then the target: the first point at least LOOKAHEAD_M further along, so the
 // arrow leads round the bends; off the route, the nearest point on it.
 //
-// Progress is saved every SAVE_M along (NodePrefs::route_seg): after a restart
-// the first fix is looked for around there before the whole route.
+// Progress is saved every SAVE_M along, and not more often than SAVE_MIN_MS
+// (NodePrefs::route_seg, in /prefs.json: a second's write on the L1): after a
+// restart the first fix is looked for around there before the whole route.
 //
 // Off route past OFF_ENTER_M, back on under OFF_LEAVE_M (no flicker at the
 // edge); the end within ARRIVE_M: finished. Each pushes a RouteAlert event.
@@ -37,6 +38,7 @@ public:
   static const int SNAP_SLACK_M = 30;
   static const int JUMP_M = 100;
   static const int SAVE_M = 250;
+  static const uint32_t SAVE_MIN_MS = 120000;
   static const uint32_t POLL_MS = 1000;
   static const uint32_t FULL_SEARCH_MS = 10000;   // off route: the whole route at most this often
 
@@ -69,6 +71,7 @@ public:
     _joined = false;
     _resume = resume > 0 ? resume : -1;
     _saved_along = 0;
+    _saved_ms = millis();
     _next_full = 0;
     _next_poll = 0;
     _state = ON_ROUTE;
@@ -189,11 +192,12 @@ public:
         scan(f, 0, nseg - 1, all, all_ahead);
         // The nearest (the earliest of equals: a loop's start, not its end), unless
         // a place further on is nearly as near -- a shortcut, but never past half
-        // the route, and not on the first fix: where you start is the start.
-        const bool shortcut = !_snap && all_ahead.seg >= 0 && all_ahead.d <= all.d + SHORTCUT_SLACK_M
+        // the route, and not before you've been on it: where you join is the start
+        // (also after a start more than FAR_M away, which isn't the first fix).
+        const bool shortcut = _joined && all_ahead.seg >= 0 && all_ahead.d <= all.d + SHORTCUT_SLACK_M
                               && all_ahead.along - _along < _info.length_m / 2.0f;
         Cand pick = shortcut ? all_ahead : all;
-        if (_snap && all.seg >= 0) { earliestNear(f, 0, nseg - 1, all); pick = all; }
+        if (!_joined && all.seg >= 0) { earliestNear(f, 0, nseg - 1, all); pick = all; }
         if (pick.seg >= 0 && (best.seg < 0 || pick.d < best.d)) best = pick;
       }
     }
@@ -218,7 +222,11 @@ public:
       _seg = best.seg;
       _along = best.along;
       _p_lat = best.lat; _p_lon = best.lon;
-      if (fabsf(_along - _saved_along) >= SAVE_M) { _saved_along = _along; saveSeg(_seg); }
+      if (fabsf(_along - _saved_along) >= SAVE_M && millis() - _saved_ms >= SAVE_MIN_MS) {
+        _saved_along = _along;
+        _saved_ms = millis();
+        saveSeg(_seg);
+      }
     }
 
     if (_state == OFF_ROUTE) {
@@ -412,6 +420,7 @@ private:
   bool     _joined = false;    // been on the route since start(): "Back on route", not "On route"
   int      _resume = -1;       // the segment saved before a restart, for the first fix
   float    _saved_along = 0;   // _along when route_seg was last saved (every SAVE_M)
+  uint32_t _saved_ms = 0;      // and when
   int32_t  _t_lat = 0, _t_lon = 0;
   int32_t  _p_lat = 0, _p_lon = 0;
   int32_t  _lat0 = 0, _lon0 = 0;

@@ -64,17 +64,23 @@ public:
     save();
   }
 
-  // Moved and renamed in place (the configurator). A target on it follows.
+  // Moved and renamed in place (the configurator). A target on it follows;
+  // one written back unchanged (a backup restored) leaves it as it was.
   void replace(int i, int32_t lat, int32_t lon, const char* label) {
     if (i < 0 || i >= _store.count()) return;
     const Waypoint& w = _store.at(i);
-    if (_locator) _locator->clearTargetIfWaypoint(w.lat_1e6, w.lon_1e6);
+    const bool target = _locator && _locator->targetsWaypoint(w.lat_1e6, w.lon_1e6);
     char lbl[WAYPOINT_LABEL_LEN];
     fitLabel(lbl, label);
     if (!lbl[0]) snprintf(lbl, sizeof(lbl), "WP%d", i + 1);
+    const bool changed = w.lat_1e6 != lat || w.lon_1e6 != lon || strcmp(w.label, lbl) != 0;
     _store.move(i, lat, lon);
     _store.rename(i, lbl);
     save();
+    if (target && changed) {
+      _locator->setTarget(0, nullptr, lat, lon, lbl);
+      the_mesh.savePrefs();
+    }
   }
 
   void remove(int i) {
