@@ -220,6 +220,7 @@ failed, so it can stand in a script.
 | `route-shortcut` | across a U-bend the guide takes up the far side instead of calling you off |
 | `route-resume` | `--reboot`: a restart on the way back of an out-and-back route; picked up on the way back, not the way out |
 | `trackback` | a trail recorded on an L, Track back: "to start", walked back to "Back at the start" |
+| `guide-switch` | Track back started during a route takes its place, and the route followed again takes Track back's |
 | `one-button` | a one-button board: click, double click and hold through the firmware's own gesture timing |
 | `memory` | free heap at the end against the start; with `--repeat`, the first round's end against the last's (more than 4 KB less fails) |
 | `pair` | `--pair`: a direct message each way between the two devices, received (in the device's history) and ACKed |

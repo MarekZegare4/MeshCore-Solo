@@ -883,6 +883,40 @@ def t_trackback(d, out):
     return f"{n} trail points, back at the start"
 
 
+@test("guide-switch")
+def t_guide_switch(d, out):
+    """Track back started while a route is followed takes its place, and a
+    route followed during Track back takes Track back's: one guide at a time."""
+    need_hooks(d)
+    rec, pts = (int(x) for x in d.cli.get("trail").split(","))
+    if rec or pts:
+        raise Skip(f"a trail is on the device ({pts} points): not wiping it")
+    with Walk(d, out, "guide-switch", STRAIGHT) as w:
+        trail_slot = route.dev_info(d.dev)["slots"]   # PlannedRoute::TRAIL_SLOT = ROUTE_SLOTS
+        try:
+            w.put(0, 0); time.sleep(1.2)
+            d.cli.put("trail on")
+            w.follow()
+            g = w.path([(0, 0), (300, 0)], step=30)
+            check(g["state"] == ON and g["slot"] == w.slot, f"following the route: {g}")
+            time.sleep(1.5)
+            r = d.cli.run("trackback")
+            check(r == "OK", f"trackback during the route: {r}")
+            g = w.at(300, 0, 2.2)
+            check(g["slot"] == trail_slot and g["label"].endswith("to start"),
+                  f"Track back didn't take the route's place: {g}")
+            check(abs(g["left"] - 300) < 50, f"{g['left']} m to the start, not 300")
+            w.follow()
+            g = w.at(300, 0, 2.2)
+            check(g["slot"] == w.slot and g["state"] == ON and not g["label"].endswith("to start"),
+                  f"the route didn't take Track back's place: {g}")
+            check(abs(g["left"] - 500) < 50, f"back on the route {g['left']} m left, not 500")
+        finally:
+            d.cli.run("trail off")
+            d.cli.run("trail clear")
+    return "route -> Track back -> route"
+
+
 # One button: the gestures timed by the host, through the firmware's own OneButton.
 
 def btn(d, held, gap=0.45):
