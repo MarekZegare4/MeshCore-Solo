@@ -832,6 +832,7 @@ void UITask::clearAllDMUnread() { _core->clearAllDMUnread(); }
 
 void UITask::showAlert(const char* text, int duration_millis) {
   snprintf(_alert, sizeof(_alert), "%s", text);
+  _alert_seq++;
   if (!alertShowing() || _alert_badge) _alert_t0 = millis();   // a banner already down only changes its text
   _alert_badge = false;
   _alert_expiry = (millis() + duration_millis) | 1;   // 0 means none
@@ -1675,7 +1676,11 @@ void UITask::loop() {
 #elif defined(PIN_USER_BTN)
   // One button: its gestures timed here from the raw state (OneButton.h), not
   // the MomentaryButton's events.
+#ifdef SOLO_TEST_HOOKS
+  oneButtonGesture(_one_btn.update(user_btn.isPressed() || _test_btn, millis()));   // or tools/hwtest.py's "btn"
+#else
   oneButtonGesture(_one_btn.update(user_btn.isPressed(), millis()));
+#endif
 #if defined(PIN_BACK_BTN)
   // A second button (the Watch13): Back, as the double click is -- leaving an
   // edit too. Locked, it only wakes the screen or shows the hint.
@@ -2651,8 +2656,21 @@ bool UITask::cliCommand(const char* command, char* reply, int n) {
 //   key <up|down|left|right|enter|cancel|next|prev|select|home|menu> [long]
 //       a press of that key, waking the screen first as a real one does;
 //       "long" a held one (Enter held: the context menu)
-//   ui  "> <screen>|<banner or ->|<locked 0/1>|<display on/off>"
+//   ui  "> <screen>|<banner or ->|<locked 0/1>|<display on/off>|<banners so far>"
+//   btn down|up  the one button (a one-button board) pressed / let go: its
+//       gestures timed by OneButton as for the real one
 bool UITask::testCli(const char* cmd, char* reply, int n) {
+  if (!strncmp(cmd, "btn ", 4)) {
+#if defined(PIN_USER_BTN) && !UI_HAS_JOYSTICK
+    if (!strcmp(cmd + 4, "down")) _test_btn = true;
+    else if (!strcmp(cmd + 4, "up")) _test_btn = false;
+    else { snprintf(reply, n, "Error, btn down/up"); return true; }
+    snprintf(reply, n, "OK");
+#else
+    snprintf(reply, n, "Error, not a one-button board");
+#endif
+    return true;
+  }
   if (!strncmp(cmd, "key ", 4)) {
     static const struct { const char* name; char key; } KEYS[] = {
       { "up", (char)KEY_UP }, { "down", (char)KEY_DOWN }, { "left", (char)KEY_LEFT }, { "right", (char)KEY_RIGHT },
@@ -2685,8 +2703,16 @@ bool UITask::testCli(const char* cmd, char* reply, int n) {
     };
     const char* name = "?";
     for (const auto& e : SCREENS) if (e.s && e.s == curr) { name = e.name; break; }
-    snprintf(reply, n, "> %s|%s|%d|%s", name, alertShowing() ? _alert : "-", _locked ? 1 : 0,
-             _display && _display->isOn() ? "on" : "off");
+    char where[32];
+    snprintf(where, sizeof(where), "%s", name);
+    if (curr && curr == home) {   // Home's page too: "home/tools"
+      static const char* const PAGES[] = { "clock", "favourites", "status", "bluetooth", "advert", "settings",
+                                           "map", "tools", "quick", "shutdown", "?", "lock" };
+      const uint8_t pg = ((HomeScreen*)home)->page();
+      snprintf(where, sizeof(where), "home/%s", pg < sizeof(PAGES) / sizeof(PAGES[0]) ? PAGES[pg] : "?");
+    }
+    snprintf(reply, n, "> %s|%s|%d|%s|%u", where, alertShowing() ? _alert : "-", _locked ? 1 : 0,
+             _display && _display->isOn() ? "on" : "off", (unsigned)_alert_seq);
     return true;
   }
   return testhooks::handle(*_core, cmd, reply, n);

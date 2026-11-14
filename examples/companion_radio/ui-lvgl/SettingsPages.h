@@ -318,8 +318,8 @@ bool UITask::cliCommand(const char* command, char* reply, int n) {
       "melody", "quick", "admin-pick", "ota", "storage", "gps", "battery", "route", "route-pick", "gallery", "sos" };
     static_assert(sizeof(NAMES) / sizeof(NAMES[0]) == SCR_SOS + 1, "a name for each Screen");
     const char* toast = _toast && !lv_obj_has_flag(_toast, LV_OBJ_FLAG_HIDDEN) ? lv_label_get_text(lv_obj_get_child(_toast, 0)) : "-";
-    snprintf(reply, n, "> %s|%s|%d|%s", _screen < sizeof(NAMES) / sizeof(NAMES[0]) ? NAMES[_screen] : "?", toast,
-             locked() ? 1 : 0, _display && _display->isOn() ? "on" : "off");
+    snprintf(reply, n, "> %s|%s|%d|%s|%u", _screen < sizeof(NAMES) / sizeof(NAMES[0]) ? NAMES[_screen] : "?", toast,
+             locked() ? 1 : 0, _display && _display->isOn() ? "on" : "off", (unsigned)_toast_seq);
     return true;
   }
   if (testhooks::handle(*_core, command, reply, n)) return true;

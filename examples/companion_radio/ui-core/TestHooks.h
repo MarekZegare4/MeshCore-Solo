@@ -12,11 +12,22 @@
 //                              (state 0 off, 1 on route, 2 off route, 3 finished)
 //   follow <slot> [reversed]   follow a planned route, as Routes > Follow does
 //   follow off                 stop following
+//   trackback                  Track back: the trail walked backwards, as Trail > Track back
+//   trail on|off|clear         record the trail, stop, empty it (as Trail's own actions)
+//   trail                      "> <recording 0/1>,<points>"
+//   mem                        "> <free heap>,<total>,<stack free>,<uptime s>" (0: unknown;
+//                              an ESP32's internal RAM, not its PSRAM)
+//   lastdm                     the newest direct message, "> <in/out>,<prefix hex>,<ack 0-3>,<text>"
+//   lastch                     the newest channel post, "> <channel>,<text>"
 //
 // The frontends add their own (ui-new/UITask.cpp: key, ui).
 
 #ifdef SOLO_TEST_HOOKS
 #include <helpers/sensors/EnvironmentSensorManager.h>
+#include <helpers/DeviceDiag.h>
+#ifdef ESP32
+  #include <esp_heap_caps.h>
+#endif
 
 namespace testhooks {
 
@@ -105,6 +116,54 @@ inline bool handle(Core& core, const char* cmd, char* reply, int n) {
 #else
     snprintf(reply, n, "Error, no routes on this board");
 #endif
+    return true;
+  }
+  if (!strcmp(cmd, "trackback")) {
+#if FEAT_ROUTES
+    snprintf(reply, n, core.startTrackBack() ? "OK" : "Error, no trail to walk back");
+#else
+    snprintf(reply, n, "Error, no routes on this board");
+#endif
+    return true;
+  }
+  if (!strcmp(cmd, "trail")) {
+    snprintf(reply, n, "> %d,%d", core.trail.isRecording() ? 1 : 0, core.trail.store().count());
+    return true;
+  }
+  if (!strncmp(cmd, "trail ", 6)) {
+    const char* a = cmd + 6;
+    if (!strcmp(a, "on")) core.trail.setActive(true);
+    else if (!strcmp(a, "off")) core.trail.setActive(false);
+    else if (!strcmp(a, "clear")) core.trail.reset();
+    else { snprintf(reply, n, "Error, trail on/off/clear"); return true; }
+    snprintf(reply, n, "OK");
+    return true;
+  }
+  if (!strcmp(cmd, "mem")) {
+    uint32_t fr = 0, total = 0;
+#ifdef ESP32
+    fr = (uint32_t)heap_caps_get_free_size(MALLOC_CAP_INTERNAL);     // not the PSRAM: what runs short
+    total = (uint32_t)heap_caps_get_total_size(MALLOC_CAP_INTERNAL);
+#else
+    DeviceDiag::getHeapStats(fr, total);
+#endif
+    snprintf(reply, n, "> %lu,%lu,%lu,%lu", (unsigned long)fr, (unsigned long)total,
+             (unsigned long)DeviceDiag::getStackFreeBytes(), (unsigned long)(millis() / 1000));
+    return true;
+  }
+  if (!strcmp(cmd, "lastdm")) {
+    const MessageHistory& h = core.history;
+    if (h.dmHistCount() == 0) { snprintf(reply, n, "> none"); return true; }
+    const DmHistEntry& e = h.dmAtPos(h.dmHistPosNewest(0));
+    snprintf(reply, n, "> %s,%02x%02x%02x%02x,%d,%s", e.outgoing ? "out" : "in", e.prefix[0], e.prefix[1],
+             e.prefix[2], e.prefix[3], (int)e.ack_status, e.text);
+    return true;
+  }
+  if (!strcmp(cmd, "lastch")) {
+    const MessageHistory& h = core.history;
+    if (h.chHistCount() == 0) { snprintf(reply, n, "> none"); return true; }
+    const ChHistEntry& e = h.chAtPos(h.chHistPosNewest(0));
+    snprintf(reply, n, "> %d,%s", (int)e.ch_idx, e.text);
     return true;
   }
   if (!strcmp(cmd, "guide")) {

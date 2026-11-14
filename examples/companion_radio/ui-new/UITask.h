@@ -88,6 +88,7 @@ class UITask : public UITaskBase, public UiCoreHost {
   bool _unlock_kb = false;
   screenlock::Attempts _pin_tries;
   char _alert[80];
+  uint16_t _alert_seq = 0;   // each banner shown counts one (tools/hwtest.py's "ui")
   char _notif_mel_buf[220];  // persistent RTTTL buffer for custom notification melodies
   // Persistent RTTTL buffer for the bot !buzz command (see botBuzz()) -- sized
   // for the full 30s cap: "Buzz:b=120:" (11B) + up to 60 "8c,8p," pairs (6B
@@ -618,6 +619,7 @@ public:
   bool cliCommand(const char* command, char* reply, int n) override;
 #ifdef SOLO_TEST_HOOKS
   bool testCli(const char* cmd, char* reply, int n);   // tools/hwtest.py's commands
+  bool _test_btn = false;                               // its "btn down": the one button held
 #endif
   void setBuzzerVolumeLevel(uint8_t level);
   void applyTxPower();

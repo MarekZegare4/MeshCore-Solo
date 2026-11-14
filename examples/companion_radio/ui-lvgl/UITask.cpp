@@ -1065,6 +1065,7 @@ void UITask::takeScreenshot() {
 
 void UITask::showToast(const char* text, uint32_t ms) {
   if (!_toast) return;
+  _toast_seq++;
   lv_label_set_text(lv_obj_get_child(_toast, 0), text);
   bool shown = !lv_obj_has_flag(_toast, LV_OBJ_FLAG_HIDDEN);
   lv_anim_delete(_toast, NULL);   // on its way out

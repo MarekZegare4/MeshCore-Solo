@@ -679,6 +679,7 @@ public:
   }
 
   void showMapPage() { _page = MAP; _quick_sel = 0; }   // sim tests
+  uint8_t page() const { return _page; }                  // tools/hwtest.py's "ui"
 
   void showGpsPage() {
     _page = STATUS;

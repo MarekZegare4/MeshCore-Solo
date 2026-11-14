@@ -126,4 +126,4 @@ values above that are set from the phone app or the CLI.
 
 | Flag | Meaning |
 | --- | --- |
-| `SOLO_TEST_HOOKS` | Console commands for [`tools/hwtest.py`](../../../tools/README.md#tests-on-a-device): a key press, a fake GPS fix, following a route, the screen shown (`ui-core/TestHooks.h`). They let a test drive the device at a desk, so they are as reachable over Bluetooth as the console is: a device people carry must never have them. `hwtest.py --flash` builds with it into `.pio/build-test`, apart from the release builds, and `ver` says `+test` on such a firmware. |
+| `SOLO_TEST_HOOKS` | Console commands for [`tools/hwtest.py`](../../../tools/README.md#tests-on-a-device): a key or button press, a fake GPS fix, following a route, the trail and Track back, the heap, the newest messages, the screen shown (`ui-core/TestHooks.h`). They let a test drive the device at a desk, so they are as reachable over Bluetooth as the console is: a device people carry must never have them. `hwtest.py --flash` builds with it into `.pio/build-test`, apart from the release builds, and `ver` says `+test` on such a firmware. |

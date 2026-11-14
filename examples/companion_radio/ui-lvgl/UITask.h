@@ -689,6 +689,7 @@ private:
   char      _status_sig[128] = "";      // what the icon row shows, to skip unchanged rebuilds
   lv_obj_t* _toast = nullptr;
   lv_timer_t* _toast_timer = nullptr;
+  uint16_t    _toast_seq = 0;   // each toast shown counts one (tools/hwtest.py's "ui": the same text twice)
   lv_obj_t* _home_clock = nullptr;
   lv_obj_t* _home_date = nullptr;
   lv_obj_t* _home_unread = nullptr;
