@@ -64,7 +64,7 @@ history on the SD card and updates over WiFi.
 - [One button](./one-button.md): the whole interface from a single button
 - [Configurator](./configurator.md): settings, Home's pages, quick messages, melodies, routes and a backup, from a computer over USB
 
-For developers: [UI Core](./developer/ui-core.md), [UI framework](./developer/ui-framework.md), [build flags](./developer/build-flags.md), [feature matrix](./developer/feature-matrix.md).
+For developers: [UI Core](./developer/ui-core.md), [UI framework](./developer/ui-framework.md), [build flags](./developer/build-flags.md), [feature matrix](./developer/feature-matrix.md), [location messages](./location-messages.md) (the `[WAY]` / `[LOC]` / `[SOS]` text formats, for other firmware).
 
 ## Contributors
 
