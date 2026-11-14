@@ -92,10 +92,13 @@ def probe(port):
         info = dev.ask(bytes([config.CMD_DEVICE_QUERY, config.CLI_MIN_VER]), config.RESP_DEVICE_INFO)
         s = lambda a, n: info[a:a + n].split(b"\0")[0].decode(errors="replace")
         return s(20, 40), s(60, 20)
-    except DeviceError:
-        return None
+    except (DeviceError, serial.SerialException, OSError):
+        return None   # not a companion, or gone mid-way (an ESP32 restarting)
     finally:
-        dev.close()
+        try:
+            dev.close()
+        except (serial.SerialException, OSError):
+            pass
 
 
 def wait_port(timeout, gone_first=None):
@@ -454,7 +457,7 @@ def ui_state(d):
 @test("keys")
 def t_keys(d, out):
     need_hooks(d)
-    if not d.knows("ui"):
+    if not d.knows("key cancel"):
         raise Skip("no keys on this frontend (a touch screen)")
     for _ in range(4):   # wake it, and back out of wherever it is
         d.cli.put("key cancel")
@@ -623,11 +626,13 @@ def flash(env, port, release):
             pass   # the bootloader restarts the board as soon as it has it all
     else:
         print(f"Uploading to {port}...")
-        r = subprocess.run([PIO, "run", "-e", env, "-t", "nobuild", "-t", "upload", "--upload-port", port],
+        r = subprocess.run([PIO, "run", "-e", env, "-t", "upload", "--upload-port", port],
                            cwd=ROOT, capture_output=True, text=True, env=pio_env(release)[0])
         if r.returncode:
             print(r.stdout[-3000:], r.stderr[-2000:])
             sys.exit("The upload failed.")
+    if not uf2.exists():
+        time.sleep(3)   # an ESP32 restarts after the upload: not the old firmware's last breath
     print("Waiting for the device...")
     p = wait_port(60, gone_first=port if uf2.exists() else None)
     if not p:

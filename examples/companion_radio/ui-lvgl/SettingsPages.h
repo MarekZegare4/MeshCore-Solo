@@ -310,7 +310,19 @@ void UITask::factoryResetStep(int stage) {
 // open on the screen is built again with the new value.
 bool UITask::cliCommand(const char* command, char* reply, int n) {
 #ifdef SOLO_TEST_HOOKS
-  if (testhooks::handle(*_core, command, reply, n)) return true;   // gps, guide (no keys: a touch screen)
+  // tools/hwtest.py: ui-core/TestHooks.h's, and "ui" as ui-new's (the screen,
+  // the toast showing, locked, display); no keys on a touch screen.
+  if (!strcmp(command, "ui")) {
+    static const char* const NAMES[] = { "home", "chats", "contacts", "thread", "settings", "nearby", "node", "map",
+      "wifi", "settings-page", "clock", "radio", "channel", "admin", "bot", "diag", "compass", "scopes", "repeater",
+      "melody", "quick", "admin-pick", "ota", "storage", "gps", "battery", "route", "route-pick", "gallery", "sos" };
+    static_assert(sizeof(NAMES) / sizeof(NAMES[0]) == SCR_SOS + 1, "a name for each Screen");
+    const char* toast = _toast && !lv_obj_has_flag(_toast, LV_OBJ_FLAG_HIDDEN) ? lv_label_get_text(lv_obj_get_child(_toast, 0)) : "-";
+    snprintf(reply, n, "> %s|%s|%d|%s", _screen < sizeof(NAMES) / sizeof(NAMES[0]) ? NAMES[_screen] : "?", toast,
+             locked() ? 1 : 0, _display && _display->isOn() ? "on" : "off");
+    return true;
+  }
+  if (testhooks::handle(*_core, command, reply, n)) return true;
 #endif
   if (!settingscli::handle(*_core, command, reply, n)) return false;
   if (_screen == SCR_SETTINGS_NAV) rebuildSchemaSettings();
