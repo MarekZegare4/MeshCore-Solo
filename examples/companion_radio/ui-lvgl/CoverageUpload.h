@@ -355,18 +355,19 @@ void UITask::buildCoveragePage(lv_obj_t* body) {
   _cov_status = nullptr;
   if (!_prefs) return;
   lv_obj_t* g = group(body, nullptr);
-  noteLabel(g, "Help draw MatterMap, a MeshCore coverage map by MatterMesh OS (mattermeshos.com/coverage). "
-               "Voluntary, off unless you turn it on.");
   switchRow(g, "Record coverage", "Off: nothing is recorded or sent", _prefs->cov_on, onCovSwitch);
+  groupNote(body, "Help draw MatterMap, a MeshCore coverage map by MatterMesh OS. Voluntary: off unless you turn it on.");
 
   g = group(body, "HOW IT WORKS");
-  noteLabel(g, "This device only listens; it sends nothing extra over the mesh. For every packet its radio hears it "
-               "writes the time, your position, the signal (SNR, RSSI) and the repeater that passed it on; every 30 s "
-               "with nothing heard, a \"nothing heard\" point. Not without a GPS fix, nor in the home zone.\n"
-               "Files stay on the SD card (meshcore/coverage) until uploaded over your saved WiFi to "
-               "mattermeshos.com. With them go the board, the firmware version and a device number made from a hash "
-               "(not your node key or address). The map shows only ~200 m areas: never who measured them or a route. "
-               "The server keeps raw files 7 days.");
+  infoNote(g, "Recorded", "Each packet your radio hears: the time, your position, SNR, RSSI and the repeater that "
+                          "passed it on; every 30 s with nothing heard, a \"nothing heard\" point.");
+  infoNote(g, "Not recorded", "Without a GPS fix, with the clock not set, or in the home zone.");
+  infoNote(g, "On the mesh", "Nothing: the device only listens.");
+  infoNote(g, "Kept", "On the SD card (meshcore/coverage) until it's uploaded.");
+  infoNote(g, "Sent", "To mattermeshos.com over your saved WiFi, with the board, the firmware version and a "
+                      "device number made from a hash (not your node's key or address).");
+  infoNote(g, "On the map", "Only areas of about 200 m: never who measured them, never a route. Raw files are "
+                            "deleted after 7 days.");
 
   g = group(body, "HOME ZONE");
   char opts[48];
@@ -381,11 +382,12 @@ void UITask::buildCoveragePage(lv_obj_t* body) {
   if (_prefs->cov_home_lat || _prefs->cov_home_lon) geo::fmtLatLon(where, sizeof(where), _prefs->cov_home_lat, _prefs->cov_home_lon, true);
   else snprintf(where, sizeof(where), "Not set");
   listRow(g, "Home", where, onCovHome, NULL);
+  groupNote(body, "Here, or a waypoint. Until one is picked there is no home zone.");
 
   g = group(body, "UPLOAD");
   switchRow(g, "Upload automatically", "Over the saved WiFi, joined for it", _prefs->cov_auto, onCovAuto);
   actionRow(g, LV_SYMBOL_UPLOAD "  Upload now", onCovUpload, NULL);
   char st[128];
   coverageStatusText(st, sizeof(st));
-  _cov_status = noteLabel(body, st, THEME_FONT_BODY, theme::TEXT);
+  _cov_status = infoNote(g, "Status", st);
 }
