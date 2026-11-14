@@ -326,12 +326,17 @@ void UITask::coverageHomePopup() {
   lv_obj_t* list = scrollList(navPopupPanel("Home", true));
   int32_t lat, lon;
   uint32_t age;
-  if (_core->course.lastFix(lat, lon, age) && age < 30) listRow(list, LV_SYMBOL_GPS "  Here", "Where you are now", onCovHomePick, (void*)(uintptr_t)COVHOME_HERE);
+  // Always there, saying what the GPS needs when it can't give a place yet.
+  const char* here = "Where you are now";
+  if (!(_core->course.lastFix(lat, lon, age) && age < 30))
+    here = !_core->gpsAvailable() ? "No GPS on this device" : !_core->gpsEnabled() ? "The GPS is off: tap to turn it on" : "Waiting for a GPS fix";
+  listRow(list, LV_SYMBOL_GPS "  Here", here, onCovHomePick, (void*)(uintptr_t)COVHOME_HERE);
   const WaypointModel& wp = _core->waypoints;
   for (int i = 0; i < wp.count(); i++) {
     const Waypoint& w = wp.at(i);
     listRow(list, w.label[0] ? w.label : "(unnamed)", nullptr, onCovHomePick, (void*)(uintptr_t)(COVHOME_WP0 + i));
   }
+  if (wp.count() == 0) noteLabel(list, "No waypoints yet: the map's pin button (Places) marks one.");
   if (_prefs && (_prefs->cov_home_lat || _prefs->cov_home_lon)) actionRow(list, "Clear", onCovHomePick, (void*)(uintptr_t)COVHOME_CLEAR);
 }
 
@@ -339,7 +344,13 @@ void UITask::coverageHomePick(int code) {
   if (!_prefs) return;
   int32_t lat = 0, lon = 0;
   uint32_t age;
-  if (code == COVHOME_HERE) { if (!_core->course.lastFix(lat, lon, age)) return; }
+  if (code == COVHOME_HERE) {
+    if (!_core->course.lastFix(lat, lon, age) || age >= 30) {
+      if (_core->gpsAvailable() && !_core->gpsEnabled()) { setGps(true); coverageHomePopup(); showToast("GPS on - tap Here once it has a fix", 2500); }
+      else showToast(_core->gpsAvailable() ? "No GPS fix yet - try again outdoors" : "No GPS on this device", 2500);
+      return;
+    }
+  }
   else if (code >= COVHOME_WP0 && code - COVHOME_WP0 < _core->waypoints.count()) {
     const Waypoint& w = _core->waypoints.at(code - COVHOME_WP0);
     lat = w.lat_1e6; lon = w.lon_1e6;
