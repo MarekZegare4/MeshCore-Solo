@@ -119,3 +119,11 @@ values above that are set from the phone app or the CLI.
 | `HIST_ARCHIVE` | Wio Tracker L2: message history also kept on the SD card (`ui-lvgl/HistoryStore.h`). Set in its solo build. |
 | `HIST_FLASH` | Wio Tracker L1: message history also kept on the QSPI flash, across a power-off and past what RAM holds, read back a page at a time (`ui-core/HistoryLog.h`, Settings > Messages > Keep messages, off by default). Implies `HIST_ARCHIVE`'s hooks. Set in its solo builds. |
 | `MESHCORE_VERSION='"x.y"'` | Overrides the upstream MeshCore base-version string shown in diagnostics, for boards whose port hasn't been rebased onto the latest yet. Cosmetic only — doesn't change protocol behaviour. |
+
+---
+
+### Tests only — never in a release
+
+| Flag | Meaning |
+| --- | --- |
+| `SOLO_TEST_HOOKS` | Console commands for [`tools/hwtest.py`](../../../tools/README.md#tests-on-a-device): a key press, a fake GPS fix, following a route, the screen shown (`ui-core/TestHooks.h`). They let a test drive the device at a desk, so they are as reachable over Bluetooth as the console is: a device people carry must never have them. `hwtest.py --flash` builds with it into `.pio/build-test`, apart from the release builds, and `ver` says `+test` on such a firmware. |

@@ -176,3 +176,4 @@ settings key:
 | `msgs`, `get msg.3`, `set msg.3 …`, `set msg.3` | The quick messages, numbered from 1; the last empties one |
 | `get melody.1`, `set melody.1 120 292a2b` | A melody of the Ringtone editor: BPM and a hex byte a note |
 | `pages`, `set pages Clock, Messages, Status` | Home's pages in order; the ones left out are hidden (not on the L2) |
+| `batch on` … `batch off` | The `set`s in between are saved once, at `batch off` (or 5 s after the last command): a configurator's backup put back in seconds, not minutes |

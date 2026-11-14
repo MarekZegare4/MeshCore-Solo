@@ -9,6 +9,7 @@ Helper scripts that run on your computer, not on the device.
 | `console.py` | the device's console (get / set settings, the radio, the name) over USB serial |
 | `route.py` | put a planned GPX route on the device to follow; list and delete routes |
 | `config.py` | the whole configuration to a JSON backup and back; the melodies (RTTTL); the order of Home's pages; waypoints from a GPX |
+| `hwtest.py` | tests on a device plugged in: builds and flashes a firmware, then drives it over USB and checks what it does |
 | `companion.py` | the companion-protocol framing `console.py`, `route.py` and `config.py` share |
 | `gpx-downloader/index.html` | the same GPX capture in a browser, via Web Serial |
 | `bdf2gfx.py` | convert a BDF bitmap font to an Adafruit-GFX header |
@@ -176,6 +177,61 @@ from the original at most. Heights are kept when the GPX has them.
 the limits, `BEGIN` / `DATA` × n / `END` to write one, `GET` and `DELETE`. The
 device writes the route to a temporary file and only renames it into place
 once it's whole, so a cut-short upload changes nothing.
+
+---
+
+## Tests on a device
+
+One command for an iteration on the firmware: build, flash, test.
+
+```sh
+uv run tools/hwtest.py --flash WioTrackerL1_companion_solo_dual   # build a test firmware, flash it, test
+uv run tools/hwtest.py                                            # test what's on the device
+uv run tools/hwtest.py --only settings,route-walk                 # some of them (--list names them)
+uv run tools/hwtest.py --reboot                                   # also what has to survive a restart
+uv run tools/hwtest.py --flash <env> --release                    # the plain firmware, without test hooks
+```
+
+Each test puts back what it changed: a setting flipped is set back, a waypoint
+or route it added is deleted. A screenshot of the device and `report.json` land
+in `.pio/hwtest/<board>-<time>/`; the exit status is non-zero when a test
+failed, so it can stand in a script.
+
+| Test | Checks |
+| --- | --- |
+| `identity`, `unknown-command` | `ver`, `board`, the reply to a command it doesn't know, the `xx\|` prefix |
+| `batch` | a `set` inside `batch on` / `batch off` takes milliseconds, the save once at the end |
+| `radio` | `get radio`, `set radio` and `set tx` to what they are |
+| `settings` | every setting set to another of its choices, read back, set back (not the ones that delete messages or contacts, can switch the device off, or send an advert) |
+| `settings-persist` | with `--reboot`: a setting changed in a batch the page never closed is there after a restart |
+| `pages`, `quick-messages`, `melodies`, `waypoints`, `routes` | written, read back (a melody through RTTTL too, a waypoint twice is "already there"), put back |
+| `screenshot` | the screen comes over as a PNG, not all black |
+| `keys` | test build: keys move the UI, Home's context menu opens and closes |
+| `gps-fake` | test build: a fake fix taken, bad ones refused |
+| `route-walk` | test build: an 800 m route walked by fake fixes: on it, 100 m off it, back, to its end; the guide's state and its "Off route", "Back on route", "Route finished" each step (`route-walk.txt`) |
+
+**Flashing.** Before anything the device has to answer as a Solo companion
+(an observer or a repeater on that port does not), and with more than one
+plugged in `--port` says which. An nRF52 board goes into its bootloader by the
+1200-baud touch and gets `firmware.uf2` copied to the drive that appears
+(should none appear, a double press of reset brings it up); an ESP32 board is
+flashed with `pio run -t upload`.
+
+**The test build** (`-D SOLO_TEST_HOOKS`, in `.pio/build-test`; `ver` says
+`+test`) adds console commands to drive the device the way its user would,
+from [`ui-core/TestHooks.h`](../examples/companion_radio/ui-core/TestHooks.h):
+
+| Command | Does |
+| --- | --- |
+| `key <up\|down\|left\|right\|enter\|cancel\|next\|prev\|select\|home\|menu> [long]` | A key press (held, with `long`), waking the screen first as a real one does. Not on the L2's touch screen |
+| `ui` | `> <screen>\|<banner or ->\|<locked 0/1>\|<display on/off>` |
+| `gps <lat>,<lon>[,<alt m>]`, `gps off` | A GPS fix there for every screen, the trail and the route guide; the real receiver again |
+| `follow <slot> [reversed]`, `follow off` | Follow a planned route (as Routes › Follow), stop |
+| `guide` | `> <state>,<slot>,<m left>,<m off>,<header>`: state 0 off, 1 on the route, 2 off it, 3 finished |
+
+They are as reachable over Bluetooth as the rest of the console, which is why
+only a test build has them: never give one to a device people carry
+(`hwtest.py --flash <env> --release` puts the plain firmware back).
 
 ---
 

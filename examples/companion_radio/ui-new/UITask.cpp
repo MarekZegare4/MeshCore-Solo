@@ -90,6 +90,7 @@ static const telemetry::Style L1_INFO      = { "\xc2\xb0", true,  false, 5 };
 #include "../ui-core/UiCore.h"   // shared UI Core: history rings + unread models (MessagesScreen views them)
 #include "../ui-core/SettingsSchema.h"   // the settings both frontends share (SettingsScreen.h)
 #include "../ui-core/SettingsCli.h"      // and their companion CLI keys
+#include "../ui-core/TestHooks.h"        // -D SOLO_TEST_HOOKS only: tools/hwtest.py's commands
 #include "SettingsScreen.h"
 #include "MessagesScreen.h"
 
@@ -2636,11 +2637,61 @@ static bool homePagesCli(NodePrefs* p, const char* cmd, char* reply, int n) {
 
 // The companion CLI's settings keys (ui-core/SettingsCli.h), and Home's pages.
 bool UITask::cliCommand(const char* command, char* reply, int n) {
+#ifdef SOLO_TEST_HOOKS
+  if (testCli(command, reply, n)) return true;
+#endif
   if (_node_prefs && homePagesCli(_node_prefs, command, reply, n)) { _next_refresh = 0; return true; }
   if (!settingscli::handle(*_core, command, reply, n)) return false;
   _next_refresh = 0;   // a screen showing the value draws it anew
   return true;
 }
+
+#ifdef SOLO_TEST_HOOKS
+// tools/hwtest.py's commands (ui-core/TestHooks.h has the shared ones):
+//   key <up|down|left|right|enter|cancel|next|prev|select|home|menu> [long]
+//       a press of that key, waking the screen first as a real one does;
+//       "long" a held one (Enter held: the context menu)
+//   ui  "> <screen>|<banner or ->|<locked 0/1>|<display on/off>"
+bool UITask::testCli(const char* cmd, char* reply, int n) {
+  if (!strncmp(cmd, "key ", 4)) {
+    static const struct { const char* name; char key; } KEYS[] = {
+      { "up", (char)KEY_UP }, { "down", (char)KEY_DOWN }, { "left", (char)KEY_LEFT }, { "right", (char)KEY_RIGHT },
+      { "enter", (char)KEY_ENTER }, { "cancel", (char)KEY_CANCEL }, { "next", (char)KEY_NEXT },
+      { "prev", (char)KEY_PREV }, { "select", (char)KEY_SELECT }, { "home", (char)KEY_HOME },
+      { "menu", (char)KEY_CONTEXT_MENU },
+    };
+    const char* a = cmd + 4;
+    const char* sp = strchr(a, ' ');
+    const int len = sp ? (int)(sp - a) : (int)strlen(a);
+    const bool hold = sp && !strcmp(sp + 1, "long");
+    for (const auto& k : KEYS) {
+      if ((int)strlen(k.name) != len || strncmp(k.name, a, len)) continue;
+      enqueueKey(hold ? handleLongPress(k.key) : checkDisplayOn(k.key));
+      snprintf(reply, n, "OK");
+      return true;
+    }
+    snprintf(reply, n, "Error, key up/down/left/right/enter/cancel/next/prev/select/home/menu [long]");
+    return true;
+  }
+  if (!strcmp(cmd, "ui")) {
+    const struct { UIScreen* s; const char* name; } SCREENS[] = {
+      { splash, "splash" }, { home, "home" }, { settings, "settings" }, { messages_screen, "messages" },
+      { tools_screen, "tools" }, { ringtone_edit, "ringtone" }, { bot_screen, "bot" }, { admin_screen, "admin" },
+      { nearby_screen, "nearby" }, { dashboard_config, "dashboard" }, { auto_advert_screen, "auto-advert" },
+      { batt_curve_screen, "battery" }, { live_share_screen, "live-share" }, { sos_screen, "sos" },
+      { locator_screen, "locator" }, { trail_screen, "trail" }, { compass_screen, "compass" },
+      { status_screen, "status" }, { repeater_screen, "repeater" }, { clock_tools, "clock" },
+      { flashlight, "flashlight" },
+    };
+    const char* name = "?";
+    for (const auto& e : SCREENS) if (e.s && e.s == curr) { name = e.name; break; }
+    snprintf(reply, n, "> %s|%s|%d|%s", name, alertShowing() ? _alert : "-", _locked ? 1 : 0,
+             _display && _display->isOn() ? "on" : "off");
+    return true;
+  }
+  return testhooks::handle(*_core, cmd, reply, n);
+}
+#endif
 
 void UITask::setBuzzerVolumeLevel(uint8_t level) {
 #ifdef PIN_BUZZER

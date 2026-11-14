@@ -34,6 +34,9 @@ namespace skyview {
     return gpsSkySim();
 #else
     LocationProvider* p = sensors.getLocationProvider();
+  #ifdef SOLO_TEST_HOOKS
+    p = testhooks::real(p);   // the test build's fake fix stands in front of it
+  #endif
     return p ? &((MicroNMEALocationProvider*)p)->sky() : nullptr;
 #endif
   }

@@ -309,6 +309,9 @@ void UITask::factoryResetStep(int stage) {
 // The companion CLI's settings keys (ui-core/SettingsCli.h); a Settings page
 // open on the screen is built again with the new value.
 bool UITask::cliCommand(const char* command, char* reply, int n) {
+#ifdef SOLO_TEST_HOOKS
+  if (testhooks::handle(*_core, command, reply, n)) return true;   // gps, guide (no keys: a touch screen)
+#endif
   if (!settingscli::handle(*_core, command, reply, n)) return false;
   if (_screen == SCR_SETTINGS_NAV) rebuildSchemaSettings();
   return true;

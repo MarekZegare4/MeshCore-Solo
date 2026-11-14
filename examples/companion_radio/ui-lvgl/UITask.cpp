@@ -73,6 +73,7 @@ static bool s_chats_stale = false;   // Messages: a refresh waits for a held row
 #include "../ui-core/EtaTracker.h"
 #include "../ui-core/SettingsSchema.h"
 #include "../ui-core/SettingsCli.h"   // the companion CLI's settings keys
+#include "../ui-core/TestHooks.h"     // -D SOLO_TEST_HOOKS only: tools/hwtest.py's commands
 #include "../ui-core/ContactQr.h"
 #include "../ui-core/GpsAverager.h"
 #include "../ui-core/TrailProfile.h"

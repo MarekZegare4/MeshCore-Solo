@@ -84,7 +84,11 @@ bool MyMesh::handleCliCommand(const char* command, char* reply, int n) {
   }
   if (strcmp(command, "board") == 0) { snprintf(reply, n, "%s", board.getManufacturerName()); return true; }
   if (strcmp(command, "ver") == 0) {
+#ifdef SOLO_TEST_HOOKS
+    snprintf(reply, n, "%s+test (Build: %s)", FIRMWARE_VERSION, FIRMWARE_BUILD_DATE);   // ui-core/TestHooks.h
+#else
     snprintf(reply, n, "%s (Build: %s)", FIRMWARE_VERSION, FIRMWARE_BUILD_DATE);
+#endif
     return true;
   }
   if (strcmp(command, "get tz.offset") == 0) { snprintf(reply, n, "> %d", _prefs.tz_offset_hours); return true; }

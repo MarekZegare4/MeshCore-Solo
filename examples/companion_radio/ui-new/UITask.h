@@ -616,6 +616,9 @@ public:
   void onSosRunning(bool running) override;
   int battPercent() override;
   bool cliCommand(const char* command, char* reply, int n) override;
+#ifdef SOLO_TEST_HOOKS
+  bool testCli(const char* cmd, char* reply, int n);   // tools/hwtest.py's commands
+#endif
   void setBuzzerVolumeLevel(uint8_t level);
   void applyTxPower();
   void applyPowerSave();   // hardware duty-cycle RX on/off from prefs
