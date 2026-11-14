@@ -271,7 +271,7 @@ public :
             if (!_time_sync_needed && _clock != NULL && (millis() - _last_time_sync) > TIME_SYNC_INTERVAL) {
                 _time_sync_needed = true;
             }
-            if (_time_sync_needed && time_valid > 2) {
+            if (_time_sync_needed && time_valid > 2 && timeFromGps()) {
                 if (_clock != NULL) {
                     _clock->setCurrentTime(getTimestamp());
                     _time_sync_needed = false;

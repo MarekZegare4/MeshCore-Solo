@@ -6,6 +6,7 @@
 #include "../RadioPresets.h"
 #include "RadioParamsEditor.h"
 #include "RadioPresetPicker.h"
+#include "DateTimeEditor.h"
 #include "AccordionList.h"
 #include "PopupMenu.h"   // scope list management's per-row action menu
 #include "InfoKit.h"     // value / switch rows
@@ -81,7 +82,9 @@ class SettingsScreen : public UIScreen {
     MSG_SLOT_5, MSG_SLOT_6, MSG_SLOT_7, MSG_SLOT_8, MSG_SLOT_9,
     Count,
     // Not walked from the enum: placed right after the schema's "Lock screen" row.
-    LOCK_PIN
+    LOCK_PIN,
+    // ...and right before its "Time zone" row.
+    SET_CLOCK
   };
   // A schema setting's row: SCHEMA_ITEM + its index in settings::ALL.
   static const int SCHEMA_ITEM = 128;
@@ -179,6 +182,8 @@ class SettingsScreen : public UIScreen {
       } else if (cur >= 0 && isSchemaGroup(i)) {
         for (int k = 0; k < settings::COUNT && _sec_count[cur] < MAX_PER_SEC; k++)
           if (schemaIn(i, settings::ALL[k].section) && schemaShown(settings::ALL[k])) {
+            if (settings::ALL[k].offset == offsetof(NodePrefs, tz_offset_hours) && _sec_count[cur] < MAX_PER_SEC - 1)
+              _sec_items[cur][_sec_count[cur]++] = (uint8_t)SET_CLOCK;
             _sec_items[cur][_sec_count[cur]++] = (uint8_t)(SCHEMA_ITEM + k);
             if (settings::ALL[k].offset == offsetof(NodePrefs, auto_lock) && _sec_count[cur] < MAX_PER_SEC)
               _sec_items[cur][_sec_count[cur]++] = (uint8_t)LOCK_PIN;
@@ -537,6 +542,14 @@ class SettingsScreen : public UIScreen {
       val("Scope", sl.name(sl.default_idx));
     } else if (item == LOCK_PIN) {
       sw("Lock PIN", _task->passwordLockEnabled());
+    } else if (item == SET_CLOCK) {
+      struct tm t;
+      if (sel && _clock_ed.active) _clock_ed.render(display, 2, y);   // the whole row: 16 characters
+      else if (_task->core().localNow(t)) {
+        snprintf(buf, sizeof(buf), "%02d-%02d %02d:%02d", t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min);
+        val("Clock", buf);
+        if (mq <= 0 || mq > 10000) mq = 10000;   // the minute moves on
+      } else val("Clock", "Not set");
     } else if (item == DEVICE_NAME) {
       val("Name", the_mesh.getNodeName());
     } else if (item == BATT_CURVE) {
@@ -638,6 +651,21 @@ class SettingsScreen : public UIScreen {
   PopupMenu _prune_confirm;
   char      _prune_confirm_title[40];
 
+  // Display > Clock: the date and time edited in place, and the ask when
+  // that puts the clock more than a few minutes back (UiCore::CLOCK_ASK_BACK).
+  DateTimeEditor _clock_ed;
+  PopupMenu _clock_confirm;
+  char      _clock_confirm_title[40];
+  uint32_t  _clock_pending = 0;
+  void setClockNow(uint32_t utc, uint32_t back) {
+    _task->core().setClock(utc);
+    if (back > UiCore::CLOCK_ASK_BACK) {
+      char m[40];
+      UiCore::clockBackCost(m, sizeof(m), back);
+      _task->showAlert(m, 2500);
+    } else _task->showAlert("Clock set", 1000);
+  }
+
   // Privacy > Position: Type in / From waypoint / Clear, then the waypoints;
   // the keyboard for typing one in. Privacy > BT PIN: the number pad.
   PopupMenu _pos_menu;
@@ -705,6 +733,8 @@ public:
     _lock_pass_first[0] = '\0';
     if (!keep) resetList();
     _editor.freq.active = false;
+    _clock_ed.active = false;
+    _clock_confirm.active = false;
   }
 
   int render(DisplayDriver& display) override {
@@ -740,6 +770,7 @@ public:
     if (_prune_confirm.active) _prune_confirm.render(display);
     if (_pos_menu.active) _pos_menu.render(display);
     if (_reset_confirm.active) _reset_confirm.render(display);
+    if (_clock_confirm.active) _clock_confirm.render(display);
 
     return (mq_delay > 0 && mq_delay < 2000) ? mq_delay : 2000;
   }
@@ -747,7 +778,7 @@ public:
   // One button: a long press on a value with more than two options (or a
   // number) edits it; a switch or an action takes it as Enter.
   bool valueRow() override {
-    if (_scope_mgmt_active || _editor.active() || _picker.menu.active || _pos_menu.active ||
+    if (_scope_mgmt_active || _editor.active() || _clock_ed.active || _clock_confirm.active || _picker.menu.active || _pos_menu.active ||
         _reset_confirm.active || _prune_confirm.active || !_task->getNodePrefs()) return false;
     const int item = currentItem();
     if (item >= SCHEMA_ITEM) {
@@ -756,7 +787,7 @@ public:
     }
     return item == TX_POWER || item == CUSTOM_SF || item == CUSTOM_BW || item == CUSTOM_CR;
   }
-  uint8_t editMode() override { return _editor.active() ? EDIT_DIGITS : EDIT_NONE; }
+  uint8_t editMode() override { return _editor.active() || _clock_ed.active ? EDIT_DIGITS : EDIT_NONE; }
 
   bool handleInput(char c) override {
     NodePrefs* p = _task->getNodePrefs();
@@ -920,6 +951,30 @@ public:
         return true;
       }
       return true;   // list has focus -- swallow anything else rather than falling through
+    }
+
+    // Display > Clock: the date and time, then the ask if it goes back
+    if (_clock_confirm.active) {
+      auto res = _clock_confirm.handleInput(c);
+      if (res == PopupMenu::SELECTED && _clock_confirm.selectedIndex() == 0)
+        setClockNow(_clock_pending, UiCore::clockBackBy(_clock_pending));
+      return true;
+    }
+    if (_clock_ed.active) {
+      if (_clock_ed.handleInput(c) == DateTimeEditor::DONE && p) {
+        const DateTimeEditor& e = _clock_ed;
+        uint32_t utc = utcFromLocal(*p, e.year, e.month, e.day, e.hour, e.minute, 0);
+        uint32_t back = UiCore::clockBackBy(utc);
+        if (!utc) _task->showAlert("No such date", 1200);
+        else if (back > UiCore::CLOCK_ASK_BACK) {
+          _clock_pending = utc;
+          char span[16];
+          UiCore::clockBackSpan(span, sizeof(span), back);
+          snprintf(_clock_confirm_title, sizeof(_clock_confirm_title), "Clock %s back?", span);
+          _clock_confirm.beginConfirm(_clock_confirm_title, "Set, adverts wait");
+        } else setClockNow(utc, back);
+      }
+      return true;
     }
 
     // Digit-by-digit Freq editor
@@ -1127,6 +1182,12 @@ public:
       p->tx_apc ^= 1;
       _task->applyApc();
       _dirty = true;
+      return true;
+    }
+    if (_selected == SET_CLOCK && p && enter) {
+      struct tm t;
+      if (_task->core().localNow(t)) _clock_ed.begin(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min);
+      else _clock_ed.begin(2026, 1, 1, 12, 0);
       return true;
     }
     // Lock PIN: Enter sets one, or clears the one set

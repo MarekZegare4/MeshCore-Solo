@@ -7,7 +7,7 @@ board supports are shown.
 
 | Section | What's there |
 | ------- | ------------ |
-| **Display** | Brightness, auto-off, wake on message, the message alert (banner, corner envelope or off), lock screen, the lock clock's look and the [PIN](./lock.md), battery as icon / % / volts, time zone and summer time, clock format and seconds; on e-ink also rotation and full refresh, and on a 4.26" panel the text and icon size |
+| **Display** | Brightness, auto-off, wake on message, the message alert (banner, corner envelope or off), lock screen, the lock clock's look and the [PIN](./lock.md), battery as icon / % / volts, the clock set by hand, time zone and summer time, clock format and seconds, time from GPS; on e-ink also rotation and full refresh, and on a 4.26" panel the text and icon size |
 | **Sound** | Buzzer on / off / auto (quiet while the app is connected), volume, quiet hours, the melody for messages, channels and adverts |
 | **Home Pages** | Order of the home pages, and which are shown |
 | **Radio** | TX power, preset, frequency, SF / BW / CR, saved presets, Auto pwr, the scope list, then the advanced options (below) |
@@ -30,6 +30,19 @@ A few notes:
   the rule of your region: Europe (the last Sundays of March and October),
   North America, south-east Australia or New Zealand. The time zone stays
   the winter one, e.g. UTC+1 for Poland. The alarm and quiet hours follow it.
+- **Clock** sets the date and time by hand, as local time: on the Wio Tracker
+  L1 a field at a time (Left / Right between year, month, day, hour and
+  minute, Up / Down to change it), on the L2 typed as `2026-11-14 12:30`.
+  Otherwise the clock comes from the GPS, the phone app or the network (L2
+  WiFi). Putting it more than 5 minutes back asks first, because other
+  nodes keep the newest time they had from this one: until the clock is past
+  it again they ignore its adverts (a new name or position) and its logins
+  to repeaters and room servers. Messages are not affected. The phone app
+  may put the clock back by up to an hour (to correct a clock that ran
+  ahead); further back is done here.
+- **Time from GPS** off: a fix no longer sets the clock. For a GPS that gives
+  a wrong time (spoofing), or to keep a clock set by hand; the position is
+  still used.
 - **Low battery** shuts the device down at the voltage you choose, which is
   also 0 % on the battery indicator.
 - **Batt curve** sets the cell voltage at 0, 10 … 100 % for a battery that
@@ -145,6 +158,7 @@ so its documentation applies:
 | `get name`, `set name …` | The device name |
 | `get pin`, `set pin 123456` | The Bluetooth PIN, `0` for a random one; used from the next start |
 | `get tz.offset`, `set tz.offset 1` | Time zone, in hours from UTC (the winter one when summer time is on) |
+| `clock`, `time 2026-11-14 12:30`, `time 1794655800` | The local date and time; set it as local time or as seconds since 1970 (UTC), back too |
 | `get lat`, `set lat …`, `get lon`, `set lon …` | The fixed position |
 | `ver`, `board` | Firmware version, hardware |
 | `reboot`, `poweroff` | Restart or turn off |

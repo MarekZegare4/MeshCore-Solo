@@ -111,6 +111,10 @@ public:
   void ownPositionText(char* sub, size_t n);
   void ownPositionPick(int code);
   void ownPositionDone(bool ok);
+  void clockText(char* b, size_t n);   // Time & units > Clock: the local date and time
+  void clockSetPopup();
+  void clockSetDone(bool ok);
+  void clockSetApply();
   void blePinPopup();
   void blePinDone(bool ok);
   void factoryResetStep(int stage);
@@ -651,6 +655,7 @@ private:
   uint32_t _next_thread_ages_ms = 0;
   uint32_t _next_trackback_ms = 0;
   uint32_t _next_clock_ms = 0;
+  uint32_t _clock_pending = 0;   // Clock: the time typed in, while asked about going back
   uint8_t  _settings_page = 0;   // settings::Page shown in SCR_SETTINGS_NAV
   lv_obj_t* _ota_status = nullptr;
   lv_obj_t* _ota_bar = nullptr;

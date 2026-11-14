@@ -1594,6 +1594,8 @@ void MyMesh::begin() {
   _prefs.tx_power_dbm = constrain(_prefs.tx_power_dbm, -9, MAX_LORA_TX_POWER);
   _prefs.gps_enabled = constrain(_prefs.gps_enabled, 0, 1);  // Ensure boolean 0 or 1
   _prefs.gps_interval = constrain(_prefs.gps_interval, 0, 86400);  // Max 24 hours
+  _prefs.gps_time_off = _prefs.gps_time_off ? 1 : 0;
+  LocationProvider::timeFromGps() = !_prefs.gps_time_off;
 
   // The session PIN (random when a display can show it) is resolved by
   // main.cpp, which knows whether there is one -- see resolveBLEPin().
@@ -1946,8 +1948,12 @@ void MyMesh::handleCmdFrame(size_t len) {
     uint32_t secs;
     memcpy(&secs, &cmd_frame[1], 4);
     uint32_t curr = getRTCClock()->getCurrentTime();
-    if (secs >= curr) {
-      getRTCClock()->setCurrentTime(secs);
+    // Upstream takes only a later time. An hour back is let through: a clock
+    // run ahead (a spoofed GPS) is put right by the phone. Further back is
+    // done on the device (Settings), which says what it costs: our adverts
+    // and logins look old to others until the clock is past the old time.
+    if (secs >= curr || curr - secs <= APP_CLOCK_BACK_MAX) {
+      setClock(secs);
       writeOKFrame();
     } else {
       writeErrFrame(ERR_CODE_ILLEGAL_ARG);

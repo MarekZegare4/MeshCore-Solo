@@ -17,6 +17,7 @@
 #include "../NodePrefs.h"
 #include "../Trail.h"
 #include "SoundControl.h"
+#include <helpers/sensors/LocationProvider.h>   // Time from GPS
 
 namespace settings {
 
@@ -223,6 +224,7 @@ static void restartShareClock(UiCore& c) { c.live_share.restartClock(); }   // a
 static void applyDisplay(UiCore& c)      { c.host()->applyDisplayPrefs(); }
 static void applyGpsDuty(UiCore& c)      { c.applyGpsInterval(); }
 static void applySound(UiCore& c)        { c.host()->applySoundPrefs(); }
+static void applyGpsTime(UiCore& c)     { if (c.prefs()) LocationProvider::timeFromGps() = !c.prefs()->gps_time_off; }
 static void applyRxGain(UiCore& c)       { if (c.prefs()) radio_driver.setRxBoostedGainMode(c.prefs()->rx_boosted_gain); }
 
 #define NP_OFF(f)  (uint16_t)offsetof(NodePrefs, f)
@@ -291,6 +293,7 @@ static const Setting ALL[] = {
   IDX("Summer time", "An hour ahead, changed by itself", SEC_TIME, dst_rule, NodePrefs::DST_COUNT, optDst, nullptr),
   SW("12-hour clock", "AM / PM instead of 24 h", SEC_TIME, clock_12h, nullptr),
   MAP("Clock seconds", "On the home clock", SEC_TIME, clock_hide_seconds, INVERTED, nullptr, nullptr),
+  MAP("Time from GPS", "Off: a fix leaves the clock as it is", SEC_TIME, gps_time_off, INVERTED, nullptr, applyGpsTime),
 
   SW("Imperial units", "Miles and feet", SEC_UNITS, units_imperial, nullptr),
 
@@ -358,7 +361,7 @@ static const struct { uint16_t offset; const char* text; } SHORT_LABELS[] = {
   { NP_OFF(msg_alert), "Msg alert" },
   { NP_OFF(batt_display_mode), "Batt disp" },    { NP_OFF(low_batt_mv), "Low batt" },
   { NP_OFF(gps_interval), "GPS pwr" },           { NP_OFF(clock_12h), "12h clock" },
-  { NP_OFF(clock_hide_seconds), "Seconds" },     { NP_OFF(units_imperial), "Imperial" },
+  { NP_OFF(clock_hide_seconds), "Seconds" },     { NP_OFF(gps_time_off), "GPS time" },     { NP_OFF(units_imperial), "Imperial" },
   { NP_OFF(dm_resend_count), "Resend" },         { NP_OFF(contact_expiry_idx), "Expire" },
   { NP_OFF(fav_sort), "Favs top" },              { NP_OFF(ch_sort), "Ch order" },
   { NP_OFF(buzzer_volume), "Buzzer vol" },

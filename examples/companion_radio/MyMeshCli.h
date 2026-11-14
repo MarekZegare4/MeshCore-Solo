@@ -64,6 +64,30 @@ bool MyMesh::handleCliCommand(const char* command, char* reply, int n) {
     return true;
   }
   if (strcmp(command, "get name") == 0) { snprintf(reply, n, "> %s", _prefs.node_name); return true; }
+  // "clock": the local time; "time <epoch>" (UTC, upstream's) or "time
+  // 2026-11-14 12:30[:05]" (local) sets it, back too: whoever types it means it.
+  if (strcmp(command, "clock") == 0 || strcmp(command, "time") == 0 || memcmp(command, "time ", 5) == 0) {
+    uint32_t now = getRTCClock()->getCurrentTime();
+    if (command[0] == 't' && command[4]) {
+      const char* a = &command[5];
+      int y, mo, d, h, mi, s = 0;
+      uint32_t t = 0;
+      if (sscanf(a, "%d-%d-%d %d:%d:%d", &y, &mo, &d, &h, &mi, &s) >= 5) t = utcFromLocal(_prefs, y, mo, d, h, mi, s);
+      else if (strspn(a, "0123456789") == strlen(a) && *a) t = (uint32_t)strtoul(a, nullptr, 10);
+      if (t < 1700000000UL) {
+        snprintf(reply, n, "Error, give YYYY-MM-DD HH:MM (local time) or seconds since 1970 (UTC)");
+        return true;
+      }
+      setClock(t);
+      now = t;
+    }
+    struct tm lt;
+    int8_t tz = tzHoursAt(_prefs, now);
+    if (!localTm(now, tz, lt)) { snprintf(reply, n, "> not set"); return true; }
+    snprintf(reply, n, "> %04d-%02d-%02d %02d:%02d:%02d UTC%+d%s", lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday,
+             lt.tm_hour, lt.tm_min, lt.tm_sec, (int)tz, _prefs.gps_time_off ? "" : ", set by the GPS too");
+    return true;
+  }
   if (memcmp(command, "set pin ", 8) == 0) {
     char* end;
     uint32_t pin = (uint32_t)strtoul(&command[8], &end, 10);

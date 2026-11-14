@@ -272,6 +272,34 @@ public:
     return true;
   }
 
+  // Settings > Clock, set by hand. Going back costs something: others keep
+  // the newest timestamp they had from us, so our adverts (a new name or
+  // position) and our logins to repeaters and rooms look old to them until
+  // the clock is past it again. More than CLOCK_ASK_BACK back is asked first.
+  static const uint32_t CLOCK_ASK_BACK = 300;
+  static uint32_t clockBackBy(uint32_t utc) {
+    uint32_t now = rtc_clock.getCurrentTime();
+    return now > 1000000000UL && utc < now ? now - utc : 0;
+  }
+  // How far back, "20 min" / "3 h" / "5 days".
+  static void clockBackSpan(char* b, int n, uint32_t back) {
+    if (back < 5400) snprintf(b, n, "%lu min", (unsigned long)((back + 59) / 60));
+    else if (back < 172800UL) snprintf(b, n, "%lu h", (unsigned long)((back + 1800) / 3600));
+    else snprintf(b, n, "%lu days", (unsigned long)((back + 43200) / 86400));
+  }
+  // "Adverts, logins wait 20 min" for a clock set `back` seconds back.
+  static void clockBackCost(char* b, int n, uint32_t back) {
+    char span[16];
+    clockBackSpan(span, sizeof(span), back);
+    snprintf(b, n, "Adverts, logins wait %s", span);
+  }
+  void setClock(uint32_t utc) { the_mesh.setClock(utc); }
+  // The local date and time now, the clock's own fields; false while it isn't set.
+  bool localNow(struct tm& t) const {
+    uint32_t now = rtc_clock.getCurrentTime();
+    return localTm(now, tzHoursAt(_prefs, now), t);
+  }
+
   // Settings > System > Factory reset: everything erased, then a restart
   // straight away -- no shutdown flush, which would write the prefs back.
   // Returns only when the erase failed.

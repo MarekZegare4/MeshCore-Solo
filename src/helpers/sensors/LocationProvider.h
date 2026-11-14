@@ -10,6 +10,9 @@ protected:
     bool _time_sync_needed = true;
 
 public:
+    // Whether a fix may set the clock (Solo: Settings > Time from GPS). One
+    // switch for the board, so a provider standing in front of another sees it.
+    static bool& timeFromGps() { static bool on = true; return on; }
     virtual void syncTime() { _time_sync_needed = true; }
     virtual bool waitingTimeSync() { return _time_sync_needed; }
     virtual long getLatitude() = 0;

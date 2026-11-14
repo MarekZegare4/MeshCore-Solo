@@ -139,6 +139,8 @@ void UITask::setTapWake(bool on) {
   lvport::saveTapWake(on);
 }
 
+static void onClockSet(lv_event_t* e)     { (void)e; s_ui->clockSetPopup(); }
+
 void UITask::buildSchemaSettings() {
   static const char* const OWN[] = { "Keyboard", "About", "Display", "Power", "Time & units" };
   const char* title = _settings_page >= PG_KEYBOARD ? OWN[_settings_page - PG_KEYBOARD]
@@ -177,6 +179,11 @@ void UITask::buildSchemaSettings() {
     case PG_TIME: {
       for (uint8_t sec : { settings::SEC_TIME, settings::SEC_UNITS }) {
         lv_obj_t* g = group(body, settings::sectionTitle(sec));
+        if (sec == settings::SEC_TIME) {
+          char now[24];
+          clockText(now, sizeof(now));
+          listRow(g, "Clock", now, onClockSet, NULL);
+        }
         for (int i = 0; i < settings::COUNT; i++) if (settings::ALL[i].section == sec) schemaRow(g, i);
       }
       return;
@@ -288,6 +295,59 @@ void UITask::blePinDone(bool ok) {
     showToast("Used from the next start", 2000);
   }
   navClosePopup();
+}
+
+// Time & units > Clock: the date and time typed in, local; asked first when
+// that puts it more than a few minutes back (UiCore::CLOCK_ASK_BACK).
+static void onClockSetKb(lv_event_t* e)   { s_ui->clockSetDone(lv_event_get_code(e) == LV_EVENT_READY); }
+static void onClockSetBack(lv_event_t* e) { (void)e; s_ui->clockSetApply(); }
+
+void UITask::clockText(char* b, size_t n) {
+  struct tm t;
+  if (_core->localNow(t))
+    snprintf(b, n, "%04d-%02d-%02d %02d:%02d", t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min);
+  else snprintf(b, n, "Not set");
+}
+
+void UITask::clockSetPopup() {
+  char cur[24] = "";
+  struct tm t;
+  if (_core->localNow(t)) clockText(cur, sizeof(cur));
+  TextEntry te = { "Clock", onClockSetKb };
+  te.text = cur;
+  te.hint = "2026-11-14 12:30, local time";
+  te.max_bytes = 16;
+  te.accepted = "0123456789-: ";
+  te.symbols = true;
+  navTextEntry(te);
+}
+
+void UITask::clockSetDone(bool ok) {
+  if (!ok || !_nav_ta || !_prefs) { navClosePopup(); return; }
+  int y, mo, d, h, mi;
+  uint32_t utc = 0;
+  if (sscanf(lv_textarea_get_text(_nav_ta), "%d-%d-%d %d:%d", &y, &mo, &d, &h, &mi) == 5)
+    utc = utcFromLocal(*_prefs, y, mo, d, h, mi, 0);
+  if (!utc) {
+    showToast("Type it as 2026-11-14 12:30");
+    return;   // the field stays, to fix it
+  }
+  _clock_pending = utc;
+  uint32_t back = UiCore::clockBackBy(utc);
+  if (back <= UiCore::CLOCK_ASK_BACK) { clockSetApply(); return; }
+  char title[32], span[16], text[200];
+  UiCore::clockBackSpan(span, sizeof(span), back);
+  snprintf(title, sizeof(title), "Clock %s back?", span);
+  snprintf(text, sizeof(text), "Other nodes keep the newest time they had from this one: for %s they won't take "
+           "its adverts (a new name or position) or its logins to repeaters and rooms. Messages go as usual.", span);
+  confirmBody(navPopupPanel(title, false), text, "Set the clock", onClockSetBack, 0);
+}
+
+void UITask::clockSetApply() {
+  navClosePopup();
+  _core->setClock(_clock_pending);
+  showToast("Clock set", 1500);
+  if (_screen == SCR_SETTINGS_NAV && _settings_page == PG_TIME) buildSchemaSettings();
 }
 
 void UITask::factoryResetStep(int stage) {

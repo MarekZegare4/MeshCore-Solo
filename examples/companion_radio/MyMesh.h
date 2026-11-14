@@ -504,6 +504,10 @@ public:
     savePrefs();
   }
   void saveRTCTime() { _store->saveRTCTime(); }
+  // The clock set (the app, the CLI, Settings), saved at once so a restart
+  // doesn't bring back the old time from /rtc_save.
+  void setClock(uint32_t utc) { getRTCClock()->setCurrentTime(utc); saveRTCTime(); }
+  static const uint32_t APP_CLOCK_BACK_MAX = 3600;   // how far back the app may set it
   // Contact updates (new adverts, path/lastmod changes) are lazily debounced
   // (see dirty_contacts_expiry) to avoid wearing flash on every packet --
   // under regular mesh traffic the timer keeps getting re-armed, so it can

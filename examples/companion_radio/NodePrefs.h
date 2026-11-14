@@ -275,6 +275,8 @@ struct NodePrefsFields {
   // local time goes through tzHoursAt() below.
   enum : uint8_t { DST_OFF, DST_EU, DST_US, DST_AU, DST_NZ, DST_COUNT };
   uint8_t  dst_rule;
+  // 1: a GPS fix leaves the clock alone (a spoofed GPS, a clock set by hand). Default 0.
+  uint8_t  gps_time_off;
   // Alarm clock — a wake alarm, configured from the Clock page (Enter › Alarm).
   // Stored as a local time-of-day; the actual fire instant is (re)computed as an
   // absolute time in tickBackground(), which is what makes it robust to RTC
@@ -933,6 +935,7 @@ class NodePrefs : public NodePrefsFields, public ConfigSerializer {
   }
   void clockSolo(Section& s) {
     s.def("hide_sec", clock_hide_seconds); s.def("h12", clock_12h); s.def("dst", dst_rule);
+    s.def("gps_off", gps_time_off);
     s.def("alarm", alarm_on); s.def("alarm_h", alarm_hour); s.def("alarm_m", alarm_min);
     s.def("alarm_rep", alarm_repeat_mask);
   }
@@ -1166,6 +1169,18 @@ static inline bool localTm(uint32_t utc, int8_t tz_hours, struct tm& out) {
   time_t t = (time_t)((int64_t)utc + (int64_t)tz_hours * 3600);
   out = *gmtime(&t);
   return true;
+}
+// A local date and time (the time zone and summer time in force then) as UTC;
+// 0 for a date that isn't one. Across the hour summer time takes back, the
+// first of the two.
+static inline uint32_t utcFromLocal(const NodePrefs& p, int y, int mo, int d, int h, int mi, int s) {
+  static const uint8_t DAYS[12] = { 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+  if (y < 2024 || y > 2105 || mo < 1 || mo > 12 || d < 1 || d > DAYS[mo - 1] || h < 0 || h > 23 || mi < 0 || mi > 59 || s < 0 || s > 59) return 0;
+  if (mo == 2 && d == 29 && !(y % 4 == 0 && (y % 100 != 0 || y % 400 == 0))) return 0;
+  const int64_t local = (int64_t)daysFromCivil(y, mo, d) * 86400 + h * 3600 + mi * 60 + s;
+  int64_t utc = local - (int64_t)tzHoursAt(p, (uint32_t)(local - p.tz_offset_hours * 3600)) * 3600;
+  utc = local - (int64_t)tzHoursAt(p, (uint32_t)utc) * 3600;
+  return (uint32_t)utc;
 }
 // Settings > Sound > Quiet hours in force at `utc` (never with the clock unset).
 static inline bool inQuietHours(const NodePrefs& p, uint32_t utc) {
