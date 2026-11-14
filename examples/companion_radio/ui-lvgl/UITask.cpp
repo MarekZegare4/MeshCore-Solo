@@ -149,6 +149,7 @@ void UITask::begin(DisplayDriver* display_drv, SensorManager* sensors, NodePrefs
   _core = new UiCore();
   _core->begin(node_prefs, sensors, this);
   _core->flow.keepHistory();   // the map's recent packets, to play again
+  coverageBegin();             // MatterMap recording: only if turned on in Settings
   {  // history kept on the SD card: back into the ring, then every new entry to it
     int hk = lvport::loadHistKeep();
     s_archive.setKeep(histstore::KEEP[hk >= 0 && hk < histstore::KEEP_COUNT ? hk : histstore::KEEP_DEFAULT]);
@@ -348,6 +349,7 @@ void UITask::loop() {
   mapDownloadTick();   // a map download keeps running on any screen, and asleep
   wifiClockTick();
   otaTick();           // so does a firmware update
+  coverageTick();      // and a coverage upload
   trailJournalTick();   // the live trail's copy on the card, once a minute
   if ((int32_t)(millis() - _next_trackback_ms) >= 0) {   // following a route or the trail back, on any screen
     _next_trackback_ms = millis() + 1000;
@@ -1460,6 +1462,7 @@ static void onOpenSchemaPage(lv_event_t* e);   // Radio > Advanced
 #include "QuickPanel.h"
 #include "OtaScreen.h"
 #include "StorageScreen.h"
+#include "CoverageUpload.h"
 #include "Splash.h"
 
 // The screen on, the full CPU clock while it's worth having: touched in the

@@ -136,7 +136,8 @@ if your mesh agrees on it.
 > - **Mesh & data**: Messages & contacts (adding contacts too; the node types
 >   show only with **By type**), Map (trail, live sharing and arrival alert
 >   options), Adverts & privacy (**Auto-advert** with the rest of what an
->   advert carries), Storage.
+>   advert carries), Storage, [Coverage map](./coverage-map.md) (MatterMap
+>   recording, voluntary, off by default).
 > - **System**: Firmware update, About; then Reboot, Power off and Factory
 >   reset.
 

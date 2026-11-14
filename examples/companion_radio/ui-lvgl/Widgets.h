@@ -983,7 +983,7 @@ static lv_obj_t* rowSub(lv_obj_t* row) {
 // Settings pages: the schema's, then this UI's own. Display, Power and Time
 // split the schema's "Display & power" page (shared with L1, left as it is)
 // into what their titles say.
-enum : uint8_t { PG_KEYBOARD = settings::PG_COUNT, PG_ABOUT, PG_DISPLAY, PG_POWER, PG_TIME, PG_ALL };
+enum : uint8_t { PG_KEYBOARD = settings::PG_COUNT, PG_ABOUT, PG_DISPLAY, PG_POWER, PG_TIME, PG_COVERAGE, PG_ALL };
 
 // A schema setting by its NodePrefs field; -1 if there's none.
 #define SETTING(field) settings::indexOf(offsetof(NodePrefs, field))

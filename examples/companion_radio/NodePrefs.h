@@ -357,6 +357,15 @@ struct NodePrefsFields {
   uint8_t  sos_dm[SOS_DM_MAX][6];
   char     sos_ack[16];          // the word a reply must hold; "" = none is recognised
   char     sos_msg[72];          // after the [SOS] tag, with SosEngine::compose()'s placeholders
+  // MatterMap coverage recording (ui-core/CoverageRecorder.h), voluntary: off
+  // unless turned on. A home zone (a radius around a point) where nothing is
+  // recorded; finished files uploaded on their own over the saved WiFi.
+  uint8_t  cov_on;
+  uint8_t  cov_home_r;           // index into covHomeRadiusM(): Off / 250 / 500 / 1000 m (default 500)
+  int32_t  cov_home_lat, cov_home_lon;   // 1e6 degrees; 0, 0 = not set
+  uint8_t  cov_auto;             // upload finished files by itself (default 1)
+  static const uint8_t COV_HOME_COUNT = 4;
+  static uint32_t covHomeRadiusM(uint8_t i) { static const uint16_t R[COV_HOME_COUNT] = { 0, 250, 500, 1000 }; return i < COV_HOME_COUNT ? R[i] : 500; }
   // ui-new's new-message alert: the banner from the top, an envelope with a
   // count in the corner, or nothing (the sound and the wake still happen).
   static const uint8_t MSG_ALERT_NORMAL = 0, MSG_ALERT_COMPACT = 1, MSG_ALERT_OFF = 2;
@@ -1017,6 +1026,10 @@ class NodePrefs : public NodePrefsFields, public ConfigSerializer {
       s.def(k, custom_msgs[i], sizeof(custom_msgs[i]));
     }
   }
+  void covSolo(Section& s) {
+    s.def("on", cov_on); s.def("home_r", cov_home_r); s.def("home_lat", cov_home_lat); s.def("home_lon", cov_home_lon);
+    s.def("auto", cov_auto);
+  }
   void lockSolo(Section& s) { s.hex("hash", lock_screen_password); s.hex("salt", lock_screen_password_salt); }
 #ifdef ENABLE_WIFI_INTERFACE
   void wifiKeys(Section& s) {
@@ -1031,6 +1044,7 @@ class NodePrefs : public NodePrefsFields, public ConfigSerializer {
     s.sub("scope", scope_solo); s.sub("bot", bot_solo); s.sub("gps", gps_solo);
     s.sub("share", share_solo); s.sub("locator", locator_solo); s.sub("lists", lists_solo);
     s.sub("gpio", gpio_solo); s.sub("msgs", msgs_solo); s.sub("lock", lock_solo); s.sub("sos", sos_solo);
+    s.sub("cov", cov_solo);
   }
 
   Section radio, gps, repeat, comp;
@@ -1039,7 +1053,7 @@ class NodePrefs : public NodePrefsFields, public ConfigSerializer {
 #endif
   Section solo, radio_solo, preset[USER_RADIO_PRESET_MAX], repeater_solo, power_solo, display_solo,
           clock_solo, sound_solo, scope_solo, bot_solo, gps_solo, share_solo, locator_solo,
-          lists_solo, gpio_solo, msgs_solo, lock_solo, sos_solo;
+          lists_solo, gpio_solo, msgs_solo, lock_solo, sos_solo, cov_solo;
   FemPrefs fem;
   DynamicConfigSerializer custom;
 
@@ -1080,7 +1094,7 @@ public:
       share_solo(this, &NodePrefs::shareSolo), locator_solo(this, &NodePrefs::locatorSolo),
       lists_solo(this, &NodePrefs::listsSolo), gpio_solo(this, &NodePrefs::gpioSolo),
       msgs_solo(this, &NodePrefs::msgsSolo), lock_solo(this, &NodePrefs::lockSolo),
-      sos_solo(this, &NodePrefs::sosSolo),
+      sos_solo(this, &NodePrefs::sosSolo), cov_solo(this, &NodePrefs::covSolo),
       fem(this), custom(&fem) {
     clearFields();
   }

@@ -116,6 +116,7 @@ build flag it needs.
 | Screenshot (`ENABLE_SCREENSHOT`) | over USB | same | same | same | side + top button to SD, or over USB |
 | SD card, USB drive | — | — | — | — | yes |
 
+| Coverage map (MatterMap recording and upload) | — | — | — | — | Settings › Coverage map, off by default |
 ### Hardware add-ons (ui-new only)
 
 | Feature | Flag | Boards |

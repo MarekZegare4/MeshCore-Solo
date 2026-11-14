@@ -63,6 +63,7 @@ history on the SD card and updates over WiFi.
 - [Hardware](./hardware.md): external keyboards and joysticks, e-ink, SD card, WiFi
 - [One button](./one-button.md): the whole interface from a single button
 - [Configurator](./configurator.md): settings, Home's pages, quick messages, melodies, routes and a backup, from a computer over USB
+- [Coverage map](./coverage-map.md): help draw MatterMap, a map of where the mesh is heard (Wio Tracker L2, voluntary)
 
 For developers: [UI Core](./developer/ui-core.md), [UI framework](./developer/ui-framework.md), [build flags](./developer/build-flags.md), [feature matrix](./developer/feature-matrix.md), [location messages](./location-messages.md) (the `[WAY]` / `[LOC]` / `[SOS]` text formats, for other firmware).
 
@@ -70,7 +71,11 @@ For developers: [UI Core](./developer/ui-core.md), [UI framework](./developer/ui
 
 Big thanks to the people who contributed to Solo:
 [vanous](https://github.com/vanous), [marczykm](https://github.com/marczykm),
-[tchellow](https://github.com/tchellow) and [3urobeat](https://github.com/3urobeat).
+[tchellow](https://github.com/tchellow), [3urobeat](https://github.com/3urobeat),
+[pmow](https://github.com/pmow) and [sim1988son](https://github.com/sim1988son).
+
+The coverage map is [MatterMap](https://mattermeshos.com/coverage/) by Andrea
+Quartararo ([MatterMesh OS](https://mattermeshos.com)).
 
 Built on [MeshCore](https://github.com/meshcore-dev/MeshCore) and the work of
 its [community](https://github.com/meshcore-dev/MeshCore/graphs/contributors).

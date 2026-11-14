@@ -178,6 +178,31 @@ inline bool handle(Core& core, const char* cmd, char* reply, int n) {
 #endif
     return true;
   }
+  // MatterMap recording: "cov" -> "> on,auto,rows,pending,fix ok,in home,newest pending";
+  // "cov on|off", "cov auto on|off" (RAM only, as a test wants), "cov rm <name>".
+  if (!strcmp(cmd, "cov") || !strncmp(cmd, "cov ", 4)) {
+    CoverageRecorder& c = core.coverage;
+    NodePrefs* p = core.prefs();
+    if (!c.available() || !p) { snprintf(reply, n, "Error, no coverage recording on this board"); return true; }
+    const char* a = cmd + 3;
+    while (*a == ' ') a++;
+    if (!strcmp(a, "on") || !strcmp(a, "off")) { p->cov_on = a[1] == 'n'; c.apply(); snprintf(reply, n, "OK"); return true; }
+    if (!strcmp(a, "auto on") || !strcmp(a, "auto off")) { p->cov_auto = a[6] == 'n'; snprintf(reply, n, "OK"); return true; }
+    if (!strcmp(a, "last")) { snprintf(reply, n, "> %s", c.lastRow()); return true; }
+    if (!strncmp(a, "rm ", 3)) {
+      char path[112];
+      snprintf(path, sizeof(path), "%s/%s", c.dir(), a + 3);
+      snprintf(reply, n, strstr(a, "/") || strstr(a, "..") || remove(path) != 0 ? "Error, not removed" : "OK");
+      return true;
+    }
+    char names[8][CoverageRecorder::NAME_LEN + 4] = {};
+    int pend = c.pending(names, 8);
+    const char* newest = pend ? names[(pend < 8 ? pend : 8) - 1] : "";
+    CoverageRecorder::Status s = c.status();
+    snprintf(reply, n, "> %d,%d,%lu,%d,%d,%d,%s", (int)p->cov_on, (int)p->cov_auto, (unsigned long)s.rows, pend,
+             (int)s.fix_ok, (int)s.home, newest);
+    return true;
+  }
   return false;
 }
 

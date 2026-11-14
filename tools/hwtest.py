@@ -964,6 +964,62 @@ def t_guide_switch(d, out):
     return "route -> Track back -> route"
 
 
+def cov_state(d):
+    on, auto, rows, pend, fix, home, newest = d.cli.get("cov").split(",", 6)
+    return {"on": on == "1", "auto": auto == "1", "rows": int(rows), "pending": int(pend),
+            "fix": fix == "1", "home": home == "1", "newest": newest}
+
+
+@test("coverage")
+def t_coverage(d, out):
+    """MatterMap recording (opt-in): with a fake fix, turned on, a "nothing
+    heard" row; turned off, the file finished and waiting. The test's file is
+    deleted after, auto upload held off meanwhile: nothing is sent."""
+    need_hooks(d)
+    r = d.cli.run("cov")
+    if not r.startswith("> "):
+        raise Skip(f"no coverage recording here ({r})")
+    st = cov_state(d)
+    if st["on"]:
+        raise Skip("recording is on: not touching the user's file")
+    made, auto = None, st["auto"]
+    try:
+        d.cli.put("cov auto off")
+        d.cli.put(f"gps {LAT0},{LON0}")
+        time.sleep(2.5)
+        st = cov_state(d)
+        if st["home"]:
+            raise Skip("the test position is in the home zone")
+        before = st["pending"]
+        d.cli.put("cov on")
+        for _ in range(20):
+            time.sleep(1)
+            st = cov_state(d)
+            if st["rows"] >= 1:
+                break
+        check(st["fix"], f"the fake fix not taken for recording: {st}")
+        check(st["rows"] >= 1, f"no row written in 20 s: {st} (an SD card in?)")
+        row = d.cli.get("cov last")
+        # t,lat,lon,acc,age,src,kind,snr,rssi,hop,hb,len,rt: a "nothing heard" row, or a packet's
+        check(re.match(r"^\d{10},-?\d+\.\d{5},-?\d+\.\d{5},\d*,\d+,R,(N,,,,,,|P,-?\d+\.\d,-?\d+,[0-9a-f]*,[1-3]?,\d+,[FD])$", row),
+              f"a row not in MatterMap's format: {row!r}")
+        la, lo = (float(x) for x in row.split(",")[1:3])
+        check(abs(la - LAT0) < 1e-4 and abs(lo - LON0) < 1e-4, f"the row's position {la},{lo} isn't the fix")
+        d.cli.put("cov off")
+        time.sleep(1)
+        st = cov_state(d)
+        check(st["pending"] == before + 1, f"no finished file waiting: {st}")
+        made = st["newest"]
+        check(re.match(r"^\d{8}-\d{6}\.csv$", made), f"file name {made!r}")
+    finally:
+        d.cli.run("cov off")
+        if made:
+            d.cli.run(f"cov rm {made}")
+        d.cli.run("gps off")
+        d.cli.run("cov auto " + ("on" if auto else "off"))
+    return f"a row recorded, {made} finished, deleted"
+
+
 # One button: the gestures timed by the host, through the firmware's own OneButton.
 
 def btn(d, held, gap=0.45):

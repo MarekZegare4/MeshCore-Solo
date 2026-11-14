@@ -38,6 +38,7 @@
 #include "RadioControl.h"
 #include "RepeaterControl.h"
 #include "SosEngine.h"
+#include "CoverageRecorder.h"
 #if FEAT_ROUTES
 #include "RouteGuide.h"
 #endif
@@ -86,6 +87,11 @@ public:
     admin.loop();
     rooms.loop();
     if (!sos.idle()) sosLoop();
+    if (coverage.available()) {
+      CoverageRecorder::Fix f;
+      bool have = coverageFix(f);
+      coverage.tick(have, f, rtc_clock.getCurrentTime());
+    }
   }
 
   UiEventQueue events;      // Core → frontend; drained by the frontend's loop()
@@ -132,6 +138,7 @@ public:
   AdminSession admin;       // remote repeater / room admin: login + CLI round trips
   RoomSessions rooms;       // room server logins for posting (messages screens)
   SosEngine    sos;         // countdown, repeats, the ACK word
+  CoverageRecorder coverage; // MatterMap recording, opt-in; begun only by a frontend that can upload (ui-lvgl)
 #if FEAT_ROUTES
   RouteGuide   guide;       // following a planned route (Tools > Trail > Routes)
 #endif
@@ -330,7 +337,23 @@ public:
   void onAdvertPosition(const uint8_t* pub_key, const char* name, int32_t lat_1e6, int32_t lon_1e6) override {
     live_share.onAdvertPosition(pub_key, name, lat_1e6, lon_1e6);
   }
-  void onPacketHeard(const mesh::Packet* pkt) override { flow.onHeard(pkt); }
+  void onPacketHeard(const mesh::Packet* pkt) override {
+    flow.onHeard(pkt);
+    if (coverage.available() && _prefs && _prefs->cov_on) {
+      CoverageRecorder::Fix f;
+      bool have = coverageFix(f);
+      coverage.onPacket(pkt, pkt->getSNR(), radio_driver.getLastRSSI(), have, f, rtc_clock.getCurrentTime());
+    }
+  }
+  // The fix for a coverage row: the last one and its age; accuracy HDOP x 5 m
+  // (MatterMesh OS's estimate), -1 when the GPS doesn't say.
+  bool coverageFix(CoverageRecorder::Fix& f) const {
+    if (!course.lastFix(f.lat, f.lon, f.age)) return false;
+    LocationProvider* loc = _sensors ? _sensors->getLocationProvider() : nullptr;
+    long hdop10 = loc ? loc->getHDOP() : -1;
+    f.acc = hdop10 >= 0 ? (int)((hdop10 + 1) / 2) : -1;
+    return true;
+  }
   void onPacketSent(const mesh::Packet* pkt) override { flow.onSent(pkt); }
   bool requestShutdown(bool restart) override { _host->shutdown(restart); return true; }
 

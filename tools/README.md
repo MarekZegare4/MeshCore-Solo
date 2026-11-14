@@ -223,6 +223,7 @@ failed, so it can stand in a script.
 | `trackback` | a trail recorded on an L, Track back: "to start", walked back to "Back at the start" |
 | `guide-switch` | Track back started during a route takes its place, and the route followed again takes Track back's |
 | `one-button` | a one-button board: click, double click and hold through the firmware's own gesture timing |
+| `coverage` | MatterMap recording (L2, an SD card): turned on with a fake fix, a row written; turned off, the file finished; deleted after, nothing uploaded |
 | `memory` | free heap at the end against the start; with `--repeat`, the first round's end against the last's (more than 4 KB less fails) |
 | `pair` | `--pair`: a direct message each way between the two devices, received (in the device's history) and ACKed |
 

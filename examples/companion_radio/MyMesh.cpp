@@ -1509,6 +1509,8 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   _prefs.sos_advert = NodePrefs::SOS_ADVERT_ZERO_HOP;
   _prefs.sos_repeat_idx = 3;      // every 5 minutes
   strcpy(_prefs.sos_ack, "ACK");
+  _prefs.cov_home_r = 2;   // 500 m
+  _prefs.cov_auto = 1;
   strcpy(_prefs.sos_msg, "{loc} {alt} {time}");
   _prefs.dm_show_all = 1;        // show all contacts by default
   _prefs.fav_sort = 1;           // favourites first in lists

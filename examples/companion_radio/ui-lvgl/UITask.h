@@ -101,6 +101,11 @@ public:
   void showAdminPick();
   // Settings > System > Firmware update (OtaScreen.h)
   void showOta();
+  // Settings > Coverage map (CoverageUpload.h): MatterMap recording and upload, opt-in.
+  void coverageSet(int what, int v);
+  void coverageHomePopup();
+  void coverageHomePick(int code);
+  bool coverageUpload(bool asked);
   void otaAction();
   void adminPick(int row);
   void pruneContacts();
@@ -496,6 +501,12 @@ private:
   void refreshOta();
   void otaTick();
   void otaLeave();
+  void coverageBegin();
+  void coverageTick();
+  void coverageStartTask();
+  void coverageStatusText(char* st, size_t n);
+  void buildCoveragePage(lv_obj_t* body);
+  bool coverageBusy() const;
   bool otaBusy() const;
   bool wifiInUse() const;   // a map download or an update holds the WiFi
   void buildNearby();
@@ -659,6 +670,7 @@ private:
   uint8_t  _settings_page = 0;   // settings::Page shown in SCR_SETTINGS_NAV
   lv_obj_t* _ota_status = nullptr;
   lv_obj_t* _ota_bar = nullptr;
+  lv_obj_t* _cov_status = nullptr;   // Settings > Coverage map: the live line
   lv_obj_t* _ota_btn = nullptr;
   lv_obj_t* _ota_btn_lbl = nullptr;
   uint32_t _map_left_ms = 0;          // when the map was left, for dropping live tiles' WiFi

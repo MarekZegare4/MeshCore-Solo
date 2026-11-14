@@ -142,7 +142,7 @@ void UITask::setTapWake(bool on) {
 static void onClockSet(lv_event_t* e)     { (void)e; s_ui->clockSetPopup(); }
 
 void UITask::buildSchemaSettings() {
-  static const char* const OWN[] = { "Keyboard", "About", "Display", "Power", "Time & units" };
+  static const char* const OWN[] = { "Keyboard", "About", "Display", "Power", "Time & units", "Coverage map" };
   const char* title = _settings_page >= PG_KEYBOARD ? OWN[_settings_page - PG_KEYBOARD]
                     : _settings_page == settings::PG_PRIVACY ? "Adverts & privacy"   // with Auto-advert here
                     : settings::pageTitle(_settings_page);
@@ -154,6 +154,7 @@ void UITask::buildSchemaSettings() {
   switch (_settings_page) {
     case PG_KEYBOARD: buildKeyboardPage(body); return;
     case PG_ABOUT:    buildAboutPage(body); return;
+    case PG_COVERAGE: buildCoveragePage(body); return;
     case PG_DISPLAY: {
       lv_obj_t* g = group(body, "SCREEN");
       schemaRow(g, SETTING(display_brightness));
@@ -491,6 +492,7 @@ void UITask::buildAboutPage(lv_obj_t* body) {
   infoNote(cr, "Map data", creditText((lvport::mountStorage() && mapview::s_provider->available())
                                           ? mapview::s_provider->attribution() : "\xC2\xA9 OpenStreetMap contributors"));
   infoNote(cr, "Emoji", creditText("Twemoji \xC2\xA9 Twitter, Inc. and contributors (CC-BY\xC2\xA0" "4.0)"));
+  infoNote(cr, "Coverage map", creditText("MatterMap by MatterMesh OS (Andrea Quartararo), mattermeshos.com"));
 }
 
 // A page's schema rows, one group per section (Settings pages and the tools'
@@ -693,6 +695,8 @@ void UITask::settingsGroup(int i) {
               onOpenSchemaPage, (void*)(uintptr_t)settings::PG_PRIVACY);
     }
     listRow(g, LV_SYMBOL_SD_CARD "  Storage", "SD card, message history", onOpenStorage, NULL);
+    if (_prefs) listRow(g, UI_SYMBOL_MAP "  Coverage map", _prefs->cov_on ? "Recording for MatterMap" : "Off  -  help map the mesh (MatterMap)",
+                        onOpenSchemaPage, (void*)(uintptr_t)PG_COVERAGE);
     break;
 
   case 4:
