@@ -184,25 +184,31 @@ static bool rankPoints(const Pt* pts, int n, float* rank) {
   return true;
 }
 
-// The whole import: `path` into the first free slot. `max_points` 0: the
-// device's limit. `slot_out` the slot written, `kept` the points kept,
-// `dev_m` how far the simplified line strays from the file's at most.
-static Result importFile(const char* path, const char* fallback_name, int max_points,
-                         int& slot_out, int& kept, float& dev_m) {
-  slot_out = -1; kept = 0; dev_m = 0;
-  const int slot = PlannedRoutes::freeSlot();
-  if (slot < 0) return NO_SLOT;
+// A file read and simplified, not yet written: the slow part (the card, the
+// ranking), which may run off the main loop; then write() puts it in a slot.
+struct Prepared {
+  Pt* pts = nullptr;   // the points kept, in order (PSRAM)
+  int count = 0;
+  bool ele = false;
+  float dev_m = 0;     // how far the simplified line strays from the file's at most
+  char name[ROUTE_NAME_LEN] = "";
+  void release() { free(pts); pts = nullptr; count = 0; }
+};
+
+// `path` read and cut down to `max_points` (0: the device's limit).
+static Result prepare(const char* path, const char* fallback_name, int max_points, Prepared& out) {
+  out.release();
+  out.ele = false; out.dev_m = 0; out.name[0] = '\0';
   FILE* f = fopen(path, "rb");
   if (!f) return NO_FILE;
   Pt* pts = nullptr;
   int n = 0;
-  char name[ROUTE_NAME_LEN];
-  Result r = readGpx(f, pts, n, name, sizeof(name));
+  Result r = readGpx(f, pts, n, out.name, sizeof(out.name));
   fclose(f);
   if (r != OK) return r;
-  if (!name[0] && fallback_name) {
-    snprintf(name, sizeof(name), "%s", fallback_name);
-    char* dot = strrchr(name, '.');
+  if (!out.name[0] && fallback_name) {
+    snprintf(out.name, sizeof(out.name), "%s", fallback_name);
+    char* dot = strrchr(out.name, '.');
     if (dot) *dot = '\0';
   }
   int want = max_points > 0 && max_points < PlannedRoutes::MAX_POINTS ? max_points : PlannedRoutes::MAX_POINTS;
@@ -220,22 +226,44 @@ static Result importFile(const char* path, const char* fallback_name, int max_po
     std::sort(order, order + n, [&](int a, int b) { return rank[a] > rank[b]; });
     memset(keep, 0, n);
     for (int i = 0; i < want; i++) keep[order[i]] = 1;
-    dev_m = rank[order[want]];
+    out.dev_m = rank[order[want]];
     free(rank); free(order);
   }
-  int count = 0;
-  bool ele = false;
-  for (int i = 0; i < n; i++) if (keep[i]) { count++; if (pts[i].ele != ROUTE_ELE_NONE) ele = true; }
-  PlannedRoutes w;
-  bool ok = w.begin(slot, (uint16_t)count, ele ? PlannedRoutes::FLAG_ELE : 0, name[0] ? name : "Route");
-  for (int i = 0; ok && i < n; i++) if (keep[i]) ok = w.add(pts[i].lat, pts[i].lon, pts[i].ele);
-  ok = ok && w.finish();
+  int count = 0;   // the kept ones moved to the front, in order
+  for (int i = 0; i < n; i++) if (keep[i]) { if (pts[i].ele != ROUTE_ELE_NONE) out.ele = true; pts[count++] = pts[i]; }
   free(keep);
-  free(pts);
+  out.pts = pts;
+  out.count = count;
+  return OK;
+}
+
+// A prepared route into the first free slot; `p` is released either way.
+static Result write(Prepared& p, int& slot_out) {
+  slot_out = -1;
+  const int slot = PlannedRoutes::freeSlot();
+  if (slot < 0) { p.release(); return NO_SLOT; }
+  PlannedRoutes w;
+  bool ok = w.begin(slot, (uint16_t)p.count, p.ele ? PlannedRoutes::FLAG_ELE : 0, p.name[0] ? p.name : "Route");
+  for (int i = 0; ok && i < p.count; i++) ok = w.add(p.pts[i].lat, p.pts[i].lon, p.pts[i].ele);
+  ok = ok && w.finish();
+  p.release();
   if (!ok) { w.abort(); return WRITE_FAILED; }
   slot_out = slot;
-  kept = count;
   return OK;
+}
+
+// The whole import at once: `path` into the first free slot. `slot_out` the
+// slot written, `kept` the points kept, `dev_m` as in Prepared.
+static Result importFile(const char* path, const char* fallback_name, int max_points,
+                         int& slot_out, int& kept, float& dev_m) {
+  slot_out = -1; kept = 0; dev_m = 0;
+  if (PlannedRoutes::freeSlot() < 0) return NO_SLOT;
+  Prepared p;
+  Result r = prepare(path, fallback_name, max_points, p);
+  if (r != OK) return r;
+  kept = p.count;
+  dev_m = p.dev_m;
+  return write(p, slot_out);
 }
 
 }  // namespace gpximport

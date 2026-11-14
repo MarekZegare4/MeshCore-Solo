@@ -351,6 +351,7 @@ void UITask::loop() {
   otaTick();           // so does a firmware update
   coverageTick();      // and a coverage upload
   trailJournalTick();   // the live trail's copy on the card, once a minute
+  routeImportTick();   // a GPX read in the background goes to its slot
   if ((int32_t)(millis() - _next_trackback_ms) >= 0) {   // following a route or the trail back, on any screen
     _next_trackback_ms = millis() + 1000;
     navPollRoute();   // the map and bar keep up
@@ -1461,8 +1462,8 @@ static void onOpenSchemaPage(lv_event_t* e);   // Radio > Advanced
 #include "QuickScreen.h"
 #include "QuickPanel.h"
 #include "OtaScreen.h"
-#include "StorageScreen.h"
 #include "CoverageUpload.h"
+#include "StorageScreen.h"
 #include "Splash.h"
 
 // The screen on, the full CPU clock while it's worth having: touched in the

@@ -374,6 +374,7 @@ public:
   void routePopup(int slot);
   void routeGpxPopup();
   void routeImport(int idx);
+  void routeImportTick();
   void routeAction(uint8_t act);
   void navFrameRoute();
   void navPollRoute();
@@ -500,13 +501,13 @@ private:
   void buildOta();
   void refreshOta();
   void otaTick();
-  void otaLeave();
   void coverageBegin();
   void coverageTick();
   void coverageStartTask();
   void coverageStatusText(char* st, size_t n);
   void buildCoveragePage(lv_obj_t* body);
   bool coverageBusy() const;
+  void otaLeave();
   bool otaBusy() const;
   bool wifiInUse() const;   // a map download or an update holds the WiFi
   void buildNearby();
@@ -669,8 +670,8 @@ private:
   uint32_t _clock_pending = 0;   // Clock: the time typed in, while asked about going back
   uint8_t  _settings_page = 0;   // settings::Page shown in SCR_SETTINGS_NAV
   lv_obj_t* _ota_status = nullptr;
-  lv_obj_t* _ota_bar = nullptr;
   lv_obj_t* _cov_status = nullptr;   // Settings > Coverage map: the live line
+  lv_obj_t* _ota_bar = nullptr;
   lv_obj_t* _ota_btn = nullptr;
   lv_obj_t* _ota_btn_lbl = nullptr;
   uint32_t _map_left_ms = 0;          // when the map was left, for dropping live tiles' WiFi

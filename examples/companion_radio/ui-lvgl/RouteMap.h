@@ -34,6 +34,22 @@ static lv_obj_t* s_del_lbl = nullptr;
 static int32_t s_last_tlat = 0, s_last_tlon = 0;
 static uint8_t s_last_state = 0xFF;
 
+// An import: the file read and simplified off the main loop (a big GPX takes
+// seconds: the card, the ranking), then written to its slot by routeImportTick().
+enum : uint8_t { IMP_IDLE, IMP_READING, IMP_READ };
+static volatile uint8_t s_imp = IMP_IDLE;
+static gpximport::Prepared s_imp_p;
+static gpximport::Result s_imp_r = gpximport::OK;
+static char s_imp_path[64];
+
+static void importRead() {
+  s_imp_r = gpximport::prepare(s_imp_path, strrchr(s_imp_path, '/') + 1, 0, s_imp_p);
+  s_imp = IMP_READ;
+}
+#ifdef ESP32
+static void importTask(void*) { importRead(); vTaskDelete(nullptr); }
+#endif
+
 // .gpx files on the card that can be imported.
 static const int GPX_MAX = 40;
 static PSRAM_BSS char s_gpx[GPX_MAX][64];
@@ -232,18 +248,40 @@ void UITask::routeGpxPopup() {
 }
 
 void UITask::routeImport(int idx) {
-  if (idx < 0 || idx >= routemap::s_gpx_n) return;
-  showToast("Importing...", 1000);
-  lv_refr_now(nullptr);
-  int slot, kept;
-  float dev;
-  const char* path = routemap::s_gpx[idx];
-  gpximport::Result r = gpximport::importFile(path, strrchr(path, '/') + 1, 0, slot, kept, dev);
+  using namespace routemap;
+  if (idx < 0 || idx >= s_gpx_n) return;
+  if (s_imp != IMP_IDLE) { showToast("Already importing one"); return; }
+  if (PlannedRoutes::freeSlot() < 0) { showToast(gpximport::message(gpximport::NO_SLOT), 3000); return; }
+  snprintf(s_imp_path, sizeof(s_imp_path), "%s", s_gpx[idx]);
+  s_imp = IMP_READING;
+  showToast("Importing...", 2000);
+#ifdef ESP32
+  // Idle priority on core 0, as the firmware update (OtaScreen.h).
+  if (xTaskCreatePinnedToCore(importTask, "gpximport", 8192, nullptr, tskIDLE_PRIORITY, nullptr, 0) != pdPASS) {
+    s_imp = IMP_IDLE;
+    showToast(gpximport::message(gpximport::NO_MEMORY), 3000);
+  }
+#else
+  importRead();   // the sim: no tasks, and nothing else waits on it
+#endif
+}
+
+// From loop(): an import read off the main loop goes to its slot (a short
+// flash write, kept here so the routes aren't written from two tasks).
+void UITask::routeImportTick() {
+  using namespace routemap;
+  if (s_imp != IMP_READ) return;
+  s_imp = IMP_IDLE;
+  if (s_imp_r != gpximport::OK) { showToast(gpximport::message(s_imp_r), 3000); return; }
+  const int kept = s_imp_p.count;
+  const float dev = s_imp_p.dev_m;
+  int slot;
+  const gpximport::Result r = gpximport::write(s_imp_p, slot);
   if (r != gpximport::OK) { showToast(gpximport::message(r), 3000); return; }
   char t[64];
   snprintf(t, sizeof(t), "Imported: %d points (within %d m)", kept, (int)lroundf(dev));
   showToast(t, 3500);
-  routePopup(slot);
+  if (_screen == SCR_MAP) routePopup(slot);
 }
 
 void UITask::routeAction(uint8_t act) {
