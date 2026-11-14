@@ -1,6 +1,8 @@
 # UI Core + frontends — design
 
-Status: written 2026-09-24 as the design; steps 0–3, 5 and 6 are done (marked ✅ below); step 4 in part (ui-new's Settings shows the schema's rows inside its own sections). Branch: `wio-tracker-l2`.
+[Go back](../README.md)
+
+Written 2026-09-24 as the design for the Wio Tracker L2 port; steps 0–3, 5 and 6 are done (marked ✅ below), step 4 in part (ui-new's Settings shows the schema's rows inside its own sections).
 
 ## Why
 

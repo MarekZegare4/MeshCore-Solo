@@ -30,8 +30,8 @@ A few notes:
   the rule of your region: Europe (the last Sundays of March and October),
   North America, south-east Australia or New Zealand. The time zone stays
   the winter one, e.g. UTC+1 for Poland. The alarm and quiet hours follow it.
-- **Clock** sets the date and time by hand, as local time: on the Wio Tracker
-  L1 a field at a time (Left / Right between year, month, day, hour and
+- **Clock** sets the date and time by hand, as local time: on joystick
+  devices a field at a time (Left / Right between year, month, day, hour and
   minute, Up / Down to change it), on the L2 typed as `2026-11-14 12:30`.
   Otherwise the clock comes from the GPS, the phone app or the network (L2
   WiFi). Putting it more than 5 minutes back asks first, because other
@@ -70,7 +70,7 @@ A node you hear is added to your contacts according to **Auto-add**:
 
 - **All**: every node heard.
 - **By type**: only the types switched on below it (companions, repeaters,
-  rooms, sensors). With none on, nodes are added only by hand (Nearby ›
+  rooms, sensors). With none on, nodes are added only by hand (Nodes ›
   **Add contact**).
 
 **Up to** limits how far away an added node may be: **Direct** (heard with

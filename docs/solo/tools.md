@@ -107,7 +107,7 @@ or **Off** for none. While an SOS runs the automatic advert rests, as its
 position follows Privacy and would move you on others' maps.
 
 **Receiving one:** a banner names the sender, also when there's no position.
-A position shows on the map and in Nearby as `SOS name`, even with **Track loc**
+A position shows on the map and in Nodes as `SOS name`, even with **Track loc**
 off; on the L2 as a red, pulsing dot, and the row in Nodes says `SOS`. Their beacon moves it as they move, while you're in its range. It stays for
 24 hours, or until a restart. **Hold Enter** on the message navigates to it. Other
 firmware and the phone app show it as an ordinary message.
@@ -237,10 +237,11 @@ room bot uses the room's saved login.
 ## Auto-advert
 
 **Tools › Auto-advert** sends your advert every 30 seconds to 1 hour (with
-your position if Settings › Privacy › **Advert pos** is on), so others see you in their Nearby list. With it on at both ends
-and Settings › Sound › **AD sound** set, each device beeps when it hears the
+your position if Settings › Privacy › **Advert pos** is on), so others see
+you in their Nodes list. With it on at both ends and Settings › Sound › **AD sound** set, each device beeps when it hears the
 other: a hands-free "still in range".
 
+> [!NOTE]
 > **Wio Tracker L2:** in Settings › Adverts & privacy, and in the Advert
 > popup of the map and Nodes.
 

@@ -1,4 +1,4 @@
-## Feature matrix
+# Feature matrix
 
 [Go back](../README.md)
 
@@ -17,7 +17,7 @@ to some screens, adds or corrects its row here in the same commit.
 | **Small** | Wio Tracker L1 (OLED), Heltec V3/V4, GAT562 30S and Watch13, ProMicro, Cardputer ADV (TFT), T-Echo Lite (e-ink) | 128 × 64, 6 × 9 | The T-Echo Lite is e-ink, so it also gets what's marked *e-ink* |
 | **E-ink L** | Wio Tracker L1 e-ink, landscape | 250 × 122, 8 × 13 | Larger icons |
 | **E-ink P** | Wio Tracker L1 e-ink, portrait | 122 × 250, 6 × 9 | |
-| **E-ink 4.2"** | Wio Tracker L1 with the 4.2" panel (parked) | 400 × 300, 9 × 15 | Its own icon set |
+| **E-ink 4.2"** | Wio Tracker L1 with the 4.2" 400 × 300 panel (`WioTrackerL1Eink42_solo_dual`) | 400 × 300, 9 × 15 | Its own icon set |
 | **E-ink 4.26"** | Wio Tracker L1 with the 4.26" 800 × 480 panel (`WioTrackerL1Eink426_solo_dual`) | 400 × 240 at 2x, 9 × 15 | Text and icon size settings; "wide" like the 4.2", 16 lines |
 | **L2** | Wio Tracker L2 | 320 × 240 touch, ui-lvgl | |
 
@@ -62,7 +62,7 @@ build flag it needs.
 | Favourites | 6 slots, 3 columns | 3 columns | 2 columns | 3 columns | favourite chats page |
 | Quick panel | per-page quick rows | same | same | same | pull-down panel |
 | Nearby nodes | list | list, direction arrows | list, direction arrows | list + detail pane | Nodes app |
-| Map of nodes | yes (Nearby › Map) | yes | yes | yes | yes, on the tile map |
+| Map of nodes | yes (Nodes › Map) | yes | yes | yes | yes, on the tile map |
 | Contact details | yes | + compass rose, path hops | + compass rose, path hops | + compass rose, path hops | card with actions |
 | Contact expiry / prune | yes | yes | yes | yes | yes |
 | Remote admin | yes | yes | yes | yes | yes |
@@ -91,6 +91,7 @@ build flag it needs.
 
 | Feature | Small | E-ink L | E-ink P | E-ink 4.2" | L2 |
 | --- | --- | --- | --- | --- | --- |
+| Clock set by hand, Time from GPS | Settings › Display, field by field | same | same | same | Time & units, typed |
 | Clock tools (alarm, timer, stopwatch) | yes, tenths on the stopwatch | no tenths | no tenths | wide layout | Clock app |
 | Calendar | Clock tools (tight grid) | Clock tools (tight grid) | + under the clock, on the lock screen | + under the clock | in the Clock app |
 | Remote bot, repeater, auto-advert | yes | yes | yes | yes | yes |
@@ -115,8 +116,8 @@ build flag it needs.
 | Firmware update | over USB | same | same | same | over WiFi from GitHub |
 | Screenshot (`ENABLE_SCREENSHOT`) | over USB | same | same | same | side + top button to SD, or over USB |
 | SD card, USB drive | — | — | — | — | yes |
-
 | Coverage map (MatterMap recording and upload) | — | — | — | — | Settings › Coverage map, off by default |
+
 ### Hardware add-ons (ui-new only)
 
 | Feature | Flag | Boards |

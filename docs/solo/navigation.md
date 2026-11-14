@@ -100,7 +100,7 @@ contact or channel) and **Set as target**.
 
 ## Navigating to something
 
-**Navigate** on a waypoint, a node in Nearby or a location in a message opens
+**Navigate** on a waypoint, a node in Nodes or a location in a message opens
 the navigation view: the distance, the bearing **To** the target and your own
 heading (**Hdg**), with the time to arrival once you're getting closer. Turn
 until the two bearings match. The heading comes from your movement, so it
@@ -128,7 +128,7 @@ Locator target) is a flag on the tape: turn until it's in the middle.
   it while you stand still.
 
 With **Track loc** on in Live Share, other people's shares show on the map
-and in Nearby, with live distance and bearing.
+and in Nodes, with live distance and bearing.
 
 Locations travel as ordinary text (`[LOC]lat,lon`, or `[WAY]lat,lon label`
 for a waypoint), readable in the phone app and on other firmware. On the
@@ -146,7 +146,7 @@ arriving at a waypoint, leaving it, or a person coming near or moving away.
 - **Mode**: alert on arriving, leaving, or both.
 - **Beeper**: ticks faster as you get closer, even when the sound is muted.
 
-**Set as target** in Nearby, the waypoint list or a message sets the target
+**Set as target** in Nodes, the waypoint list or a message sets the target
 in one step. The target shows as a flag on the map and the compass;
 **Navigate** under it opens the navigation view.
 

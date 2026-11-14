@@ -1,3 +1,166 @@
+## Solo v2.2.1
+
+A quick fix release.
+
+**Fixes**
+- **ESP32 boards start again (#58).** Since v2.1.0 the M5Stack Cardputer ADV and the Heltec V3 / V4 crashed at every start: three dots, then a reset, over and over. The screen setup asked for something that wasn't there yet. Erasing the flash didn't help. They start normally now, and your settings are kept. Thanks for the report.
+- **E-ink going grey.** v2.2.0 put the panel to sleep a second after each refresh. On some panels the picture then faded to grey within seconds. By default the panel now stays powered, as it did before v2.2.0.
+
+**E-ink (Wio Tracker L1)**
+- **New: Settings > Display > Panel sleep.**
+  - **Off** (default): the panel stays powered and every picture stays crisp, on any panel.
+  - **On**: the panel goes to sleep a second after its last refresh. That's what the panel maker recommends. Nothing is held on the screen for hours, so nothing burns in, and the battery lasts longer. Only turn it on if your panel stays crisp with it.
+
+**What we found about the L1's 2.13" panels**
+
+The L1 E-Ink uses a Good Display GDEY0213B74 panel. It is marked **0213BN-B74**. Not all of these panels behave the same:
+- **Some panels keep their picture without power,** as e-paper should. On these, Panel sleep On works well.
+- **Panels marked "V4"** lose the picture to grey a few seconds after the power to the panel goes off. This happens after a full refresh as well as a partial one. A full refresh only clears what earlier screens left behind; it doesn't make the picture last. A longer, stronger refresh didn't help either: we tried forcing the panel's cold-weather setting, and the refresh got slower but the picture still faded. It looks like a difference in the panels themselves, not something the firmware can drive around. These panels stay crisp only while powered, so leave Panel sleep **Off** there.
+- **To know which you have**, turn Panel sleep On and watch the screen for a minute after it changes. If it greys, turn it back Off.
+- A full refresh still happens every 10 partial ones by default (Settings > Display > Full rfsh). It clears ghosting, and with Panel sleep Off the picture is driven again right after it, so it stays crisp.
+
+Thanks to NIk on discord who tried several builds on their panels to pin this down.
+
+**Notes**
+- No settings are reset. Panel sleep starts Off.
+- L2 updates over WiFi from Settings > Firmware update once this release is published.
+
+## Solo v2.2.0
+
+**New**
+- **Two channel bots.** Tools > Bot > Channel now has **Bot 1 / Bot 2**. Each one has its own channel, trigger, reply, commands, allowed list, actions and reply gap. For example, `test` → `ok` on #test and `!batt !loc` on #bot. Your current channel bot becomes Bot 1.
+- **Battery since boot and time left.** The battery chart now goes back to when the device was switched on. **Time left** is worked out from how fast the battery has gone down since it was last unplugged, using your battery curve. It shows after 30 min on battery and says *charging* on USB. L2: Diagnostics > History. Other devices: Status > Power.
+- **SOS, from the feedback on #56:**
+  - The countdown now starts at 30 s by default, so there is time to stop an SOS started in a pocket.
+  - The countdown ticks louder, whatever the volume, and blinks faster towards the end.
+  - **Advert** can now be Off, 0-hop or Flood. The auto advert pauses while an SOS runs.
+  - Hiding the SOS view tells you how to get back to it.
+
+**L2**
+- **Keyboard:**
+  - The rows line up, and a comma sits beside the space bar.
+  - Hold a key and slide along its accents. Let go on the one you want. The one you picked last comes first next time.
+  - Tap shift twice quickly for caps lock.
+  - Hold backspace: it deletes letters first, then whole words.
+  - Taps register faster.
+- **Quick panel:**
+  - It follows your finger down from the status bar, and only a pull opens it, so a tap no longer opens it.
+  - All eight tiles fit on one page.
+  - The slide is smooth.
+- **Clock page:** tap a field to go where its value comes from:
+  - battery: the history chart;
+  - GPS: the GPS screen;
+  - contacts: Nodes;
+  - unread: Messages;
+  - a sensor: every sensor's reading.
+- **Clock from the internet** without anything else using WiFi:
+  - **After start-up:** with WiFi on and a network saved, the device connects once just to get the time, then turns WiFi off again.
+  - **Saving a network** in Settings > WiFi also sets the clock.
+- Favourites: no hint under the tiles.
+
+**Other devices (OLED and e-ink)**
+- **E-ink burn-in:** the panel now goes to sleep a second after each refresh, keeping the image. Before, a still screen stayed powered for hours and could burn in. A full refresh now happens every 10 partial ones by default, against ghosting.
+- E-ink SOS: the countdown blinks on every frame and ticks on time, even during a slow refresh.
+
+**Fixes**
+- **Nodes:** with more contacts than rows, the list kept the first ones in the table, usually the ones made at home. In another town, none of the nodes around you showed, in the list or on the map. It now keeps the best ones: favourites, then the nearest or latest. Live and SOS shares always stay on the list. The L2 map ranks contacts by what is around the middle of the view.
+- L2 chat: if a message came in while a message's menu was open, Reply / Path / Resend could act on the next message.
+- L2 Gallery: the tabs respond while thumbnails are still loading, and the spacing is even.
+- L2 SOS: the countdown blinks the backlight on a red screen instead of redrawing the whole screen, which tore.
+- L2 keyboard: after sliding a finger off a held key, the next key you tapped was sometimes lost.
+
+**Notes**
+- No settings are reset. New options start at their defaults.
+- L2 updates over WiFi from Settings > Firmware update once this release is published.
+
+## Solo v2.1.0
+
+**New**
+- **SOS (experimental, issue #56).** Off by default. After a countdown your position goes to the channels and contacts you choose, and is sent again until someone answers with the ACK word. **Answered** shows who replied, what they wrote and when. An optional beep plays `... --- ...` until you end it. While an SOS runs, the screen goes off after 30 s and the repeater rests (WiFi too on the L2). A received SOS shows a banner and stays on the map for 24 h. Other devices: Tools > SOS, start by holding Back for 3 s. L2: the SOS app, start by holding the top button for 5 s and sliding (this works over the lock screen and the PIN too). The message starts with `[SOS]`, then your own text with placeholders (`{loc} {alt} {time}` by default, `{batt}` too); the position always goes. The messages stop once someone answers, but a zero-hop advert with your position goes on until you end the SOS, with each send and then at the Repeat interval (every 5 min with Repeat off), so anyone in range sees you on their map in any app, and a Solo that received your SOS moves it as you move. The GPS stays on until the end. Settings changed while it runs count at once. On the L2 someone's SOS is a red, pulsing dot on the maps and says `SOS` in Nodes. **Still experimental: feedback on #56.**
+- **Discover (route discovery).** Under Route (L2) or Path / trace (other devices): ask a contact for its route, with 1, 3 or 5 tries 20 s apart. The routes found can be used in the route editor, the way back as well.
+- **Routes from messages on the map.** A route written in a message can be shown on the map (L2: Route, other devices: Show route).
+- **Summer time.** Settings > Summer time (Europe, North America, Australia, New Zealand) moves the clock an hour ahead and back by itself. The alarm keeps its time across the change.
+- **GPS is off:** starting the trail, live share or track back, sharing or marking your position, or centring the map on you now asks to turn the GPS on, instead of waiting silently or switching it on unasked. A share or a mark waits for a fresh fix.
+- **Bot**
+  - New: `{path}` / `!path` (#55), `{snr}` / `{rssi}` / `!snr`, `!dist`.
+  - **Allowed commands**: which commands it answers, set per channel, room and direct.
+  - Actions can be limited to favourites (**Actions by All / Fav**). **Position = Fav** limits who gets your position the same way.
+  - **Reply gap**: a minimum time between its replies.
+  - Commands count only at the start of a message.
+  - On the L2: a **Log** tab with the bot's last 32 replies.
+
+**L2**
+- **Gallery** app: your screenshots as thumbnails, a full view with swipe and delete, and the saved trails.
+- The clock is set from the network (NTP) while WiFi is up.
+- **Settings in one consistent order**:
+  - Name and Radio first.
+  - Then Bluetooth, WiFi and GPS side by side. Tap a row for its details: the pairing PIN, saved networks, or the GPS screen, which has a new **Options** tab for power saving and the fixed position.
+  - Then Device, Mesh & data (Auto-advert is now under Adverts & privacy) and System.
+- **Recent packets on the map**: tap the packet-flow legend to list the last 10 packets and replay one, or **Play all**.
+- Keyboard: a second symbols page behind `#+=` with brackets and the rest of ASCII.
+- One switch size and one height for main action buttons on every screen.
+
+**Other devices (OLED and e-ink)**
+- **Messages kept across a power-off** (Wio Tracker L1 OLED and e-ink, GAT562 Watch13, Heltec V3 / V4, Cardputer ADV; the other boards have no flash to spare). Settings > Messages > **Keep messages** (Off / 500 / 1000 / 2500; off by default) saves them on the flash. Scroll past the oldest message to read older ones. **Delete after** and **Delete history** clean up. A busy channel can be left out with Channel options > **Save**.
+- E-ink: a shutdown leaves **Powered off** on the panel.
+- E-ink SOS: its status refreshes every 15 s and counts in minutes, so the panel isn't redrawn every second.
+
+**Fixes**
+- **Share my pos** with the GPS off could send the last, possibly old position as the current one. It now asks to turn the GPS on first. From Trail it also goes to a running live share, as it does from the Map page.
+- Discover: a reply that came after its try had timed out could replace the contact's route.
+- Settings: the time zone says it's the winter time, which summer time adds an hour to.
+- Home: the title bar was missing for a moment when the Clock page is hidden.
+- Channel list: says "Fav only" when that filter hides every channel (#54).
+- Bot: `!hops` / `{hops}` say "known route" as `!path` does.
+- L2: map lines start from the middle of the position and node dots.
+- On a locked device with the screen off, one click of Back could start an SOS and cancel it straight away; after an unfinished unlock sequence the Back hold sometimes didn't start one; picking an SOS contact stalled the device for a moment.
+- L2: a setting change could be saved at once instead of a moment later, a WiFi test could time out straight away, and the home page could flip without the hold at the edge.
+
+**Notes**
+- No settings are reset. New options start at their defaults.
+- L2 updates over WiFi from Settings > Firmware update once this release is published.
+
+## Solo v2.0.2
+
+**New**
+- Turn dial / compass rose in navigation (L2 nav bar and narrow L1/OLED screens)
+- Path hash size on Status > Radio (L2: Diag > Radio)
+- `UI_NO_HIBERNATE` flag hides the Hibernate row
+- Simpson board updates (PR #53)
+
+**Fixes**
+- L2: top button wakes the screen at once and switches it off on release; no bright bar at power-on; banners/toasts no longer wait on a sleeping screen; battery shows icon, percentage or voltage (not the icon too); chat previews no longer cut at the bottom
+- L2: SD unmount waits for the tile being read, with a timeout so Format / USB drive can't hang the UI
+- `!temp` / `{temp}` fall back to the chip's temperature
+- Nearby: names take the room the row leaves; long distances can't squeeze them to nothing
+- Settings: Home pages listed in order, numbered 1-10
+- Simpson: Enter isn't lost when another key is pressed while it is held
+- Status: GPS chip no longer highlighted while the receiver is duty-sleeping
+
+## Solo v2.0.1
+
+A small update to 2.0: a new board, a boot-loop fix for the ProMicro with a CardKB, and a few smaller fixes.
+
+Coming from 2.0, your settings, contacts, channels and messages stay as they are, and you don't need to erase the flash.
+
+> [!NOTE]
+> **Wio Tracker L2:** Settings › Firmware update finds 2.0.1 and installs it over WiFi.
+
+### New board
+
+- **Simpson** *(experimental)*: a DIY nRF52840 board with an SH1106 OLED and its own keypad (T9 typing, buzzer). Its schematic and keypad are in the [hardware docs](https://github.com/MarekZegare4/MeshCore-Solo/blob/main/docs/solo/hardware.md#simpson). Thanks to @sim1988son (#49).
+
+### Fixes
+
+- **ProMicro with a CardKB:** since rc3 the device froze on the boot screen and rebooted over and over. On this board the CardKB shares the I2C bus with the screen, and the keyboard was being read in the middle of a screen update. (#51)
+- **ProMicro and GAT562 Mesh Watch13:** Cyrillic, Greek and accented letters now show as themselves instead of filled squares. Both builds now have the full screen font the other OLED boards already use.
+- **Ping (OLED):** the ping result window now scrolls. Up and Down reach the last row (SNR back), which used to be hidden, and Enter sends the ping from any row. (#50)
+- **Wio Tracker L2:** a long screen title now fits in the title bar. First the battery percentage, then the button labels make room for it (their icons stay); only if that isn't enough is the title shortened with "…".
+
+### For builders
+
+- New build flag `UI_ENTER_DOUBLE_BACK=1`: double-clicking Enter goes back, for a joystick whose Back button is hard to reach. Off by default; only the GAT562 30S target wires it up. See [build flags](https://github.com/MarekZegare4/MeshCore-Solo/blob/main/docs/solo/developer/build-flags.md).
+
 ## MeshCore Solo Companion Firmware v2.0
 
 The biggest Solo release so far:

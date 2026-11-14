@@ -1,7 +1,5 @@
 # Location messages
 
-[Go back](README.md)
-
 How Solo puts a position into an ordinary MeshCore text message, so that
 another firmware or app can send and read the same. There is no new packet
 type: everything below is plain text in a direct message or a channel post,

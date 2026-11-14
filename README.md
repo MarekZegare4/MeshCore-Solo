@@ -59,7 +59,7 @@ Heltec V3/V4 need [a keyboard or joystick wired up](./docs/solo/hardware.md#wiri
 
 **nRF52840 boards** — press reset twice quickly; the device shows up as a USB drive. Copy the `.uf2` onto it.
 
-**ESP32-S3 boards** — flash the `-merged.bin` at offset `0x0` with the [MeshCore Flasher](https://meshcore.io/flasher) or `esptool.py --chip esp32s3 write_flash 0x0 <file>-merged.bin`. The Wio Tracker L2 then updates itself over WiFi (Settings › System › Firmware update).
+**ESP32-S3 boards** — flash the `-merged.bin` at offset `0x0` with the [MeshCore Flasher](https://meshcore.io/flasher) or `esptool.py --chip esp32s3 write_flash 0x0 <file>-merged.bin`. The Wio Tracker L2 then updates itself over WiFi (Settings › Firmware update).
 
 ---
 

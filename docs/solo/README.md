@@ -55,12 +55,12 @@ history on the SD card and updates over WiFi.
 
 - [Getting started](./getting-started.md): controls, the home screen and its quick panels, the phone app, updates
 - [Messages](./messages.md): channels, direct messages, rooms, typing
-- [Contacts](./contacts.md): nearby nodes, favourites, remote admin
-- [Navigation](./navigation.md): GPS, trail, waypoints, compass, sharing your location, the map
-- [Tools](./tools.md): clock tools, bot, repeater, ringtones, the Status screen
+- [Contacts](./contacts.md): nearby nodes, paths and trace, favourites, cleaning up, remote admin
+- [Navigation](./navigation.md): trail, planned routes, waypoints, compass, sharing your location, Locator, the map
+- [Tools](./tools.md): clock tools, SOS, bot, auto-advert, repeater, ringtones, flashlight, the Status screen, GPIO
 - [Settings](./settings.md): what is where
 - [Screen lock](./lock.md): locking, auto-lock, PIN
-- [Hardware](./hardware.md): external keyboards and joysticks, e-ink, SD card, WiFi
+- [Hardware](./hardware.md): external keyboards and joysticks, e-ink, the Simpson board, the Wio Tracker L2's buttons, SD card and WiFi
 - [One button](./one-button.md): the whole interface from a single button
 - [Configurator](./configurator.md): settings, Home's pages, quick messages, melodies, routes and a backup, from a computer over USB
 - [Coverage map](./coverage-map.md): help draw MatterMap, a map of where the mesh is heard (Wio Tracker L2, voluntary)

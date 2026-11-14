@@ -83,7 +83,7 @@ on `OK` when done.
 - **Home**: a click walks the rows of a quick panel, the Favourites tiles one
   by one, then on to the next page; a double click is the page before. Their
   order: the configurator's **Home screen** tab.
-- **Lists with tabs or filters** (Nearby, the Bot, remote admin, the trail):
+- **Lists with tabs or filters** (Nodes, the Bot, remote admin, the trail):
   a click walks the list, then the next tab.
 - **A message opened full screen**: a click scrolls it, then on to the next
   message.

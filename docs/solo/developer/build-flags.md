@@ -1,4 +1,4 @@
-## Build Flags
+# Build Flags
 
 [Go back](../README.md)
 
