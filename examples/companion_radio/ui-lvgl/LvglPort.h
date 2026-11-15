@@ -16,6 +16,9 @@
   #include <esp_heap_caps.h>
   #include <esp_system.h>
   #include <esp_core_dump.h>
+  #if CONFIG_PM_ENABLE
+    #include <esp_pm.h>
+  #endif
   #if ESP_ARDUINO_VERSION_MAJOR >= 3
     #include <esp_vfs_fat.h>
     #include <driver/sdmmc_host.h>
@@ -116,17 +119,38 @@ static uint32_t s_flush_us = 0;  // UI_PERF_TEST: time spent in flushCb (and wai
 static bool s_dma = false;       // the buffers are DMA-able: sent in the background
 static bool s_flushing = false;  // a DMA transfer under way
 
-// The CPU clock down to 80 MHz (LoRa, BLE and WiFi all run at that) with the
-// screen off (powerSave()), and with it on while nobody touches it and nothing
-// moves (the loop decides); a touch brings the full clock back before the
-// frame it causes is drawn.
+// The CPU clock: full while the screen is in use; 80 MHz (LoRa, BLE and WiFi
+// all run at that) with the screen off (powerSave()), and with it on while
+// nobody touches it and nothing moves (the loop decides) -- a touch brings
+// the full clock back before the frame it causes is drawn. Dozing (cpuDoze(),
+// the screen off on battery, nothing on WiFi): 80 MHz while there's work,
+// 10 MHz while the core waits for the next interrupt -- the power manager
+// (sdkconfig: PM_ENABLE) switches, raising it on any interrupt and while a
+// driver (UART, I2C, the SD card, I2S, WiFi, BLE between its sleeps) holds
+// it up. Fixed clocks otherwise: the panel's SPI is timed off the bus clock,
+// which falls below 80 MHz with the CPU.
+enum CpuClock : uint8_t { CLK_FULL, CLK_SLOW, CLK_DOZE };
 static uint32_t s_full_mhz = 0;
-static bool s_cpu_slow = false;
-static void cpuSlow(bool on) {
-  if (on == s_cpu_slow) return;
+static CpuClock s_clock = CLK_FULL;
+static void cpuClock(CpuClock c) {
+  if (c == s_clock) return;
   if (!s_full_mhz) s_full_mhz = getCpuFrequencyMhz();
-  s_cpu_slow = on;
-  setCpuFrequencyMhz(on ? 80 : s_full_mhz);
+  s_clock = c;
+  const int mhz = c == CLK_FULL ? (int)s_full_mhz : 80;
+#if CONFIG_PM_ENABLE
+  esp_pm_config_t pm = {};
+  pm.max_freq_mhz = mhz;
+  pm.min_freq_mhz = c == CLK_DOZE ? 10 : mhz;
+  pm.light_sleep_enable = false;
+  if (esp_pm_configure(&pm) == ESP_OK) return;
+  if (c == CLK_DOZE) { s_clock = CLK_SLOW; return; }   // not allowed: as it was
+#endif
+  setCpuFrequencyMhz(mhz);
+}
+static void cpuSlow(bool on) { cpuClock(on ? CLK_SLOW : CLK_FULL); }
+static void cpuDoze(bool on) {
+  if (on) cpuClock(CLK_DOZE);
+  else if (s_clock == CLK_DOZE) cpuClock(CLK_SLOW);
 }
 
 static void flushCb(lv_display_t* disp, const lv_area_t* area, uint8_t* px_map) {
@@ -902,6 +926,7 @@ static bool touched() { return SimLcdDisplay::touchState().down; }
 static void swallowTouch() { s_swallow = true; }
 static void powerSave(bool, bool) {}   // the browser's page loop runs the sim
 static void cpuSlow(bool) {}
+static void cpuDoze(bool) {}
 static void idle(uint32_t) {}
 static void setBacklightPct(uint8_t pct) { (void)pct; }   // the browser canvas has no backlight
 static void backlightFadeIn() {}

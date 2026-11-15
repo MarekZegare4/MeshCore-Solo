@@ -413,6 +413,9 @@ void UITask::loop() {
     }
     lvport::cpuSlow(!cpuNeeded());
     lv_next = lv_timer_handler();
+  } else if ((int32_t)(millis() - _next_doze_ms) >= 0) {   // the screen off: doze on battery
+    _next_doze_ms = millis() + 2000;
+    lvport::cpuDoze(dozeOk());
   }
   lvport::idle(idleMillis(lv_next));
 }
@@ -1472,6 +1475,12 @@ static void onOpenSchemaPage(lv_event_t* e);   // Radio > Advanced
 // update on WiFi. Otherwise 80 MHz (lvport::cpuSlow) -- a clock ticking over,
 // a message being read.
 static constexpr uint32_t CPU_IDLE_MS = 2000;
+// Asleep: may the clock doze (lvport::cpuDoze())? Not on USB power (nothing
+// to save, and USB wants its clock) nor with WiFi at work.
+bool UITask::dozeOk() {
+  return !wifiInUse() && !mapview::s_dl.liveNet() && !board.isExternalPowered();
+}
+
 bool UITask::cpuNeeded() {
 #ifdef UI_PERF_TEST
   return true;   // measured at the full clock

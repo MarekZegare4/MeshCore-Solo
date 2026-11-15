@@ -32,3 +32,15 @@ CONFIG_LWIP_TCP_OOSEQ_MAX_PBUFS=4
 CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY=y
 # Its callbacks are short (~0.4 KB of stack used): half the framework's 8 KB.
 CONFIG_ESP_TIMER_TASK_STACK_SIZE=4096
+
+# Power management: the clock scales down by itself while the CPU waits
+# (lvport::cpuClock() sets the range: fixed while the screen is in use, down
+# to 10 MHz with it off on battery). No light sleep: USB, the GPS's UART and
+# the expander-polled buttons would all need waking up for it. BLE's modem
+# sleep (between connection events, the main crystal as its clock, which DFS
+# allows) lets the radio's own clock lock go between them -- without it BLE
+# holds the CPU at 80 MHz all the time.
+CONFIG_PM_ENABLE=y
+CONFIG_BT_CTRL_MODEM_SLEEP=y
+CONFIG_BT_CTRL_MODEM_SLEEP_MODE_1=y
+CONFIG_BT_CTRL_LPCLK_SEL_MAIN_XTAL=y

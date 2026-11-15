@@ -637,6 +637,7 @@ private:
   uint32_t autoOffMillis() const;
   uint32_t idleMillis(uint32_t lv_next);
   bool cpuNeeded();
+  bool dozeOk();
   void checkLowBattery();
 
 #ifdef PIN_BUZZER
@@ -667,6 +668,7 @@ private:
   uint32_t _next_thread_check_ms = 0;
   uint32_t _next_thread_ages_ms = 0;
   uint32_t _next_trackback_ms = 0;
+  uint32_t _next_doze_ms = 0;      // asleep: whether the clock may doze, looked at every 2 s
   uint32_t _next_clock_ms = 0;
   uint32_t _clock_pending = 0;   // Clock: the time typed in, while asked about going back
   uint8_t  _settings_page = 0;   // settings::Page shown in SCR_SETTINGS_NAV
