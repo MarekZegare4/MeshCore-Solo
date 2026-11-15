@@ -20,9 +20,9 @@ static const int8_t SNR_MIN = -20, SNR_MAX = 10;   // repeat_min_snr, or REPEAT_
 static void applyPowerSave(const NodePrefs* p) {
   if (!p) return;
 #if FEAT_RX_POWERSAVE
-  radio_driver.setPowerSaving(p->rx_powersave && !p->client_repeat);
+  radio_driver.setPowerSaving(p->client_repeat ? 0 : p->rx_powersave);
 #else
-  radio_driver.setPowerSaving(false);   // see Features.h FEAT_RX_POWERSAVE
+  radio_driver.setPowerSaving(0);   // see Features.h FEAT_RX_POWERSAVE
 #endif
 }
 

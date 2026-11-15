@@ -29,22 +29,16 @@
   #define FEAT_FULL_REFRESH_SETTING       0
 #endif
 
-// Hardware RX duty-cycle ("Pwr save") is disabled: the SX126x's duty-cycle
-// preamble detection needs the *actual transmitted* preamble to exactly match
-// what we're configured to expect (confirmed hardware behaviour, see SX1262
-// datasheet 6.1.3 and https://github.com/jgromes/RadioLib/issues/1597) --
-// something we can't guarantee across a mesh with mixed firmware. A mismatch
-// doesn't cost a little sensitivity, it silently drops every packet from that
-// sender regardless of signal strength (2026-09-22 field report: near-total
-// reception loss, unaffected by antenna). The real duty-cycle implementation
-// (RadioLibWrapper::armRecv()/CustomSX1262Wrapper::startPowerSaveRecv()) is
-// left in place for if a network-wide compatibility mechanism ever lands --
-// flipping this back to 1 requires solving that first, not just re-adding the
-// Settings toggle.
+// Hardware RX duty-cycle ("Power save", NodePrefs::rx_powersave): the radio
+// sleeps between listens short enough for the shortest preamble expected of
+// senders to span one (RadioLibWrapper::_power_save). Off from September 2026
+// after near-total reception loss in the field; two causes, both fixed 2026-11:
+// the sleep assumed every sender's preamble was 32 symbols (firmware before
+// companion v1.16 sends 16), and a check run every loop pass talked to the
+// sleeping chip over SPI, which wakes it into a deaf standby.
 // Lives here (not MyMesh.h) so every `#if FEAT_RX_POWERSAVE` user sees the
-// same definition: an undefined macro in `#if` silently reads as 0, which
-// would split the build the day this is flipped to 1.
-#define FEAT_RX_POWERSAVE 0
+// same definition: an undefined macro in `#if` silently reads as 0.
+#define FEAT_RX_POWERSAVE 1
 
 // Planned routes (PlannedRoute.h, ui-core/RouteGuide.h): a GPX route uploaded
 // from the site over USB and followed. Where there is room for them on flash:

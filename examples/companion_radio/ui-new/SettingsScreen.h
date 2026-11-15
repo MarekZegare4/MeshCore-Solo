@@ -530,8 +530,10 @@ class SettingsScreen : public UIScreen {
 #if FEAT_RX_POWERSAVE
     } else if (item == POWER_SAVE) {
       // Forced off (and locked) while the repeater is on — it must hear all traffic.
+      // Off / On (catches every node) / Max (sleeps longer: v1.16+ nodes only).
+      static const char* const PS[] = { "Off", "On", "Max" };
       if (p && p->client_repeat) val("Pwr save", "--");
-      else sw("Pwr save", p && p->rx_powersave);
+      else val("Pwr save", PS[p && p->rx_powersave <= 2 ? p->rx_powersave : 0]);
 #endif
     } else if (item == TX_APC) {
       // Suppressed (and locked) while repeating — a repeater holds full TX power.
@@ -1171,8 +1173,9 @@ public:
 #if FEAT_RX_POWERSAVE
     if (_selected == POWER_SAVE && p && (left || right || enter)) {
       if (p->client_repeat) { _task->showAlert("Off while repeating", 900); return true; }
-      p->rx_powersave ^= 1;
+      p->rx_powersave = (uint8_t)((p->rx_powersave + (left ? 2 : 1)) % 3);
       _task->applyPowerSave();
+      if (p->rx_powersave == 2) _task->showAlert("Misses nodes < v1.16", 1400);
       _dirty = true;
       return true;
     }

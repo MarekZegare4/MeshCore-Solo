@@ -20,6 +20,10 @@
 //   lastdm                     the newest direct message, "> <in/out>,<prefix hex>,<ack 0-3>,<text>"
 //   lastch                     the newest channel post, "> <channel>,<text>"
 //   loops                      since the last ask: "> <loop passes a second>,<busy %>,<seconds>"
+//   rxps [0|1|2]               RX power save off / for every node / for v1.16+ only, as the
+//                              radio runs it (not saved); alone: "> <set>,<armed>,<asleep %>,
+//                              <watchdog soft>,<hard>,<packets received>"
+//   txpre <symbols>            send with this preamble (an older node's 16) until the radio is set again
 //
 // The frontends add their own (ui-new/UITask.cpp: key, ui).
 
@@ -151,6 +155,25 @@ inline bool handle(Core& core, const char* cmd, char* reply, int n) {
     at_ms = now; at_passes = g_loop_passes; at_busy = g_loop_busy_us;
     return true;
   }
+#if defined(USE_SX1262) && !defined(SIM_BUILD)
+  if (!strcmp(cmd, "rxps")) {
+    const uint16_t pm = radio_driver.sampleAsleepPermille(1000);
+    snprintf(reply, n, "> %u,%u,%u.%u,%lu,%lu,%lu", radio_driver.getPowerSaving(), radio_driver.getPowerSavingActive(),
+             pm / 10, pm % 10, (unsigned long)radio_driver.getRxPsWatchdogSoftCount(),
+             (unsigned long)radio_driver.getRxPsWatchdogHardCount(), (unsigned long)radio_driver.getRecvCount());
+    return true;
+  }
+  if (!strncmp(cmd, "rxps ", 5)) {
+    radio_driver.setPowerSaving((uint8_t)atoi(cmd + 5));
+    snprintf(reply, n, "OK");
+    return true;
+  }
+  if (!strncmp(cmd, "txpre ", 6)) {
+    radio_driver.forceTxPreamble((uint16_t)atoi(cmd + 6));
+    snprintf(reply, n, "OK");
+    return true;
+  }
+#endif
   if (!strcmp(cmd, "mem")) {
     uint32_t fr = 0, total = 0;
 #ifdef ESP32

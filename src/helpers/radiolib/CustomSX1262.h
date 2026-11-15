@@ -8,6 +8,7 @@ class CustomSX1262 : public SX1262 {
   uint32_t _maxPayloadMillis = 3934;
   uint32_t _activityAt = 0;
   bool _headerSeen = false;
+  bool _tcxo = false;   // std_init() set up a TCXO: RadioLib waits 5 ms for it on every wake
 
   public:
     CustomSX1262(Module *mod) : SX1262(mod) { }
@@ -70,6 +71,7 @@ class CustomSX1262 : public SX1262 {
         tcxo = 0.0f;
         status = begin(LORA_FREQ, LORA_BW, LORA_SF, cr, RADIOLIB_SX126X_SYNC_WORD_PRIVATE, init_power, 16, tcxo, useRegulatorLDO);
       }
+      _tcxo = tcxo > 0;
       if (status != RADIOLIB_ERR_NONE) {
         Serial.print("ERROR: radio init failed: ");
         Serial.println(status);
@@ -108,6 +110,18 @@ class CustomSX1262 : public SX1262 {
       MESH_DEBUG_PRINTLN("SX1262 status=0x%02X device_errors=0x%04X", getStatus(), getDeviceErrors());
 
       return true;  // success
+    }
+
+    uint32_t tcxoDelayUs() const { return _tcxo ? 5000 : 0; }   // RadioLib's setTCXO() default
+
+    // Same IRQs as startReceive() (the preamble one for isReceiving()).
+    int16_t startReceiveDutyCycle(uint32_t rxPeriod, uint32_t sleepPeriod) {
+      int16_t e = SX1262::startReceiveDutyCycle(rxPeriod, sleepPeriod,
+          RADIOLIB_IRQ_RX_DEFAULT_FLAGS | (1UL << RADIOLIB_IRQ_PREAMBLE_DETECTED), RADIOLIB_IRQ_RX_DEFAULT_MASK);
+      // RadioLib stages RX through standby, which leaves a host-driven RXEN
+      // switch idle: back to RX for the whole cycle.
+      if (e == RADIOLIB_ERR_NONE) this->mod->setRfSwitchState(Module::MODE_RX);
+      return e;
     }
 
     int16_t startReceive() override {

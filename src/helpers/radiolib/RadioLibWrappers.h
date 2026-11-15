@@ -42,24 +42,31 @@ protected:
   virtual void doResetAGC();
 
   // Power-save RX: hardware SX126x RX duty-cycle (SetRxDutyCycle). Instead of a
-  // continuous receive the chip itself cycles RX↔sleep, latches a preamble, then
-  // stays in RX to receive the packet (RX_DONE on DIO1) — no MCU state machine,
-  // average RX current cut several-fold. Driven from armRecv()/loop(); falls back
-  // to continuous RX if the modem doesn't support it.
-  // Companion-side gating: FEAT_RX_POWERSAVE (examples/companion_radio/Features.h)
-  // is 0, so nothing on that target ever calls setPowerSaving(true) and this
-  // path never actually runs there -- the SX126x duty-cycle's preamble
-  // detection needs the sender's actual preamble to exactly match what we
-  // configure (confirmed hardware behaviour, not a bug here), which can't be
-  // guaranteed across a mesh with mixed firmware. See that file before
-  // re-enabling it anywhere.
-  bool _power_save = false;
-  bool _ps_active = false;       // is the radio currently armed in duty-cycle mode
+  // continuous receive the chip itself cycles RX<->sleep, latches a preamble, then
+  // stays in RX to receive the packet (RX_DONE on DIO1) -- no MCU state machine.
+  // Driven from armRecv()/loop(); falls back to continuous RX if the modem
+  // doesn't support it.
+  //
+  // The sleep is sized off the shortest preamble the senders may use: one that
+  // starts the instant a listen window closes must still have enough of itself
+  // left for the next window to latch (rxPsGeometry()). RX_PS_ALL assumes 16
+  // symbols, what every MeshCore sends at SF9+ and what firmware before
+  // companion v1.16 sends at any SF; RX_PS_RECENT assumes the 32 that v1.16 and
+  // later send at SF8 and below -- a longer sleep that misses older nodes.
+  //
+  // Nothing may talk to the chip over SPI while it sleeps: that wakes it into
+  // standby, deaf until re-armed. Hence isReceivingPacket() looking at BUSY
+  // first, the SNR/RSSI of a packet read as it's taken off the chip, and the
+  // watchdog re-arming a chip that stopped cycling.
+  uint8_t _power_save = 0;       // RX_PS_*
+  uint8_t _ps_active = 0;        // the RX_PS_* the radio is armed in (0: continuous RX)
+  bool _ps_unfit = false;        // no duty cycle fits these radio settings: continuous RX until they change
   int8_t _tx_dbm = 0;            // last TX power applied (tracks APC's live value)
   void armRecv();                // arm RX: duty-cycle in power-save, else continuous
-  // Arm the hardware RX duty-cycle. Base returns UNSUPPORTED → armRecv() falls
-  // back to continuous RX; SX126x overrides with startReceiveDutyCycleAuto().
-  virtual int16_t startPowerSaveRecv() { return RADIOLIB_ERR_UNSUPPORTED; }
+  // Arm the hardware RX duty-cycle for senders' preambles of `preamble`
+  // symbols. Base returns UNSUPPORTED -> armRecv() falls back to continuous
+  // RX; SX126x overrides.
+  virtual int16_t startPowerSaveRecv(uint8_t preamble) { (void)preamble; return RADIOLIB_ERR_UNSUPPORTED; }
 
   // RX duty-cycle watchdog: the chip's own sequencer cycles RX<->sleep with no
   // MCU polling, so if it desyncs (a known SX126x failure mode) nothing else
@@ -134,10 +141,36 @@ public:
   RadioLibWrapper(PhysicalLayer& radio, mesh::MainBoard& board) : _radio(&radio), _board(&board), _preamble_sf(0) { n_recv = n_sent = 0; }
 
   void begin() override;
-  // Enable/disable hardware duty-cycle RX. Takes effect on the next RX re-arm
-  // (loop() re-arms once the live mode differs from this request).
-  void setPowerSaving(bool en) { _power_save = en; }
-  bool getPowerSaving() const { return _power_save; }
+  // Hardware duty-cycle RX (RX_PS_*; see _power_save). Takes effect on the
+  // next RX re-arm (loop() re-arms once the live mode differs from this).
+  enum { RX_PS_OFF = 0, RX_PS_ALL = 1, RX_PS_RECENT = 2 };
+  void setPowerSaving(uint8_t mode) { _power_save = mode <= RX_PS_RECENT ? mode : RX_PS_OFF; _ps_unfit = false; }
+  uint8_t getPowerSaving() const { return _power_save; }
+  uint8_t getPowerSavingActive() const { return _ps_active; }
+  // The shortest preamble `mode` expects of senders (see _power_save).
+  uint8_t rxPsPreamble(uint8_t mode) const { return mode == RX_PS_RECENT ? preambleLengthForSF(_preamble_sf) : 16; }
+  // How much of the time the radio would sleep in `mode` at the current
+  // settings, in per cent; -1: it can't (no duty cycle fits, or no support).
+  virtual int rxPsSleepPercent(uint8_t mode) { (void)mode; return -1; }
+  // The listen and sleep periods of a duty cycle at `sf`/`bw` that catches
+  // every preamble of `preamble` symbols; false where none fits (the sleep
+  // would be too short to be worth it, or below what the chip can do).
+  // `transition_us`: the chip's sleep-to-RX time, which the driver takes off
+  // the sleep it programs.
+  static bool rxPsGeometry(uint8_t sf, float bw, uint8_t preamble, uint32_t transition_us,
+                           uint32_t& rx_us, uint32_t& sleep_us);
+#ifdef SOLO_TEST_HOOKS
+  // Test builds: send with `n` symbols of preamble (an older node's 16) until
+  // the next setParams().
+  void forceTxPreamble(uint16_t n) { _radio->setPreambleLength(n); }
+  // Per mille of `ms` the chip spent with BUSY high (asleep, duty-cycling).
+  uint16_t sampleAsleepPermille(uint32_t ms) {
+    uint32_t hi = 0, all = 0;
+    for (uint32_t t0 = millis(); millis() - t0 < ms; all++) { if (isChipBusy()) hi++; delayMicroseconds(100); }
+    return all ? (uint16_t)(hi * 1000 / all) : 0;
+  }
+  uint32_t getRecvCount() const { return n_recv; }
+#endif
   virtual void powerOff() { _radio->sleep(); }
   int recvRaw(uint8_t* bytes, int sz) override;
   uint32_t getEstAirtimeFor(int len_bytes) override;
@@ -174,7 +207,7 @@ public:
     if (sf < 7) sf = 7; else if (sf > 12) sf = 12;
     return -7.5f - 2.5f * (float)(sf - 7);
   }
-  void updatePreamble(uint8_t sf) { _preamble_sf = sf; _radio->setPreambleLength(preambleLengthForSF(sf)); }
+  void updatePreamble(uint8_t sf) { _preamble_sf = sf; _radio->setPreambleLength(preambleLengthForSF(sf)); _ps_unfit = false; }
   PacketMillis calcMaxPacketMillis(uint8_t sf, float bw, uint8_t cr, uint8_t preambleSymbols);
   virtual int16_t performChannelScan();
 

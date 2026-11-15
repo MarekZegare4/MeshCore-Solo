@@ -10,7 +10,7 @@ board supports are shown.
 | **Display** | Brightness, auto-off, wake on message, the message alert (banner, corner envelope or off), lock screen, the lock clock's look and the [PIN](./lock.md), battery as icon / % / volts, the clock set by hand, time zone and summer time, clock format and seconds, time from GPS; on e-ink also rotation and full refresh, and on a 4.26" panel the text and icon size |
 | **Sound** | Buzzer on / off / auto (quiet while the app is connected), volume, quiet hours, the melody for messages, channels and adverts |
 | **Home Pages** | Order of the home pages, and which are shown |
-| **Radio** | TX power, preset, frequency, SF / BW / CR, saved presets, Auto pwr, the scope list, then the advanced options (below) |
+| **Radio** | TX power, preset, frequency, SF / BW / CR, saved presets, Auto pwr, Power save, the scope list, then the advanced options (below) |
 | **System** | Device name, low-battery shutdown, GPS power saving, units, the battery curve, reboot, factory reset |
 | **Keyboard** | ABC or T9 layout, the two scripts, CardKB mode |
 | **Contacts** | Show all or favourites only (DMs, channels, rooms), favourites on top, the order of the channel list, contact expiry and prune, which heard nodes are added |
@@ -21,6 +21,12 @@ A few notes:
 
 - **Auto pwr** lowers the TX power on strong links and raises it back on weak
   ones; the power set above is the ceiling.
+- **Power save** lets the radio sleep between short listens. **On** hears
+  every node and sleeps about a third of the time. **Max** sleeps about two
+  thirds of the time at SF8 and below, but misses nodes on firmware older
+  than companion v1.16. At SF9 and above it is the same as On. Power save
+  is off while repeating, and SX1262 radios only. How it works and the
+  tests behind it: [RX power save](./developer/rx-power-save.md).
 - **Scope** is a list of named regions (plus `*`, no region). Messages are
   tagged with a scope so repeaters can tell communities on the same frequency
   apart. The default one is used for direct messages and repeating, and a channel

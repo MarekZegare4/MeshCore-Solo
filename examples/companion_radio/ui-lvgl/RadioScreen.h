@@ -1,6 +1,6 @@
 #pragma once
-// Settings > Radio: preset, frequency, SF / bandwidth / coding rate, TX power
-// and Adaptive Power Control -- ui-new's Settings > Radio; the saved presets
+// Settings > Radio: preset, frequency, SF / bandwidth / coding rate, TX power,
+// Adaptive Power Control and RX power save -- ui-new's Settings > Radio; the saved presets
 // and scopes below them are RadioExtras.h. Every change is
 // applied to the radio at once and saved (ui-core/RadioControl.h does the
 // applying for both frontends).
@@ -9,7 +9,7 @@
 
 namespace radioview {
 
-enum : uint8_t { R_PRESET, R_SF, R_BW, R_CR, R_TX, R_APC };
+enum : uint8_t { R_PRESET, R_SF, R_BW, R_CR, R_TX, R_APC, R_PS };
 static const int TX_MIN = radioctl::TX_MIN_DBM;
 static const int TX_MAX = radioctl::TX_MAX_DBM;
 
@@ -114,6 +114,18 @@ void UITask::radioGroup(int i) {
   lv_obj_t* sw = switchRow(g, "Auto power", p->client_repeat ? "Off while repeating" : "Lowers power on good links",
                            p->tx_apc, onRadioSwitch, (void*)(uintptr_t)R_APC);
   if (p->client_repeat) lv_obj_add_state(sw, LV_STATE_DISABLED);
+
+  // RX power save (RadioLibWrapper::RX_PS_*): the hint says what it saves here.
+  g = group(_body, "RECEIVE");
+  const uint8_t ps = p->rx_powersave <= 2 ? p->rx_powersave : 0;
+  const int pct = radio_driver.rxPsSleepPercent(ps);
+  char hint[48];
+  if (p->client_repeat) snprintf(hint, sizeof(hint), "Off while repeating");
+  else if (!ps) snprintf(hint, sizeof(hint), "The radio always listens");
+  else if (pct < 0) snprintf(hint, sizeof(hint), "Not at these radio settings");
+  else snprintf(hint, sizeof(hint), ps == 2 ? "Sleeps %d%%, misses nodes before v1.16" : "Sleeps %d%% of the time", pct);
+  lv_obj_t* dd = rowDropdown(settingRow(g, "Power save", hint), "Off\nOn\nMax", ps, 0, onRadioDropdown, R_PS);
+  if (p->client_repeat) lv_obj_add_state(dd, LV_STATE_DISABLED);
 }
 
 void UITask::radioSet(int which, int v) {
@@ -130,9 +142,10 @@ void UITask::radioSet(int which, int v) {
     case R_CR: p->cr = (uint8_t)(5 + v); radioctl::applyParams(); break;
     case R_TX: p->tx_power_dbm = (int8_t)(TX_MIN + v); radioctl::applyTxPower(p); break;
     case R_APC: p->tx_apc = (uint8_t)v; radioctl::applyApc(); break;
+    case R_PS: p->rx_powersave = (uint8_t)v; rptctl::applyPowerSave(p); break;
   }
   prefsSave();
-  if (which == R_APC) rebuildSoon(&UITask::rebuildRadio);   // the TX power hint follows
+  if (which == R_APC || which == R_PS) rebuildSoon(&UITask::rebuildRadio);   // the hints follow
   else rebuildRadio();   // preset name / hints follow
 }
 

@@ -1,6 +1,7 @@
 
 #define RADIOLIB_STATIC_ONLY 1
 #include "RadioLibWrappers.h"
+#include <math.h>
 
 #define STATE_IDLE       0
 #define STATE_RX         1
@@ -11,7 +12,7 @@
 #define NUM_NOISE_FLOOR_SAMPLES  64
 #define SAMPLING_THRESHOLD  14
 
-#define RXPS_WATCHDOG_THRESHOLD_MS  60000UL   // no BUSY transition for this long => stuck
+#define RXPS_WATCHDOG_THRESHOLD_MS   3000UL   // no BUSY transition for this long => stuck (a cycle is ~0.1 s; a packet ~1 s)
 #define NF_CALIB_INTERVAL_MS         60000UL  // recalibrate at least once a minute
 #define NF_CALIB_TIMEOUT_MS           5000UL  // give up on the window (busy channel)
 
@@ -129,6 +130,7 @@ void RadioLibWrapper::rxPsWatchdogCheck() {
   if (now - _wd_last_transition_ms <= RXPS_WATCHDOG_THRESHOLD_MS) return;
 
   _wd_last_transition_ms = now;   // grace period before the next escalation
+  if (!busy && isReceivingPacket()) return;   // awake on a long packet (BUSY low: may ask)
 
   if (_wd_stage == 0) {
     _wd_stage = 1;
@@ -144,6 +146,32 @@ void RadioLibWrapper::rxPsWatchdogCheck() {
   }
 }
 
+// After IoTThinks' PowerSaving firmware (RXPowerSaving.cpp, its guarded
+// "balanced" level), measured there on SX1262s:
+//  - the sleep leaves 10 symbols of the shortest preamble for the next window
+//    (latching takes ~6), less a fifth of a symbol that keeps the register
+//    pairs off ones that latch a preamble and then lose the header;
+//  - on a preamble the chip re-times itself to 2 x listen + sleep, which must
+//    cover the preamble, the sync word and the header (the datasheet's
+//    condition; + a symbol of slack) -- that sets the listen window;
+//  - a sleep within ~250 us of the transition arms and then hears nothing.
+bool RadioLibWrapper::rxPsGeometry(uint8_t sf, float bw, uint8_t preamble, uint32_t transition_us,
+                                   uint32_t& rx_us, uint32_t& sleep_us) {
+  if (sf < 7 || sf > 12 || bw <= 0) return false;
+  const float sym_us = 1000.0f * (float)(1UL << sf) / bw;
+  const float CATCH = 10.0f, PAD = 0.2f, TICK = 15.625f;
+  float sleep = ((float)preamble - CATCH - PAD) * sym_us;
+  if (sleep < (float)(transition_us + 250) || sleep < 2.0f * sym_us) return false;
+  // whole register ticks past the transition, as the driver programs it
+  const uint32_t ticks = (uint32_t)((sleep - (float)transition_us) / TICK);
+  sleep_us = transition_us + (uint32_t)ceilf((float)ticks * TICK);
+  const float need = ((float)preamble + 4.25f + 8.0f + 1.0f) * sym_us;
+  float rx = (need - (float)ticks * TICK) / 2.0f;
+  if (rx < sym_us) rx = sym_us;
+  rx_us = (uint32_t)(ceilf(rx / TICK) * TICK + 0.5f);
+  return true;
+}
+
 void RadioLibWrapper::reattachRecvAction() {
   _radio->setPacketReceivedAction(setFlag);
 }
@@ -153,11 +181,11 @@ void RadioLibWrapper::reattachRecvAction() {
 // Only starts one when it's safe to interrupt: not mid-transmit, no unread
 // packet waiting, and no reception currently in progress.
 void RadioLibWrapper::noiseFloorCalibCheck() {
-  if ((state & STATE_INT_READY) != 0 || (state & ~STATE_INT_READY) == STATE_TX_WAIT) return;
-  if (isReceivingPacket()) return;
-
+  // The interval first: isReceivingPacket() talks to the chip, every pass.
   uint32_t now = millis();
   if (_nf_last_calib_ms != 0 && now - _nf_last_calib_ms < NF_CALIB_INTERVAL_MS) return;
+  if ((state & STATE_INT_READY) != 0 || (state & ~STATE_INT_READY) == STATE_TX_WAIT) return;
+  if (isReceivingPacket()) return;
 
   _nf_calib_active = true;
   _nf_calib_deadline_ms = now + NF_CALIB_TIMEOUT_MS;
@@ -171,7 +199,7 @@ void RadioLibWrapper::loop() {
   // noise-floor recalibration window borrowing continuous RX for a moment):
   // re-arm into the wanted mode once the radio is idle (don't interrupt an
   // in-flight TX or an unread RX-done).
-  bool want_duty_cycle = _power_save && !_nf_calib_active;
+  uint8_t want_duty_cycle = _nf_calib_active || _ps_unfit ? RX_PS_OFF : _power_save;
   if (want_duty_cycle != _ps_active) {
     if (state != STATE_TX_WAIT && !(state & STATE_INT_READY) && !isReceivingPacket()) armRecv();
     return;
@@ -233,13 +261,18 @@ void RadioLibWrapper::startRecv() {
 // continuous RX. Falls back to continuous RX if the modem doesn't support
 // duty-cycle (base startPowerSaveRecv() returns UNSUPPORTED).
 void RadioLibWrapper::armRecv() {
-  if (_power_save && !_nf_calib_active) {
-    int16_t e = startPowerSaveRecv();
-    if (e == RADIOLIB_ERR_NONE) { state = STATE_RX; _ps_active = true; return; }
-    MESH_DEBUG_PRINTLN("RadioLibWrapper: RX duty-cycle unsupported (%d) — power-save off", (int)e);
-    _power_save = false;
+  if (_power_save && !_nf_calib_active && !_ps_unfit) {
+    int16_t e = startPowerSaveRecv(rxPsPreamble(_power_save));
+    if (e == RADIOLIB_ERR_NONE) {
+      state = STATE_RX;
+      _ps_active = _power_save;
+      _wd_last_transition_ms = millis();   // watch the new cycle from now
+      return;
+    }
+    MESH_DEBUG_PRINTLN("RadioLibWrapper: no RX duty-cycle here (%d) — continuous RX", (int)e);
+    _ps_unfit = true;   // till the settings change (the user's choice stays)
   }
-  _ps_active = false;
+  _ps_active = RX_PS_OFF;
   #if defined(USE_LR2021)
   _radio->standby(); // without this LR2021 can throw -706 when calling startReceive after hardware CAD when side detectors are enabled
   #endif
@@ -288,7 +321,11 @@ int RadioLibWrapper::recvRaw(uint8_t* bytes, int sz) {
         n_recv++;
       }
     }
-    _last_recv_was_pumped = false;
+    // Read now, before the receiver is re-armed: asking later could find a
+    // duty-cycling chip asleep, and wake it deaf (see _power_save).
+    _pumped_pop_snr = readLiveSNR();
+    _pumped_pop_rssi = readLiveRSSI();
+    _last_recv_was_pumped = true;
     #if defined(USE_LR2021)
     state = STATE_RX;     // LR2021 stays in Rx after readData, calling startReceive while still in Rx throws -706 errors
     #else

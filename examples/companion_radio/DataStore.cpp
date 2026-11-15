@@ -350,7 +350,7 @@ static void sanitize(NodePrefs& p) {
   flag(p.units_imperial, 0);
   flag(p.trail_show_pace, 0);
   if (p.advert_sound_scope > 1) p.advert_sound_scope = ADVERT_SOUND_SCOPE_ALL;
-  flag(p.rx_powersave, 0);
+  if (p.rx_powersave > 2) p.rx_powersave = 0;   // RadioLibWrapper::RX_PS_*
   flag(p.tx_apc, 0);
   if (p.dm_resend_count > 5) p.dm_resend_count = 2;
   if (p.gpio1_mode > 4) p.gpio1_mode = 0;   // gpio1/2 can be analog (AIN0/AIN5)

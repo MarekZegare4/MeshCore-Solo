@@ -26,7 +26,7 @@
 // matches that contract exactly, no framing/reassembly needed on either side.
 class SimRadio : public mesh::Radio {
   uint32_t n_recv = 0, n_sent = 0, n_recv_errors = 0;
-  bool _power_save = false;
+  uint8_t _power_save = 0;
   bool _rx_boosted_gain = false;
   int8_t _tx_dbm = 0;
 
@@ -134,8 +134,9 @@ public:
   void setParams(float freq, float bw, uint8_t sf, uint8_t cr) { }
   void powerOff() { }
 
-  void setPowerSaving(bool en) { _power_save = en; }
-  bool getPowerSaving() const { return _power_save; }
+  void setPowerSaving(uint8_t mode) { _power_save = mode; }
+  uint8_t getPowerSaving() const { return _power_save; }
+  int rxPsSleepPercent(uint8_t mode) { return mode == 1 ? 33 : mode == 2 ? 64 : -1; }   // a device's at SF8 / 62.5 kHz
 
   void setTxPower(int8_t dbm) { _tx_dbm = dbm; }
   int8_t getTxPower() const { return _tx_dbm; }

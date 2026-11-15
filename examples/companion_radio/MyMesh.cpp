@@ -1619,9 +1619,9 @@ void MyMesh::begin() {
   applyApc();                                         // sets TX power to the ceiling and arms APC if enabled
   radio_driver.setRxBoostedGainMode(_prefs.rx_boosted_gain);
 #if FEAT_RX_POWERSAVE
-  radio_driver.setPowerSaving(_prefs.rx_powersave && !_prefs.client_repeat);   // duty-cycle RX off while repeating (must hear all traffic)
+  radio_driver.setPowerSaving(_prefs.client_repeat ? 0 : _prefs.rx_powersave);   // duty-cycle RX off while repeating (must hear all traffic)
 #else
-  radio_driver.setPowerSaving(false);   // see Features.h FEAT_RX_POWERSAVE -- ignore any stale persisted rx_powersave byte
+  radio_driver.setPowerSaving(0);   // see Features.h FEAT_RX_POWERSAVE -- ignore any stale persisted rx_powersave byte
 #endif
   board.attachDynamicPrefs(_prefs.getCustom());   // the board's own settings (FEM gains): read now, set by its CLI
   MESH_DEBUG_PRINTLN("RX Boosted Gain Mode: %s",
@@ -2123,9 +2123,9 @@ void MyMesh::handleCmdFrame(size_t len) {
       // is toggled via the app, mirroring the on-device path (a repeater must hear
       // all traffic and relay at consistent power).
 #if FEAT_RX_POWERSAVE
-      radio_driver.setPowerSaving(_prefs.rx_powersave && !_prefs.client_repeat);
+      radio_driver.setPowerSaving(_prefs.client_repeat ? 0 : _prefs.rx_powersave);
 #else
-      radio_driver.setPowerSaving(false);   // see Features.h FEAT_RX_POWERSAVE -- ignore any stale persisted rx_powersave byte
+      radio_driver.setPowerSaving(0);   // see Features.h FEAT_RX_POWERSAVE -- ignore any stale persisted rx_powersave byte
 #endif
       applyApc();   // pins power to the ceiling; apcActive() keeps it there while repeating
       MESH_DEBUG_PRINTLN("OK: CMD_SET_RADIO_PARAMS: f=%d, bw=%d, sf=%d, cr=%d", freq, bw, (uint32_t)sf,
