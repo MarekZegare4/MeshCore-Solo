@@ -103,8 +103,12 @@ contact or channel) and **Set as target**.
 **Navigate** on a waypoint, a node in Nodes or a location in a message opens
 the navigation view: the distance, the bearing **To** the target and your own
 heading (**Hdg**), with the time to arrival once you're getting closer. Turn
-until the two bearings match. The heading comes from your movement, so it
-shows `--` while you stand still.
+until the two bearings match. The heading comes from your movement: it's set
+once you've walked about 12 m in a straight-ish line, and after a turn it
+follows within a few seconds on a bike, 10–15 s at a slow walk. Standing still
+it keeps the last one (`--` until you've first moved). The time to arrival is
+worked out from how fast the distance has been shrinking over the last ~15 s,
+so it shows a few seconds after you set off.
 
 **Tools › Compass** shows the same heading as a scrolling tape with the
 degrees and direction. Where you're going (the next bend of a route, else the
