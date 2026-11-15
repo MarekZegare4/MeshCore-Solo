@@ -1430,6 +1430,7 @@ static void onFactoryReset(lv_event_t* e) { s_ui->factoryResetStep((int)(uintptr
 #include "NodesView.h"
 
 #include "MapStyle.h"
+#include "FastLine.h"       // the map's packet flow lines, drawn fast
 #include "MapScreen.h"
 #include "Chart.h"
 #include "ProfileView.h"
@@ -1489,6 +1490,7 @@ bool UITask::cpuNeeded() {
   if (lv_display_get_inactive_time(NULL) < CPU_IDLE_MS || lv_anim_count_running() > 0) return true;
   if (wifiInUse() || mapview::s_dl.liveQueued() > 0) return true;
   if (_screen == SCR_MAP && _map_pending) return true;
+  if (_screen == SCR_MAP && millis() - mapview::s_flow_drawn_ms < 300) return true;   // packet flows moving
   if (_screen == SCR_HOME && home::mini::s_area && home::mini::s_pending) return true;
   return false;
 }

@@ -385,6 +385,39 @@ bool UITask::cliCommand(const char* command, char* reply, int n) {
   }
   if (!strcmp(command, "screen on")) { wake(); snprintf(reply, n, "OK"); return true; }
   if (!strcmp(command, "screen off")) { sleep(); snprintf(reply, n, "OK"); return true; }
+  // flowdemo [n]: n packet flows (zigzags) over the open map, spread over the
+  // last 6 s (dots running, trails fading) -- the load of its repaint, with
+  // `loops` and `flowdemo stat`. Opens the map first if it isn't (then ask
+  // again), and closes the USB drive question.
+  if (!strcmp(command, "flowdemo stat")) {   // since the last ask: repaint ticks, rectangles, pixels; ms ticking, drawing
+    using namespace mapview;
+    snprintf(reply, n, "> %lu,%lu,%lu,%lu,%lu", (unsigned long)g_flow_ticks, (unsigned long)g_flow_rects, (unsigned long)g_flow_px,
+             (unsigned long)(g_flow_tick_us / 1000), (unsigned long)(g_flow_draw_us / 1000));
+    g_flow_ticks = g_flow_rects = g_flow_px = g_flow_tick_us = g_flow_draw_us = 0;
+    return true;
+  }
+  if (!strncmp(command, "flowdemo", 8)) {
+    usbTap(false);   // the USB drive question off the map (as PerfTest.h)
+    if (_screen != SCR_MAP) { showMap(false); snprintf(reply, n, "OK, map opened: again"); return true; }
+    const int cnt = command[8] ? atoi(command + 9) : 8;
+    if (_prefs) _prefs->flow_show = 1;
+    const uint32_t now = millis();
+    for (int i = 0; i < cnt && i < PacketFlow::MAX_FLOWS; i++) {
+      PacketFlow::Flow f = {};
+      f.t_ms = now - (uint32_t)(i * 6000 / (cnt ? cnt : 1));
+      f.id = 0x71000000u + (now & 0xFFFF) * 64 + i;
+      f.kind = (uint8_t)(i % 5);
+      f.origin = true;
+      f.n = (uint8_t)(2 + i % 4);
+      for (int k = 0; k < f.n; k++) {
+        mapPointToLatLon(30 + (i * 97 + k * 113) % 260, 20 + (i * 61 + k * 89 + (k & 1) * 60) % 170, f.lat[k], f.lon[k]);
+        f.node[k] = -1;
+      }
+      _core->flow.simPush(f);
+    }
+    snprintf(reply, n, "OK");
+    return true;
+  }
 #ifdef SEEED_WIO_TRACKER_L2
   if (!strcmp(command, "sdbench")) { sdbench::run(reply, n); return true; }   // SdBench.h
 #endif

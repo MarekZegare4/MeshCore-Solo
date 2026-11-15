@@ -177,8 +177,8 @@ public:
     push(f);
   }
 
-#ifdef SIM_PLATFORM
-  void simPush(const Flow& f) { push(f); }   // the sim's made-up packets (sim_open "flowdemo")
+#if defined(SIM_PLATFORM) || defined(SOLO_TEST_HOOKS)
+  void simPush(const Flow& f) { push(f); }   // made-up packets: the sim's (sim_open "flowdemo"), the L2's test hook
 #endif
 
   void clear() { _n = 0; _head = 0; _seq++; memset(_cnt, 0, sizeof(_cnt)); _hist_n = 0; _hist_head = 0; _rp_next = -1; }

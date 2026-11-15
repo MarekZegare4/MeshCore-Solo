@@ -293,8 +293,22 @@ static const uint32_t FLOW_LIFE = 7000;     // ms a flow stays on the map
 static const uint32_t FLOW_TRAVEL = 1500;   // ms the dot takes from end to end
 static const uint32_t PULSE_MS = 1400;
 static bool s_flow_nodes = false;           // no node markers on this map: a flow draws its own, while it lasts
-static lv_area_t s_flow_area;               // what the flows covered at the last tick
-static bool s_flow_area_on = false;
+static lv_area_t s_flow_area;               // what the flows cover (flowArea())
+#ifdef SOLO_TEST_HOOKS
+static uint32_t g_flow_ticks = 0, g_flow_rects = 0, g_flow_px = 0, g_flow_tick_us = 0, g_flow_draw_us = 0;   // flowdemo stat
+#endif
+// Each live flow as the last mapFlowTick() left it: what changes is repainted.
+struct FlowSeen { uint32_t id, t_ms; lv_area_t box; };
+static FlowSeen s_seen[PacketFlow::MAX_FLOWS];
+static int s_seen_n = 0;
+static uint32_t s_flow_prev_ms = 0;
+static uint32_t s_flow_drawn_ms = 0;   // when mapFlowTick() last had something to repaint (UITask::cpuNeeded())
+// Each live flow's points on the layer, as mapFlowTick() placed them: the
+// drawing (once for each band of the screen) reuses them -- the projection is
+// double maths, in software on this chip.
+struct FlowPx { uint32_t id, t_ms; uint8_t n; int16_t x[PacketFlow::MAX_PTS], y[PacketFlow::MAX_PTS]; };
+static FlowPx s_fpx[PacketFlow::MAX_FLOWS];
+static int s_fpx_n = 0;   // 0: none kept (the view moved: placed afresh)
 
 // Fixed colours, not the accent: a kind looks the same whatever the theme.
 static uint32_t flowColour(uint8_t kind) {
@@ -333,6 +347,8 @@ static void flowLegendRefresh() {
 static void flowPx(int32_t lat, int32_t lon, int32_t& x, int32_t& y);
 // Point k of a flow on the layer, where its node and you are now (PacketFlow::pointNow).
 static void flowPt(const PacketFlow::Flow& f, int k, int32_t& x, int32_t& y) {
+  for (int i = 0; i < s_fpx_n; i++)
+    if (s_fpx[i].id == f.id && s_fpx[i].t_ms == f.t_ms && k < s_fpx[i].n) { x = s_fpx[i].x[k]; y = s_fpx[i].y[k]; return; }
   int32_t lat, lon;
   s_flow->pointNow(f, k, lat, lon);
   flowPx(lat, lon, x, y);
@@ -364,6 +380,39 @@ static bool flowArea(lv_area_t& r) {
   return any;
 }
 
+// A trail fades in a few steps, each one repaint of it -- not a little every
+// tick, which repainted every trail 20 times a second: bright while its dot
+// runs, dimmer twice, then gone over the last 1.5 s (about the straight fade
+// it replaced, at fewer repaints).
+static const uint32_t FADE_AT[] = { FLOW_TRAVEL, FLOW_TRAVEL + 2000, FLOW_LIFE - 1500, FLOW_LIFE - 1000, FLOW_LIFE - 500 };
+static const lv_opa_t FADE_OPA[] = { 255, 210, 160, 120, 80, 40 };
+static uint32_t flowStep(uint32_t fade) {   // which of FADE_OPA, `fade` ms into its fading
+  uint32_t k = 0;
+  while (k < sizeof(FADE_AT) / sizeof(FADE_AT[0]) && fade >= FADE_AT[k]) k++;
+  return k;
+}
+static lv_opa_t flowLineOpa(uint32_t fade) { return FADE_OPA[flowStep(fade)]; }
+
+// Where the dot is `t` (0..1) along the line px/py, and the last point it has
+// passed.
+static void flowHead(const int32_t* px, const int32_t* py, int n, float t, int32_t& hx, int32_t& hy, int& passed) {
+  float len[PacketFlow::MAX_PTS], total = 0;
+  for (int k = 1; k < n; k++) {
+    float dx = px[k] - px[k - 1], dy = py[k] - py[k - 1];
+    len[k] = sqrtf(dx * dx + dy * dy);
+    total += len[k];
+  }
+  float left = total * (t < 0 ? 0 : t > 1 ? 1 : t);
+  hx = px[0]; hy = py[0]; passed = 0;
+  for (int k = 1; k < n; k++) {
+    if (left >= len[k]) { left -= len[k]; hx = px[k]; hy = py[k]; passed = k; continue; }
+    const float part = len[k] > 0 ? left / len[k] : 0;
+    hx = px[k - 1] + (int32_t)lroundf((px[k] - px[k - 1]) * part);
+    hy = py[k - 1] + (int32_t)lroundf((py[k] - py[k - 1]) * part);
+    break;
+  }
+}
+
 // On a map without node markers, the nodes a flow passes -- its sender and
 // repeaters, a dot and the name -- shown while it lasts and fading with it,
 // each once however many flows share it (the most visible one counts).
@@ -376,7 +425,8 @@ static void drawFlowNodes(lv_layer_t* layer, const lv_area_t& a, uint32_t now) {
     const uint32_t age = now - (f.n == 1 ? f.t_ms : f.t_fade);   // a pulse's node: as long as the pulse
     const uint32_t life = f.n == 1 ? PULSE_MS : FLOW_LIFE;
     if (age >= life) continue;
-    const lv_opa_t opa = (lv_opa_t)(age < FLOW_TRAVEL ? 255 : 255 - 255 * (age - FLOW_TRAVEL) / (life - FLOW_TRAVEL + 1));
+    const lv_opa_t opa = f.n > 1 ? flowLineOpa(age)   // a line's nodes fade with it, in its steps
+        : (lv_opa_t)(age < FLOW_TRAVEL ? 255 : 255 - 255 * (age - FLOW_TRAVEL) / (life - FLOW_TRAVEL + 1));
     for (int k = 0; k < f.n; k++) {
       if (f.node[k] < 0) continue;
       int j = 0;
@@ -423,6 +473,9 @@ static void drawFlowNodes(lv_layer_t* layer, const lv_area_t& a, uint32_t now) {
 
 static void drawFlows(lv_layer_t* layer, const lv_area_t& a) {
   if (!s_flow || !s_view_ok || !s_flow->enabled()) return;
+#ifdef SOLO_TEST_HOOKS
+  struct T { uint32_t t = micros(); ~T() { g_flow_draw_us += micros() - t; } } tt;
+#endif
   const uint32_t now = millis();
   lv_draw_line_dsc_t ln, halo;   // the line, over a dark casing that lifts it off any map, in either theme
   mapstyle::lineDsc(ln, 0, 3, LV_OPA_COVER);
@@ -433,6 +486,15 @@ static void drawFlows(lv_layer_t* layer, const lv_area_t& a) {
   ring.width = 3;
   lv_draw_rect_dsc_t dot;
   mapstyle::dotDsc(dot);
+  // mapFlowTick() repaints small pieces: what lies wholly outside the one
+  // being drawn isn't even handed to LVGL.
+  const lv_area_t& clip = layer->_clip_area;
+  auto outside = [&](int32_t x1, int32_t y1, int32_t x2, int32_t y2, int32_t pad) {
+    return min(x1, x2) - pad > clip.x2 || max(x1, x2) + pad < clip.x1 || min(y1, y2) - pad > clip.y2 || max(y1, y2) + pad < clip.y1;
+  };
+  fastline::Target fast;   // the lines straight into the draw buffer, where it can (FastLine.h)
+  const bool use_fast = fastline::begin(layer, fast);
+  const uint16_t halo565 = fastline::rgb565(mapstyle::DARK_CASE);
   for (int i = s_flow->count() - 1; i >= 0; i--) {   // oldest first: the newest on top
     const PacketFlow::Flow& f = s_flow->at(i);
     const uint32_t age = now - f.t_ms;      // the dot's run
@@ -440,7 +502,12 @@ static void drawFlows(lv_layer_t* layer, const lv_area_t& a) {
     if (fade >= FLOW_LIFE) continue;
     const lv_color_t col = lv_color_hex(flowColour(f.kind));
     int32_t px[PacketFlow::MAX_PTS], py[PacketFlow::MAX_PTS];
-    for (int k = 0; k < f.n; k++) { flowPt(f, k, px[k], py[k]); px[k] += a.x1; py[k] += a.y1; }
+    int32_t bx1 = INT32_MAX, by1 = INT32_MAX, bx2 = INT32_MIN, by2 = INT32_MIN;
+    for (int k = 0; k < f.n; k++) {
+      flowPt(f, k, px[k], py[k]); px[k] += a.x1; py[k] += a.y1;
+      bx1 = min(bx1, px[k]); by1 = min(by1, py[k]); bx2 = max(bx2, px[k]); by2 = max(by2, py[k]);
+    }
+    if (outside(bx1, by1, bx2, by2, 28)) continue;   // (28: the widest ring)
     if (f.n == 1) {   // a pulse
       if (age >= PULSE_MS) continue;
       ring.color = col;
@@ -461,7 +528,7 @@ static void drawFlows(lv_layer_t* layer, const lv_area_t& a) {
     const float t = age >= FLOW_TRAVEL ? 1.0f : (float)age / FLOW_TRAVEL;
     float left = total * t;
     ln.color = col;
-    ln.opa = (lv_opa_t)(fade < FLOW_TRAVEL ? 255 : 255 - 215 * (fade - FLOW_TRAVEL) / (FLOW_LIFE - FLOW_TRAVEL));
+    ln.opa = flowLineOpa(fade);
     halo.opa = mapstyle::caseOpa(mapstyle::DARK_CASE, ln.opa);
     int32_t hx = px[0], hy = py[0];   // the dot
     int32_t ex_[PacketFlow::MAX_PTS], ey_[PacketFlow::MAX_PTS];
@@ -473,13 +540,26 @@ static void drawFlows(lv_layer_t* layer, const lv_area_t& a) {
       hx = ex_[k]; hy = ey_[k];
       left -= len[k];
     }
-    for (int pass = 0; pass < 2; pass++)   // all the halo, then all the line: joints stay clean
-      for (int k = 1; k <= segs; k++) {
+    // All the halo, then all the line, each one polyline: one draw task
+    // apiece, not one a segment (a task costs about as much as its pixels on
+    // this renderer), and the joints stay clean.
+    if (segs > 0 && use_fast) {
+      int32_t xs[PacketFlow::MAX_PTS], ys[PacketFlow::MAX_PTS];
+      xs[0] = px[0]; ys[0] = py[0];
+      for (int k = 1; k <= segs; k++) { xs[k] = ex_[k]; ys[k] = ey_[k]; }
+      fastline::polyline(fast, xs, ys, segs + 1, (float)halo.width, halo565, halo.opa);
+      fastline::polyline(fast, xs, ys, segs + 1, (float)ln.width, fastline::rgb565(flowColour(f.kind)), ln.opa);
+    } else if (segs > 0) {
+      lv_point_precise_t pts[PacketFlow::MAX_PTS];
+      pts[0] = { px[0], py[0] };
+      for (int k = 1; k <= segs; k++) pts[k] = { ex_[k], ey_[k] };
+      for (int pass = 0; pass < 2; pass++) {
         lv_draw_line_dsc_t& d = pass ? ln : halo;
-        d.p1 = { px[k - 1], py[k - 1] };
-        d.p2 = { ex_[k], ey_[k] };
+        d.points = pts;
+        d.point_cnt = segs + 1;
         lv_draw_line(layer, &d);
       }
+    }
     if (age < FLOW_TRAVEL) {
       dot.bg_color = col;
       lv_area_t d = { hx - 5, hy - 5, hx + 5, hy + 5 };
@@ -837,7 +917,9 @@ void UITask::buildMap() {
   }
   mapview::s_flow = &_core->flow;
   mapview::s_view_ok = false;
-  mapview::s_flow_area_on = false;
+  mapview::s_seen_n = 0;
+  mapview::s_fpx_n = 0;
+  mapview::s_flow_prev_ms = 0;
   mapview::s_sig_n = 0;
 
   areaBuildLayer(body);   // download frame / area outlines, over the tiles (MapAreas.h)
@@ -1179,6 +1261,7 @@ void UITask::layoutMapMarks(double left, double top, int w, int h) {
   if (!s_mark_layer) return;
   if (s_view_ok && (s_view_left != left || s_view_top != top || s_view_z != _map_z) && flowArea(s_flow_area))
     lv_obj_invalidate(s_mark_layer);   // the view moved under live flows
+  if (s_view_left != left || s_view_top != top || s_view_z != _map_z) s_seen_n = s_fpx_n = 0;   // (mapFlowTick: all new again)
   s_view_left = left; s_view_top = top; s_view_z = _map_z; s_view_ok = true;
   const int half = MARK_D / 2;
   const int lh = lv_font_get_line_height(THEME_FONT_SMALL) + 2;
@@ -1357,27 +1440,125 @@ void UITask::mapLongPress(int x, int y) {
 }
 
 
-// Packet flow: while flows move, the area they cover (and covered) is
-// repainted ~20 times a second; nothing at all when none is live.
+// Packet flow: repainted ~20 times a second while something moves, and only
+// what changed since the last tick -- the stretch a dot ran (its line is
+// solid while it runs), a ring, a trail whose fading stepped, one that came,
+// went or moved. Painting the box round all the flows instead redrew most of
+// the map every tick (~34 ms of each 50) once a few were spread over it.
+namespace mapview {
+
+// The rectangles to repaint (layer px): overlapping ones merged; past the
+// cap, all as one.
+struct Dirty {
+  static const int CAP = 12;
+  lv_area_t r[CAP];
+  int n = 0;
+  bool all = false;
+  lv_area_t u;
+  void add(lv_area_t a) {
+    if (a.x2 < a.x1 || a.y2 < a.y1) return;
+    u = (n || all) ? lv_area_t{ min(u.x1, a.x1), min(u.y1, a.y1), max(u.x2, a.x2), max(u.y2, a.y2) } : a;
+    if (all) return;
+    for (int i = 0; i < n; i++)
+      if (!(a.x2 < r[i].x1 || a.x1 > r[i].x2 || a.y2 < r[i].y1 || a.y1 > r[i].y2)) {
+        a = { min(a.x1, r[i].x1), min(a.y1, r[i].y1), max(a.x2, r[i].x2), max(a.y2, r[i].y2) };
+        r[i] = r[--n];
+        i = -1;   // the grown one may touch others now
+      }
+    if (n == CAP) { all = true; return; }
+    r[n++] = a;
+  }
+};
+static lv_area_t ptBox(int32_t x1, int32_t y1, int32_t x2, int32_t y2, int32_t pad) {
+  return { min(x1, x2) - pad, min(y1, y2) - pad, max(x1, x2) + pad, max(y1, y2) + pad };
+}
+}  // namespace mapview
+
 void UITask::mapFlowTick() {
   using namespace mapview;
   if (!s_mark_layer || (int32_t)(millis() - _next_flow_ms) < 0) return;
   _next_flow_ms = millis() + 50;
+#ifdef SOLO_TEST_HOOKS
+  struct T { uint32_t t = micros(); ~T() { g_flow_tick_us += micros() - t; } } tt;
+#endif
   _core->flow.tick();   // Play all: the next one when it's due
   if (++_flow_legend_tick >= 10) { _flow_legend_tick = 0; flowLegendRefresh(); }   // twice a second
-  lv_area_t r;
-  bool now_on = flowArea(r);
-  if (!now_on && !s_flow_area_on) return;
+  const uint32_t now = millis();
+  const uint32_t prev = s_flow_prev_ms ? s_flow_prev_ms : now;
+  s_flow_prev_ms = now;
+  if (!s_flow || !s_view_ok || (!s_flow->enabled() && !s_seen_n)) { s_seen_n = 0; return; }
+
+  s_fpx_n = 0;   // placed afresh below, and kept for the drawing
+  Dirty d;
+  FlowSeen seen[PacketFlow::MAX_FLOWS];
+  int seen_n = 0;
+  const int32_t RING = 28, NAME_W = s_flow_nodes ? 120 : 0;   // a ring's reach; a node's name, right of it
+  for (int i = 0; s_flow->enabled() && i < s_flow->count(); i++) {
+    const PacketFlow::Flow& f = s_flow->at(i);
+    const uint32_t fade = now - f.t_fade, age = now - f.t_ms;
+    if (fade >= FLOW_LIFE) continue;   // gone (as the seen list notices)
+    int32_t px[PacketFlow::MAX_PTS], py[PacketFlow::MAX_PTS];
+    lv_area_t box;
+    for (int k = 0; k < f.n; k++) {
+      flowPt(f, k, px[k], py[k]);
+      box = k ? lv_area_t{ min(box.x1, px[k]), min(box.y1, py[k]), max(box.x2, px[k]), max(box.y2, py[k]) }
+              : lv_area_t{ px[k], py[k], px[k], py[k] };
+    }
+    box.x1 -= RING; box.y1 -= RING; box.x2 += RING + NAME_W; box.y2 += RING;
+    if (s_fpx_n < PacketFlow::MAX_FLOWS) {
+      FlowPx& c = s_fpx[s_fpx_n++];
+      c.id = f.id; c.t_ms = f.t_ms; c.n = f.n;
+      for (int k = 0; k < f.n; k++) { c.x[k] = (int16_t)px[k]; c.y[k] = (int16_t)py[k]; }
+    }
+    if (seen_n < PacketFlow::MAX_FLOWS) seen[seen_n++] = { f.id, f.t_ms, box };
+
+    const FlowSeen* was = nullptr;
+    for (int j = 0; j < s_seen_n && !was; j++) if (s_seen[j].id == f.id && s_seen[j].t_ms == f.t_ms) was = &s_seen[j];
+    const bool restarted = was && (int32_t)(f.t_fade - prev) > 0;   // a copy heard: bright again
+    if (restarted || (!was && f.n == 1)) { d.add(box); continue; }
+    if (!was && age >= FLOW_TRAVEL) { d.add(box); continue; }   // (a replay may come in late)
+    if (was && memcmp(&was->box, &box, sizeof(box))) { d.add(was->box); d.add(box); continue; }   // moved (you, or a node)
+    if (was && flowStep(fade) != flowStep(prev - f.t_fade)) { d.add(box); continue; }           // its fading stepped
+
+    const uint32_t age0 = was ? prev - f.t_ms : 0;   // new: its run from the start
+    if (f.n == 1) {   // a pulse: its ring (and its node's name) while it spreads
+      if (age0 < PULSE_MS) d.add({ px[0] - RING, py[0] - RING, px[0] + RING + NAME_W, py[0] + RING });
+      continue;
+    }
+    if (age0 < FLOW_TRAVEL) {   // the dot ran on: from where it was to where it is
+      int32_t x0, y0, x1, y1;
+      int k0, k1;
+      flowHead(px, py, f.n, (float)age0 / FLOW_TRAVEL, x0, y0, k0);
+      flowHead(px, py, f.n, (float)age / FLOW_TRAVEL, x1, y1, k1);
+      lv_area_t r = ptBox(x0, y0, x1, y1, 8);
+      for (int k = k0 + 1; k <= k1; k++) r = { min(r.x1, px[k] - 8), min(r.y1, py[k] - 8), max(r.x2, px[k] + 8), max(r.y2, py[k] + 8) };
+      d.add(r);
+    }
+    if (age >= FLOW_TRAVEL && age0 < FLOW_TRAVEL + PULSE_MS)   // the ring where it arrived
+      d.add({ px[f.n - 1] - RING, py[f.n - 1] - RING, px[f.n - 1] + RING, py[f.n - 1] + RING });
+  }
+  for (int j = 0; j < s_seen_n; j++) {   // gone since: wiped
+    bool still = false;
+    for (int i = 0; i < seen_n && !still; i++) still = seen[i].id == s_seen[j].id && seen[i].t_ms == s_seen[j].t_ms;
+    if (!still) d.add(s_seen[j].box);
+  }
+  memcpy(s_seen, seen, sizeof(FlowSeen) * seen_n);
+  s_seen_n = seen_n;
+
   lv_area_t la;
   lv_obj_get_coords(s_mark_layer, &la);
   auto inval = [&](const lv_area_t& b) {
     lv_area_t x = { la.x1 + b.x1, la.y1 + b.y1, la.x1 + b.x2, la.y1 + b.y2 };
     lv_obj_invalidate_area(s_mark_layer, &x);
   };
-  if (s_flow_area_on) inval(s_flow_area);
-  if (now_on) inval(r);
-  s_flow_area = r;
-  s_flow_area_on = now_on;
+  if (d.all) inval(d.u);
+  else for (int i = 0; i < d.n; i++) inval(d.r[i]);
+  if (d.all || d.n) s_flow_drawn_ms = now;
+#ifdef SOLO_TEST_HOOKS
+  g_flow_ticks++;
+  if (d.all) { g_flow_rects++; g_flow_px += lv_area_get_size(&d.u); }
+  else for (int i = 0; i < d.n; i++) { g_flow_rects++; g_flow_px += lv_area_get_size(&d.r[i]); }
+#endif
 }
 
 // ── Recent packets (PacketFlow history) ──────────────────────────────────────
