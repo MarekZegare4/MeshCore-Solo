@@ -7,6 +7,13 @@
 # PSRAM; frames draw ~35% faster. Costs 16 KB internal RAM.
 CONFIG_ESP32S3_INSTRUCTION_CACHE_32KB=y
 CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y
+# Code copied to PSRAM at boot and run from there: an instruction cache miss
+# is filled from octal PSRAM instead of QIO flash, several times faster --
+# screens build 13% and open 11% faster, full redraws 14%, map panning ~40%
+# (UI_PERF_TEST). Costs 2.1 MB of the 8 MB PSRAM (the code; read-only data,
+# mostly fonts and emoji, stays in flash: moving it too, XIP_FROM_PSRAM, took
+# 4.3 MB for no more speed) and ~2.6 KB internal RAM.
+CONFIG_SPIRAM_FETCH_INSTRUCTIONS=y
 
 # ...won back, and more: TLS (map downloads, live tiles, OTA) and the BLE
 # host keep their buffers in PSRAM.
