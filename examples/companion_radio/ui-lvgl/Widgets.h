@@ -675,6 +675,53 @@ static void rowsFit(lv_obj_t* root) {
     return LV_OBJ_TREE_WALK_NEXT;
   }, nullptr);
 }
+// Building a screen, LVGL refreshes an object after each style set or added
+// style: invalidates it twice, works its extended draw area, layer type and
+// blur out again, tells it and its children -- ~20 us a time, 500 times on a
+// settings page, half its build. newScreen() turns that off (LVGL's own
+// switch, global) and the first layout or frame after does it once for
+// every object (styleBatchEnd()): the same steps, each object once.
+static lv_obj_t* s_style_batch = nullptr;
+#if defined(SEEED_WIO_TRACKER_L2)
+// LVGL switches refreshing off and back on around each object it creates
+// (its theme applied) and deletes, which would end the batch at the first
+// lv_obj_create(): -Wl,--wrap=lv_obj_enable_style_refresh (platformio.ini)
+// keeps it off while a batch is open. (The sim has no wrap: there the batch
+// ends at once and every style set refreshes, as LVGL does by default.)
+extern "C" void __real_lv_obj_enable_style_refresh(bool en);
+extern "C" void __wrap_lv_obj_enable_style_refresh(bool en) { __real_lv_obj_enable_style_refresh(en && !s_style_batch); }
+#endif
+static void styleRefreshTree(lv_obj_t* o) {
+  lv_obj_update_layer_type(o);
+  lv_obj_update_blur_status(o);
+  lv_obj_refresh_ext_draw_size(o);
+  lv_obj_send_event(o, LV_EVENT_STYLE_CHANGED, NULL);   // a label measures its text again
+  lv_obj_mark_layout_as_dirty(o);
+  const uint32_t n = lv_obj_get_child_count(o);
+  for (uint32_t i = 0; i < n; i++) styleRefreshTree(lv_obj_get_child(o, i));
+}
+static void styleBatchEnd() {
+  if (!s_style_batch) return;
+  lv_obj_t* root = s_style_batch;
+  s_style_batch = nullptr;
+  lv_obj_enable_style_refresh(true);
+#ifdef PERF_PROF
+  lvprof_begin("styleBatchEnd");
+#endif
+  if (lv_obj_is_valid(root)) { styleRefreshTree(root); lv_obj_invalidate(root); }
+  // A style set meanwhile outside it (the status bar, a toast) wasn't
+  // invalidated: the overlays are redrawn whole with the new screen anyway.
+  lv_obj_invalidate(lv_layer_top());
+#ifdef PERF_PROF
+  lvprof_end("styleBatchEnd");
+#endif
+}
+static void styleBatchBegin(lv_obj_t* root) {
+  styleBatchEnd();
+  s_style_batch = root;
+  lv_obj_enable_style_refresh(false);
+}
+
 static void rowsFitPending() {
   if (!s_fit_pending) return;
   s_fit_pending = false;
@@ -684,6 +731,9 @@ static void rowsFitPending() {
 }
 // lv_obj_update_layout() for a screen just built: its rows fitted first.
 static void layoutNow(lv_obj_t* o) {
+  // the screen being built: its styles in place before it's measured (the
+  // status bar placing its icons meanwhile is no reason)
+  if (s_style_batch && lv_obj_get_screen(o) == s_style_batch) styleBatchEnd();
   rowsFitPending();
   lv_obj_update_layout(o);
 }

@@ -14,6 +14,7 @@
 #include <src/core/lv_obj_event_private.h>   // lv_cover_check_info_t (coversOwnArea)
 #include <src/widgets/label/lv_label_private.h>   // lv_label_t (labelShows)
 #include <src/misc/lv_area_private.h>   // lv_area_intersect (clockview::wheelDraw)
+#include <src/core/lv_obj_style_private.h>   // lv_obj_update_layer_type (styleBatchEnd, Widgets.h)
 #include <stdarg.h>
 #include <sys/stat.h>
 
@@ -133,6 +134,9 @@ extern "C" EMSCRIPTEN_KEEPALIVE int sim_buzzer_freq_hz() { return s_ui ? (int)s_
 extern "C" EMSCRIPTEN_KEEPALIVE int sim_buzzer_get_volume() { return s_ui ? (int)s_ui->buzzerVolume() : 0; }
 #endif
 
+#ifdef PERF_PROF
+#include "LvProf.h"
+#endif
 #include "Widgets.h"
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
@@ -186,6 +190,7 @@ void UITask::begin(DisplayDriver* display_drv, SensorManager* sensors, NodePrefs
   theme::setLight(lvport::loadLight());
   theme::install(lv_display_get_default());
   lv_display_add_event_cb(lv_display_get_default(), [](lv_event_t*) {
+    styleBatchEnd();   // a screen just built: its styles in place before the frame (Widgets.h)
     rowsFitPending();
     if (s_hdr_fit && s_ui) { s_hdr_fit = false; s_ui->fitHeader(); }
   }, LV_EVENT_REFR_START, NULL);
@@ -412,11 +417,13 @@ void UITask::loop() {
       messagePopupTick();
     }
     lvport::cpuSlow(!cpuNeeded());
+    styleBatchEnd();   // a screen built this pass: its style refreshes, once (Widgets.h)
     lv_next = lv_timer_handler();
   } else if ((int32_t)(millis() - _next_doze_ms) >= 0) {   // the screen off: doze on battery
     _next_doze_ms = millis() + 2000;
     lvport::cpuDoze(dozeOk());
   }
+  styleBatchEnd();   // (asleep: built by a message or an alarm, not drawn yet)
   lvport::idle(idleMillis(lv_next));
 }
 
@@ -1190,6 +1197,7 @@ lv_obj_t* UITask::newScreen(const char* title, bool with_back) {
   lv_obj_t* scr = lv_obj_create(NULL);
   s_fit_screen = scr;   // rowsFit()
   s_fit_pending = true;
+  styleBatchBegin(scr);   // style refreshes once for all, at the first layout (Widgets.h)
   styleOpaque(scr, theme::BG);
   lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
 

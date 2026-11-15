@@ -57,6 +57,16 @@
 // Snapshots: the screen under an open popup, frozen dimmed (Widgets.h, namespace freeze).
 #define LV_USE_SNAPSHOT         1
 
+// -D PERF_PROF: LVGL's profiler hooks into LvProf.h's tally (perf builds only).
+#ifdef PERF_PROF
+  #define LV_USE_PROFILER         1
+  #define LV_USE_PROFILER_BUILTIN 0
+  #define LV_PROFILER_INCLUDE     "LvProf.h"
+  #define LV_PROFILER_STYLE       1
+  #define LV_PROFILER_DRAW        1
+  #define LV_PROFILER_REFR        1
+#endif
+
 #define LV_USE_THEME_DEFAULT    1
 #define LV_THEME_DEFAULT_DARK   1
 

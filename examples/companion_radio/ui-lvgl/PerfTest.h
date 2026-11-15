@@ -47,6 +47,15 @@ extern "C" lv_result_t __wrap_lv_obj_send_event(lv_obj_t* o, lv_event_code_t c, 
 #define TM_PRINT(tag)
 #endif
 
+#if defined(PERF_PROF)
+#include "LvProf.h"
+#define PROF_RESET() lvprof_reset()
+#define PROF_DUMP(what, page, phase) do { char t_[40]; snprintf(t_, sizeof(t_), "%s %d %s", what, page, phase); lvprof_dump(t_, 14); } while (0)
+#else
+#define PROF_RESET()
+#define PROF_DUMP(what, page, phase)
+#endif
+
 #if defined(UI_PERF_TEST)
 // Perf tools (-D UI_PERF_TEST, output lines start "PERF"): each settings page
 // and most screens built and drawn once, draw profiles, a popup test, then a
@@ -57,6 +66,8 @@ extern "C" lv_result_t __wrap_lv_obj_send_event(lv_obj_t* o, lv_event_code_t c, 
 // -D PERF_WRAP_TEXT plus -Wl,--wrap= of lv_text_get_size_attributes,
 // lv_layout_apply, lv_obj_get_style_prop_internal and lv_obj_send_event adds
 // what layout costs per screen (text measured, flex runs, style reads, events).
+// -D PERF_PROF: LVGL's own profiler hooks (LvProf.h) -- each screen's build,
+// layout and first frame as the LVGL functions taking the most CPU cycles.
 //
 // A full redraw of the active screen (and the top layer), timed per
 // object -- its own drawing, not its children's -- the costliest listed with
@@ -323,19 +334,19 @@ void UITask::perfWalk() {
 #endif
       if (step == 0) {   // once: every settings page and most screens, built and drawn once
         auto one = [this](const char* what, int page, void (UITask::*fn)()) {
-          TM_RESET();
+          TM_RESET(); PROF_RESET();
           uint32_t t = micros();
           if (fn) (this->*fn)(); else showSchemaSettings(page);
           uint32_t b = micros() - t;
-          TM_PRINT("build"); TM_RESET();
+          TM_PRINT("build"); TM_RESET(); PROF_DUMP(what, page, "build");
           uint32_t tl = micros();
           layoutNow(lv_screen_active());   // layout apart from drawing
           tl = micros() - tl;
-          TM_PRINT("layout"); TM_RESET();
+          TM_PRINT("layout"); TM_RESET(); PROF_DUMP(what, page, "layout");
           uint32_t fl0 = lvport::s_flush_us, td = micros();
           lv_refr_now(NULL);
           td = micros() - td;
-          TM_PRINT("draw"); TM_RESET();
+          TM_PRINT("draw"); TM_RESET(); PROF_DUMP(what, page, "draw");
           uint32_t fl1 = lvport::s_flush_us - fl0;
           uint32_t total = micros() - t;
           uint32_t tr = micros();   // the same screen drawn again: what a first frame costs over a steady one
