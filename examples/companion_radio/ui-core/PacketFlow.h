@@ -127,8 +127,8 @@ public:
       int16_t idx;
       if (type != PAYLOAD_TYPE_TRACE && hc > 0 && placeHash(pkt->path, hs, false, 0, 0, false, lat, lon, idx)) add(f, lat, lon, idx);
       else if (own) { add(f, ola, olo); f.here = true; }
-      else return;
-      push(f);
+      remember(f, hc, true);
+      if (f.n) push(f);
       return;
     }
 
@@ -153,14 +153,12 @@ public:
       f.origin = true;
     }
     for (int i = k; i < MAX_PTS; i++) add(f, lat[i], lon[i], node[i]);
-    if (f.n < 2) {   // only here, or nothing: a pulse here
-      if (!own) return;
+    if (f.n < 2) {   // only here, or nothing: a pulse here (nowhere, with no position of yours)
       f.n = 0;
-      add(f, ola, olo);
-      f.here = true;
+      if (own) { add(f, ola, olo); f.here = true; }
     }
-    if (!f.here) remember(f, hc);
-    push(f);
+    remember(f, hc, false);
+    if (f.n) push(f);
   }
 
   void onSent(const mesh::Packet* pkt) {
@@ -179,11 +177,17 @@ public:
     push(f);
   }
 
+#ifdef SIM_PLATFORM
+  void simPush(const Flow& f) { push(f); }   // the sim's made-up packets (sim_open "flowdemo")
+#endif
+
   void clear() { _n = 0; _head = 0; _seq++; memset(_cnt, 0, sizeof(_cnt)); _hist_n = 0; _hist_head = 0; _rp_next = -1; }
 
   // ── Recent packets ──
-  // The last HIST packets heard that made a line, each with the ways it came
-  // (a copy per repeater that relayed it), for a list to play again. Kept
+  // The last HIST packets heard, each with the ways it came (a copy per
+  // repeater that relayed it; a pulse is a way too, none when nothing of it
+  // could be placed), for a list to play again -- every packet the legend
+  // counts, so the list never says less than the count. Kept
   // only once a frontend asks (keepHistory(): the L2's map), so the others
   // spend no memory on it.
   static const int HIST = 10;
@@ -193,7 +197,8 @@ public:
     uint32_t id;      // the packet (Flow::id)
     uint32_t ts;      // RTC time it was first heard
     uint8_t  kind;
-    uint8_t  hops;    // repeaters on its first copy
+    uint8_t  hops;    // repeaters on its first copy (routed: the ones still ahead)
+    bool     routed;  // a direct packet heard on its way elsewhere
     uint8_t  heard;   // copies heard
     uint8_t  ways;    // distinct lines kept in `way`
     Flow     way[HIST_WAYS];
@@ -239,7 +244,7 @@ public:
   }
 
 private:
-  void remember(const Flow& f, uint8_t hops) {
+  void remember(const Flow& f, uint8_t hops, bool routed) {
     if (!_hist) return;
     for (int i = 0; i < _hist_n; i++) {   // another copy of one kept: its way, if new
       Heard& h = _hist[(_hist_head + HIST - 1 - i) % HIST];
@@ -247,7 +252,7 @@ private:
       if (h.heard < 255) h.heard++;
       bool known = false;
       for (int w = 0; w < h.ways && !known; w++) known = sameLine(h.way[w], f);
-      if (!known && h.ways < HIST_WAYS) keepWay(h, h.ways++, f);
+      if (!known && f.n && h.ways < HIST_WAYS) keepWay(h, h.ways++, f);
       return;
     }
     Heard& h = _hist[_hist_head];
@@ -255,9 +260,10 @@ private:
     h.ts = the_mesh.getRTCClock()->getCurrentTime();
     h.kind = f.kind;
     h.hops = hops;
+    h.routed = routed;
     h.heard = 1;
-    h.ways = 1;
-    keepWay(h, 0, f);
+    h.ways = f.n ? 1 : 0;
+    if (f.n) keepWay(h, 0, f);
     _hist_head = (_hist_head + 1) % HIST;
     if (_hist_n < HIST) _hist_n++;
     // A replayAll() running: the one it plays next is a place older now (gone,

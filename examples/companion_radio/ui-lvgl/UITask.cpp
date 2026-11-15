@@ -1426,6 +1426,7 @@ static void onFactoryReset(lv_event_t* e) { s_ui->factoryResetStep((int)(uintptr
 
 #include "NodesView.h"
 
+#include "MapStyle.h"
 #include "MapScreen.h"
 #include "Chart.h"
 #include "ProfileView.h"
@@ -1511,6 +1512,31 @@ void UITask::simTrail() {
   }
 }
 
+void UITask::simFlows() {
+  if (_prefs) _prefs->flow_show = 1;
+  // Kraków: three repeaters round the old town relaying to here, a channel
+  // message, an advert from the west and a DM, each still on its way in.
+  struct P { float lat, lon; };
+  const P ME = { 50.0614f, 19.9372f };   // where simTrail ends
+  const struct { uint8_t kind; int n; P p[4]; } F[] = {
+    { PacketFlow::K_GROUP,  4, { { 50.0720f, 19.9080f }, { 50.0700f, 19.9230f }, { 50.0660f, 19.9300f }, ME } },
+    { PacketFlow::K_ADVERT, 3, { { 50.0520f, 19.9000f }, { 50.0560f, 19.9180f }, ME } },
+    { PacketFlow::K_MSG,    3, { { 50.0500f, 19.9600f }, { 50.0560f, 19.9500f }, ME } },
+    { PacketFlow::K_REQ,    2, { { 50.0700f, 19.9580f }, ME } },
+  };
+  for (unsigned i = 0; i < sizeof(F) / sizeof(F[0]); i++) {
+    PacketFlow::Flow f = {};
+    f.t_ms = millis() - 600;   // the line drawn most of the way: full by a screenshot 0.9 s on
+    f.id = 0x5100 + i;
+    f.kind = F[i].kind;
+    f.origin = true;
+    for (int k = 0; k < F[i].n; k++) {
+      f.lat[f.n] = (int32_t)(F[i].p[k].lat * 1e6f); f.lon[f.n] = (int32_t)(F[i].p[k].lon * 1e6f); f.node[f.n] = -1; f.n++;
+    }
+    _core->flow.simPush(f);
+  }
+}
+
 void UITask::simUnread() {
   _core->simUnreadDemo();
   if (_screen == SCR_CHATS) refreshChats();
@@ -1556,6 +1582,8 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_open(const char* name) {
   if (!strncmp(name, "field@", 6)) { s_ui->homeFieldSet(atoi(name + 6), atoi(name + 8)); return; }   // "field@0:1": slot 0 = Battery (V)
   if (!strcmp(name, "dm")) { s_ui->simDm(); return; }
   if (!strcmp(name, "trail")) { s_ui->simTrail(); return; }   // a 13-point trail, as ui-new's sim_trail
+  if (!strcmp(name, "flowdemo")) { s_ui->simFlows(); return; }   // packet flow lines, as if just heard
+  if (!strcmp(name, "gpson")) { s_ui->setGps(true); return; }
   if (!strcmp(name, "trackback")) { s_ui->setGps(true); s_ui->navToolAction(navmap::TL_TRACKBACK); return; }   // Map tools' button, GPS on
   if (!strcmp(name, "send")) { s_ui->simSend(); return; }
   if (!strcmp(name, "unread")) { s_ui->simUnread(); return; }

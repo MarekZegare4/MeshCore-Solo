@@ -17,7 +17,6 @@ namespace routemap {
 
 enum : uint8_t { RT_LIST = navmap::TL_ROUTE_BASE, RT_STOP, RT_FOLLOW, RT_FOLLOW_REV, RT_DELETE, RT_IMPORT };
 
-static const uint32_t COLOR = 0xD65DB1;
 static float* s_nx = nullptr;   // normalised Web-Mercator, offsets from s_ox / s_oy (as the trail's)
 static float* s_ny = nullptr;
 static double s_ox = 0, s_oy = 0;
@@ -29,6 +28,7 @@ static lv_point_precise_t* s_pts = nullptr;
 static int s_pts_n = 0;
 static int32_t s_pts_x0 = 0, s_pts_y0 = 0;
 static lv_obj_t* s_line = nullptr;
+static bool s_dashed = false;   // Track back: dashes over the trail it retraces, not a line under it
 static int s_sel = -1;                 // the route a popup is about
 static lv_obj_t* s_del_lbl = nullptr;
 static int32_t s_last_tlat = 0, s_last_tlon = 0;
@@ -84,13 +84,8 @@ static void onDraw(lv_event_t* e) {
     }
     s_pts_x0 = a.x1; s_pts_y0 = a.y1;
   }
-  lv_draw_line_dsc_t d;
-  lv_draw_line_dsc_init(&d);
-  lv_obj_init_draw_line_dsc(obj, LV_PART_MAIN, &d);
-  d.base.layer = lv_event_get_layer(e);
-  d.points = s_pts;
-  d.point_cnt = s_pts_n;
-  lv_draw_line(d.base.layer, &d);
+  if (s_dashed) mapstyle::dashedPolyline(lv_event_get_layer(e), s_pts, s_pts_n, mapstyle::ROUTE, mapstyle::TRAIL_W, 0);
+  else mapstyle::polyline(lv_event_get_layer(e), s_pts, s_pts_n, mapstyle::ROUTE, mapstyle::ROUTE_W, mapstyle::LIGHT_CASE);
 }
 
 // The followed route's points, once per route (and again after a change to the slots).
@@ -175,18 +170,23 @@ void UITask::buildRouteLayer() {
   lv_obj_t* o = lv_obj_create(_map_marks);
   lv_obj_remove_style_all(o);
   lv_obj_set_size(o, LV_PCT(100), LV_PCT(100));
-  lv_obj_set_style_line_width(o, 4, 0);
-  lv_obj_set_style_line_color(o, lv_color_hex(routemap::COLOR), 0);
-  lv_obj_set_style_line_opa(o, LV_OPA_80, 0);
-  lv_obj_set_style_line_rounded(o, true, 0);
   lv_obj_remove_flag(o, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_add_event_cb(o, routemap::onDraw, LV_EVENT_DRAW_MAIN, nullptr);
   routemap::s_line = o;
   routemap::s_pts_n = 0;
   routemap::s_slot = -2;   // a new map: the points again
+  routemap::s_dashed = false;   // under the trail, as built
 }
 
 void UITask::layoutRoute(double scale) {
+  // A planned route lies under the trail walked; Track back's goes over it,
+  // dashed, or the trail would hide it.
+  const bool tb = _core->guide.trackBack();
+  if (tb != routemap::s_dashed && routemap::s_line && navmap::s_trail) {
+    routemap::s_dashed = tb;
+    lv_obj_move_to_index(routemap::s_line, lv_obj_get_index(navmap::s_trail));   // the two swap
+    lv_obj_invalidate(routemap::s_line);
+  }
   routemap::sync(_core->guide);
   routemap::layout(scale);
 }

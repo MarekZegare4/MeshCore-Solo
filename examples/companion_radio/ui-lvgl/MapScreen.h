@@ -389,10 +389,6 @@ static void drawFlowNodes(lv_layer_t* layer, const lv_area_t& a, uint32_t now) {
     }
   }
   lv_draw_rect_dsc_t dot, pill;
-  lv_draw_rect_dsc_init(&dot);
-  dot.radius = LV_RADIUS_CIRCLE;
-  dot.border_color = lv_color_hex(theme::BG);
-  dot.border_width = 2;
   lv_draw_rect_dsc_init(&pill);
   pill.bg_color = lv_color_hex(theme::BG);
   pill.radius = 4;
@@ -405,8 +401,8 @@ static void drawFlowNodes(lv_layer_t* layer, const lv_area_t& a, uint32_t now) {
   for (int j = 0; j < nn; j++) {
     const Node& n = nodes[j];
     if (n.x < a.x1 - 120 || n.x > a.x2 + 8 || n.y < a.y1 - 20 || n.y > a.y2 + 20) continue;
+    mapstyle::dotDsc(dot, 2, n.opa);
     dot.bg_color = lv_color_hex(flowColour(n.kind));
-    dot.bg_opa = dot.border_opa = n.opa;
     lv_area_t da = { n.x - 5, n.y - 5, n.x + 5, n.y + 5 };
     lv_draw_rect(layer, &dot, &da);
     ContactInfo c;
@@ -428,24 +424,15 @@ static void drawFlowNodes(lv_layer_t* layer, const lv_area_t& a, uint32_t now) {
 static void drawFlows(lv_layer_t* layer, const lv_area_t& a) {
   if (!s_flow || !s_view_ok || !s_flow->enabled()) return;
   const uint32_t now = millis();
-  lv_draw_line_dsc_t ln, halo;   // the line, over a dark halo that lifts it off the map
-  lv_draw_line_dsc_init(&ln);
-  ln.width = 3;
-  ln.round_start = ln.round_end = 1;
-  halo = ln;
-  halo.width = 6;
-  halo.color = lv_color_hex(theme::BG);
+  lv_draw_line_dsc_t ln, halo;   // the line, over a dark casing that lifts it off any map, in either theme
+  mapstyle::lineDsc(ln, 0, 3, LV_OPA_COVER);
+  mapstyle::lineDsc(halo, mapstyle::DARK_CASE, 3 + mapstyle::CASE_W, LV_OPA_COVER);
   lv_draw_arc_dsc_t ring;
   lv_draw_arc_dsc_init(&ring);
   ring.start_angle = 0; ring.end_angle = 360;
   ring.width = 3;
   lv_draw_rect_dsc_t dot;
-  lv_draw_rect_dsc_init(&dot);
-  dot.radius = LV_RADIUS_CIRCLE;
-  dot.bg_opa = LV_OPA_COVER;
-  dot.border_color = lv_color_hex(theme::BG);
-  dot.border_width = 2;
-  dot.border_opa = LV_OPA_COVER;
+  mapstyle::dotDsc(dot);
   for (int i = s_flow->count() - 1; i >= 0; i--) {   // oldest first: the newest on top
     const PacketFlow::Flow& f = s_flow->at(i);
     const uint32_t age = now - f.t_ms;      // the dot's run
@@ -475,7 +462,7 @@ static void drawFlows(lv_layer_t* layer, const lv_area_t& a) {
     float left = total * t;
     ln.color = col;
     ln.opa = (lv_opa_t)(fade < FLOW_TRAVEL ? 255 : 255 - 215 * (fade - FLOW_TRAVEL) / (FLOW_LIFE - FLOW_TRAVEL));
-    halo.opa = (lv_opa_t)(ln.opa * 2 / 3);
+    halo.opa = mapstyle::caseOpa(mapstyle::DARK_CASE, ln.opa);
     int32_t hx = px[0], hy = py[0];   // the dot
     int32_t ex_[PacketFlow::MAX_PTS], ey_[PacketFlow::MAX_PTS];
     int segs = 0;
@@ -540,16 +527,9 @@ static void drawMarks(lv_event_t* e) {
   lv_area_t a;
   lv_obj_get_coords(o, &a);
   if (s_route_on && s_route_n >= 2) {
-    lv_draw_line_dsc_t ln;
-    lv_draw_line_dsc_init(&ln);
-    ln.color = lv_color_hex(theme::ACCENT);
-    ln.width = 3;
-    ln.round_start = ln.round_end = 1;
-    for (int i = 0; i + 1 < s_route_n; i++) {
-      ln.p1 = { s_route_px[i].x + a.x1, s_route_px[i].y + a.y1 };
-      ln.p2 = { s_route_px[i + 1].x + a.x1, s_route_px[i + 1].y + a.y1 };
-      lv_draw_line(layer, &ln);
-    }
+    lv_point_precise_t p[ROUTE_PTS];   // radio: over a dark casing, as the packet flows
+    for (int i = 0; i < s_route_n; i++) p[i] = { s_route_px[i].x + a.x1, s_route_px[i].y + a.y1 };
+    mapstyle::polyline(layer, p, s_route_n, theme::ACCENT, 3, mapstyle::DARK_CASE);
   }
   drawFlows(layer, a);
   lv_draw_rect_dsc_t pill;
@@ -571,12 +551,7 @@ static void drawMarks(lv_event_t* e) {
     lv_draw_label(layer, &ld, &ta);
   }
   lv_draw_rect_dsc_t dot;
-  lv_draw_rect_dsc_init(&dot);
-  dot.bg_opa = LV_OPA_COVER;
-  dot.radius = LV_RADIUS_CIRCLE;
-  dot.border_color = lv_color_hex(theme::BG);
-  dot.border_opa = LV_OPA_COVER;
-  dot.border_width = 2;
+  mapstyle::dotDsc(dot);
   const int half = MARK_D / 2;
   for (int k = 0; k < s_mark_count; k++) {
     const Mark& m = s_marks[k];
@@ -841,12 +816,7 @@ void UITask::buildMap() {
 
   _map_me = lv_obj_create(_map_marks);
   lv_obj_remove_style_all(_map_me);
-  lv_obj_set_size(_map_me, 17, 17);   // odd: its middle on the pixel a route line starts from
-  lv_obj_set_style_radius(_map_me, LV_RADIUS_CIRCLE, 0);
-  lv_obj_set_style_bg_color(_map_me, lv_color_hex(theme::ACCENT), 0);
-  lv_obj_set_style_bg_opa(_map_me, LV_OPA_COVER, 0);
-  lv_obj_set_style_border_color(_map_me, lv_color_hex(theme::BG), 0);
-  lv_obj_set_style_border_width(_map_me, 3, 0);
+  mapstyle::styleDot(_map_me, 17, theme::ACCENT, 3);   // odd: its middle on the pixel a route line starts from
   lv_obj_remove_flag(_map_me, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_add_flag(_map_me, LV_OBJ_FLAG_HIDDEN);
 
@@ -1423,24 +1393,25 @@ void UITask::flowHistoryPopup() {
   lv_obj_t* panel = navPopupPanel("Recent packets", true);
   lv_obj_t* list = scrollList(panel);
   if (F.historyCount() == 0) {
-    noteLabel(list, "None yet: a packet is kept when its sender or a repeater on its way has a position.");
+    noteLabel(list, "None heard yet.");
     return;
   }
   lv_obj_t* g = group(list, nullptr);
   for (int i = 0; i < F.historyCount(); i++) {
     const PacketFlow::Heard& h = F.history(i);
-    const PacketFlow::Flow f = F.wayNow(h, 0);
+    const PacketFlow::Flow f = h.ways ? F.wayNow(h, 0) : PacketFlow::Flow{};
     char title[64], sub[64];
     ContactInfo c;
-    const bool named = f.node[0] >= 0 && the_mesh.getContactByIdx(f.node[0], c) && c.name[0];
+    const bool named = f.n && f.node[0] >= 0 && the_mesh.getContactByIdx(f.node[0], c) && c.name[0];
     snprintf(title, sizeof(title), "%s%s%s%.24s", FLOW_KINDS[h.kind < PacketFlow::K_COUNT ? h.kind : PacketFlow::K_OTHER],
-             named ? "  " : "", named && !f.origin ? "via " : "", named ? c.name : "");
+             named ? "  " : "", named && h.routed ? "to " : named && !f.origin ? "via " : "", named ? c.name : "");
     const uint32_t t = h.ts + (int32_t)tzHoursAt(_prefs, h.ts) * 3600;
     int o = snprintf(sub, sizeof(sub), "%02u:%02u:%02u  ", (unsigned)(t / 3600 % 24), (unsigned)(t / 60 % 60), (unsigned)(t % 60));
-    if (h.hops == 0) o += snprintf(sub + o, sizeof(sub) - o, "direct");
-    else             o += snprintf(sub + o, sizeof(sub) - o, "%u hop%s", (unsigned)h.hops, h.hops == 1 ? "" : "s");
+    if (h.routed)         o += snprintf(sub + o, sizeof(sub) - o, "passing by, %u hop%s to go", (unsigned)h.hops, h.hops == 1 ? "" : "s");
+    else if (h.hops == 0) o += snprintf(sub + o, sizeof(sub) - o, "direct");
+    else                  o += snprintf(sub + o, sizeof(sub) - o, "%u hop%s", (unsigned)h.hops, h.hops == 1 ? "" : "s");
     if (h.heard > 1) snprintf(sub + o, sizeof(sub) - o, ", heard %u times", (unsigned)h.heard);
-    lv_obj_t* row = groupLine(g, true);
+    lv_obj_t* row = groupLine(g, h.ways > 0);
     lv_obj_t* dot = lv_obj_create(row);   // its line's colour on the map
     lv_obj_remove_style_all(dot);
     lv_obj_set_size(dot, 11, 11);
@@ -1449,6 +1420,7 @@ void UITask::flowHistoryPopup() {
     lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
     lv_obj_remove_flag(dot, LV_OBJ_FLAG_CLICKABLE);
     groupText(row, title, sub);
+    if (!h.ways) continue;   // nothing of it on the map: nothing to play
     label(row, LV_SYMBOL_PLAY, THEME_FONT_SMALL, theme::TEXT_MUTED);
     lv_obj_add_event_cb(row, onFlowReplay, LV_EVENT_CLICKED, (void*)(intptr_t)i);
   }

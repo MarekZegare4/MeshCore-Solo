@@ -47,13 +47,13 @@ static uint32_t s_sync_gen = 0xFFFFFFFF, s_sync_seq = 0, s_sync_full_at = 0;
 static int s_sync_n = 0;
 static lv_obj_t* s_trail = nullptr;
 static lv_obj_t* s_target_line = nullptr;
-static lv_point_precise_t s_target_pts[2];
+static lv_point_precise_t s_target_pts[2];   // relative to the line's object
+static uint32_t s_target_col = 0;   // the route's next bend: the route's colour; else the accent
 static lv_obj_t* s_target_ring = nullptr;
 static lv_obj_t* s_target_dot = nullptr;
 static const int RING_D = 30;   // clear of a 12 px marker dot inside it
 static navview::EtaTracker s_eta;
 static GpsAverager s_avg;   // "mark here" with Settings > Map > Waypoint averaging
-static const uint32_t TRAIL_COLOR = 0x4FA3FF;
 
 static void fmtDuration(char* b, int n, uint32_t secs) {
   if (secs >= 3600) snprintf(b, n, "%luh%02lu", (unsigned long)(secs / 3600), (unsigned long)(secs % 3600 / 60));
@@ -82,13 +82,17 @@ static void onTrailDraw(lv_event_t* e) {
     }
     s_pts_x0 = a.x1; s_pts_y0 = a.y1;
   }
-  lv_draw_line_dsc_t d;
-  lv_draw_line_dsc_init(&d);
-  lv_obj_init_draw_line_dsc(obj, LV_PART_MAIN, &d);
-  d.base.layer = lv_event_get_layer(e);
-  d.points = s_pts;
-  d.point_cnt = s_pts_n;
-  lv_draw_line(d.base.layer, &d);
+  mapstyle::polyline(lv_event_get_layer(e), s_pts, s_pts_n, mapstyle::TRAIL, mapstyle::TRAIL_W, mapstyle::LIGHT_CASE);
+}
+
+// The line from you to the target: dashed, over a white casing.
+static void onTargetLineDraw(lv_event_t* e) {
+  lv_obj_t* obj = lv_event_get_current_target_obj(e);
+  lv_area_t a;
+  lv_obj_get_coords(obj, &a);
+  lv_point_precise_t p[2];
+  for (int i = 0; i < 2; i++) { p[i].x = s_target_pts[i].x + a.x1; p[i].y = s_target_pts[i].y + a.y1; }
+  mapstyle::dashedPolyline(lv_event_get_layer(e), p, 2, s_target_col, 3, mapstyle::LIGHT_CASE);
 }
 
 
@@ -187,38 +191,28 @@ void UITask::buildNavLayers() {
   lv_obj_t* tr = lv_obj_create(_map_marks);
   lv_obj_remove_style_all(tr);
   lv_obj_set_size(tr, LV_PCT(100), LV_PCT(100));   // clip to the view, whatever the points
-  lv_obj_set_style_line_width(tr, 3, 0);
-  lv_obj_set_style_line_color(tr, lv_color_hex(navmap::TRAIL_COLOR), 0);
-  lv_obj_set_style_line_rounded(tr, true, 0);
   lv_obj_remove_flag(tr, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_add_event_cb(tr, navmap::onTrailDraw, LV_EVENT_DRAW_MAIN, nullptr);
   navmap::s_trail = tr;
   navmap::s_pts_n = 0;
-  navmap::s_target_line = lv_line_create(_map_marks);
+  navmap::s_target_line = lv_obj_create(_map_marks);
+  lv_obj_remove_style_all(navmap::s_target_line);
   lv_obj_set_size(navmap::s_target_line, LV_PCT(100), LV_PCT(100));
-  lv_obj_set_style_line_width(navmap::s_target_line, 2, 0);
-  lv_obj_set_style_line_color(navmap::s_target_line, lv_color_hex(theme::ACCENT), 0);
-  lv_obj_set_style_line_dash_width(navmap::s_target_line, 8, 0);
-  lv_obj_set_style_line_dash_gap(navmap::s_target_line, 6, 0);
   lv_obj_remove_flag(navmap::s_target_line, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_event_cb(navmap::s_target_line, navmap::onTargetLineDraw, LV_EVENT_DRAW_MAIN, nullptr);
+  navmap::s_target_col = theme::ACCENT;
   lv_obj_add_flag(navmap::s_target_line, LV_OBJ_FLAG_HIDDEN);
 
   navmap::s_target_ring = lv_obj_create(_map_marks);
   lv_obj_remove_style_all(navmap::s_target_ring);
-  lv_obj_set_size(navmap::s_target_ring, navmap::RING_D, navmap::RING_D);
-  lv_obj_set_style_radius(navmap::s_target_ring, LV_RADIUS_CIRCLE, 0);
-  lv_obj_set_style_border_color(navmap::s_target_ring, lv_color_hex(theme::ACCENT), 0);
-  lv_obj_set_style_border_width(navmap::s_target_ring, 3, 0);
+  mapstyle::styleRing(navmap::s_target_ring, navmap::RING_D, theme::ACCENT, 3);
   lv_obj_remove_flag(navmap::s_target_ring, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_add_flag(navmap::s_target_ring, LV_OBJ_FLAG_HIDDEN);
   // Centre dot, for a target no marker stands on (a map point, a message
   // position, a person whose live share went stale: last known place).
   navmap::s_target_dot = lv_obj_create(navmap::s_target_ring);
   lv_obj_remove_style_all(navmap::s_target_dot);
-  lv_obj_set_size(navmap::s_target_dot, 8, 8);
-  lv_obj_set_style_radius(navmap::s_target_dot, LV_RADIUS_CIRCLE, 0);
-  lv_obj_set_style_bg_color(navmap::s_target_dot, lv_color_hex(theme::ACCENT), 0);
-  lv_obj_set_style_bg_opa(navmap::s_target_dot, LV_OPA_COVER, 0);
+  mapstyle::styleDot(navmap::s_target_dot, 10, theme::ACCENT, 2);
   lv_obj_remove_flag(navmap::s_target_dot, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_center(navmap::s_target_dot);
   navmap::s_segs = 0;
@@ -429,6 +423,14 @@ void UITask::layoutNav() {
   bool person, set;
   bool target = navCurrentTarget(tlat, tlon, name, sizeof(name), person, set);
   if (target) {
+    // The route's next bend in the route's colour: it belongs to that line.
+    const uint32_t col = _core->guide.active() ? mapstyle::ROUTE : theme::ACCENT;
+    if (col != navmap::s_target_col) {
+      navmap::s_target_col = col;
+      lv_obj_set_style_border_color(navmap::s_target_ring, lv_color_hex(col), 0);
+      lv_obj_set_style_bg_color(navmap::s_target_dot, lv_color_hex(col), 0);
+      lv_obj_invalidate(navmap::s_target_line);
+    }
     int tx = (int)lround(navmap::normX(tlon) * scale - mapview::s_left);
     int ty = (int)lround(navmap::normY(tlat) * scale - mapview::s_top);
     lv_obj_set_pos(navmap::s_target_ring, tx - navmap::RING_D / 2, ty - navmap::RING_D / 2);
@@ -445,7 +447,7 @@ void UITask::layoutNav() {
       navmap::s_target_pts[0].y = (lv_value_precise_t)lround(navmap::normY(mlat) * scale - mapview::s_top);
       navmap::s_target_pts[1].x = tx;
       navmap::s_target_pts[1].y = ty;
-      lv_line_set_points(navmap::s_target_line, navmap::s_target_pts, 2);
+      lv_obj_invalidate(navmap::s_target_line);
       lv_obj_remove_flag(navmap::s_target_line, LV_OBJ_FLAG_HIDDEN);
     } else {
       lv_obj_add_flag(navmap::s_target_line, LV_OBJ_FLAG_HIDDEN);

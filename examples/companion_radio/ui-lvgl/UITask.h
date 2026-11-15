@@ -201,6 +201,7 @@ public:
   UiCore& core() { return *_core; }   // sim tests
   void simDm();                         // the first chat contact's thread
   void simTrail();                      // a trail to walk back
+  void simFlows();                      // packet flow lines over the map, as if just heard
   void simUnread();                     // read and new messages to open on
   void simSleep(bool on) { if (on) sleep(); else wake(); }
   void simLock(bool on) { if (on) lockScreen(); else unlockScreen(); }

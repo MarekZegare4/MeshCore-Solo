@@ -57,9 +57,9 @@ dash and dot.
 > is a ring around you. Colours by kind: adverts blue, direct messages
 > green, channels amber, requests violet, acks and paths teal, the rest
 > pink, your own white. The pill at the top counts each kind over the last
-> minute. A tap on it opens **Recent packets**: the last 10 that made a line,
-> with what they were, who sent them, when, and how many hops they took. A tap
-> on one plays it again on the map, every way it came, and moves the map to
+> minute. A tap on it opens **Recent packets**: the last 10 heard,
+> with what they were, who sent them (when known), when, and how many hops they
+> took. A tap on one plays it again on the map, every way it came, and moves the map to
 > show it. **Play all** plays them one after another. The list is kept until a
 > restart.
 

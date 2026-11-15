@@ -178,6 +178,8 @@ the route is drawn and the last line is how much of it is left.
 >   whole regions as packs made with `tools/maps/osm_vector.py`, copied to
 >   the card.
 >
-> The minimap on the home screen shows your surroundings at a glance; tap it
-> for the full map. The **Nodes** map is the same map with every node that
+> The minimap on the home screen shows your surroundings at a glance: you,
+> the trail, people sharing their position and the target. Following a route
+> or Track back, it frames the whole route with the next point on it, and its
+> caption says how much is left. Tap it for the full map. The **Nodes** map is the same map with every node that
 > has a position on it; Back returns to Nodes.

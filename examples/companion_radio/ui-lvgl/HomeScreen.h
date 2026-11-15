@@ -144,7 +144,7 @@ static lv_obj_t* s_imgs[COLS * ROWS];
 static lv_obj_t* s_hint = nullptr;
 static lv_obj_t* s_caption = nullptr;
 static const int MAX_PTS = LiveTrackStore::CAPACITY + 2;
-enum : uint8_t { P_ME, P_LAST, P_TARGET, P_LIVE, P_SOS };   // how a point's dot looks
+enum : uint8_t { P_ME, P_LAST, P_TARGET, P_LIVE, P_SOS, P_NEXT };   // how a point's dot looks
 struct Pt { int32_t lat, lon; uint8_t kind; lv_obj_t* obj; };
 static PSRAM_BSS Pt s_pts[MAX_PTS];   // [0] you, then the target, then live shares
 static int s_npts = 0;
@@ -155,25 +155,73 @@ static bool s_pending = false;
 static uint32_t s_next_fit_ms = 0;
 static mapview::Grid s_grid;   // under the tiles, as on the map
 
+// The trail and the followed route (or Track back), over the tiles and under
+// the dots: the map's own points (navmap / routemap), cut to 2 px steps for
+// this view. One buffer, the trail's points first. Drawn as on the map: the
+// route under the trail, but Track back's dashed over it.
+static const int LP_MAX = 3000;
+static lv_obj_t* s_lines = nullptr;
+static lv_point_precise_t* s_lp = nullptr;
+static int s_lp_trail = 0, s_lp_n = 0;
+static bool s_lp_dashed = false;
+static int32_t s_lp_x0 = 0, s_lp_y0 = 0;   // the object's screen origin s_lp was made for
+
+static void onLinesDraw(lv_event_t* e) {
+  if (s_lp_n < 2) return;
+  lv_obj_t* obj = lv_event_get_current_target_obj(e);
+  lv_area_t a;
+  lv_obj_get_coords(obj, &a);
+  if (a.x1 != s_lp_x0 || a.y1 != s_lp_y0) {   // the page slid (a swipe)
+    for (int i = 0; i < s_lp_n; i++) {
+      if (s_lp[i].x == LV_DRAW_LINE_POINT_NONE) continue;
+      s_lp[i].x += a.x1 - s_lp_x0;
+      s_lp[i].y += a.y1 - s_lp_y0;
+    }
+    s_lp_x0 = a.x1; s_lp_y0 = a.y1;
+  }
+  using namespace mapstyle;
+  lv_layer_t* layer = lv_event_get_layer(e);
+  const int rn = s_lp_n - s_lp_trail;
+  if (!s_lp_dashed) polyline(layer, s_lp + s_lp_trail, rn, ROUTE, ROUTE_W, LIGHT_CASE);
+  polyline(layer, s_lp, s_lp_trail, TRAIL, TRAIL_W, LIGHT_CASE);
+  if (s_lp_dashed) dashedPolyline(layer, s_lp + s_lp_trail, rn, ROUTE, TRAIL_W, 0);
+}
+
+// `n` normalised points (offsets from ox, oy) into s_lp, 2 px apart at least,
+// the last one always; `scale` px per world, `left` / `top` the view's corner.
+static void addLine(const float* nx, const float* ny, int n, double ox, double oy, double scale, double left, double top) {
+  if (!nx || !ny || n < 2) return;
+  const float fs = (float)scale;
+  const float bx = (float)(ox * scale - left) + s_lp_x0, by = (float)(oy * scale - top) + s_lp_y0;
+  float lx = 0, ly = 0;
+  for (int i = 0; i < n && s_lp_n < LP_MAX; i++) {
+    const float x = nx[i] * fs + bx, y = ny[i] * fs + by;
+    if (i > 0 && i < n - 1 && fabsf(x - lx) < 2 && fabsf(y - ly) < 2) continue;
+    s_lp[s_lp_n].x = (lv_value_precise_t)lroundf(x);
+    s_lp[s_lp_n].y = (lv_value_precise_t)lroundf(y);
+    s_lp_n++;
+    lx = x; ly = y;
+  }
+}
+
 static void onTap(lv_event_t* e) { (void)e; s_ui->openMap(true); }
 
 static lv_obj_t* dot(uint8_t kind) {
-  // Not static: the accent can change after the first dot (Settings > Display).
-  const struct { uint8_t d; uint32_t col, border; } LOOK[] = {
-    { 14, theme::ACCENT, theme::BG }, { 14, theme::BG, theme::ACCENT },   // you; no fix: the last position, hollow
-    { 12, theme::BG, theme::ACCENT }, { 12, theme::OK, theme::BG },       // the target; live shares
-    { 12, theme::FAIL, theme::BG },                                       // someone's SOS, pulsing
-  };
-  int d = LOOK[kind].d;
-  uint32_t col = LOOK[kind].col, border = LOOK[kind].border;
+  // As on the map (MapStyle.h). The accent is read here: it can change after
+  // the first dot (Settings > Display).
   lv_obj_t* o = lv_obj_create(s_area);
   lv_obj_remove_style_all(o);
-  lv_obj_set_size(o, d, d);
-  lv_obj_set_style_radius(o, LV_RADIUS_CIRCLE, 0);
-  lv_obj_set_style_bg_color(o, lv_color_hex(col), 0);
-  lv_obj_set_style_bg_opa(o, LV_OPA_COVER, 0);
-  lv_obj_set_style_border_color(o, lv_color_hex(border), 0);
-  lv_obj_set_style_border_width(o, 2, 0);
+  switch (kind) {
+    case P_ME:     mapstyle::styleDot(o, 14, theme::ACCENT, 2); break;
+    case P_LAST:   // no fix: the last position, hollow
+      mapstyle::styleDot(o, 14, mapstyle::RING, 3);
+      lv_obj_set_style_border_color(o, lv_color_hex(theme::ACCENT), 0);
+      break;
+    case P_TARGET: mapstyle::styleRing(o, 16, theme::ACCENT, 3); break;
+    case P_NEXT:   mapstyle::styleDot(o, 12, mapstyle::ROUTE, 2); break;   // the route's next bend
+    case P_LIVE:   mapstyle::styleDot(o, 12, theme::OK, 2); break;
+    default:       mapstyle::styleDot(o, 12, theme::FAIL, 2); break;      // someone's SOS, pulsing
+  }
   lv_obj_remove_flag(o, LV_OBJ_FLAG_CLICKABLE);
   if (kind == P_SOS) mapview::sosPulse(o);
   return o;
@@ -525,6 +573,7 @@ void UITask::setHomePage(int page) {
   _home_clock = _home_date = _home_unread = nullptr;
   for (lv_obj_t*& v : s_field_val) v = nullptr;
   mini::s_area = nullptr;
+  mini::s_lines = nullptr;
   s_unread_sig = unreadTotal();
   lv_obj_set_layout(s_page_box, LV_LAYOUT_FLEX);
   lv_obj_set_flex_flow(s_page_box, LV_FLEX_FLOW_ROW_WRAP);
@@ -690,6 +739,14 @@ void UITask::buildHomeMap(lv_obj_t* box) {
     s_imgs[i] = lv_image_create(cell);
     lv_image_set_pivot(s_imgs[i], 0, 0);
   }
+  s_lines = lv_obj_create(s_area);   // over the tiles; the dots come after it
+  lv_obj_remove_style_all(s_lines);
+  lv_obj_set_size(s_lines, LV_PCT(100), LV_PCT(100));
+  lv_obj_remove_flag(s_lines, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_event_cb(s_lines, onLinesDraw, LV_EVENT_DRAW_MAIN, nullptr);
+  if (!s_lp) s_lp = psramBuf<lv_point_precise_t>(LP_MAX);
+  s_lp_n = s_lp_trail = 0;
+  routemap::s_slot = -2;   // the route's points read again for this page
   s_npts = 0;
   s_fitted = false;
   s_hint = label(s_area, "", THEME_FONT_SMALL, theme::TEXT);
@@ -733,9 +790,13 @@ bool UITask::homeMapFit() {
     last = true;
     pts[np++] = { (int32_t)lround(_sensors->node_lat * 1e6), (int32_t)lround(_sensors->node_lon * 1e6), P_LAST, nullptr };
   }
-  if (_core->locator.activeTargetPos(lat, lon)) {
+  const RouteGuide& g = _core->guide;
+  const bool guided = g.active();
+  if (guided && g.target(lat, lon)) pts[np++] = { lat, lon, P_NEXT, nullptr };   // the next bend, or back to the route
+  int32_t tlat = 0, tlon = 0;
+  if (_core->locator.activeTargetPos(tlat, tlon)) {
     target = true;
-    pts[np++] = { lat, lon, P_TARGET, nullptr };
+    pts[np++] = { tlat, tlon, P_TARGET, nullptr };
   }
   const LiveTrackStore& lt = _core->live_share.track();
   uint32_t now = rtc_clock.getCurrentTime();
@@ -748,7 +809,22 @@ bool UITask::homeMapFit() {
   bool same = np == s_npts;
   for (int i = 0; i < np && same; i++)
     same = pts[i].kind == s_pts[i].kind && pts[i].lat == s_pts[i].lat && pts[i].lon == s_pts[i].lon && s_pts[i].obj;
-  if (same && s_fitted) return false;
+  // The trail and the route are redrawn when they change, even with the dots still.
+  const bool lines = navTrailSync() | routemap::sync(g);
+  char cap[64];
+  int o = snprintf(cap, sizeof(cap), "%s", me ? "You" : last ? "Last position" : "No position yet");
+  if (guided) {
+    char l[28];
+    g.label(l, sizeof(l), _prefs && _prefs->units_imperial);
+    o += snprintf(cap + o, sizeof(cap) - o, "  %s", l);
+  } else if (target && np > 0 && pts[0].kind != P_TARGET) {
+    char d[12];
+    geo::fmtDist(d, sizeof(d), geo::haversineKm(pts[0].lat, pts[0].lon, tlat, tlon), _prefs && _prefs->units_imperial);
+    o += snprintf(cap + o, sizeof(cap) - o, "  " UI_SYMBOL_FLAG " %s", d);
+  }
+  if (live) snprintf(cap + o, sizeof(cap) - o, "  " LV_SYMBOL_GPS " %d", live);
+  setText(s_caption, cap);   // the distances move with the dots still
+  if (same && s_fitted && !lines) return false;
   s_fitted = true;
   bool made = false;
   for (int i = 0; i < np; i++) {   // the same dot where the kind matches
@@ -768,12 +844,6 @@ bool UITask::homeMapFit() {
   lv_obj_move_foreground(s_caption);
   }
 
-  char cap[48];
-  int o = snprintf(cap, sizeof(cap), "%s", me ? "You" : last ? "Last position" : "No position yet");
-  if (live) o += snprintf(cap + o, sizeof(cap) - o, "  " LV_SYMBOL_GPS " %d sharing", live);
-  if (target) snprintf(cap + o, sizeof(cap) - o, "  " UI_SYMBOL_FLAG " target");
-  setText(s_caption, cap);
-
   if (s_npts == 0) {   // nothing to show: where the map was left, else the default view
     if (_map_z) {
       s_z = _map_z;
@@ -792,9 +862,15 @@ bool UITask::homeMapFit() {
     double x = mapview::lonToTileX(s_pts[i].lon / 1e6, 0), y = mapview::latToTileY(s_pts[i].lat / 1e6, 0);
     x0 = fmin(x0, x); x1 = fmax(x1, x); y0 = fmin(y0, y); y1 = fmax(y1, y);
   }
+  if (guided) {   // the whole route followed, as on L1's Map page
+    const RouteInfo& ri = g.info();
+    x0 = fmin(x0, mapview::lonToTileX(ri.min_lon / 1e6, 0)); x1 = fmax(x1, mapview::lonToTileX(ri.max_lon / 1e6, 0));
+    y0 = fmin(y0, mapview::latToTileY(ri.max_lat / 1e6, 0)); y1 = fmax(y1, mapview::latToTileY(ri.min_lat / 1e6, 0));
+  }
+  const bool several = s_npts > 1 || guided;
   int w = lv_obj_get_width(s_area) - 2 * MARGIN, h = lv_obj_get_height(s_area) - 2 * MARGIN - 20;
-  s_z = s_npts == 1 ? SOLO_Z : mapview::MIN_Z;
-  for (int z = MAX_Z; s_npts > 1 && z >= mapview::MIN_Z; z--) {
+  s_z = several ? mapview::MIN_Z : SOLO_Z;
+  for (int z = MAX_Z; several && z >= mapview::MIN_Z; z--) {
     double k = (double)(1 << z) * mapview::TILE_PX;
     if ((x1 - x0) * k <= w && (y1 - y0) * k <= h) { s_z = z; break; }
   }
@@ -852,6 +928,18 @@ void UITask::homeMapLayout() {
     }
   }
   mapview::showTiled(s_area, s_grid, tiled);
+  s_lp_n = s_lp_trail = 0;
+  if (s_lines && s_lp) {
+    lv_area_t a;
+    lv_obj_get_coords(s_lines, &a);
+    s_lp_x0 = a.x1; s_lp_y0 = a.y1;
+    const double scale = (double)mapview::TILE_PX * n;
+    addLine(navmap::s_nx, navmap::s_ny, navmap::s_sync_n, navmap::s_ox, navmap::s_oy, scale, left, top);
+    s_lp_trail = s_lp_n;
+    s_lp_dashed = _core->guide.trackBack();
+    if (_core->guide.active()) addLine(routemap::s_nx, routemap::s_ny, routemap::s_n, routemap::s_ox, routemap::s_oy, scale, left, top);
+    lv_obj_invalidate(s_lines);
+  }
   for (int i = 0; i < s_npts; i++) {
     double x = mapview::lonToTileX(s_pts[i].lon / 1e6, s_z) * mapview::TILE_PX - left;
     double y = mapview::latToTileY(s_pts[i].lat / 1e6, s_z) * mapview::TILE_PX - top;
