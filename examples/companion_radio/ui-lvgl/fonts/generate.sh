@@ -60,6 +60,11 @@ $CONV --bpp 4 --size 14 --no-compress --font "$CACHE/ui-icons.ttf" -r "$ICONS" \
   --format lvgl --lv-include lvgl.h --lv-font-name ui_icons_14 -o "$HERE/ui_icons_14.c"
 sed -i.bak -e 's/\.line_height = [0-9]*,/.line_height = 18,/' -e 's/\.base_line = [0-9]*,/.base_line = 4,/' \
   -e 's/\.fallback = NULL,/.fallback = \&ui_font_12,/' "$HERE/ui_icons_14.c" && rm "$HERE/ui_icons_14.c.bak"
+# Uncompressed, the bitmaps are static: LVGL may keep a pointer to them, and
+# GlyphCache.h hands it unpacked ones (lv_font_conv 1.5.3 leaves this out).
+for f in "$HERE"/ui_font_*.c "$HERE/ui_icons_14.c"; do
+  perl -0pi -e 's/(\n    \.user_data = NULL,)/\n    .static_bitmap = 1,$1/ unless /static_bitmap/' "$f"
+done
 # Colour emoji the text fonts fall back to (ui_emoji.c): Twemoji 15.1, CC-BY 4.0.
 # Needs python3 with Pillow.
 TW="$CACHE/twemoji-15.1.0"

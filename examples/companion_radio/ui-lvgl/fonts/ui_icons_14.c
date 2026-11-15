@@ -306,6 +306,7 @@ lv_font_t ui_icons_14 = {
 #if LV_VERSION_CHECK(8, 2, 0) || LVGL_VERSION_MAJOR >= 9
     .fallback = &ui_font_12,
 #endif
+    .static_bitmap = 1,
     .user_data = NULL,
 };
 

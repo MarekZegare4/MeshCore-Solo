@@ -47,6 +47,46 @@ extern "C" lv_result_t __wrap_lv_obj_send_event(lv_obj_t* o, lv_event_code_t c, 
 #define TM_PRINT(tag)
 #endif
 
+#ifdef PERF_WRAP_GLYPH
+// (-Wl,--wrap=lv_draw_sw_label -Wl,--wrap=lv_draw_sw_blend) What drawing
+// labels costs in a full redraw, in CPU cycles, and how much of it is
+// blending letters in; -D PERF_GLYPH_TWICE also times each label drawn a
+// second time straight after, code and data cached. (Lookups, unpacking and
+// line breaks were measured the same way: GlyphCache.h.)
+#include <esp_cpu.h>
+#include <src/draw/lv_draw_label_private.h>
+#include <src/draw/sw/blend/lv_draw_sw_blend_private.h>
+static uint32_t g_lab_n, g_lab_cy, g_warm_cy, g_bl_n, g_bl_cy, g_bl_px;
+static bool g_in_label = false;
+#define GW_RESET() (g_lab_n = g_lab_cy = g_warm_cy = g_bl_n = g_bl_cy = g_bl_px = 0)
+extern "C" void __real_lv_draw_sw_label(lv_draw_task_t*, const lv_draw_label_dsc_t*, const lv_area_t*);
+extern "C" void __wrap_lv_draw_sw_label(lv_draw_task_t* t, const lv_draw_label_dsc_t* d, const lv_area_t* a) {
+  uint32_t c = esp_cpu_get_cycle_count(); g_in_label = true;
+  __real_lv_draw_sw_label(t, d, a);
+  g_in_label = false; g_lab_cy += esp_cpu_get_cycle_count() - c; g_lab_n++;
+#ifdef PERF_GLYPH_TWICE
+  c = esp_cpu_get_cycle_count();
+  __real_lv_draw_sw_label(t, d, a);
+  g_warm_cy += esp_cpu_get_cycle_count() - c;
+#endif
+}
+extern "C" void __real_lv_draw_sw_blend(lv_draw_task_t*, const lv_draw_sw_blend_dsc_t*);
+extern "C" void __wrap_lv_draw_sw_blend(lv_draw_task_t* t, const lv_draw_sw_blend_dsc_t* d) {
+  if (!g_in_label) { __real_lv_draw_sw_blend(t, d); return; }
+  uint32_t c = esp_cpu_get_cycle_count();
+  __real_lv_draw_sw_blend(t, d);
+  g_bl_cy += esp_cpu_get_cycle_count() - c; g_bl_n++;
+  if (d->blend_area) g_bl_px += lv_area_get_size(d->blend_area);
+}
+#define GW_PRINT(tag, N) do { const float k_ = (float)getCpuFrequencyMhz() * 1000.0f * (N); \
+  Serial.printf("PERF   labels %-8s %lu drawn %5.2f ms (again %5.2f) | letters blended %lu %5.2f ms, %lu px\n", tag, \
+    (unsigned long)(g_lab_n / (N)), g_lab_cy / k_, g_warm_cy / k_, (unsigned long)(g_bl_n / (N)), g_bl_cy / k_, \
+    (unsigned long)(g_bl_px / (N))); } while (0)
+#else
+#define GW_RESET()
+#define GW_PRINT(tag, N)
+#endif
+
 #if defined(PERF_PROF)
 #include "LvProf.h"
 #define PROF_RESET() lvprof_reset()
@@ -68,6 +108,7 @@ extern "C" lv_result_t __wrap_lv_obj_send_event(lv_obj_t* o, lv_event_code_t c, 
 // what layout costs per screen (text measured, flex runs, style reads, events).
 // -D PERF_PROF: LVGL's own profiler hooks (LvProf.h) -- each screen's build,
 // layout and first frame as the LVGL functions taking the most CPU cycles.
+// -D PERF_WRAP_GLYPH (wraps above): what labels cost in each full redraw.
 //
 // A full redraw of the active screen (and the top layer), timed per
 // object -- its own drawing, not its children's -- the costliest listed with
@@ -112,8 +153,10 @@ static void perfDrawProfile(const char* tag) {
   lv_obj_tree_walk(lv_layer_top(), hook, nullptr);
   const int N = 5;
   uint32_t fl0 = lvport::s_flush_us, t = micros();
+  GW_RESET();
   for (int i = 0; i < N; i++) { lv_obj_invalidate(lv_screen_active()); lv_refr_now(NULL); }
   t = micros() - t;
+  GW_PRINT(tag, N);
   uint32_t fl = lvport::s_flush_us - fl0, sum = 0;
   for (int i = 0; i < s_dp_n; i++) sum += s_dp_own[i];
   Serial.printf("PERF draw %-8s full %5.1f ms = flush %4.1f + objects %4.1f + the rest %4.1f  (%d objects)\n", tag,

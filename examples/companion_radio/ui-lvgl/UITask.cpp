@@ -137,6 +137,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE int sim_buzzer_get_volume() { return s_ui ? (int
 #ifdef PERF_PROF
 #include "LvProf.h"
 #endif
+#include "GlyphCache.h"
 #include "Widgets.h"
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
