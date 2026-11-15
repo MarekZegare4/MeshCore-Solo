@@ -238,6 +238,84 @@ static void touchCb(lv_indev_t* indev, lv_indev_data_t* data) {
   }
 }
 
+// Draw buffers. Sent by DMA (FLUSH_DMA): two of `lines` lines in internal
+// RAM. Not PSRAM: LovyanGFX cuts a transfer into 4092-byte DMA descriptors,
+// and from the second one on PSRAM isn't 16-byte aligned as the S3's DMA
+// needs it there (bands shifted, or of stale pixels). 24 lines (ten passes a
+// frame, 2 x 15 KB) were 7-11% faster than 48 in PSRAM; 40 (six passes,
+// 2 x 25.6 KB) draw a full frame 20-30% faster again -- each pass walks the
+// whole tree and draws what straddles its edge twice. WiFi wants ~42 KB of
+// internal RAM to start (~25 later), so 40 only while it's off and
+// DMA_KEEP_FREE is left over: back to 24 before it starts (netBegin() &c.),
+// 40 again a little after it stops.
+static lv_display_t* s_disp = nullptr;
+static uint8_t* s_dbuf[2] = {};
+static int s_dma_lines = 0;
+static uint32_t s_dma_grow_ms = 0;   // when to try 40 lines (0: not to)
+static const int DMA_LINES = 40, DMA_LINES_WIFI = 24;
+static const uint32_t DMA_KEEP_FREE = 52 * 1024;
+static void dmaBufsFree() {
+  heap_caps_free(s_dbuf[0]); heap_caps_free(s_dbuf[1]);
+  s_dbuf[0] = s_dbuf[1] = nullptr;
+  s_dma_lines = 0;
+}
+// New buffers in, the old ones out after; false (nothing changed) if there
+// isn't room. Between frames only: the last area's sent by then (REFR_READY).
+static bool dmaBufs(int lines) {
+  const uint32_t sz = (uint32_t)s_gfx->width() * lines * 2;
+  uint8_t* a = (uint8_t*)heap_caps_malloc(sz, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
+  uint8_t* b = a ? (uint8_t*)heap_caps_malloc(sz, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA) : nullptr;
+  if (!b) { heap_caps_free(a); return false; }
+  lv_display_set_buffers(s_disp, a, b, sz, LV_DISPLAY_RENDER_MODE_PARTIAL);
+  dmaBufsFree();
+  s_dbuf[0] = a; s_dbuf[1] = b; s_dma_lines = lines;
+  return true;
+}
+static bool psramBufs() {
+  const uint32_t sz = (uint32_t)s_gfx->width() * 120 * 2;
+  uint8_t* a = (uint8_t*)heap_caps_malloc(sz, MALLOC_CAP_SPIRAM);
+  uint8_t* b = (uint8_t*)heap_caps_malloc(sz, MALLOC_CAP_SPIRAM);
+  if (!a) { heap_caps_free(b); b = nullptr; a = (uint8_t*)heap_caps_malloc(sz, MALLOC_CAP_8BIT); }
+  if (!a) return false;
+  lv_display_set_buffers(s_disp, a, b, sz, LV_DISPLAY_RENDER_MODE_PARTIAL);
+  return true;
+}
+#if FLUSH_DMA
+// To `lines`: new buffers before the old go if they fit beside them, else the
+// old freed first (their room joins what's around it), else back to the old
+// size; failing even that, PSRAM, sent as drawn.
+static void dmaSwap(int lines) {
+  if (dmaBufs(lines)) return;
+  const int was = s_dma_lines;
+  uint8_t* o[2] = { s_dbuf[0], s_dbuf[1] };
+  s_dbuf[0] = s_dbuf[1] = nullptr;
+  heap_caps_free(o[0]); heap_caps_free(o[1]);
+  if (dmaBufs(lines) || dmaBufs(was)) return;
+  s_dma = false;
+  lv_display_set_flush_wait_cb(s_disp, nullptr);
+  psramBufs();
+}
+// Before WiFi starts: the small buffers.
+static void dmaForWifi() {
+  s_dma_grow_ms = 0;
+  if (s_dma && s_dma_lines > DMA_LINES_WIFI) dmaSwap(DMA_LINES_WIFI);
+}
+static void dmaAfterWifi() { if (s_dma) s_dma_grow_ms = millis() + 3000; }
+// From idle(): 40 lines, when it's time and there's room.
+static void dmaGrow() {
+  if (!s_dma_grow_ms || (int32_t)(millis() - s_dma_grow_ms) < 0 || s_flushing) return;
+  s_dma_grow_ms = 0;
+  if (!s_dma || s_dma_lines >= DMA_LINES || WiFi.getMode() != WIFI_OFF) return;
+  const uint32_t more = (uint32_t)s_gfx->width() * (DMA_LINES - s_dma_lines) * 2 * 2;
+  if (heap_caps_get_free_size(MALLOC_CAP_INTERNAL) >= more + DMA_KEEP_FREE) dmaSwap(DMA_LINES);
+  if (s_dma && s_dma_lines < DMA_LINES) s_dma_grow_ms = millis() + 10000;   // no room yet (WiFi still letting go, say)
+}
+#else
+static void dmaForWifi() {}
+static void dmaAfterWifi() {}
+static void dmaGrow() {}
+#endif
+
 static bool begin() {
   s_gfx = display.lgfxDevice();
   s_gfx->setColorDepth(16);
@@ -246,33 +324,15 @@ static bool begin() {
   lv_display_t* disp = lv_display_create(s_gfx->width(), s_gfx->height());
   lv_display_set_flush_cb(disp, flushCb);
 
-  // Sent by DMA (FLUSH_DMA): two 24-line buffers (15 KB each) in internal
-  // RAM, ten passes a frame, each drawn while the last goes out -- 7-11%
-  // faster screens than 48 lines in PSRAM, the map the same. Not PSRAM:
-  // LovyanGFX cuts a transfer into 4092-byte DMA descriptors, and from the
-  // second one on PSRAM isn't 16-byte aligned as the S3's DMA needs it
-  // there (bands shifted, or of stale pixels).
-  // Otherwise two half-screen buffers (75 KB each) in PSRAM: two passes
-  // instead of six (every pass walks the whole tree and lays text out again)
-  // -- measured ~8% faster than 40 lines; internal RAM / -O2 made no
-  // difference (UI_PERF_TEST).
-  uint32_t buf_sz = 0;
-  uint8_t *buf1 = nullptr, *buf2 = nullptr;
+  // Sent by DMA (FLUSH_DMA): dmaBufs(), above. Otherwise two half-screen
+  // buffers (75 KB each) in PSRAM: two passes instead of six -- measured ~8%
+  // faster than 40 lines; internal RAM / -O2 made no difference.
+  s_disp = disp;
 #if FLUSH_DMA
-  buf_sz = (uint32_t)s_gfx->width() * 24 * 2;
-  buf1 = (uint8_t*)heap_caps_malloc(buf_sz, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
-  buf2 = buf1 ? (uint8_t*)heap_caps_malloc(buf_sz, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA) : nullptr;
-  s_dma = buf2 != nullptr;
-  if (!s_dma && buf1) { heap_caps_free(buf1); buf1 = nullptr; }   // no room: sent as it's drawn, as below
+  s_dma = dmaBufs(DMA_LINES_WIFI);
+  s_dma_grow_ms = millis() + 8000;   // once BLE and the radio have what they take
 #endif
-  if (!s_dma) {
-    buf_sz = (uint32_t)s_gfx->width() * 120 * 2;
-    buf1 = (uint8_t*)heap_caps_malloc(buf_sz, MALLOC_CAP_SPIRAM);
-    buf2 = (uint8_t*)heap_caps_malloc(buf_sz, MALLOC_CAP_SPIRAM);
-    if (!buf1) { buf1 = (uint8_t*)heap_caps_malloc(buf_sz, MALLOC_CAP_8BIT); buf2 = nullptr; }
-  }
-  if (!buf1) return false;
-  lv_display_set_buffers(disp, buf1, buf2, buf_sz, LV_DISPLAY_RENDER_MODE_PARTIAL);
+  if (!s_dma && !psramBufs()) return false;
 #if FLUSH_DMA
   // Drawn big-endian, as the panel takes it: swapping a frame's bytes
   // before sending cost ~6 ms. Pictures are made so too (map tiles, the
@@ -318,6 +378,7 @@ static void powerSave(bool on, bool keep_touch) {
 // instead of spinning -- woken early by a frame from the app (below).
 static TaskHandle_t s_loop_task = nullptr;
 static void idle(uint32_t ms) {
+  dmaGrow();
   if (!ms) return;
   if (!s_loop_task) s_loop_task = xTaskGetCurrentTaskHandle();
 #ifdef SOLO_TEST_HOOKS
@@ -627,6 +688,7 @@ static bool s_net_scanning = false;
 static char s_fb_ssid[33], s_fb_pass[65];
 static void ntpAskDhcp();
 static void netBegin(const char* ssid, const char* pass) {
+  dmaForWifi();
   WiFi.mode(WIFI_STA);
   ntpAskDhcp();
   snprintf(s_fb_ssid, sizeof(s_fb_ssid), "%s", ssid);
@@ -638,6 +700,7 @@ static void netBegin(const char* ssid, const char* pass) {
 // Just this network, no scan (Settings > WiFi checking a password it saved).
 static void netJoin(const char* ssid, const char* pass) {
   s_net_scanning = false;
+  dmaForWifi();
   WiFi.mode(WIFI_STA);
   ntpAskDhcp();
   WiFi.begin(ssid, pass);
@@ -701,6 +764,7 @@ static void netEnd() {
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
   fetchFreeBuffer();
+  dmaAfterWifi();
 }
 // The network joined (Settings > WiFi marks it), "" when not connected.
 static void netSsid(char* out, size_t n) {
@@ -712,6 +776,7 @@ static int netRadio() { return WiFi.getMode() != WIFI_OFF && WiFi.status() == WL
 // Async scan: scanStart(), then scanResults() returns -1 while running, else
 // the count, filling `names` (strongest first, as the driver reports them).
 static void scanStart() {
+  dmaForWifi();
   WiFi.mode(WIFI_STA);
   WiFi.scanNetworks(true /* async */);
 }
