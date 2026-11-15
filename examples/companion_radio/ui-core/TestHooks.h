@@ -12,6 +12,7 @@
 //                              (state 0 off, 1 on route, 2 off route, 3 finished)
 //   follow <slot> [reversed]   follow a planned route, as Routes > Follow does
 //   follow off                 stop following
+//   guidesave <ms>             the guide saves progress at most this often (2 min; till a restart)
 //   trackback                  Track back: the trail walked backwards, as Trail > Track back
 //   trail on|off|clear         record the trail, stop, empty it (as Trail's own actions)
 //   trail                      "> <recording 0/1>,<points>"
@@ -121,6 +122,15 @@ inline bool handle(Core& core, const char* cmd, char* reply, int n) {
     const long slot = strtol(a, &e, 10);
     if (e == a || (*e && strcmp(e, " reversed"))) { snprintf(reply, n, "Error, follow <slot> [reversed] or follow off"); return true; }
     snprintf(reply, n, core.guide.start((int)slot, *e != 0) ? "OK" : "Error, no route there");
+#else
+    snprintf(reply, n, "Error, no routes on this board");
+#endif
+    return true;
+  }
+  if (!strncmp(cmd, "guidesave ", 10)) {
+#if FEAT_ROUTES
+    core.guide.saveEvery((uint32_t)strtoul(cmd + 10, nullptr, 10));
+    snprintf(reply, n, "OK");
 #else
     snprintf(reply, n, "Error, no routes on this board");
 #endif

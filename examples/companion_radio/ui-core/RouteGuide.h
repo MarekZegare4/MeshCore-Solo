@@ -78,6 +78,8 @@ public:
     return true;
   }
   void stop() { _state = OFF; _have_target = false; remember(-1, false); }
+  // The test hook `guidesave`: a route walked by fake fixes in seconds saves too.
+  void saveEvery(uint32_t ms) { _save_min_ms = ms; }
 
   bool  active() const    { return _state == ON_ROUTE || _state == OFF_ROUTE; }
   State state() const     { return _state; }
@@ -222,7 +224,7 @@ public:
       _seg = best.seg;
       _along = best.along;
       _p_lat = best.lat; _p_lon = best.lon;
-      if (fabsf(_along - _saved_along) >= SAVE_M && millis() - _saved_ms >= SAVE_MIN_MS) {
+      if (fabsf(_along - _saved_along) >= SAVE_M && millis() - _saved_ms >= _save_min_ms) {
         _saved_along = _along;
         _saved_ms = millis();
         saveSeg(_seg);
@@ -421,6 +423,7 @@ private:
   int      _resume = -1;       // the segment saved before a restart, for the first fix
   float    _saved_along = 0;   // _along when route_seg was last saved (every SAVE_M)
   uint32_t _saved_ms = 0;      // and when
+  uint32_t _save_min_ms = SAVE_MIN_MS;
   int32_t  _t_lat = 0, _t_lon = 0;
   int32_t  _p_lat = 0, _p_lon = 0;
   int32_t  _lat0 = 0, _lon0 = 0;

@@ -905,6 +905,7 @@ def t_route_resume(d, out):
     need_hooks(d)
     legs = [(100 * n, 0) for n in (0, 1, 2, 3, 4, 3, 2, 1, 0)]
     with Walk(d, out, "route-resume", legs) as w:
+        d.cli.put("guidesave 0")   # the walk takes seconds; the guide saves at most every 2 min
         w.put(0, 0); time.sleep(1.2)
         w.follow()
         w.path([(0, 0), (400, 0), (200, 0)])
