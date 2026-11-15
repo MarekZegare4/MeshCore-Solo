@@ -428,7 +428,17 @@ void setup() {
 #endif
 }
 
+#ifdef SOLO_TEST_HOOKS
+// tools/hwtest.py's "loops" (ui-core/TestHooks.h): passes of loop() and the
+// time spent in them, not asleep (g_loop_idle_us: a frontend idling inside
+// its own loop, the L2's, adds what it slept).
+uint32_t g_loop_passes = 0, g_loop_busy_us = 0, g_loop_idle_us = 0;
+#endif
+
 void loop() {
+#ifdef SOLO_TEST_HOOKS
+  const uint32_t loop_t0 = micros(), loop_idle0 = g_loop_idle_us;
+#endif
 #ifdef NRF52_PLATFORM
   NRF_WDT->RR[0] = 0x6E524635UL;  // pet watchdog
 #endif
@@ -444,6 +454,10 @@ void loop() {
   external_watchdog.loop();
 #endif
 
+#ifdef SOLO_TEST_HOOKS
+  g_loop_passes++;
+  g_loop_busy_us += micros() - loop_t0 - (g_loop_idle_us - loop_idle0);
+#endif
   // CPU sleeps until next interrupt (radio, timer, BLE) — but only when the
   // mesh has no pending work, so queued TX/processing isn't delayed.
   if (!the_mesh.hasPendingWork()) {

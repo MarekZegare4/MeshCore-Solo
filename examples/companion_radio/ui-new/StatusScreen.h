@@ -433,10 +433,15 @@ public:
   // GPS stays awake while its live tabs are on screen.
   bool wantsLiveGps() const { return tab() == TAB_GPS || tab() == TAB_SKY; }
 
-  // Called from the UI loop on every pass; the history keeps its own pace.
+  // Called from the UI loop on every pass; the history keeps its own pace --
+  // and nothing is read (the SNR is an SPI read on the radio) unless a sample
+  // is due or a packet came in.
   void sample() {
-    _hist.tick(millis(), (int)radio_driver.getNoiseFloor(), battMv(), totalRx(), radio_driver.getLastSNR());
-    _batt.tick(millis(), battMv(), board.isExternalPowered());
+    const unsigned long now = millis();
+    const uint32_t rx = totalRx();
+    const bool hist = _hist.due(now, rx), batt = _batt.due(now);
+    if (hist) _hist.tick(now, (int)radio_driver.getNoiseFloor(), battMv(), rx, radio_driver.getLastSNR());
+    if (batt) _batt.tick(now, battMv(), board.isExternalPowered());
   }
 
   const info::History<HIST_N>& battHistory() const { return _hist.batt; }

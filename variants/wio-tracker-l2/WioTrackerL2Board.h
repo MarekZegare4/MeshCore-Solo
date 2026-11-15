@@ -93,8 +93,11 @@ private:
   uint8_t wake_btn_baseline = 0;   // idle level of P00, captured at init
   uint16_t batt_mv_last = 0;       // last good battery reading (a failed read keeps it)
   uint32_t batt_read_ms = 0;       // when it was taken (reads closer together reuse it)
+  bool vbus_last = false;          // isExternalPowered()'s last answer...
+  uint32_t vbus_read_ms = 0;       // ...and when (0: never): asked often, read at most once a second
 
   int expReadInputs();   // 16-bit input register pair, -1 on error
+  int expReadPort0();    // input port 0 alone (P00..P07), -1 on error
   int awRead(uint8_t reg);   // AW35615 register, -1 on error
 
   // hardware reset pulse to the L76K GNSS (active HIGH on this board); the

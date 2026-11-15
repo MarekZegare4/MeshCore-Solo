@@ -507,9 +507,15 @@ void UITask::fillHistory() {
 // From loop(): the history's readings (it keeps its own pace).
 void UITask::sampleHistory() {
   using namespace diagview;
+  // Every loop pass: nothing read (the SNR is an SPI read on the radio, the
+  // USB power an I2C one) unless a sample is due or a packet came in.
+  const unsigned long now = millis();
+  const uint32_t rx = totalRecv();
+  const bool hist = s_hist.due(now, rx), batt = s_batt.due(now);
+  if (!hist && !batt) return;
   const int mv = _batt_mv ? _batt_mv : getBattMilliVolts();
-  s_hist.tick(millis(), (int)radio_driver.getNoiseFloor(), mv, totalRecv(), radio_driver.getLastSNR());
-  s_batt.tick(millis(), mv, board.isExternalPowered());
+  if (hist) s_hist.tick(now, (int)radio_driver.getNoiseFloor(), mv, rx, radio_driver.getLastSNR());
+  if (batt) s_batt.tick(now, mv, board.isExternalPowered());
 }
 
 void UITask::refreshDiag() {

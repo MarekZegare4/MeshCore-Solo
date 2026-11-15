@@ -223,14 +223,29 @@ public :
         return false;
     }
 
+protected:
+    // Up to `max` bytes from the receiver, 0 when none wait. A byte at a time
+    // here; a board whose UART reads a run in one call (an ESP32's
+    // HardwareSerial: each read() and available() takes the driver's mutex)
+    // overrides it.
+    virtual int readChunk(uint8_t* buf, int max) {
+        int n = 0;
+        for (int k = _gps_serial->available(); n < max && k > 0; k--) buf[n++] = (uint8_t)_gps_serial->read();
+        return n;
+    }
+
+public:
     void loop() override {
 
-        while (_gps_serial->available()) {
-            char c = _gps_serial->read();
-            _rx_chars++;
-            _uart_bytes++;
-            _last_uart_ms = millis();
-            _uart_seen = true;
+        uint8_t chunk[64];
+        int got;
+        while ((got = readChunk(chunk, sizeof(chunk))) > 0) {
+          _rx_chars += got;
+          _uart_bytes += got;
+          _last_uart_ms = millis();
+          _uart_seen = true;
+          for (int ci = 0; ci < got; ci++) {
+            const char c = (char)chunk[ci];
             #ifdef GPS_NMEA_DEBUG
             Serial.print(c);
             #endif
@@ -261,6 +276,7 @@ public :
                     _nmea_checksum_bad++;
                 }
             }
+          }
         }
 
         if (!isValid()) time_valid = 0;

@@ -72,7 +72,10 @@ public:
     // Background delivery: resend pending on-device DMs whose ACK timed out,
     // and finalise the ✗ marker; free DM unread slots the ring no longer backs.
     history.tickDmResends();
-    dm_unread.reconcile(history);
+    if ((int32_t)(millis() - _next_reconcile_ms) >= 0) {   // a scan of the DM ring per unread sender: not every pass
+      _next_reconcile_ms = millis() + 1000;
+      dm_unread.reconcile(history);
+    }
 #ifdef HIST_FLASH
     history_log.loop();
 #endif
@@ -522,6 +525,7 @@ public:
   bool botGetGPIOAnalog(int idx, int& millivolts) override { return _host->botGetGPIOAnalog(idx, millivolts); }
 
 private:
+  uint32_t _next_reconcile_ms = 0;   // loop(): dm_unread against the ring, once a second
   void sosLoop() {
     int32_t lat, lon;
     if (sos.loop(millis(), course.currentLocation(lat, lon))) sendSos();

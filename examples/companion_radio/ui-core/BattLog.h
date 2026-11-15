@@ -42,6 +42,9 @@ struct BattLog {
     version++;
   }
 
+  // Would tick() take a sample now?
+  bool due(unsigned long now) const { return !_next || (long)(now - _next) >= 0; }
+
   // How far back the log goes, in minutes.
   uint32_t spanMinutes() const { return mv.n > 1 ? (uint32_t)(mv.n - 1) * (interval_ms / 60000UL) : 0; }
   // Sample i's age, in minutes (0 = the newest).

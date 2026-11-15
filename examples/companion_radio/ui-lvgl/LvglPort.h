@@ -6,6 +6,10 @@
 //
 // Single-TU fragment: included by ui-lvgl/UITask.cpp only.
 
+#ifdef SOLO_TEST_HOOKS
+extern uint32_t g_loop_idle_us;   // main.cpp: tools/hwtest.py's "loops", the time idle() slept
+#endif
+
 #if defined(SEEED_WIO_TRACKER_L2)
   #include <SD_MMC.h>
   #include <WiFi.h>
@@ -313,7 +317,13 @@ static TaskHandle_t s_loop_task = nullptr;
 static void idle(uint32_t ms) {
   if (!ms) return;
   if (!s_loop_task) s_loop_task = xTaskGetCurrentTaskHandle();
+#ifdef SOLO_TEST_HOOKS
+  const uint32_t t0 = micros();
   ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(ms));
+  g_loop_idle_us += micros() - t0;
+#else
+  ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(ms));
+#endif
 }
 
 // Backlight 1-100 % (the brightness slider), on the LP5814 PWM.

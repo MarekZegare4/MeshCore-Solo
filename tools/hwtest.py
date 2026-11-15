@@ -544,6 +544,28 @@ def t_screenshot(d, out):
 
 # ── With the test hooks (a --flash build) ──────────────────────────────────
 
+@test("loops")
+def t_loops(d, out):
+    """How often loop() runs and how busy it is, screen on and off: the
+    firmware's own measure of what it wakes for (no current meter needed)."""
+    need_hooks(d)
+    if not d.knows("loops"):
+        raise Skip("no loops command (older test build)")
+    res = {}
+    try:
+        for state, secs in (("on", 8), ("off", 12)):
+            d.cli.run(f"screen {state}")
+            time.sleep(2)
+            d.cli.get("loops")   # from here
+            time.sleep(secs)
+            f = d.cli.get("loops").split(",")
+            res[state] = (int(f[0]), float(f[1]))
+    finally:
+        d.cli.run("screen on")
+    (out / "loops.json").write_text(json.dumps(res))
+    return "  ".join(f"screen {k}: {v[0]}/s, {v[1]}% busy" for k, v in res.items())
+
+
 def need_hooks(d):
     if not d.hooks:
         raise Skip("needs a test build (--flash, not --release)")

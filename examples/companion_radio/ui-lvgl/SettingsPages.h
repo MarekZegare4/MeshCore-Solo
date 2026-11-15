@@ -383,6 +383,8 @@ bool UITask::cliCommand(const char* command, char* reply, int n) {
              locked() ? 1 : 0, _display && _display->isOn() ? "on" : "off", (unsigned)_toast_seq);
     return true;
   }
+  if (!strcmp(command, "screen on")) { wake(); snprintf(reply, n, "OK"); return true; }
+  if (!strcmp(command, "screen off")) { sleep(); snprintf(reply, n, "OK"); return true; }
   if (testhooks::handle(*_core, command, reply, n)) return true;
 #endif
   if (!settingscli::handle(*_core, command, reply, n)) return false;

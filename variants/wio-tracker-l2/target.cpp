@@ -47,6 +47,11 @@ void L2GpsProvider::loop() {
   }
 }
 
+int L2GpsProvider::readChunk(uint8_t* buf, int max) {
+  const int k = Serial1.available();
+  return k > 0 ? (int)Serial1.read(buf, (size_t)(k < max ? k : max)) : 0;
+}
+
 void L2GpsProvider::stop() {
   MicroNMEALocationProvider::stop();
   // The UART's TX idling high would feed the unpowered module through its pin.

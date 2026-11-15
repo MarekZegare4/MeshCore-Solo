@@ -42,6 +42,10 @@ struct StatusHistory {
     _last_rx = total_rx;
     version++;
   }
+  // Would tick() do anything: a sample due, or a packet heard since?
+  bool due(unsigned long now, uint32_t total_rx) const {
+    return total_rx != _snr_rx || !_next || (long)(now - _next) >= 0;
+  }
   // After the packet counters are reset: the next interval counts from 0.
   void countersReset() { _last_rx = 0; _snr_rx = 0; }
 

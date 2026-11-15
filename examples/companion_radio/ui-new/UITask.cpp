@@ -2659,7 +2659,16 @@ bool UITask::cliCommand(const char* command, char* reply, int n) {
 //   ui  "> <screen>|<banner or ->|<locked 0/1>|<display on/off>|<banners so far>"
 //   btn down|up  the one button (a one-button board) pressed / let go: its
 //       gestures timed by OneButton as for the real one
+//   screen on|off  the display on, or off as its timeout does
 bool UITask::testCli(const char* cmd, char* reply, int n) {
+  if (!strcmp(cmd, "screen on") || !strcmp(cmd, "screen off")) {
+    if (!_display) { snprintf(reply, n, "Error, no display"); return true; }
+    if (cmd[8] == 'n') { checkDisplayOn(0); }
+    else { _display->turnOff(); }
+    _next_refresh = 0;
+    snprintf(reply, n, "OK");
+    return true;
+  }
   if (!strncmp(cmd, "btn ", 4)) {
 #if defined(PIN_USER_BTN) && !UI_HAS_JOYSTICK
     if (!strcmp(cmd + 4, "down")) _test_btn = true;

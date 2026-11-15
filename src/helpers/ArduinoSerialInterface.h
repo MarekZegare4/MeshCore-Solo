@@ -31,6 +31,11 @@ public:
   // can't, so it never counts as an app being there.
   bool isClientConnected() const override;
 
+  // Bytes from the host waiting (a frame is written out whole, nothing is
+  // queued to send). The base's "can't tell" (true) kept a sleeping loop
+  // (UI_LOOP_IDLES) at 2 ms naps whenever an app was connected, on any link.
+  bool hasPendingFrames() const override { return _isEnabled && _serial && _serial->available() > 0; }
+
   bool isWriteBusy() const override;
   size_t writeFrame(const uint8_t src[], size_t len) override;
   size_t checkRecvFrame(uint8_t dest[]) override;

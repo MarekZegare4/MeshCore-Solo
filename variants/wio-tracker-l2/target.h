@@ -31,6 +31,8 @@ public:
   void reset() override;
   bool isEnabled() override;
   void loop() override;
+protected:
+  int readChunk(uint8_t* buf, int max) override;   // the UART's run in one read
 };
 
 extern WioTrackerL2Board board;

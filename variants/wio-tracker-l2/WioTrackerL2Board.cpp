@@ -219,6 +219,14 @@ int WioTrackerL2Board::expReadInputs() {
   return lo | (hi << 8);
 }
 
+int WioTrackerL2Board::expReadPort0() {
+  Wire.beginTransmission(TCA9535_ADDR);
+  Wire.write((uint8_t)0x00);   // input port 0 register
+  if (Wire.endTransmission(false) != 0) return -1;   // a repeated start: the read goes with it, one transfer
+  if (Wire.requestFrom((int)TCA9535_ADDR, 1) != 1) return -1;
+  return Wire.read();
+}
+
 int WioTrackerL2Board::awRead(uint8_t reg) {
   if (!aw_ok) return -1;
   Wire.beginTransmission(0x22);
@@ -228,14 +236,20 @@ int WioTrackerL2Board::awRead(uint8_t reg) {
   return Wire.read();
 }
 
+// Asked every loop pass in places (the history's sample, the low-battery
+// check, the doze): an I2C read each, ~1 ms at the bus's 100 kHz. A cable
+// goes in or out far less often than once a second.
 bool WioTrackerL2Board::isExternalPowered() {
+  if (vbus_read_ms && millis() - vbus_read_ms < 1000) return vbus_last;
   int st0 = awRead(0x40);   // STATUS0
-  return st0 >= 0 && (st0 & 0x80) != 0;   // VBUSOK
+  vbus_last = st0 >= 0 && (st0 & 0x80) != 0;   // VBUSOK
+  vbus_read_ms = millis() | 1;
+  return vbus_last;
 }
 
 bool WioTrackerL2Board::readWakeButton() {
   if (!expander_ok) return false;
-  int v = expReadInputs();
+  int v = expReadPort0();   // polled every 50 ms: the one byte it's in
   if (v < 0) return false;
   return ((uint8_t)(v & 1)) != wake_btn_baseline;
 }

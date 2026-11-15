@@ -19,6 +19,7 @@
 //                              an ESP32's internal RAM, not its PSRAM)
 //   lastdm                     the newest direct message, "> <in/out>,<prefix hex>,<ack 0-3>,<text>"
 //   lastch                     the newest channel post, "> <channel>,<text>"
+//   loops                      since the last ask: "> <loop passes a second>,<busy %>,<seconds>"
 //
 // The frontends add their own (ui-new/UITask.cpp: key, ui).
 
@@ -28,6 +29,8 @@
 #ifdef ESP32
   #include <esp_heap_caps.h>
 #endif
+
+extern uint32_t g_loop_passes, g_loop_busy_us;   // main.cpp
 
 namespace testhooks {
 
@@ -137,6 +140,15 @@ inline bool handle(Core& core, const char* cmd, char* reply, int n) {
     else if (!strcmp(a, "clear")) core.trail.reset();
     else { snprintf(reply, n, "Error, trail on/off/clear"); return true; }
     snprintf(reply, n, "OK");
+    return true;
+  }
+  if (!strcmp(cmd, "loops")) {
+    static uint32_t at_ms = 0, at_passes = 0, at_busy = 0;
+    const uint32_t now = millis(), dt = now - at_ms, p = g_loop_passes - at_passes, b = g_loop_busy_us - at_busy;
+    const unsigned long permille = dt ? (unsigned long)((uint64_t)b / dt) : 0;   // us busy per ms
+    snprintf(reply, n, "> %lu,%lu.%lu,%lu", (unsigned long)(dt ? (uint64_t)p * 1000 / dt : 0),
+             permille / 10, permille % 10, (unsigned long)(dt / 1000));
+    at_ms = now; at_passes = g_loop_passes; at_busy = g_loop_busy_us;
     return true;
   }
   if (!strcmp(cmd, "mem")) {

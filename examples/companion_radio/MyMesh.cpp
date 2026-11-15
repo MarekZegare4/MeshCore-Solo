@@ -3174,8 +3174,15 @@ void MyMesh::setClock(uint32_t utc) {
 }
 
 // To check if there is pending work
+// Work for the loop now: what it mustn't nap through. A packet queued for
+// later (a flood's random delay, a retry) or the contacts' lazy write
+// pending (5 s after each change, and put off while keys are pressed) isn't:
+// the loop's naps are short (an nRF52 wakes on its 1 kHz tick, the L2 within
+// 50 ms) and meet them when due. Counting them kept the loop from sleeping at
+// all for seconds after every advert from a known contact.
 bool MyMesh::hasPendingWork() const {
-  return _mgr->getOutboundTotal() > 0 || dirty_contacts_expiry != 0;
+  return _mgr->getOutboundCount(_ms->getMillis()) > 0 ||
+         (dirty_contacts_expiry && millisHasNowPassed(dirty_contacts_expiry));
 }
 
 #include "MyMeshContacts.h"
