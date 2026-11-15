@@ -118,6 +118,7 @@ values above that are set from the phone app or the CLI.
 | `MAP_VECTOR` | Wio Tracker L2: turns on the unfinished vector map (regions from `tools/maps/osm_vector.py`). Without it the vector map stays off whatever was saved. |
 | `HIST_ARCHIVE` | Wio Tracker L2: message history also kept on the SD card (`ui-lvgl/HistoryStore.h`). Set in its solo build. |
 | `HIST_FLASH` | Wio Tracker L1: message history also kept on the QSPI flash, across a power-off and past what RAM holds, read back a page at a time (`ui-core/HistoryLog.h`, Settings > Messages > Keep messages, off by default). Implies `HIST_ARCHIVE`'s hooks. Set in its solo builds. |
+| `SOLO_TCXO_DELAY_US=<µs>` | The SX1262's TCXO start-up allowance on each wake, default 1600 (RadioLib's own is 5000). A board whose radio receives nothing, or fails to start, with a TCXO slower than that sets 5000. See [RX power save](./rx-power-save.md#tcxo-start-up). |
 | `MESHCORE_VERSION='"x.y"'` | Overrides the upstream MeshCore base-version string shown in diagnostics, for boards whose port hasn't been rebased onto the latest yet. Cosmetic only — doesn't change protocol behaviour. |
 
 ---

@@ -55,22 +55,41 @@ its guarded "balanced" level). They measured it on several SX1262 boards.
   8-symbol header, plus a symbol of slack. This is the datasheet's
   condition, and it sets the listen window.
 - No duty cycle is used where the sleep would come within 250 µs of the
-  chip's wake-up time, which is the TCXO start-up (5 ms) plus 1 ms. Below
+  chip's wake-up time, which is the TCXO start-up (1.6 ms, see below) plus 1 ms. Below
   that the SX1262 arms without an error and then hears nothing. The radio
   keeps listening continuously at such settings; the L2's Radio page says
   "Not at these radio settings".
 
-What it comes to, with the sleep including the 6 ms wake-up:
+What it comes to. The sleep includes the 2.6 ms wake-up, so the radio's
+low-power share is a little under the "time asleep":
 
 | Settings | On: sleep / listen, time asleep | Max |
 | --- | --- | --- |
-| SF7 / 62.5 kHz | 11.9 / 27.0 ms, 31 % | 44.6 / 27.0 ms, 62 % |
-| SF8 / 62.5 kHz | 23.8 / 51.0 ms, 32 % | 89.3 / 51.0 ms, 64 % |
-| SF7 / 125 kHz | (too short: continuous) | 22.3 / 15.0 ms, 60 % |
-| SF9 / 125 kHz | 23.8 / 51.0 ms, 32 % | as On |
-| SF10 / 250 kHz | 23.8 / 51.0 ms, 32 % | as On |
-| SF11 / 125 kHz | 95.0 / 195.1 ms, 33 % | as On |
-| SF12 / 125 kHz | 190.0 / 387.2 ms, 33 % | as On |
+| SF7 / 62.5 kHz | 11.9 / 25.3 ms, 31 % | 44.6 / 25.3 ms, 63 % |
+| SF8 / 62.5 kHz | 23.8 / 49.3 ms, 32 % | 89.3 / 49.3 ms, 64 % |
+| SF7 / 125 kHz | 5.9 / 13.3 ms, 30 % | 22.3 / 13.3 ms, 62 % |
+| SF7 / 250 kHz | 3.0 / 7.3 ms, 28 % | 11.1 / 7.3 ms, 60 % |
+| SF9 / 125 kHz | 23.8 / 49.3 ms, 32 % | as On |
+| SF10 / 250 kHz | 23.8 / 49.3 ms, 32 % | as On |
+| SF11 / 125 kHz | 95.0 / 193.4 ms, 32 % | as On |
+| SF12 / 125 kHz | 190.1 / 385.5 ms, 33 % | as On |
+
+### TCXO start-up
+
+Most of these boards clock the radio from a TCXO, which the SX1262 powers
+up on every wake: on each duty-cycle listen, and on every receive or
+transmit started from standby. RadioLib allows 5 ms for that by default.
+IoTThinks measured 150–400 µs to be enough on five modules. Solo now sets
+1.6 ms after the radio starts (`SOLO_TCXO_DELAY_US` in `CustomSX1262.h`,
+then a recalibration), 4x the worst of their figures. With 5 ms, SF8 On
+spent 6 of its 23.8 ms "sleep" waking up, and SF7 at 125 kHz and wider
+couldn't duty-cycle at all.
+
+A board whose TCXO needed longer would fail to start its oscillator, and
+receive nothing. To check the margin, the L1 and the L2 were also run with
+**0.4 ms**: 75 of 75 messages arrived with power save off, On and Max,
+both ways. A board that turns out to need more can set
+`-D SOLO_TCXO_DELAY_US=5000` in its build flags.
 
 ## Why it was off, and what changed
 
@@ -127,6 +146,18 @@ watchdog stepped in once in all of it, during the deliberate loss.
 
 The "asleep" figures match the computed ones above (32 % and 64 %).
 
+After the TCXO change to 1.6 ms the trial ran again from L2 to L1, 15 and
+then 30 messages a case:
+
+- On: 45 of 45 from 16-symbol senders, 44 of 45 from 32-symbol ones.
+- Max: 15 of 15 from v1.16 senders, and 9 of 15 from older ones, as
+  expected.
+- Off: 30 of 30.
+
+The one message On missed came while two packets from other nodes were on
+the air, which points to a collision rather than the duty cycle. The rerun
+of that case held 30 of 30.
+
 The device test suites passed with it all built in: L1 26/26, L2 51/51 over
 two rounds.
 
@@ -168,14 +199,8 @@ their [PowerSaving firmware for MeshCore](https://github.com/IoTThinks/MeshCore/
   condition, and the 250 µs floor above the wake-up;
 - looking at BUSY before asking a duty-cycling chip anything;
 - putting a host-driven RF switch back to receive after arming.
+- the TCXO start-up times, and setting a shorter one with a recalibration.
 
 Solo's code is written anew around its own radio wrapper, not copied.
 What is Solo's own: finding the SPI wake-ups that made the June version
 deaf, the On / Max choice by sender firmware, and the tests above.
-
-## Possible next steps
-
-- **TCXO start-up.** RadioLib waits 5 ms for the TCXO on every wake;
-  IoTThinks measured 150–400 µs to be enough on the boards they tried. A
-  shorter wait would cut the time the radio spends waking. It would also
-  let On work at SF7 / 125 kHz, where the sleep is now too short to use.

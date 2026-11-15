@@ -3,12 +3,17 @@
 #include <RadioLib.h>
 #include "MeshCore.h"
 
+#ifndef SOLO_TCXO_DELAY_US
+  #define SOLO_TCXO_DELAY_US 1600   // the TCXO's start-up allowance on each wake (std_init())
+#endif
+
 class CustomSX1262 : public SX1262 {
   uint32_t _preambleMillis = 66;
   uint32_t _maxPayloadMillis = 3934;
   uint32_t _activityAt = 0;
   bool _headerSeen = false;
-  bool _tcxo = false;   // std_init() set up a TCXO: RadioLib waits 5 ms for it on every wake
+  bool _tcxo = false;   // std_init() set up a TCXO, waited for on every wake
+  uint32_t _tcxo_us = SOLO_TCXO_DELAY_US;
 
   public:
     CustomSX1262(Module *mod) : SX1262(mod) { }
@@ -71,11 +76,23 @@ class CustomSX1262 : public SX1262 {
         tcxo = 0.0f;
         status = begin(LORA_FREQ, LORA_BW, LORA_SF, cr, RADIOLIB_SX126X_SYNC_WORD_PRIVATE, init_power, 16, tcxo, useRegulatorLDO);
       }
-      _tcxo = tcxo > 0;
       if (status != RADIOLIB_ERR_NONE) {
         Serial.print("ERROR: radio init failed: ");
         Serial.println(status);
         return false;  // fail
+      }
+      // RadioLib waits 5 ms for the TCXO on every wake (every RX duty-cycle
+      // listen, every receive or transmit started from standby). Measured
+      // enough by IoTThinks (PowerSaving firmware): 150-400 us on five
+      // modules; SOLO_TCXO_DELAY_US keeps 4x the worst. Recalibrated after,
+      // as the datasheet wants once the TCXO is set up (13.3.6).
+      _tcxo = this->tcxoVoltage > 0.0f;   // begin() may have fallen back to a crystal
+      if (_tcxo && setTCXO(this->tcxoVoltage, SOLO_TCXO_DELAY_US) == RADIOLIB_ERR_NONE) {
+        calibrate(RADIOLIB_SX126X_CALIBRATE_ALL);
+        delay(50);
+        _tcxo_us = SOLO_TCXO_DELAY_US;
+      } else {
+        _tcxo_us = 5000;   // RadioLib's, as begin() left it
       }
     
       setCRC(1);
@@ -112,7 +129,7 @@ class CustomSX1262 : public SX1262 {
       return true;  // success
     }
 
-    uint32_t tcxoDelayUs() const { return _tcxo ? 5000 : 0; }   // RadioLib's setTCXO() default
+    uint32_t tcxoDelayUs() const { return _tcxo ? _tcxo_us : 0; }
 
     // Same IRQs as startReceive() (the preamble one for isReceiving()).
     int16_t startReceiveDutyCycle(uint32_t rxPeriod, uint32_t sleepPeriod) {
