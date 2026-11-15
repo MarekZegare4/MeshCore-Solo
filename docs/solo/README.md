@@ -74,6 +74,10 @@ Big thanks to the people who contributed to Solo:
 [tchellow](https://github.com/tchellow), [3urobeat](https://github.com/3urobeat),
 [pmow](https://github.com/pmow) and [sim1988son](https://github.com/sim1988son).
 
+RX power save is timed after [IoTThinks](https://github.com/IoTThinks)'
+[PowerSaving firmware](https://github.com/IoTThinks/MeshCore/tree/PowerSaving-v18)
+(see [RX power save](./developer/rx-power-save.md#credits)).
+
 The coverage map is [MatterMap](https://mattermeshos.com/coverage/) by Andrea
 Quartararo ([MatterMesh OS](https://mattermeshos.com)).
 

@@ -146,8 +146,9 @@ void RadioLibWrapper::rxPsWatchdogCheck() {
   }
 }
 
-// After IoTThinks' PowerSaving firmware (RXPowerSaving.cpp, its guarded
-// "balanced" level), measured there on SX1262s:
+// After IoTThinks' PowerSaving firmware for MeshCore
+// (https://github.com/IoTThinks/MeshCore/tree/PowerSaving-v18,
+// RXPowerSaving.cpp, its guarded "balanced" level), measured there on SX1262s:
 //  - the sleep leaves 10 symbols of the shortest preamble for the next window
 //    (latching takes ~6), less a fifth of a symbol that keeps the register
 //    pairs off ones that latch a preamble and then lose the header;

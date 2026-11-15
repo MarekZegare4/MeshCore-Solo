@@ -94,4 +94,6 @@ Questions and feedback: the [Solo firmware thread](https://discord.com/channels/
 
 Big thanks to [vanous](https://github.com/vanous), [marczykm](https://github.com/marczykm), [tchellow](https://github.com/tchellow), [3urobeat](https://github.com/3urobeat), [pmow](https://github.com/pmow) and [sim1988son](https://github.com/sim1988son).
 
+RX power save is timed after [IoTThinks](https://github.com/IoTThinks)' [PowerSaving firmware](https://github.com/IoTThinks/MeshCore/tree/PowerSaving-v18).
+
 Built on upstream [MeshCore](https://github.com/meshcore-dev/MeshCore) and its [community](https://github.com/meshcore-dev/MeshCore/graphs/contributors).

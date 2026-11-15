@@ -155,6 +155,24 @@ The test hooks it drives (`ui-core/TestHooks.h`):
   and the packets received.
 - `txpre <symbols>` sends with that preamble until the radio is set again.
 
+## Credits
+
+The timing is the work of [IoTThinks](https://github.com/IoTThinks) in
+their [PowerSaving firmware for MeshCore](https://github.com/IoTThinks/MeshCore/tree/PowerSaving-v18)
+(`src/helpers/radiolib/RXPowerSaving.*`). Taken from there:
+
+- the method: size the sleep by the preamble symbols left for the next
+  listen, and size the listen by the datasheet's timer condition;
+- the constants they measured on SX1262 boards: 10 symbols caught at their
+  balanced level, the 0.2-symbol pad, a symbol of slack in the timer
+  condition, and the 250 µs floor above the wake-up;
+- looking at BUSY before asking a duty-cycling chip anything;
+- putting a host-driven RF switch back to receive after arming.
+
+Solo's code is written anew around its own radio wrapper, not copied.
+What is Solo's own: finding the SPI wake-ups that made the June version
+deaf, the On / Max choice by sender firmware, and the tests above.
+
 ## Possible next steps
 
 - **TCXO start-up.** RadioLib waits 5 ms for the TCXO on every wake;
