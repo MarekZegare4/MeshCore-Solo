@@ -3,9 +3,10 @@
 // and "which way am I heading", shared by the nav / compass / map screens.
 //
 // Course-over-ground ring: a heading source independent of trail recording,
-// sampled every ~1 s from the GPS whenever it has a fix. Heading = bearing
-// across the window (oldest→newest) once the cumulative movement clears
-// MIN_MOVE_M; gross GPS jumps are rejected on insert.
+// sampled every ~1 s from the GPS whenever it has a fix. Heading = bearing to
+// the newest fix from the latest one at least MIN_MOVE_M behind it, within the
+// last RING seconds: a bike's is a couple of seconds old, a slow walk's (3 km/h,
+// under a metre a second) fifteen. Gross GPS jumps are rejected on insert.
 
 #include "../GeoUtils.h"
 
@@ -56,24 +57,37 @@ public:
   // recent movement to derive a stable heading. Holds the last good heading
   // while standing still.
   bool currentCourse(int& deg_out) const {
-    static const float MIN_MOVE_M = 6.0f;   // window must span ≥ this to be a real heading
-    if (_count < 2) {
-      if (_deg >= 0) { deg_out = _deg; return true; }  // hold last good
-      return false;
+    // GPS noise is a few metres: over 12 m it turns the heading by ~15° at most.
+    static const float MIN_MOVE_M = 12.0f;
+    if (_count >= 2) {
+      const Fix& newest = _ring[(_head + _count - 1) % RING];
+      for (int i = _count - 2; i >= 0; i--) {   // newest first: the shortest stretch that's enough
+        const Fix& f = _ring[(_head + i) % RING];
+        if (geo::haversineKm(f.lat, f.lon, newest.lat, newest.lon) * 1000.0f < MIN_MOVE_M) continue;
+        if (onTheWay(f, _ring[(_head + (i + _count - 1) / 2) % RING], newest))
+          _deg = geo::bearingDeg(f.lat, f.lon, newest.lat, newest.lon);
+        break;
+      }
     }
-    const Fix& oldest = _ring[_head];
-    const Fix& newest = _ring[(_head + _count - 1) % RING];
-    float span_m = geo::haversineKm(oldest.lat, oldest.lon, newest.lat, newest.lon) * 1000.0f;
-    if (span_m < MIN_MOVE_M) {
-      if (_deg >= 0) { deg_out = _deg; return true; }  // standing still → hold last
-      return false;
-    }
-    _deg = geo::bearingDeg(oldest.lat, oldest.lon, newest.lat, newest.lon);
-    deg_out = _deg;
+    if (_deg < 0) return false;
+    deg_out = _deg;   // not far enough lately (standing still): the last good one held
     return true;
   }
 
 private:
+  struct Fix { int32_t lat, lon; uint32_t ms; };
+
+  // The fix halfway between a and b in time lies along the way from one to the
+  // other (each half at least a quarter of it): walking, it does; GPS noise
+  // wandering round a standing receiver seldom lines up like that.
+  static bool onTheWay(const Fix& a, const Fix& m, const Fix& b) {
+    const float kx = cosf(a.lat * 1e-6f * (float)M_PI / 180.0f);
+    const float dx = (b.lon - a.lon) * kx, dy = (float)(b.lat - a.lat);
+    const float mx = (m.lon - a.lon) * kx, my = (float)(m.lat - a.lat);
+    const float t = (mx * dx + my * dy) / (dx * dx + dy * dy);   // m's place from a (0) to b (1)
+    return t >= 0.25f && t <= 0.75f;
+  }
+
   int32_t  _fix_lat = 0, _fix_lon = 0;
   uint32_t _fix_ms = 0;
   bool     _had_fix = false;
@@ -102,8 +116,7 @@ private:
     _ring[pos].lat = lat; _ring[pos].lon = lon; _ring[pos].ms = now;
   }
 
-  static const int RING = 5;
-  struct Fix { int32_t lat, lon; uint32_t ms; };
+  static const int RING = 30;   // seconds of fixes
 
   SensorManager* _sensors = nullptr;
   Fix      _ring[RING];

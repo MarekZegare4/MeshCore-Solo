@@ -32,9 +32,14 @@ static inline int bearingDeg(int32_t lat1, int32_t lon1, int32_t lat2, int32_t l
   static const float DEG2RAD = (float)M_PI / 180.0f;
   float la1 = lat1 * (1e-6f * DEG2RAD);
   float la2 = lat2 * (1e-6f * DEG2RAD);
+  float dla = (lat2 - lat1) * (1e-6f * DEG2RAD);
   float dlo = (lon2 - lon1) * (1e-6f * DEG2RAD);
+  // The north part, cos(la1)sin(la2) - sin(la1)cos(la2)cos(dlo), written as
+  // sin(dla) + 2 sin(la1)cos(la2)sin²(dlo/2): the same, but without taking two
+  // near-equal numbers apart, which in float put a point 5 m off by up to 9°.
+  float s   = sinf(dlo / 2);
   float b   = atan2f(sinf(dlo)*cosf(la2),
-                     cosf(la1)*sinf(la2) - sinf(la1)*cosf(la2)*cosf(dlo)) * (180.0f / (float)M_PI);
+                     sinf(dla) + 2.0f*sinf(la1)*cosf(la2)*s*s) * (180.0f / (float)M_PI);
   if (b < 0.0f) b += 360.0f;
   return (int)(b + 0.5f) % 360;
 }
