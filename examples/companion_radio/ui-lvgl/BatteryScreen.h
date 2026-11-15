@@ -163,7 +163,11 @@ void UITask::refreshBattCurve() {
   char t[64];
   if (mv > 0) snprintf(t, sizeof(t), "Now %d mV  -  %d %%  -  %s curve", mv, battery::rawPercent(mv), custom ? "your" : "LiPo");
   else snprintf(t, sizeof(t), "%s curve  -  drag a point up or down", custom ? "Your" : "LiPo");
-  lv_label_set_text(s_now, t);
-  if (s_reset) lv_obj_set_style_text_opa(s_reset, custom ? LV_OPA_COVER : LV_OPA_40, 0);
-  if (s_chart && s_drag < 0) lv_obj_invalidate(s_chart);   // the "now" line moves with the cell
+  setText(s_now, t);
+  const lv_opa_t ro = custom ? LV_OPA_COVER : LV_OPA_40;
+  if (s_reset && lv_obj_get_style_text_opa(s_reset, LV_PART_MAIN) != ro) lv_obj_set_style_text_opa(s_reset, ro, 0);
+  // The "now" line moves with the cell: redrawn when the reading changes (the
+  // smoothed one, every few seconds), not each second.
+  static int s_drawn_mv = -1;
+  if (s_chart && s_drag < 0 && mv != s_drawn_mv) { s_drawn_mv = mv; lv_obj_invalidate(s_chart); }
 }

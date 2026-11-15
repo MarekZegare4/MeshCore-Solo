@@ -104,6 +104,10 @@ static void setTextColor(lv_obj_t* l, uint32_t color) {
   lv_color_t c = lv_color_hex(color);
   if (!lv_color_eq(lv_obj_get_style_text_color(l, LV_PART_MAIN), c)) lv_obj_set_style_text_color(l, c, 0);
 }
+static void setBgColor(lv_obj_t* o, uint32_t color) {
+  lv_color_t c = lv_color_hex(color);
+  if (!lv_color_eq(lv_obj_get_style_bg_color(o, LV_PART_MAIN), c)) lv_obj_set_style_bg_color(o, c, 0);
+}
 static void setTextFmt(lv_obj_t* l, const char* fmt, ...) __attribute__((format(printf, 2, 3)));
 static void setTextFmt(lv_obj_t* l, const char* fmt, ...) {
   char b[160];

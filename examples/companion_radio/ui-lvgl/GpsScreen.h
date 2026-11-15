@@ -80,6 +80,19 @@ static void snapshot(GpsSky& g) {
   for (int i = 0; i < s_n; i++) { s_sats[i] = g.sats[idx[i]]; s_used_flag[i] = g.used(g.sats[idx[i]]); }
 }
 
+// What the sky and the bars draw, hashed (FNV-1a): redrawn when it changes,
+// not each second -- most seconds the receiver reports the same sky.
+static uint32_t skySig() {
+  uint32_t h = 2166136261u ^ (uint32_t)s_n;
+  auto mix = [&h](int32_t v) { h = (h ^ (uint32_t)v) * 16777619u; };
+  for (int i = 0; i < s_n; i++) {
+    const GpsSky::Sat& t = s_sats[i];
+    mix(t.prn | t.sys << 16); mix(t.elev); mix(t.azim); mix(t.snr | s_used_flag[i] << 8);
+  }
+  return h;
+}
+static uint32_t s_sky_sig = 0;
+
 static void dot(lv_layer_t* layer, int32_t x, int32_t y, int32_t r, uint32_t color, bool filled) {
   lv_draw_rect_dsc_t d;
   lv_draw_rect_dsc_init(&d);
@@ -545,6 +558,9 @@ void UITask::refreshGps() {
 #endif
   }
 
+  const uint32_t sig = skySig();
+  const bool moved = sig != s_sky_sig;
+  s_sky_sig = sig;
   if (s_status) {   // Sky
     setText(s_status, status);
     setTextColor(s_status, status_col);
@@ -553,7 +569,7 @@ void UITask::refreshGps() {
     infoSet(s_search, search);
     infoSet(s_ttff, ttff);
     infoSet(s_utc, utc);
-    lv_obj_invalidate(s_sky);
+    if (moved) lv_obj_invalidate(s_sky);
   }
   if (s_bars) {   // Signal
     for (uint8_t k = 0; k < GpsSky::SYS_COUNT; k++) {
@@ -565,7 +581,7 @@ void UITask::refreshGps() {
     }
     int32_t w = s_n * BAR_PITCH;
     lv_obj_set_width(s_bars, w < BAR_PITCH ? BAR_PITCH : w);
-    lv_obj_invalidate(s_bars);
+    if (moved) lv_obj_invalidate(s_bars);
   }
   if (s_d_fix) {   // Details
     char f[64];

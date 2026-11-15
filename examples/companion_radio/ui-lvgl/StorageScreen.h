@@ -23,7 +23,15 @@ static bool     s_walking = false;
 
 // Folder walk, one entry at a time: a stack of open folders.
 static const int DEPTH = 8;
+#if defined(SEEED_WIO_TRACKER_L2)
+// The card's folders through FatFs itself: f_readdir() gives each entry's
+// size and kind as it goes. stat() on each name would look it up again from
+// the folder's start -- a folder of n tiles read n times over.
+static FF_DIR  s_dir[DEPTH];
+static int     s_drive = -1;
+#else
 static DIR*    s_dir[DEPTH];
+#endif
 static size_t  s_plen[DEPTH];
 static uint8_t s_dcat[DEPTH];
 static int     s_depth = 0;
@@ -50,8 +58,16 @@ static void fmtBytes(char* out, size_t n, uint64_t b) {
   else snprintf(out, n, "%.1f GB", b / 1073741824.0);
 }
 
+static void walkClose(int i) {
+#if defined(SEEED_WIO_TRACKER_L2)
+  f_closedir(&s_dir[i]);
+#else
+  closedir(s_dir[i]);
+#endif
+}
+
 static void stopWalk() {
-  while (s_depth > 0) closedir(s_dir[--s_depth]);
+  while (s_depth > 0) walkClose(--s_depth);
   s_walking = false;
 }
 
@@ -68,9 +84,16 @@ static void startWalk() {
   stopWalk();
   memset(s_bytes, 0, sizeof(s_bytes));
   s_files = 0;
+#if defined(SEEED_WIO_TRACKER_L2)
+  s_drive = lvport::sdDrive();
+  if (s_drive < 0) return;
+  snprintf(s_path, sizeof(s_path), "%d:", s_drive);
+  if (f_opendir(&s_dir[0], s_path) == FR_OK) {
+#else
   snprintf(s_path, sizeof(s_path), "/sdcard");
   if (DIR* d = opendir(s_path)) {
     s_dir[0] = d;
+#endif
     s_plen[0] = strlen(s_path);
     s_dcat[0] = C_OTHER;
     s_depth = 1;
@@ -92,33 +115,50 @@ static bool stepWalk(uint32_t budget_ms) {
   uint32_t t0 = millis();
   while (s_depth > 0 && millis() - t0 < budget_ms) {
     int top = s_depth - 1;
+#if defined(SEEED_WIO_TRACKER_L2)
+    static FILINFO fi;   // its long name: no room on the loop's stack to spare
+    const bool more = f_readdir(&s_dir[top], &fi) == FR_OK && fi.fname[0];
+    const char* name = fi.fname;
+    const bool dir = fi.fattrib & AM_DIR;
+    const uint64_t size = fi.fsize;
+#else
     struct dirent* de = readdir(s_dir[top]);
-    if (!de) {
-      closedir(s_dir[top]);
+    const bool more = de != nullptr;
+    const char* name = de ? de->d_name : "";
+#endif
+    if (!more) {
+      walkClose(top);
       s_depth--;
       if (s_depth > 0) s_path[s_plen[s_depth - 1]] = '\0';
       continue;
     }
-    if (de->d_name[0] == '.') continue;   // ".", "..", hidden files
+    if (name[0] == '.') continue;   // ".", "..", hidden files
     size_t base = s_plen[top];
-    snprintf(s_path + base, sizeof(s_path) - base, "/%s", de->d_name);
-    uint8_t cat = top == 0 ? topCat(de->d_name) : s_dcat[top];
+    snprintf(s_path + base, sizeof(s_path) - base, "/%s", name);
+    uint8_t cat = top == 0 ? topCat(name) : s_dcat[top];
+#if !defined(SEEED_WIO_TRACKER_L2)
     struct stat st;
-    if (stat(s_path, &st) == 0) {
-      if (S_ISDIR(st.st_mode)) {
-        if (s_depth < DEPTH) {
-          if (DIR* d = opendir(s_path)) {
-            s_dir[s_depth] = d;
-            s_plen[s_depth] = strlen(s_path);
-            s_dcat[s_depth] = cat;
-            s_depth++;
-            continue;   // the path stays extended while inside
-          }
+    if (stat(s_path, &st) != 0) { s_path[base] = '\0'; continue; }
+    const bool dir = S_ISDIR(st.st_mode);
+    const uint64_t size = (uint64_t)st.st_size;
+#endif
+    if (dir) {
+      if (s_depth < DEPTH) {
+#if defined(SEEED_WIO_TRACKER_L2)
+        if (f_opendir(&s_dir[s_depth], s_path) == FR_OK) {
+#else
+        if (DIR* d = opendir(s_path)) {
+          s_dir[s_depth] = d;
+#endif
+          s_plen[s_depth] = strlen(s_path);
+          s_dcat[s_depth] = cat;
+          s_depth++;
+          continue;   // the path stays extended while inside
         }
-      } else {
-        s_bytes[cat] += (uint64_t)st.st_size;
-        s_files++;
       }
+    } else {
+      s_bytes[cat] += size;
+      s_files++;
     }
     s_path[base] = '\0';
   }
@@ -229,7 +269,7 @@ static void showUsage(lv_obj_t* bar, lv_obj_t* lbl, uint64_t total, uint64_t use
   fmtBytes(t, sizeof(t), total);
   fmtBytes(f, sizeof(f), total - used);
   snprintf(line, sizeof(line), "%s used of %s  -  %s free", u, t, f);
-  lv_label_set_text(lbl, line);
+  setText(lbl, line);
 }
 
 static void refreshSizes() {
@@ -237,12 +277,12 @@ static void refreshSizes() {
     if (!s_cat_val[c]) continue;
     char b[16];
     fmtBytes(b, sizeof(b), s_bytes[c]);
-    lv_label_set_text(s_cat_val[c], b);
+    setText(s_cat_val[c], b);
   }
   if (s_status) {
     char t[48];
     snprintf(t, sizeof(t), s_walking ? "counting... %lu" : "%lu", (unsigned long)s_files);
-    lv_label_set_text(s_status, t);
+    setText(s_status, t);
   }
 }
 
@@ -333,7 +373,7 @@ void UITask::pollStorage() {
     }
   }
   if (s_walking) stepWalk(12);
-  if (millis() - s_shown_ms < 300 && s_walking) return;   // labels a few times a second
+  if (millis() - s_shown_ms < (s_walking ? 300u : 1000u)) return;   // labels a few times a second, then each second
   s_shown_ms = millis();
   refreshSizes();
   if (s_sd_ok) {

@@ -892,7 +892,7 @@ void UITask::refreshStatusBar() {
   const uint32_t sos_col = _core->sos.acked() ? theme::OK : theme::FAIL;   // green: someone has answered
   if (sos) icons[n++] = { SOS_SYM, sos_col };
   if (_hdr_time) {   // a screen with a title bar has no status bar: its clock takes the colour
-    lv_obj_set_style_bg_color(lv_obj_get_parent(_hdr_time), lv_color_hex(sos ? sos_col : theme::SURFACE), 0);
+    setBgColor(lv_obj_get_parent(_hdr_time), sos ? sos_col : theme::SURFACE);
     setTextColor(_hdr_time, sos ? 0xFFFFFF : theme::TEXT);
   }
   if (isBluetoothEnabled()) icons[n++] = { LV_SYMBOL_BLUETOOTH, hasConnection() ? theme::ACCENT : theme::TEXT_MUTED };
