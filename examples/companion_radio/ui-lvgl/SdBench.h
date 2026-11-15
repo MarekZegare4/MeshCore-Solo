@@ -12,6 +12,9 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include "diskio.h"
+#include <sys/stat.h>
+bool pngdecBench(const uint8_t* png, size_t len, int side);   // TilePng.cpp
+bool pngdecRef(const uint8_t* png, size_t len, uint16_t* out, int side);
 
 namespace sdbench {
 
@@ -36,8 +39,8 @@ static float raw(int drv, uint8_t* buf, uint32_t start, int secs, uint32_t total
 }
 
 // The first folder of tiles under the map layer's root (deepest zoom first).
-static bool tileDir(const char* root, char* out, size_t n) {
-  for (int z = 18; z >= 3; z--) {
+static bool tileDir(const char* root, char* out, size_t n, int only_z = 0) {
+  for (int z = only_z ? only_z : 18; z >= (only_z ? only_z : 3); z--) {
     char zp[64];
     snprintf(zp, sizeof(zp), "%s/%d", root, z);
     DIR* d = opendir(zp);
@@ -52,6 +55,55 @@ static bool tileDir(const char* root, char* out, size_t n) {
     closedir(d);
   }
   return false;
+}
+
+// tilebench: the map layer's tiles read into memory first, then decoded as
+// the tile task does -- full, and inflate alone -- timed apart from the card.
+static void tiles(char* reply, int n, int z) {
+  if (!lvport::mountStorage()) { snprintf(reply, n, "Error: no card"); return; }
+  char dir[80];
+  if (!tileDir(mapview::LAYERS[mapview::s_layer].root, dir, sizeof(dir), z)) { snprintf(reply, n, "Error: no tiles"); return; }
+  static const int MAXN = 24;
+  uint8_t* buf[MAXN]; uint32_t len[MAXN]; int cnt = 0;
+  DIR* d = opendir(dir);
+  struct dirent* e;
+  while (d && cnt < MAXN && (e = readdir(d))) {
+    if (e->d_type != DT_REG) continue;
+    char path[160];
+    snprintf(path, sizeof(path), "%s/%s", dir, e->d_name);
+    int fd = open(path, O_RDONLY);
+    if (fd < 0) continue;
+    struct stat st;
+    if (fstat(fd, &st) == 0 && st.st_size > 33 && st.st_size < 200000) {
+      buf[cnt] = (uint8_t*)heap_caps_malloc(st.st_size, MALLOC_CAP_SPIRAM);
+      if (buf[cnt] && read(fd, buf[cnt], st.st_size) == st.st_size) len[cnt++] = st.st_size;
+      else heap_caps_free(buf[cnt]);
+    }
+    close(fd);
+  }
+  if (d) closedir(d);
+  uint16_t* out = (uint16_t*)heap_caps_malloc(mapview::TILE_PX * mapview::TILE_PX * 2, MALLOC_CAP_SPIRAM);
+  lvport::cpuSlow(false);   // as the tile task has it while tiles load (UITask::cpuNeeded)
+  uint16_t* ref = (uint16_t*)heap_caps_malloc(mapview::TILE_PX * mapview::TILE_PX * 2, MALLOC_CAP_SPIRAM);
+  uint32_t diff = 0;
+  uint32_t full = 0, infl = 0, bytes = 0, ok = 0;
+  for (int i = 0; out && i < cnt; i++) {
+    uint32_t t = micros();
+    bool a = pngdecRgb565(buf[i], len[i], out, mapview::TILE_PX);
+    full += micros() - t;
+    t = micros();
+    pngdecBench(buf[i], len[i], mapview::TILE_PX);
+    infl += micros() - t;
+    if (ref && pngdecRef(buf[i], len[i], ref, mapview::TILE_PX))
+      for (int k = 0; k < mapview::TILE_PX * mapview::TILE_PX; k++) diff += ref[k] != out[k];
+    ok += a; bytes += len[i];
+  }
+  snprintf(reply, n, "> %s: %d tiles (%d ok) %lu B avg, type %u/%u bit | full %.1f ms, inflate+unfilter %.1f ms, %lu px differ from getLineAsRGB565",
+           dir, cnt, (int)ok, cnt ? (unsigned long)(bytes / cnt) : 0UL, cnt ? buf[0][25] : 0, cnt ? buf[0][24] : 0,
+           cnt ? full / 1000.0f / cnt : 0, cnt ? infl / 1000.0f / cnt : 0, (unsigned long)diff);
+  for (int i = 0; i < cnt; i++) heap_caps_free(buf[i]);
+  heap_caps_free(out);
+  heap_caps_free(ref);
 }
 
 static void run(char* reply, int n) {

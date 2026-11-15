@@ -455,6 +455,7 @@ bool UITask::cliCommand(const char* command, char* reply, int n) {
     return true;
   }
   if (!strcmp(command, "sdbench")) { sdbench::run(reply, n); return true; }   // SdBench.h
+  if (!strncmp(command, "tilebench", 9)) { sdbench::tiles(reply, n, atoi(command + 9)); return true; }   // [zoom]
 #endif
   if (testhooks::handle(*_core, command, reply, n)) return true;
 #endif
