@@ -8,8 +8,12 @@
 // unplugged.
 //
 // estimate(): the percentage (the user's curve, battery::percent) fitted
-// against time over the last few hours on battery -- a least-squares line,
-// so the ADC's jitter averages out -- and what's left at that rate.
+// against time -- a least-squares line, so the ADC's jitter averages out --
+// twice: over the last few hours, and over all the time since unplugged
+// (but its first half hour, the surface charge going). The faster of the two
+// drains is the one used: a quiet spell (a night with the screen off, the
+// voltage creeping back up when the load goes) can't promise days the
+// day's use won't keep; a heavier spell lately shows at once.
 //
 // Standalone header (no MeshCore / display dependencies but Battery.h).
 
@@ -55,19 +59,15 @@ struct BattLog {
     if (!mv.n) return e;
     if (ext[mv.n - 1]) { e.charging = true; return e; }
     const uint32_t step = interval_ms / 60000UL ? interval_ms / 60000UL : 1;
-    int first = mv.n - 1;   // back to the last unplug, at most the window
-    while (first > 0 && !ext[first - 1] && (uint32_t)(mv.n - first) * step < window_min) first--;
-    const int k = mv.n - first;
-    if (k < 4 || (uint32_t)(k - 1) * step < min_min) return e;
-    // Least squares of % on minutes (t = 0 the oldest in the window).
-    double st = 0, sp = 0, stt = 0, stp = 0;
-    for (int i = 0; i < k; i++) {
-      const double t = (double)i * step, p = battery::percent(mv.at(first + i), low_mv);
-      st += t; sp += p; stt += t * t; stp += t * p;
-    }
-    const double den = k * stt - st * st;
-    if (den <= 0) return e;
-    const double slope = (k * stp - st * sp) / den;   // % a minute; negative while draining
+    int unplug = mv.n - 1;   // the first sample since the last unplug
+    while (unplug > 0 && !ext[unplug - 1]) unplug--;
+    int first = mv.n - 1;    // the window: back to it, at most window_min
+    while (first > unplug && (uint32_t)(mv.n - first) * step < window_min) first--;
+    double slope;            // % a minute; negative while draining
+    if (!fit(first, step, low_mv, min_min, slope)) return e;
+    const int settled = unplug + (int)((SETTLE_MIN + step - 1) / step);
+    double whole;
+    if (settled < first && fit(settled, step, low_mv, window_min, whole) && whole < slope) slope = whole;
     e.ok = true;
     e.pct_per_h_x10 = (int)(-slope * 600 + 0.5);
     const int pct_now = battery::percent(mv.at(mv.n - 1), low_mv);
@@ -79,7 +79,24 @@ struct BattLog {
   }
 
 private:
+  static const uint32_t SETTLE_MIN = 30;   // after an unplug: the surface charge's drop, no drain
   unsigned long _next = 0;
+
+  // Least squares of % on minutes from sample `first` to the newest, when
+  // they're at least 4 and span min_min.
+  bool fit(int first, uint32_t step, int low_mv, uint32_t min_min, double& slope) const {
+    const int k = mv.n - first;
+    if (k < 4 || (uint32_t)(k - 1) * step < min_min) return false;
+    double st = 0, sp = 0, stt = 0, stp = 0;
+    for (int i = 0; i < k; i++) {
+      const double t = (double)i * step, p = battery::percent(mv.at(first + i), low_mv);
+      st += t; sp += p; stt += t * t; stp += t * p;
+    }
+    const double den = k * stt - st * st;
+    if (den <= 0) return false;
+    slope = (k * stp - st * sp) / den;
+    return true;
+  }
 
   // Neighbours merged in pairs (a pair on power if either was), the
   // interval doubled: N samples become N/2, spanning the same time.

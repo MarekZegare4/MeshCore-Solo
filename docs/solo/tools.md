@@ -303,9 +303,10 @@ Right** between them, **Up / Down** scrolls):
 | **System** | Uptime, firmware, device, memory, the send queue, errors, and a sample of every script the font covers; **Enter** shows your contact as a QR code, which the phone app scans to add you, and **Enter** again a QR code that opens this manual; any other key closes it |
 
 **Time left** is worked out from how fast the battery has gone down on
-battery power since the device was last unplugged (the last six hours of
-it at most), with your battery curve. It shows after half an hour on
-battery; on USB it says **charging**.
+battery power, with your battery curve: over the last six hours and over
+all the time since the device was last unplugged, whichever goes faster,
+so a quiet night doesn't promise days the day's use won't keep. It shows
+after half an hour on battery; on USB it says **charging**.
 
 **GPS pwr** in Settings › System turns the GPS off between fixes to save
 battery; anything that needs your position (the trail, live share, the
