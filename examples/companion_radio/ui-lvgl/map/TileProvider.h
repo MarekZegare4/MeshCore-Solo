@@ -8,6 +8,7 @@
 
 #include <stdio.h>
 #include <sys/stat.h>
+#include <unistd.h>
 // LVGL's copy of lodepng (LV_USE_LODEPNG), compiled as C. It is patched for
 // LVGL: the decode "output" is an lv_draw_buf_t* (32-bit RGBA pixels in ->data),
 // not a plain pixel array, and is freed with lv_draw_buf_destroy().
@@ -48,27 +49,36 @@ static const char* const TRAILS_ATTR = "Trails \xC2\xA9 waymarkedtrails.org (CC-
 static const int TRAILS_MAX_Z = 18;
 static bool s_trails_on = false;   // Map tools > Hiking trails (NVS), set when the map opens
 
-// fread into a PSRAM buffer: the SD card can't DMA there, so the driver
-// falls back to one 512-byte sector per transfer. Read in chunks through
-// internal (DMA-capable) memory instead -- several times faster.
-static bool readFast(FILE* f, uint8_t* dst, size_t len) {
+// A file's next `len` bytes into a PSRAM buffer, fast. Two things slow the
+// plain fread down on the SD card (measured with `sdbench`, SdBench.h):
+//  - stdio's 128-byte buffer splits it into sector-at-a-time reads: read()
+//    on the descriptor takes 1.7 ms where fread takes 4.2 (a 4.8 KB tile);
+//  - the card can't DMA into PSRAM: through internal memory a transfer runs
+//    4.8 MB/s instead of 4.2.
+// The FILE is left positioned after what was read; returns how much that was.
+static size_t readFastN(FILE* f, uint8_t* dst, size_t len) {
 #if defined(ESP32)
-  const size_t CHUNK = 16 * 1024;
-  uint8_t* bounce = (uint8_t*)heap_caps_malloc(len < CHUNK ? len : CHUNK, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
-  if (bounce) {
+  const long pos = ftell(f);
+  const int fd = fileno(f);
+  if (pos >= 0 && fd >= 0 && lseek(fd, pos, SEEK_SET) == pos) {
+    const size_t CHUNK = 16 * 1024;
+    uint8_t* bounce = (uint8_t*)heap_caps_malloc(len < CHUNK ? len : CHUNK, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
     size_t done = 0;
     while (done < len) {
-      size_t n = len - done < CHUNK ? len - done : CHUNK;
-      if (fread(bounce, 1, n, f) != n) break;
-      memcpy(dst + done, bounce, n);
-      done += n;
+      size_t want = len - done < CHUNK ? len - done : CHUNK;
+      ssize_t got = read(fd, bounce ? bounce : dst + done, want);
+      if (got <= 0) break;
+      if (bounce) memcpy(dst + done, bounce, (size_t)got);
+      done += (size_t)got;
     }
     heap_caps_free(bounce);
-    return done == len;
+    fseek(f, pos + (long)done, SEEK_SET);   // the FILE in step with the descriptor
+    return done;
   }
 #endif
-  return fread(dst, 1, len, f) == len;
+  return fread(dst, 1, len, f);
 }
+static bool readFast(FILE* f, uint8_t* dst, size_t len) { return readFastN(f, dst, len) == len; }
 
 // PNG -> RGBA (LVGL's lodepng: the result is an lv_draw_buf_t*, destroy it).
 static lv_draw_buf_t* decodePng(const uint8_t* png, size_t len) {

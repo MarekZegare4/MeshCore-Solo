@@ -385,6 +385,9 @@ bool UITask::cliCommand(const char* command, char* reply, int n) {
   }
   if (!strcmp(command, "screen on")) { wake(); snprintf(reply, n, "OK"); return true; }
   if (!strcmp(command, "screen off")) { sleep(); snprintf(reply, n, "OK"); return true; }
+#ifdef SEEED_WIO_TRACKER_L2
+  if (!strcmp(command, "sdbench")) { sdbench::run(reply, n); return true; }   // SdBench.h
+#endif
   if (testhooks::handle(*_core, command, reply, n)) return true;
 #endif
   if (!settingscli::handle(*_core, command, reply, n)) return false;

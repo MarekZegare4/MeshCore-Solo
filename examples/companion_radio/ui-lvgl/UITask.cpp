@@ -1450,6 +1450,7 @@ static void onOpenSchemaPage(lv_event_t* e);   // Radio > Advanced
 
 #include "ThreadView.h"
 
+#include "SdBench.h"        // test builds: sdbench (SettingsPages.h's CLI)
 #include "SettingsPages.h"
 
 #include "ConversationScreen.h"

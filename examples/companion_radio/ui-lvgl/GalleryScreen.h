@@ -134,7 +134,7 @@ struct Bmp {
     cn = 0;
     if (fseek(f, (long)(off + (uint32_t)(bottom_up ? h - 1 - z : a) * stride), SEEK_SET) != 0) return false;
     const size_t n = (size_t)(z - a + 1) * stride;
-    if (fread(buf, 1, n, f) < n - (stride - (uint32_t)w * 3)) return false;   // the last row's padding may be missing
+    if (mapview::readFastN(f, buf, n) < n - (stride - (uint32_t)w * 3)) return false;   // the last row's padding may be missing
     c0 = a; cn = z - a + 1;
     return true;
   }

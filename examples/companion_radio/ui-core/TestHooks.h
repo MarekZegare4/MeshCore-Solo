@@ -25,7 +25,8 @@
 //                              <watchdog soft>,<hard>,<packets received>"
 //   txpre <symbols>            send with this preamble (an older node's 16) until the radio is set again
 //
-// The frontends add their own (ui-new/UITask.cpp: key, ui).
+// The frontends add their own (ui-new/UITask.cpp: key, ui; ui-lvgl/SettingsPages.h: ui,
+// screen on|off, and on the L2 sdbench -- the SD card's read speed, SdBench.h).
 
 #ifdef SOLO_TEST_HOOKS
 #include <helpers/sensors/EnvironmentSensorManager.h>
