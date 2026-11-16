@@ -75,6 +75,9 @@ static bool s_chats_stale = false;   // Messages: a refresh waits for a held row
 #include "../ui-core/SettingsSchema.h"
 #include "../ui-core/SettingsCli.h"   // the companion CLI's settings keys
 #include "../ui-core/TestHooks.h"     // -D SOLO_TEST_HOOKS only: tools/hwtest.py's commands
+#ifdef SOLO_TEST_HOOKS
+static volatile bool s_test_hang = false;   // "hang" (SettingsPages.h): the loop watchdog's test
+#endif
 #include "../ui-core/ContactQr.h"
 #include "../ui-core/GpsAverager.h"
 #include "../ui-core/TrailProfile.h"
@@ -227,6 +230,9 @@ static constexpr uint32_t SOS_HOLD_MS = 5000;    // the top button held: the SOS
 
 
 void UITask::loop() {
+#ifdef SOLO_TEST_HOOKS
+  while (s_test_hang) { }   // stuck, as a hang would be: main.cpp's watchdog restarts it
+#endif
   pollConnection();
   drainCoreEvents();
   sampleHistory();

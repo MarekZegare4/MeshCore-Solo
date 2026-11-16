@@ -27,6 +27,7 @@
 #include <stdlib.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include <SHA256.h>
 #include <helpers/UTF8Helpers.h>
 #include "../NodePrefs.h"
@@ -85,6 +86,9 @@ public:
     if (!_on || !_prefs) return;
     if (!_prefs->cov_on && _file) finish();
   }
+  // "Upload now": the file being written is finished too, so it goes with
+  // the others (recording, if on, goes on in a new one).
+  void finishNow() { if (_on && _file) finish(); }
 
   // A packet the radio heard (MyMesh::logRx), with the fix now (`have`: one at all).
   void onPacket(const mesh::Packet* pkt, float snr, float rssi, bool have, const Fix& f, uint32_t t) {
@@ -118,7 +122,11 @@ public:
       return;
     }
     if (!_started) { _started = true; startup(); }
-    if (_file && (int32_t)(millis() - _flush_ms) >= 0) { fflush(_file); _flush_ms = millis() + FLUSH_MS; }
+    // fflush() alone hands the rows to FAT but leaves the file's size in its
+    // directory entry as it was: a hang or a reset then found the file empty
+    // (0 B -- the rows on the card, out of reach) and deleted it. fsync()
+    // writes the entry too.
+    if (_file && (int32_t)(millis() - _flush_ms) >= 0) { fflush(_file); fsync(fileno(_file)); _flush_ms = millis() + FLUSH_MS; }
     if (!_prefs->cov_on) return;
     if (!wanted(have, f, t)) return;
     if (_last_row && t < _last_row + QUIET_S) return;
@@ -301,7 +309,11 @@ private:
   // Whether a row may be written now; keeps what the page shows up to date.
   bool wanted(bool have, const Fix& f, uint32_t t) {
     _fix_ok = have && f.age <= FIX_MAX_AGE_S && f.acc <= ACC_MAX_M;
+    const bool was_home = _in_home;
     _in_home = have && inHome(f);
+    // Back home: the file so far is finished, so it can go (auto upload) --
+    // recording goes on in a new one when you leave.
+    if (_in_home && !was_home && _file) finish();
     if (!_on || !_prefs || !_prefs->cov_on || !_started) return false;
     if (!_fix_ok || _in_home || t < 1700000000UL) return false;
     return _ready && _ready();
@@ -549,5 +561,6 @@ public:
   Status status() const { return Status{}; }
   int scrubHome() { return -1; }
   bool clearAll() { return false; }
+  void finishNow() {}
 };
 #endif

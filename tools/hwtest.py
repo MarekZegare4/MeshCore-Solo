@@ -921,6 +921,88 @@ def t_route_resume(d, out):
     return f"{before['left']} m left before the restart, {g['left']} m after"
 
 
+@test("loop-watchdog", needs_reboot=True)
+def t_loop_watchdog(d, out):
+    """The L2's main loop stuck ("hang"): within 30 s the watchdog restarts the
+    device, and the reason and a core dump are there after ("boot", as
+    Diagnostics' "Last start" / "Last crash")."""
+    need_hooks(d)
+    if not d.knows("boot"):
+        raise Skip("no loop watchdog on this board")
+    try:
+        d.cli.run("hang")
+    except (DeviceError, serial.SerialException, OSError):
+        pass
+    t0 = time.time()
+    d.close()
+    while time.time() - t0 < 45 and d.port in candidate_ports():   # stuck: the port stays till the restart
+        time.sleep(0.3)
+    check(d.port not in candidate_ports(), "still there after 45 s: frozen, no watchdog?")
+    p = wait_port(60, board=d.board, prefer=d.port)
+    check(p, "the device didn't come back from the hang (frozen: no watchdog?)")
+    secs = time.time() - t0
+    d.port = p
+    time.sleep(1)
+    d.open()
+    why, crash = d.cli.get("boot").split(",", 1)
+    check(why == "Watchdog", f"started again by {why!r}, not the watchdog")
+    check(crash.strip() != "", "no core dump of the hang")
+    return f"restarted after {secs:.0f} s, last crash {crash}"
+
+
+@test("coverage-crash", needs_reboot=True)
+def t_coverage_crash(d, out):
+    """Rows recorded, then a hang and the watchdog's restart: the rows are in
+    the file after it (synced to the card, not only flushed -- a file left at
+    0 B in its directory entry was deleted as empty). A test build's files only."""
+    need_hooks(d)
+    if not d.knows("boot"):
+        raise Skip("no loop watchdog on this board")
+    r = d.cli.run("cov")
+    if not r.startswith("> "):
+        raise Skip(f"no coverage recording here ({r})")
+    st = cov_state(d)
+    home0, auto, on0 = d.cli.get("cov home"), st["auto"], st["on"]
+    try:
+        d.cli.put("cov auto off")
+        d.cli.get("cov home 0,0 0")
+        d.cli.put(f"gps {LAT0},{LON0}")
+        time.sleep(2.5)
+        d.cli.put("cov on")
+        for _ in range(20):
+            time.sleep(1)
+            if cov_state(d)["rows"] >= 1:
+                break
+        name = d.cli.get("cov file")
+        check(name, f"no file being written: {cov_state(d)}")
+        time.sleep(17)   # past the flush (15 s)
+        try:
+            d.cli.run("hang")
+        except (DeviceError, serial.SerialException, OSError):
+            pass
+        t0 = time.time()
+        d.close()
+        while time.time() - t0 < 45 and d.port in candidate_ports():
+            time.sleep(0.3)
+        p = wait_port(60, board=d.board, prefer=d.port)
+        check(p, "the device didn't come back from the hang")
+        d.port = p
+        time.sleep(1)
+        d.open()
+        c = d.cli.get(f"cov count {name}.csv")
+        check(c.split(",")[0] not in ("-1", "0"), f"{name} after the restart: {c} (rows, in the zone): the rows lost")
+    finally:
+        d.cli.run("cov off")
+        d.cli.run("cov clear")
+        d.cli.run("gps off")
+        la, lo, rr = home0.split(",")
+        d.cli.run(f"cov home {la},{lo} {rr}")
+        d.cli.run("cov auto " + ("on" if auto else "off"))
+        if on0:
+            d.cli.run("cov on")
+    return f"{name}: {c.split(',')[0]} rows kept through the hang"
+
+
 @test("trackback")
 def t_trackback(d, out):
     """A trail recorded on an L (400 m north, 200 m east), then Track back:
@@ -1046,8 +1128,8 @@ def t_coverage(d, out):
 @test("coverage-home")
 def t_coverage_home(d, out):
     """The home zone set after recording: a finished file keeps only its rows
-    away from it, the file being written loses its rows in it (and goes on);
-    then "cov clear" deletes every file. A test build's files only
+    away from it, the file being written loses its rows in it and, being in
+    the zone now, is finished; then "cov clear" deletes every file. A test build's files only
     (coverage-test/: the user's recordings are elsewhere); recording, home
     and auto upload put back."""
     need_hooks(d)
@@ -1076,7 +1158,14 @@ def t_coverage_home(d, out):
         check(rows_at_least(1, 20), f"no row at A in 20 s: {cov_state(d)}")
         f1 = d.cli.get("cov file")
         fix(b)
-        check(rows_at_least(2, 40), f"no second row at B: {cov_state(d)}")   # a "nothing heard" row every 30 s
+        def at_b():   # a row at B (a "nothing heard" one every 30 s; packets heard add rows at A too)
+            for _ in range(40):
+                time.sleep(1)
+                row = d.cli.get("cov last").split(",")
+                if len(row) > 2 and abs(float(row[1]) - b[0] / 1e6) < 1e-4:
+                    return True
+            return False
+        check(at_b(), f"no row at B: {cov_state(d)}")
         d.cli.put("cov off")
         time.sleep(1.5)
         fix(a)
@@ -1084,14 +1173,20 @@ def t_coverage_home(d, out):
         check(rows_at_least(1, 20), f"no row at A in the second file: {cov_state(d)}")
         f2 = d.cli.get("cov file")
         check(f2 and f2 != f1, f"the second file {f2!r} is the first {f1!r}")
-        check(d.cli.get(f"cov count {f1}.csv").split(",")[0] == "2", f"{f1} doesn't have its 2 rows")
+        n1 = int(d.cli.get(f"cov count {f1}.csv").split(",")[0])
+        check(n1 >= 2, f"{f1} has {n1} rows, not A's and B's")
         gone = d.cli.get(f"cov home {a[0]},{a[1]} 1")   # 250 m round A
-        check(gone == "2", f"rows taken out: {gone}, not 2 (A's in both files)")
-        c1 = d.cli.get(f"cov count {f1}.csv")
-        check(c1 == "1,0", f"{f1} after: {c1} (rows, in the zone), not 1,0")
+        check(gone.isdigit() and int(gone) >= 2, f"rows taken out: {gone}, not A's in both files")
+        r1, h1 = (int(x) for x in d.cli.get(f"cov count {f1}.csv").split(","))
+        check(r1 >= 1 and h1 == 0 and r1 + int(gone) >= n1 + 1, f"{f1} after: {r1},{h1} (rows, in the zone): B's rows only")
         c2 = d.cli.get(f"cov count {f2}.csv")
-        check(c2 == "0,0", f"the file being written after: {c2}, not 0,0 (kept, header only)")
-        check(d.cli.get("cov file") == f2, "recording didn't go on in the same file")
+        check(c2 in ("0,0", "-1,-1"), f"the file being written after: {c2}, not 0,0 (its rows out)")
+        # Now in the home zone: the file being written is finished -- with no
+        # rows left, deleted -- and nothing more is recorded here.
+        time.sleep(1.5)
+        check(d.cli.get("cov file") == "", "a file still being written in the home zone")
+        check(d.cli.get(f"cov count {f2}.csv") == "-1,-1", f"{f2}, empty, not deleted when finished")
+        check(cov_state(d)["home"], "the fix at A isn't in the home zone")
         d.cli.put("cov clear")
         st = cov_state(d)
         check(st["pending"] == 0 and d.cli.get(f"cov count {f1}.csv") == "-1,-1", f"files left after clear: {st}")
@@ -1104,7 +1199,7 @@ def t_coverage_home(d, out):
         d.cli.run("cov auto " + ("on" if auto else "off"))
         if on0:
             d.cli.run("cov on")
-    return "home rows out of a finished file and the one being written, then all cleared"
+    return "home rows out of a finished file and the one being written (finished at home), then all cleared"
 
 
 # One button: the gestures timed by the host, through the firmware's own OneButton.

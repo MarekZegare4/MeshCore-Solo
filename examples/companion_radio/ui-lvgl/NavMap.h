@@ -691,7 +691,7 @@ void UITask::navClosePopup() {
   if (_nav_overlay) lv_obj_delete_async(_nav_overlay);   // may be closing from its own button
   _nav_overlay = _nav_ta = _nav_kb = _nav_del_lbl = nullptr;
   _nav_trail_lbl = _nav_trail_btn = _nav_reset_lbl = _nav_share_lbl = _nav_share_btn = _nav_tb_btn = _nav_route_lbl = nullptr;
-  navmap::s_tools_list = nullptr;
+  navmap::s_tools_list = navmap::s_tools_chart = nullptr;
 }
 
 lv_obj_t* UITask::navTextEntry(const TextEntry& t) {
@@ -1015,7 +1015,7 @@ void UITask::navToolsPopup(bool back) {
   _nav_trail_lbl = label(list, "", THEME_FONT_SMALL, theme::TEXT);
   profileview::s_prof = trailprofile::Sampler();   // its height profile, as it is now
   profileview::s_prof.feedAll(_core->trail.store());
-  profileChart(list, 120);
+  navmap::s_tools_chart = profileChart(list, 120);
   lv_obj_t* r = buttonBar(list);
   _nav_trail_btn = toolButton(r, "", navmap::TL_TRAIL_TOGGLE, true);
   toolButton(r, LV_SYMBOL_SAVE " Save", navmap::TL_TRAIL_SAVE, false);
@@ -1024,6 +1024,10 @@ void UITask::navToolsPopup(bool back) {
   _nav_tb_btn = toolButton(r, "", navmap::TL_TRACKBACK, false);
   toolButton(r, LV_SYMBOL_SD_CARD " GPX", navmap::TL_TRAIL_GPX, false);
   _nav_reset_lbl = toolButton(r, LV_SYMBOL_TRASH " Reset", navmap::TL_TRAIL_RESET, false);
+  lv_obj_t* rb = lv_obj_get_parent(_nav_reset_lbl);   // red: it can't be undone
+  lv_obj_set_style_bg_color(rb, lv_color_hex(theme::FAIL), 0);
+  lv_obj_set_style_bg_color(rb, lv_color_hex(theme::mix(theme::FAIL, theme::BG, 75)), LV_STATE_PRESSED);
+  textUnder(rb, theme::TEXT);
   listRow(group(list, nullptr), "Trail options", "Point spacing, auto-pause, low battery", onNavTool,
           (void*)(uintptr_t)navmap::TL_OPT_TRAIL);
 
@@ -1400,6 +1404,8 @@ void UITask::navToolAction(uint8_t act) {
     case navmap::TL_TRAIL_RESET:
       if (!tapConfirmed(_nav_reset_lbl, "Reset?")) return;
       tr.reset();
+      if (navmap::s_tools_chart) { lv_obj_delete(navmap::s_tools_chart); navmap::s_tools_chart = nullptr; }
+      showToast("Trail deleted");
       rebuildMapMarkers();
       layoutMap();
       break;

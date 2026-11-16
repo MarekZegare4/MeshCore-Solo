@@ -37,7 +37,9 @@ Nothing is written:
   each file is checked again just before it's uploaded. Points already sent
   stay on the map.
 
-A file is finished when you turn recording off or when it reaches 1.5 MB.
+A file is finished when you turn recording off, when it reaches 1.5 MB,
+when you come into the home zone (so it goes up on its own once you're
+home) and when you tap **Upload now** (recording goes on in a new file).
 Turned off and on again, or after a restart, recording goes on in the same
 file. When a file is finished, the repeaters it heard that have a position in
 their adverts are added at its end (their name, position and the start of

@@ -223,6 +223,7 @@ bool UITask::coverageUpload(bool asked) {
 #endif
 #if COVUP_SUPPORTED
   if (coverageBusy() || s_task) return false;
+  if (asked) _core->coverage.finishNow();
   s_nfiles = _core->coverage.pending(s_files, MAX_FILES);
   if (s_nfiles == 0) { if (asked) showToast("Nothing to upload"); return false; }
   char ssid[33], pass[65];

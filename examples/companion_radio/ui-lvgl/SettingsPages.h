@@ -454,6 +454,15 @@ bool UITask::cliCommand(const char* command, char* reply, int n) {
     snprintf(reply, n, "OK");
     return true;
   }
+  // "hang": the loop stuck from its next pass (the watchdog's test, main.cpp);
+  // "boot": "> why it last started,the last crash" (as Diagnostics shows).
+  if (!strcmp(command, "hang")) { s_test_hang = true; snprintf(reply, n, "OK"); return true; }
+  if (!strcmp(command, "boot")) {
+    char c[24] = "";
+    lvport::crashSummary(c, sizeof(c));
+    snprintf(reply, n, "> %s,%s", lvport::resetReason(), c);
+    return true;
+  }
   if (!strcmp(command, "sdbench")) { sdbench::run(reply, n); return true; }   // SdBench.h
   if (!strncmp(command, "tilebench", 9)) { sdbench::tiles(reply, n, atoi(command + 9)); return true; }   // [zoom]
 #endif

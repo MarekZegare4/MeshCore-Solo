@@ -689,6 +689,7 @@ static const int BAR_H = 44;   // target bar along the bottom of the Navigation 
 static lv_obj_t* s_scale_pill = nullptr;   // the bottom-left pill (credit, scale, zoom): moves up over a bar
 static bool s_ready = false;               // the map is built: a bar coming or going lays it out again
 static lv_obj_t* s_tools_list = nullptr;   // Map tools' list while it's up
+static lv_obj_t* s_tools_chart = nullptr;  // its trail height profile (gone with a reset)
 static int32_t s_tools_y = 0;              // where it was scrolled, leaving for a page of options
 // Navigation targets as one int (event user data): type << 8 | index.
 enum : uint8_t { T_CLEAR, T_WAYPOINT, T_TRAILSTART, T_LIVE };

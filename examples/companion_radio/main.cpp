@@ -167,6 +167,9 @@ SimpleMeshTables tables;
 // RAM, which WiFi + TLS + BLE need (PSRAM is on the heap before global
 // constructors run; internal RAM is the fallback).
 #include <new>
+#if defined(SEEED_WIO_TRACKER_L2)
+  #include <esp_task_wdt.h>
+#endif
 #include <esp_heap_caps.h>
 static MyMesh* newMesh() {
   void* p = heap_caps_malloc(sizeof(MyMesh), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
@@ -421,6 +424,21 @@ void setup() {
   NRF_WDT->CRV         = 32768*30-1;  // 30 second timeout
   NRF_WDT->RREN        = 0x01;        // enable reload register 0
   NRF_WDT->TASKS_START = 1;
+#endif
+#if defined(SEEED_WIO_TRACKER_L2) && ESP_ARDUINO_VERSION_MAJOR >= 3
+  // The loop task watched too (as the NRF52's above): stuck for 30 s, a panic --
+  // the core dump keeps where (Diagnostics' "Last crash"), the device starts
+  // again and the trail comes back from the card. Unwatched, a hang stayed
+  // frozen until a reset and left nothing to look at. The loop never idles
+  // more than 50 ms at a time; nothing in it should come near 30 s.
+  {
+    esp_task_wdt_config_t c = {};
+    c.timeout_ms = 30000;
+    c.idle_core_mask = 1 << 0;   // as sdkconfig: core 0's idle task
+    c.trigger_panic = true;
+    esp_task_wdt_reconfigure(&c);
+    enableLoopWDT();
+  }
 #endif
   board.onBootComplete();
 #if defined(SIM_PLATFORM) && defined(__EMSCRIPTEN__)
