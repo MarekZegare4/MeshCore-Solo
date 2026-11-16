@@ -108,7 +108,7 @@ void MyMesh::handleRouteCommand(const uint8_t* frame, size_t len) {
     if (!upload.open()) { writeErrFrame(ERR_CODE_BAD_STATE); return; }
     if (!upload.finish()) { writeErrFrame(ERR_CODE_FILE_IO_ERROR); return; }
     RouteInfo ri;
-    PlannedRoutes::info(slot, ri);
+    if (!PlannedRoutes::info(slot, ri)) memset(&ri, 0, sizeof(ri));   // written, but not read back: length 0
     out_frame[i++] = RESP_CODE_ROUTE;
     out_frame[i++] = END;
     out_frame[i++] = (uint8_t)slot;

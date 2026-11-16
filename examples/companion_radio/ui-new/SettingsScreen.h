@@ -531,9 +531,9 @@ class SettingsScreen : public UIScreen {
     } else if (item == POWER_SAVE) {
       // Forced off (and locked) while the repeater is on — it must hear all traffic.
       // Off / On (catches every node) / Max (sleeps longer: v1.16+ nodes only).
-      static const char* const PS[] = { "Off", "On", "Max" };
+      static const char* const PS_NAMES[] = { "Off", "On", "Max" };
       if (p && p->client_repeat) val("Pwr save", "--");
-      else val("Pwr save", PS[p && p->rx_powersave <= 2 ? p->rx_powersave : 0]);
+      else val("Pwr save", PS_NAMES[p && p->rx_powersave <= 2 ? p->rx_powersave : 0]);
 #endif
     } else if (item == TX_APC) {
       // Suppressed (and locked) while repeating — a repeater holds full TX power.

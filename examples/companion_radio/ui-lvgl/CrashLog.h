@@ -139,7 +139,9 @@ static bool writeReport(bool card, const char* fw, const char* board, const char
 #ifdef CRASHLOG_ON
   esp_core_dump_summary_t sum;
   if (esp_core_dump_image_check() == ESP_OK && esp_core_dump_get_summary(&sum) == ESP_OK) {
-    const bool fresh = s_reason != ESP_RST_BROWNOUT;   // a brown-out leaves no dump: what's there is older
+    // Only the panic handler writes a dump (a crash, the task or interrupt
+    // watchdog); after a brown-out or another reset what's there is older.
+    const bool fresh = s_reason == ESP_RST_PANIC || s_reason == ESP_RST_TASK_WDT || s_reason == ESP_RST_INT_WDT;
     fprintf(f, "\nCore dump%s: task %.16s, pc 0x%08lx, firmware sha %.16s\n", fresh ? "" : " (an earlier crash's)",
             sum.exc_task, (unsigned long)sum.exc_pc, (const char*)sum.app_elf_sha256);
     fprintf(f, "Exception cause %lu, address 0x%08lx\n", (unsigned long)sum.ex_info.exc_cause, (unsigned long)sum.ex_info.exc_vaddr);

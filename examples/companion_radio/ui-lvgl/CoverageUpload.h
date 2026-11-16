@@ -179,7 +179,11 @@ static void task(void* arg) {
       s_file_i = i;
       // The home zone may have been set since the file was written: its rows
       // there go first (the first try only -- a resumed one sends the same bytes).
-      rec->scrubForUpload(s_files[i]);
+      if (rec->scrubForUpload(s_files[i]) < 0) {   // never sent with its home rows
+        snprintf(s_msg, sizeof(s_msg), "%s: couldn't take the home zone out - is the card full?", s_files[i]);
+        refused++;
+        continue;
+      }
       char path[96];
       struct stat st;
       snprintf(path, sizeof(path), "%s/%s", DIR, s_files[i]);

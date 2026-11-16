@@ -20,6 +20,7 @@ extern uint32_t g_loop_idle_us;   // main.cpp: tools/hwtest.py's "loops", the ti
   #include <esp_heap_caps.h>
   #include <esp_system.h>
   #include <esp_core_dump.h>
+  #include "../ui-core/LoopWdt.h"
   #if CONFIG_PM_ENABLE
     #include <esp_pm.h>
   #endif
@@ -426,6 +427,7 @@ static bool mountStorage() {
 // afterwards: map, history and tile caches all hold state read off the card.
 static bool formatCard() {
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
+  loopwdt::Pause hold;   // one call, past the loop watchdog's 30 s on a big card
   SD_MMC.end();
   s_sd_mounted = false;
   sdmmc_host_t host = SDMMC_HOST_DEFAULT();

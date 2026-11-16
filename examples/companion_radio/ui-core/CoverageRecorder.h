@@ -32,6 +32,7 @@
 #include <helpers/UTF8Helpers.h>
 #include "../NodePrefs.h"
 #include "../GeoUtils.h"
+#include "LoopWdt.h"
 
 class CoverageRecorder {
 public:
@@ -208,10 +209,13 @@ public:
 
   // One finished file, just before its upload begins (the upload task): rows
   // in the home zone out, then marked begun. -1: not read. The upload goes
-  // on to send it only when it's still there (a file of home rows only isn't).
+  // on to send it only when it's still there (a file of home rows only isn't),
+  // and not at all on -1: its home rows may still be in it (the card full?),
+  // so it stays waiting, unmarked, to be scrubbed again next time.
   int scrubForUpload(const char* name) {
     if (begun(name)) return 0;
     const int r = homeSet() ? scrubFile(name, true) : 0;
+    if (r < 0) return -1;
     char mark[96];
     snprintf(mark, sizeof(mark), "%s/%.*s.up", _dir, NAME_LEN - 1, name);
     if (FILE* m = fopen(mark, "w")) fclose(m);
@@ -351,7 +355,9 @@ private:
     char line[160];
     int gone = 0, kept = 0;
     bool ok = true;
+    uint32_t n = 0;
     while (fgets(line, sizeof(line), in)) {
+      if ((++n & 255) == 0) loopwdt::feed();   // scrubHome() goes through every file waiting
       if (line[0] != '#') {
         // t,lat,lon,...
         const char* la = strchr(line, ',');
@@ -429,6 +435,23 @@ private:
     DIR* d = opendir(_dir);
     if (!d) return;
     struct dirent* e;
+    // A scrubFile() cut off by a restart: a .tmp whose .csv is gone holds the
+    // rows kept (the .csv is removed just before the rename) and takes its
+    // place; one next to its .csv was never finished and goes.
+    while ((e = readdir(d)) != nullptr && n < 8) {
+      size_t l = strlen(e->d_name);
+      if (l == NAME_LEN - 1 + 4 && strcmp(e->d_name + l - 4, ".tmp") == 0) snprintf(unf[n++], NAME_LEN + 4, "%s", e->d_name);
+    }
+    for (int i = 0; i < n; i++) {
+      char tmp[96], csv[96];
+      struct stat st;
+      snprintf(tmp, sizeof(tmp), "%s/%s", _dir, unf[i]);
+      snprintf(csv, sizeof(csv), "%s/%.*s.csv", _dir, NAME_LEN - 1, unf[i]);
+      if (stat(csv, &st) == 0) remove(tmp);
+      else rename(tmp, csv);
+    }
+    if (n) rewinddir(d);
+    n = 0;
     while ((e = readdir(d)) != nullptr && n < 8) {
       size_t l = strlen(e->d_name);
       if (l != NAME_LEN - 1 + 4 || strcmp(e->d_name + l - 4, ".csv") != 0) continue;
@@ -470,7 +493,9 @@ private:
     FILE* f = fopen(path, "r");
     if (!f) return 0;
     char line[160];
+    uint32_t n = 0;
     while (fgets(line, sizeof(line), f)) {
+      if ((++n & 255) == 0) loopwdt::feed();   // 8 files of 1.5 MB at the start
       if (bytes) *bytes += strlen(line);
       if (line[0] == '#') continue;
       rows++;

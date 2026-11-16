@@ -90,6 +90,7 @@ class CustomSX1262 : public SX1262 {
       if (_tcxo && setTCXO(this->tcxoVoltage, SOLO_TCXO_DELAY_US) == RADIOLIB_ERR_NONE) {
         calibrate(RADIOLIB_SX126X_CALIBRATE_ALL);
         delay(50);
+        calibrateImage(this->freqMHz);   // calibrate(0x7F) leaves the image at 902-928 MHz
         _tcxo_us = SOLO_TCXO_DELAY_US;
       } else {
         _tcxo_us = 5000;   // RadioLib's, as begin() left it

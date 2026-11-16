@@ -39,8 +39,8 @@
 | Seeed Wio Tracker L2 | ESP32-S3 | 320 × 240 touch LCD | `solo-<version>-Wio-Tracker-L2-merged.bin` |
 | GAT562 30S Mesh Kit | nRF52840 | SSD1306 128 × 64 | `solo-<version>-GAT562-30S-Mesh-Kit.uf2` |
 | GAT562 Mesh Watch13 *(experimental)* | nRF52840 | SSD1306 128 × 64 | `solo-<version>-GAT562-Mesh-Watch13.uf2` |
-| Heltec LoRa32 V3 *(experimental)* | ESP32-S3 | SSD1306 128 × 64 | `solo-<version>-Heltec-v3-merged.bin` |
-| Heltec LoRa32 V4 *(experimental)* | ESP32-S3 | SSD1306 128 × 64 | `solo-<version>-heltec-v4-merged.bin` |
+| Heltec LoRa32 V3 *(experimental)* | ESP32-S3 | SSD1306 128 × 64 | `solo-<version>-Heltec-v3-merged.bin`, or `-Heltec-v3-button-merged.bin` for its own button alone |
+| Heltec LoRa32 V4 *(experimental)* | ESP32-S3 | SSD1306 128 × 64 | `solo-<version>-heltec-v4-merged.bin`, or `-heltec-v4-button-merged.bin` for its own button alone |
 | M5Stack Cardputer ADV *(experimental)* | ESP32-S3 | ST7789 TFT 240 × 135 | `solo-<version>-M5Stack-Cardputer-ADV-merged.bin` |
 | LilyGO T-Echo Lite + KeyShield *(experimental)* | nRF52840 | GxEPD2 250 × 122 | `solo-<version>-LilyGo-T-Echo-Lite-keyshield.uf2` |
 | ProMicro *(experimental)* | nRF52840 | SSD1306 128 × 64 | `solo-<version>-ProMicro.uf2` |
@@ -48,7 +48,7 @@
 
 Firmware files are on the [releases page](https://github.com/MarekZegare4/MeshCore-Solo/releases). Every binary serves the companion app over Bluetooth and USB serial at the same time.
 
-Heltec V3/V4 need [a keyboard or joystick wired up](./docs/solo/hardware.md#wiring-on-the-heltec-v3--v4); ProMicro needs a CardKB; the T-Echo Lite needs the KeyShield; Simpson has its own keypad. The rest work out of the box.
+Heltec V3/V4 run either from their own button ([one button](./docs/solo/one-button.md), the `-button` file) or with [a keyboard or joystick wired up](./docs/solo/hardware.md#wiring-on-the-heltec-v3--v4); ProMicro needs a CardKB; the T-Echo Lite needs the KeyShield; Simpson has its own keypad. The rest work out of the box.
 
 ---
 

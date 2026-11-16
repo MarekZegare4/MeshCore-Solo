@@ -224,6 +224,11 @@ failed, so it can stand in a script.
 | `trackback` | a trail recorded on an L, Track back: "to start", walked back to "Back at the start" |
 | `guide-switch` | Track back started during a route takes its place, and the route followed again takes Track back's |
 | `coverage` | MatterMap recording (L2, an SD card): turned on with a fake fix, a row written; turned off, the file finished; deleted after, nothing uploaded |
+| `coverage-home` | the home zone set after recording: a finished file keeps only its rows outside it, the file being written loses its rows inside it and is finished |
+| `coverage-crash` | `--reboot`, L2: rows recorded, the loop hung, the watchdog's restart: the rows are still in the file |
+| `loop-watchdog` | `--reboot`, L2: the loop hung; within 30 s the watchdog restarts the device, with the reason and a core dump after |
+| `crash-report` | `--reboot`, L2: a hang after a few screens; the report on the card (`meshcore/crash/`) has the backtrace and the screen opened last; deleted after |
+| `loops` | how often `loop()` runs and how busy it is, screen on and off |
 | `one-button` | a one-button board: click, double click and hold through the firmware's own gesture timing |
 | `memory` | free heap at the end against the start; with `--repeat`, the first round's end against the last's (more than 4 KB less fails) |
 | `pair` | `--pair`: a direct message each way between the two devices, received (in the device's history) and ACKed |
@@ -266,6 +271,11 @@ from [`ui-core/TestHooks.h`](../examples/companion_radio/ui-core/TestHooks.h):
 | `trackback` | Track back, as Trail › Track back |
 | `mem` | `> <free heap>,<total>,<stack free>,<seconds since boot>` |
 | `lastdm`, `lastch` | The newest direct message (`> in\|out,<prefix>,<ack>,<text>`), channel post (`> <channel>,<text>`) |
+| `loops` | `> <loop passes a second>,<busy %>,<seconds>` since the last ask |
+| `cov ...` | MatterMap recording (L2): `cov` its state; `cov on\|off`, `cov auto on\|off`, `cov home <lat>,<lon> <r>`, `cov count <name>`, `cov rm <name>`, `cov clear` (in RAM, a test build's `coverage-test/` files) |
+| `screen on\|off`, `idle <screen>`, `idle` | L2: the screen woken, put off; a screen opened; `> <areas>,<pixels>` sent to the panel since the last ask (what a screen left alone redraws) |
+| `hang`, `boot` | L2: the loop stuck from its next pass (for the watchdog); `> <why it last started>,<the last crash>` |
+| `crash`, `crash rm` | L2: the newest crash report, `> <file>,<things noted>,<backtrace 0/1>,<the last>`; deleted |
 
 They are as reachable over Bluetooth as the rest of the console, which is why
 only a test build has them: never give one to a device people carry

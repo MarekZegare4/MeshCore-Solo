@@ -25,7 +25,8 @@ still connects as with the stock firmware, over Bluetooth or USB.
   [SOS](./tools.md#sos) (experimental).
 - **Screen lock** with an optional PIN.
 - **On the Wio Tracker L2**: an offline map, message history on the SD card,
-  the SD card as a USB drive, updates over WiFi.
+  the SD card as a USB drive, GPX routes imported from the card, updates over
+  WiFi, and [coverage recording](./coverage-map.md) for MatterMap (voluntary).
 
 ## Devices
 

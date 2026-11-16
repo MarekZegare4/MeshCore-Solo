@@ -159,13 +159,16 @@ public:
   }
 
   // ── Writing (one upload at a time) ─────────────────────────────────────────
-  // begin() -> add() count times -> finish(). abort() drops it.
-  bool begin(int slot, uint16_t count, uint8_t flags, const char* name) {
+  // begin() -> add() count times -> finish(). abort() drops it. `import`: a
+  // GPX import on the device, through its own .tmp, so it can't meet a USB
+  // upload's half-written file (the upload's frames come over many loops).
+  bool begin(int slot, uint16_t count, uint8_t flags, const char* name, bool import = false) {
     abort();
     FILESYSTEM* f = fs();
     DataStore* ds = the_mesh.getDataStore();
     if (!f || !ds || !validSlot(slot) || count < 2 || count > MAX_POINTS) return false;
     _slot = slot;
+    _import = import;
     _file = new File(ds->openWrite(f, tmp()));
     if (!*_file) { delete _file; _file = nullptr; return false; }
     memset(&_info, 0, sizeof(_info));
@@ -181,6 +184,7 @@ public:
     if (n) memcpy(_info.name, name, n);
     _written = 0;
     _open = true;
+    if (_slot < 32) held() |= 1u << _slot;
     return true;
   }
 
@@ -228,19 +232,21 @@ public:
     if (fs()) fs()->remove(tmp());
   }
 
-  // The first empty slot, else -1.
+  // The first empty slot, else -1. One an upload is still writing isn't.
   static int freeSlot() {
     RouteInfo ri;
-    for (int i = 0; i < SLOTS; i++) if (!info(i, ri)) return i;
+    for (int i = 0; i < SLOTS; i++) if (!(i < 32 && (held() >> i & 1)) && !info(i, ri)) return i;
     return -1;
   }
 
 private:
   static constexpr const char* TMP = "/rt.tmp";
   // Track back's own, so it can't meet a USB upload's half-written file.
-  const char* tmp() const { return _slot == TRAIL_SLOT ? "/rtt.tmp" : TMP; }
+  const char* tmp() const { return _slot == TRAIL_SLOT ? "/rtt.tmp" : _import ? "/rti.tmp" : TMP; }
+  static uint32_t& held() { static uint32_t h = 0; return h; }   // slots being written
   void closeFile() {
     if (_file) { _file->close(); delete _file; _file = nullptr; }
+    if (_open && _slot >= 0 && _slot < 32) held() &= ~(1u << _slot);
     _open = false;
   }
   File*     _file = nullptr;
@@ -248,6 +254,7 @@ private:
   int       _slot = -1;
   uint16_t  _written = 0;
   bool      _open = false;
+  bool      _import = false;
   float     _cum = 0;
   int32_t   _last_lat = 0, _last_lon = 0;
 };

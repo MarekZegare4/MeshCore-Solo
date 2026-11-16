@@ -243,7 +243,7 @@ static Result write(Prepared& p, int& slot_out) {
   const int slot = PlannedRoutes::freeSlot();
   if (slot < 0) { p.release(); return NO_SLOT; }
   PlannedRoutes w;
-  bool ok = w.begin(slot, (uint16_t)p.count, p.ele ? PlannedRoutes::FLAG_ELE : 0, p.name[0] ? p.name : "Route");
+  bool ok = w.begin(slot, (uint16_t)p.count, p.ele ? PlannedRoutes::FLAG_ELE : 0, p.name[0] ? p.name : "Route", true);
   for (int i = 0; ok && i < p.count; i++) ok = w.add(p.pts[i].lat, p.pts[i].lon, p.pts[i].ele);
   ok = ok && w.finish();
   p.release();
