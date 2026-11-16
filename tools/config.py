@@ -14,6 +14,7 @@ Usage:
     uv run tools/config.py melody 1                   # melody 1 as RTTTL
     uv run tools/config.py melody 2 "Tune:d=8,o=5,b=120:c,e,g,c6"
     uv run tools/config.py melody 2 ringtone.txt      # a file holding one RTTTL line
+    uv run tools/config.py melody 2 clear             # empty it
     uv run tools/config.py pages                      # Home's pages, in order
     uv run tools/config.py pages Clock Messages Status Tools Settings   # that order; the rest hidden
     uv run tools/config.py waypoints                  # the device's waypoints
@@ -362,6 +363,11 @@ def cmd_melody(args):
                 print(to_rtttl(bpm, notes) if notes else f"(melody {args.slot} is empty)")
                 return
             text = args.rtttl
+            if text.strip().lower() == "clear":   # empty, its tempo kept
+                bpm, _ = get_melody(cli, args.slot)
+                cli.put(f"set melody.{args.slot} {bpm}")
+                print(f"Melody {args.slot} emptied.")
+                return
             if ":" not in text and Path(text).is_file():
                 text = Path(text).read_text(encoding="utf-8").strip().splitlines()[0]
             try:
@@ -440,7 +446,7 @@ def main():
     i.add_argument("--dry-run", action="store_true", help="list the commands, send nothing")
     m = sub.add_parser("melody", help="show a melody as RTTTL, or set it from RTTTL")
     m.add_argument("slot", type=int)
-    m.add_argument("rtttl", nargs="?", help="RTTTL text, or a file holding it")
+    m.add_argument("rtttl", nargs="?", help="RTTTL text, a file holding it, or clear")
     p = sub.add_parser("pages", help="show Home's pages, or set their order (the rest hidden)")
     p.add_argument("names", nargs="*")
     w = sub.add_parser("waypoints", help="list the waypoints, add a GPX's, or delete one")

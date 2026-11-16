@@ -121,6 +121,7 @@ uv run tools/config.py import backup.json --only settings,melodies --dry-run
 uv run tools/config.py import backup.json --identity   # also the name, Bluetooth PIN, time zone
 uv run tools/config.py melody 1                   # melody 1 as RTTTL
 uv run tools/config.py melody 2 "Tune:d=8,o=5,b=120:c,e,g,c6"
+uv run tools/config.py melody 2 clear             # empty it
 uv run tools/config.py pages                      # Home's pages in order
 uv run tools/config.py pages Clock Messages Status Tools   # that order, the rest hidden
 uv run tools/config.py waypoints                  # the device's waypoints
@@ -164,8 +165,8 @@ folder).
 uv run tools/route.py upload walk.gpx                       # as many points as the device holds
 uv run tools/route.py upload walk.gpx -n 300 --name "Hala"  # fewer points, another name
 uv run tools/route.py upload walk.gpx --reverse --dry-run   # just the numbers, nothing sent
-uv run tools/route.py list
-uv run tools/route.py delete 2
+uv run tools/route.py list                                  # numbered from 1
+uv run tools/route.py delete 2                              # route 2 of the list
 ```
 
 The GPX's track segments (or its route points) are joined into one line and

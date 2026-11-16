@@ -14,7 +14,7 @@ Usage:
     uv run tools/route.py upload walk.gpx --points 300 --name "Hala Gąsienicowa"
     uv run tools/route.py upload walk.gpx --reverse --dry-run   # just the numbers, nothing sent
     uv run tools/route.py list
-    uv run tools/route.py delete 2
+    uv run tools/route.py delete 2                         # route 2 as list numbers them (from 1)
 
 Firmware side: examples/companion_radio/MyMeshRoutes.h (CMD_ROUTE) and
 PlannedRoute.h. Needs Solo 2.3 or newer on a Wio Tracker L1 / L2, Watch13,
@@ -163,19 +163,21 @@ def cmd_list(args):
         rows = dev_list(dev, info)
     if not rows:
         print(f"No routes on the device (room for {info['slots']}).")
-    for s, count, length_m, name in rows:
-        print(f"{s}  {name or f'Route {s + 1}':<24} {fmt_dist(length_m):>9}  {count} pts")
+    for s, count, length_m, name in rows:   # numbered from 1, as the waypoints
+        print(f"{s + 1}  {name or f'Route {s + 1}':<24} {fmt_dist(length_m):>9}  {count} pts")
 
 
 def cmd_delete(args):
     from companion import DeviceError
     dev, info = connect(args.port)
     with dev:
+        if not 1 <= args.n <= info["slots"]:
+            sys.exit(f"Route 1 to {info['slots']} (route.py list numbers them).")
         try:
-            dev.ask(bytes([CMD_ROUTE, DELETE, args.slot]), 0)
+            dev.ask(bytes([CMD_ROUTE, DELETE, args.n - 1]), 0)
         except DeviceError as e:
-            sys.exit(f"Couldn't delete slot {args.slot}: {e}")
-    print(f"Deleted slot {args.slot}.")
+            sys.exit(f"Couldn't delete route {args.n}: {e}")
+    print(f"Deleted route {args.n}.")
 
 
 def cmd_upload(args):
@@ -217,7 +219,7 @@ def cmd_upload(args):
                 print(f"\r  sending... {100 * (i + len(chunk)) // len(kept)}%", end="", flush=True)
             f = dev.ask(bytes([CMD_ROUTE, END]), CMD_ROUTE)
             begun = False
-            print(f"\rSent to slot {slot}: {fmt_dist(struct.unpack_from('<I', f, 3)[0])}. "
+            print(f"\rSent as route {slot + 1}: {fmt_dist(struct.unpack_from('<I', f, 3)[0])}. "
                   "On the device: Tools > Trail, hold Enter, Routes (L2: Map > tools > Route).")
         except DeviceError as e:
             if begun:
@@ -240,8 +242,8 @@ def main():
     up.add_argument("--dry-run", action="store_true", help="simplify and print, send nothing")
     up.set_defaults(fn=cmd_upload)
     sub.add_parser("list", help="the routes on the device").set_defaults(fn=cmd_list)
-    de = sub.add_parser("delete", help="delete a route by its slot (see list)")
-    de.add_argument("slot", type=int)
+    de = sub.add_parser("delete", help="delete a route by its number (see list, from 1)")
+    de.add_argument("n", type=int)
     de.set_defaults(fn=cmd_delete)
     args = ap.parse_args()
     args.fn(args)
