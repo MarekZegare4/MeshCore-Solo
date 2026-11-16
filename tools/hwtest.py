@@ -921,6 +921,33 @@ def t_route_resume(d, out):
     return f"{before['left']} m left before the restart, {g['left']} m after"
 
 
+@test("route-resume-away", needs_reboot=True)
+def t_route_resume_away(d, out):
+    """A loop route (a 400 m square, start = end), a restart halfway round
+    with the first fix 1.3 km away (a detour): off the route, the progress
+    kept; back where it was, on it again with the same distance left. Found
+    afresh it would take the start of the loop."""
+    need_hooks(d)
+    legs = [(0, 0), (400, 0), (400, 400), (0, 400), (0, 0)]
+    with Walk(d, out, "route-resume-away", legs) as w:
+        d.cli.put("guidesave 0")
+        w.put(0, 0); time.sleep(1.2)
+        w.follow()
+        w.path([(0, 0), (400, 0), (400, 400)])
+        before = guide_state(d)
+        check(before["state"] == ON and abs(before["left"] - 800) < 60, f"before the restart: {before}")
+        d.reboot()
+        g = w.at(400, 1700, 2.5)
+        check(g["state"] == OFF, f"restarted 1.3 km away: state {g['state']} ({g['label']}), not off the route")
+        check(abs(g["left"] - before["left"]) < 60, f"away: {g['left']} m left, before {before['left']}")
+        w.path([(400, 1700), (400, 900), (400, 400)])
+        g = guide_state(d)
+        check(g["state"] == ON, f"back where it was: state {g['state']} ({g['label']})")
+        check(abs(g["left"] - before["left"]) < 80,
+              f"back: {g['left']} m left, before {before['left']}" + (" (taken up at the loop's start)" if g["left"] > 1200 else ""))
+    return f"{before['left']} m left before, {g['left']} m back on it"
+
+
 @test("loop-watchdog", needs_reboot=True)
 def t_loop_watchdog(d, out):
     """The L2's main loop stuck ("hang"): within 30 s the watchdog restarts the

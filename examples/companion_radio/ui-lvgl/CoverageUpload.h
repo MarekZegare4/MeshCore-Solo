@@ -85,9 +85,17 @@ static int sendFile(HTTPClient& http, NetworkClientSecure& tls, const CoverageRe
   snprintf(path, sizeof(path), "%s/%s", DIR, fname);
   FILE* f = fopen(path, "r");
   if (!f) { snprintf(s_msg, sizeof(s_msg), "Can't read %s", fname); return -1; }
+  // Its size and rows (lines not starting with '#'), read in the upload's
+  // own CHUNK-sized blocks: one quick pass, each line counted once however long.
   uint32_t size = 0, rows = 0;
-  char line[160];
-  while (fgets(line, sizeof(line), f)) { size += strlen(line); if (line[0] != '#') rows++; }
+  bool bol = true;   // at the start of a line
+  for (size_t n; (n = fread(buf, 1, CHUNK, f)) > 0; ) {
+    size += n;
+    for (size_t k = 0; k < n; k++) {
+      if (bol && buf[k] != '#') rows++;
+      bol = buf[k] == '\n';
+    }
+  }
   s_size_b = size;
   s_sent_b = 0;
   char name[CoverageRecorder::NAME_LEN];

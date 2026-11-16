@@ -153,7 +153,9 @@ public:
 
     // Far from the whole route (started away from it, or wandered off): the
     // overview is near enough, and the flash isn't searched end to end each time.
-    if ((_snap || _state == OFF_ROUTE) && farFromRoute()) return;
+    // (Not before a restart's place is taken up: that's near the segment saved.)
+    const bool resuming = _snap && _resume >= 0;
+    if (!resuming && (_snap || _state == OFF_ROUTE) && farFromRoute()) return;
 
     char path[8];
     PlannedRoutes::slotPath(_slot, path, sizeof(path));
@@ -162,23 +164,33 @@ public:
 
     Cand best, ahead;
     const int nseg = _info.count - 1;
-    if (_snap && _resume >= 0) {   // after a restart: where it was, if you're still there
+    if (resuming) {   // after a restart: the progress where it was
       const int s0 = _resume - WIN_BACK < 0 ? 0 : _resume - WIN_BACK;
       const int s1 = _resume + WIN_AHEAD > nseg - 1 ? nseg - 1 : _resume + WIN_AHEAD;
       Cand near, unused;
       scan(f, s0, s1, near, unused);
       _resume = -1;
-      if (near.seg >= 0 && near.d <= OFF_ENTER_M) {
-        earliestNear(f, s0, s1, near);
+      if (near.seg >= 0) {
+        const bool there = near.d <= OFF_ENTER_M;
+        if (there) earliestNear(f, s0, s1, near);
         _snap = false;
         _joined = true;
         _off_m = near.d;
         _seg = near.seg; _along = _saved_along = near.along;
         _p_lat = near.lat; _p_lon = near.lon;
-        findTarget(f);
+        if (there) {
+          findTarget(f);
+        } else {
+          // Restarted away from it (a detour): off the route with no alarm, the
+          // progress kept -- not found afresh, which on a loop is its start.
+          _state = OFF_ROUTE;
+          _t_lat = near.lat; _t_lon = near.lon;
+          _have_target = true;
+        }
         f.close();
+        if (!there) farFromRoute();   // past FAR_M: the nearest point of the whole route the target
         return;
-      }   // else found afresh, as at a start
+      }
     }
     if (!_snap) {
       int s0 = _seg - WIN_BACK, s1 = _seg + WIN_AHEAD;

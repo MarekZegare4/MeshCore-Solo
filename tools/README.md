@@ -221,6 +221,7 @@ failed, so it can stand in a script.
 | `route-far-start` | started 300 m away: off it with no "Off route"; "On route" on reaching it, not "Back on route" |
 | `route-shortcut` | across a U-bend the guide takes up the far side instead of calling you off |
 | `route-resume` | `--reboot`: a restart on the way back of an out-and-back route; picked up on the way back, not the way out |
+| `route-resume-away` | `--reboot`: a restart halfway round a loop with the first fix 1.3 km away: off the route with the progress kept; back on it with the same distance left, not at the loop's start |
 | `trackback` | a trail recorded on an L, Track back: "to start", walked back to "Back at the start" |
 | `guide-switch` | Track back started during a route takes its place, and the route followed again takes Track back's |
 | `coverage` | MatterMap recording (L2, an SD card): turned on with a fake fix, a row written; turned off, the file finished; deleted after, nothing uploaded |

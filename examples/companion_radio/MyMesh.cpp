@@ -2080,7 +2080,12 @@ void MyMesh::handleCmdFrame(size_t len) {
   } else if (cmd_frame[0] == CMD_SYNC_NEXT_MESSAGE) {
     int out_len;
     if ((out_len = getFromOfflineQueue(out_frame)) > 0) {
+      // Taken off the queue for good: every link gets it (an app on Bluetooth
+      // and one on USB), as before replies went only to the one that asked.
+      const int asked = _serial->replyTarget();
+      _serial->setReplyTarget(-1);
       _serial->writeFrame(out_frame, out_len);
+      _serial->setReplyTarget(asked);
       if (_listener) _listener->onQueueSizeChanged(offline_queue_len);
     } else {
       out_frame[0] = RESP_CODE_NO_MORE_MESSAGES;
