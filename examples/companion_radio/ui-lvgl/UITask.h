@@ -105,6 +105,8 @@ public:
   void coverageSet(int what, int v);
   void coverageHomePopup();
   void coverageHomePick(int code);
+  void coverageScrubHome();
+  void coverageClear();
   bool coverageUpload(bool asked);
   void otaAction();
   void adminPick(int row);

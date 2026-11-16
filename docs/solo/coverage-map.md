@@ -31,7 +31,11 @@ Nothing is written:
 - with the clock not set;
 - inside the **home zone**: a radius (250, 500 or 1000 m, or Off) around a
   point you pick under **Home**: where you are, or a waypoint. 500 m by
-  default; until you pick a point there is no home zone.
+  default; until you pick a point there is no home zone. Picking it later,
+  moving it or making it larger also takes out the points already recorded
+  inside it, from the file being written and from those waiting to go, and
+  each file is checked again just before it's uploaded. Points already sent
+  stay on the map.
 
 A file is finished when you turn recording off or when it reaches 1.5 MB.
 Turned off and on again, or after a restart, recording goes on in the same
@@ -55,6 +59,11 @@ address; the server uses it only to resume an upload and to limit how many
 uploads come from one device. A file that was sent is moved to
 `meshcore/coverage/sent/`; one the server refused, to `failed/` (the page
 says why).
+
+**Delete recorded points** (red, at the end of the page; tap twice) deletes
+every coverage file on the SD card: the one being written (recording goes on
+in a new one), those waiting, and the copies in `sent/` and `failed/`. What
+the map already has stays there.
 
 ## What the map shows
 

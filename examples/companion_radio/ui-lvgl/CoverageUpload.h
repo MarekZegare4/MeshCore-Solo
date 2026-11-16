@@ -177,6 +177,13 @@ static void task(void* arg) {
     http.setUserAgent("MeshCore-Solo-MatterMap");
     for (int i = 0; i < s_nfiles; i++) {
       s_file_i = i;
+      // The home zone may have been set since the file was written: its rows
+      // there go first (the first try only -- a resumed one sends the same bytes).
+      rec->scrubForUpload(s_files[i]);
+      char path[96];
+      struct stat st;
+      snprintf(path, sizeof(path), "%s/%s", DIR, s_files[i]);
+      if (stat(path, &st) != 0) { rec->moveDone(s_files[i], true); continue; }   // home rows only: nothing left to send
       int r = sendFile(http, tls, *rec, s_files[i], buf);
       if (r == 0) { net_err = true; break; }
       rec->moveDone(s_files[i], r > 0);
@@ -310,6 +317,8 @@ static void onCovRadius(lv_event_t* e) { s_ui->coverageSet(2, choiceSelected((lv
 static void onCovHome(lv_event_t* e)   { (void)e; s_ui->coverageHomePopup(); }
 static void onCovHomePick(lv_event_t* e) { s_ui->coverageHomePick((int)(uintptr_t)lv_event_get_user_data(e)); }
 static void onCovUpload(lv_event_t* e) { (void)e; s_ui->coverageUpload(true); }
+static void onCovClear(lv_event_t* e)  { (void)e; s_ui->coverageClear(); }
+static lv_obj_t* s_cov_clear_lbl = nullptr;
 
 void UITask::coverageSet(int what, int v) {
   if (!_prefs) return;
@@ -317,7 +326,29 @@ void UITask::coverageSet(int what, int v) {
   else if (what == 1) _prefs->cov_auto = (uint8_t)v;
   else _prefs->cov_home_r = (uint8_t)v;
   prefsSave();
+  if (what == 2) coverageScrubHome();     // a larger zone takes in rows already recorded
   if (what == 0) buildSchemaSettings();   // the status line and what's shown follow it
+}
+
+// The home zone set, moved or grown: the rows already on the card inside it
+// go now. During an upload the task does it file by file before sending.
+void UITask::coverageScrubHome() {
+  if (coverageBusy()) return;
+  const int n = _core->coverage.scrubHome();
+  if (n <= 0) return;
+  char t[48];
+  snprintf(t, sizeof(t), "Removed %d point%s in the home zone", n, n == 1 ? "" : "s");
+  showToast(t, 2500);
+}
+
+// Delete everything recorded, after a second tap. What the map has stays.
+void UITask::coverageClear() {
+  if (coverageBusy()) { showToast("Uploading - try again when it's done"); return; }
+  if (!tapConfirmed(s_cov_clear_lbl, "Tap again to delete")) return;
+  if (!_core->coverage.clearAll()) { showToast("No SD card"); return; }
+  covup::s_msg[0] = '\0';
+  showToast("Recorded points deleted");
+  buildSchemaSettings();
 }
 
 enum : int { COVHOME_HERE, COVHOME_CLEAR, COVHOME_WP0 = 100 };
@@ -359,6 +390,7 @@ void UITask::coverageHomePick(int code) {
   _prefs->cov_home_lon = lon;
   prefsSave();
   navClosePopup();
+  coverageScrubHome();
   buildSchemaSettings();
 }
 
@@ -393,7 +425,8 @@ void UITask::buildCoveragePage(lv_obj_t* body) {
   if (_prefs->cov_home_lat || _prefs->cov_home_lon) geo::fmtLatLon(where, sizeof(where), _prefs->cov_home_lat, _prefs->cov_home_lon, true);
   else snprintf(where, sizeof(where), "Not set");
   listRow(g, "Home", where, onCovHome, NULL);
-  groupNote(body, "Here, or a waypoint. Until one is picked there is no home zone.");
+  groupNote(body, "Here, or a waypoint. Until one is picked there is no home zone. Points already recorded in it "
+                  "are taken out too, before they're uploaded.");
 
   g = group(body, "UPLOAD");
   switchRow(g, "Upload automatically", "Over the saved WiFi, joined for it", _prefs->cov_auto, onCovAuto);
@@ -401,4 +434,6 @@ void UITask::buildCoveragePage(lv_obj_t* body) {
   char st[128];
   coverageStatusText(st, sizeof(st));
   _cov_status = infoNote(g, "Status", st);
+  s_cov_clear_lbl = actionRow(g, LV_SYMBOL_TRASH "  Delete recorded points", onCovClear, NULL, theme::FAIL);
+  groupNote(body, "Everything on the SD card: waiting, being recorded and already sent. What the map has stays there.");
 }

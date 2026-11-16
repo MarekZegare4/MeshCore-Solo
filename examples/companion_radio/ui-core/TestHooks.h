@@ -235,6 +235,44 @@ inline bool handle(Core& core, const char* cmd, char* reply, int n) {
     if (!strcmp(a, "on") || !strcmp(a, "off")) { p->cov_on = a[1] == 'n'; c.apply(); snprintf(reply, n, "OK"); return true; }
     if (!strcmp(a, "auto on") || !strcmp(a, "auto off")) { p->cov_auto = a[6] == 'n'; snprintf(reply, n, "OK"); return true; }
     if (!strcmp(a, "last")) { snprintf(reply, n, "> %s", c.lastRow()); return true; }
+    // "cov home" -> "> lat,lon,r"; "cov home <lat>,<lon> <r>" sets it (RAM) and
+    // scrubs, -> "> rows taken out".
+    if (!strcmp(a, "home")) {
+      snprintf(reply, n, "> %ld,%ld,%u", (long)p->cov_home_lat, (long)p->cov_home_lon, (unsigned)p->cov_home_r);
+      return true;
+    }
+    if (!strncmp(a, "home ", 5)) {
+      long la = 0, lo = 0;
+      unsigned r = 0;
+      if (sscanf(a + 5, "%ld,%ld %u", &la, &lo, &r) != 3) { snprintf(reply, n, "Error, cov home <lat_1e6>,<lon_1e6> <r>"); return true; }
+      p->cov_home_lat = (int32_t)la; p->cov_home_lon = (int32_t)lo; p->cov_home_r = (uint8_t)r;
+      snprintf(reply, n, "> %d", c.scrubHome());
+      return true;
+    }
+    // "cov count <name>" -> "> rows,rows in the home zone" (-1 when it isn't there).
+    if (!strncmp(a, "count ", 6)) {
+      char path[112];
+      snprintf(path, sizeof(path), "%s/%s", c.dir(), a + 6);
+      FILE* f = strstr(a, "/") || strstr(a, "..") ? nullptr : fopen(path, "r");
+      if (!f) { snprintf(reply, n, "> -1,-1"); return true; }
+      char line[160];
+      int rows = 0, home = 0;
+      while (fgets(line, sizeof(line), f)) {
+        if (line[0] == '#') continue;
+        rows++;
+        const char* la = strchr(line, ',');
+        const char* lo = la ? strchr(la + 1, ',') : nullptr;
+        if (la && lo && NodePrefs::covHomeRadiusM(p->cov_home_r) && (p->cov_home_lat || p->cov_home_lon)
+            && geo::haversineKm((int32_t)lround(strtod(la + 1, nullptr) * 1e6), (int32_t)lround(strtod(lo + 1, nullptr) * 1e6),
+                                p->cov_home_lat, p->cov_home_lon) * 1000.0f < NodePrefs::covHomeRadiusM(p->cov_home_r))
+          home++;
+      }
+      fclose(f);
+      snprintf(reply, n, "> %d,%d", rows, home);
+      return true;
+    }
+    if (!strcmp(a, "file")) { snprintf(reply, n, "> %s", c.status().name); return true; }   // the one being written
+    if (!strcmp(a, "clear")) { snprintf(reply, n, c.clearAll() ? "OK" : "Error, no storage"); return true; }
     if (!strncmp(a, "rm ", 3)) {
       char path[112];
       snprintf(path, sizeof(path), "%s/%s", c.dir(), a + 3);

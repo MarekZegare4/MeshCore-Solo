@@ -1043,6 +1043,70 @@ def t_coverage(d, out):
     return f"a row recorded, {made} finished, deleted"
 
 
+@test("coverage-home")
+def t_coverage_home(d, out):
+    """The home zone set after recording: a finished file keeps only its rows
+    away from it, the file being written loses its rows in it (and goes on);
+    then "cov clear" deletes every file. A test build's files only
+    (coverage-test/: the user's recordings are elsewhere); recording, home
+    and auto upload put back."""
+    need_hooks(d)
+    r = d.cli.run("cov")
+    if not r.startswith("> "):
+        raise Skip(f"no coverage recording here ({r})")
+    st = cov_state(d)
+    home0, auto, on0 = d.cli.get("cov home"), st["auto"], st["on"]
+    d.cli.put("cov off")
+    a = (int(LAT0 * 1e6), int(LON0 * 1e6))
+    b = (int((LAT0 + 0.02) * 1e6), a[1])   # ~2.2 km north
+    def fix(p):
+        d.cli.put(f"gps {p[0] / 1e6:.6f},{p[1] / 1e6:.6f}")
+        time.sleep(2.5)
+    def rows_at_least(k, secs):
+        for _ in range(secs):
+            time.sleep(1)
+            if cov_state(d)["rows"] >= k:
+                return True
+        return False
+    try:
+        d.cli.put("cov auto off")
+        d.cli.get("cov home 0,0 0")   # no zone while recording
+        fix(a)
+        d.cli.put("cov on")
+        check(rows_at_least(1, 20), f"no row at A in 20 s: {cov_state(d)}")
+        f1 = d.cli.get("cov file")
+        fix(b)
+        check(rows_at_least(2, 40), f"no second row at B: {cov_state(d)}")   # a "nothing heard" row every 30 s
+        d.cli.put("cov off")
+        time.sleep(1.5)
+        fix(a)
+        d.cli.put("cov on")
+        check(rows_at_least(1, 20), f"no row at A in the second file: {cov_state(d)}")
+        f2 = d.cli.get("cov file")
+        check(f2 and f2 != f1, f"the second file {f2!r} is the first {f1!r}")
+        check(d.cli.get(f"cov count {f1}.csv").split(",")[0] == "2", f"{f1} doesn't have its 2 rows")
+        gone = d.cli.get(f"cov home {a[0]},{a[1]} 1")   # 250 m round A
+        check(gone == "2", f"rows taken out: {gone}, not 2 (A's in both files)")
+        c1 = d.cli.get(f"cov count {f1}.csv")
+        check(c1 == "1,0", f"{f1} after: {c1} (rows, in the zone), not 1,0")
+        c2 = d.cli.get(f"cov count {f2}.csv")
+        check(c2 == "0,0", f"the file being written after: {c2}, not 0,0 (kept, header only)")
+        check(d.cli.get("cov file") == f2, "recording didn't go on in the same file")
+        d.cli.put("cov clear")
+        st = cov_state(d)
+        check(st["pending"] == 0 and d.cli.get(f"cov count {f1}.csv") == "-1,-1", f"files left after clear: {st}")
+    finally:
+        d.cli.run("cov off")
+        d.cli.run("cov clear")
+        d.cli.run("gps off")
+        la, lo, rr = home0.split(",")
+        d.cli.run(f"cov home {la},{lo} {rr}")
+        d.cli.run("cov auto " + ("on" if auto else "off"))
+        if on0:
+            d.cli.run("cov on")
+    return "home rows out of a finished file and the one being written, then all cleared"
+
+
 # One button: the gestures timed by the host, through the firmware's own OneButton.
 
 def btn(d, held, gap=0.45):

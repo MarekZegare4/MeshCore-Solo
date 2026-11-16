@@ -154,9 +154,108 @@ public:
     closedir(d);
     return k;
   }
+  // The home zone set or moved: rows already on the card inside it go, from
+  // the file being written too, and from every finished one whose upload
+  // hasn't begun (begun(): a resumed upload needs the same bytes -- that one
+  // is scrubbed no more). A file left with no rows is deleted. The rows taken
+  // out, -1 when the storage isn't there.
+  int scrubHome() {
+    if (!_on || !_prefs || !_ready || !_ready()) return -1;
+    if (!homeSet()) return 0;
+    const bool active = _file != nullptr;
+    char name[NAME_LEN];
+    snprintf(name, sizeof(name), "%s", _name);
+    if (active) { fclose(_file); _file = nullptr; }
+    int gone = 0;
+    DIR* d = opendir(_dir);
+    if (d) {
+      char names[24][NAME_LEN + 4];
+      int n = 0;
+      struct dirent* e;
+      while ((e = readdir(d)) != nullptr && n < 24) {
+        size_t l = strlen(e->d_name);
+        if (l == NAME_LEN - 1 + 4 && strcmp(e->d_name + l - 4, ".csv") == 0) snprintf(names[n++], NAME_LEN + 4, "%s", e->d_name);
+      }
+      closedir(d);
+      for (int i = 0; i < n; i++) {
+        const bool cur = active && strncmp(names[i], name, NAME_LEN - 1) == 0;
+        if (!cur && begun(names[i])) continue;
+        const int r = scrubFile(names[i], !cur);
+        if (r > 0) gone += r;
+      }
+    }
+    if (active) {   // on with the same file, as after a restart
+      char path[96];
+      snprintf(path, sizeof(path), "%s/%s.csv", _dir, name);
+      _file = fopen(path, "a");
+      if (_file) {
+        snprintf(_name, sizeof(_name), "%s", name);
+        _nh = 0;
+        _rows = scanFile(path, _hops, _nh, &_bytes);
+        _flush_ms = millis() + FLUSH_MS;
+      }
+    }
+    return gone;
+  }
+
+  // One finished file, just before its upload begins (the upload task): rows
+  // in the home zone out, then marked begun. -1: not read. The upload goes
+  // on to send it only when it's still there (a file of home rows only isn't).
+  int scrubForUpload(const char* name) {
+    if (begun(name)) return 0;
+    const int r = homeSet() ? scrubFile(name, true) : 0;
+    char mark[96];
+    snprintf(mark, sizeof(mark), "%s/%.*s.up", _dir, NAME_LEN - 1, name);
+    if (FILE* m = fopen(mark, "w")) fclose(m);
+    return r;
+  }
+
+  // Everything recorded on the card goes: the file being written (recording
+  // goes on in a new one), those waiting, and the sent/ and failed/ copies.
+  // What the map already has stays there. False when the storage isn't there.
+  bool clearAll() {
+    if (!_on || !_ready || !_ready()) return false;
+    if (_file) { fclose(_file); _file = nullptr; }
+    _rows = _bytes = 0;
+    _nh = 0;
+    _last_row = 0;
+    _last[0] = '\0';
+    for (const char* sub : { "", "/sent", "/failed" }) {
+      char dir[80];
+      snprintf(dir, sizeof(dir), "%s%s", _dir, sub);
+      DIR* d = opendir(dir);
+      if (!d) continue;
+      struct dirent* e;
+      char names[16][NAME_LEN + 8];
+      bool more = true;
+      for (int round = 0; more && round < 64; round++) {   // a directory isn't changed while it's read: a batch at a time
+        int n = 0;
+        rewinddir(d);
+        while ((e = readdir(d)) != nullptr && n < 16) {
+          size_t l = strlen(e->d_name);
+          if (l == NAME_LEN - 1 + 4 && (strcmp(e->d_name + l - 4, ".csv") == 0 || strcmp(e->d_name + l - 4, ".tmp") == 0))
+            snprintf(names[n++], sizeof(names[0]), "%s", e->d_name);
+          else if (l == NAME_LEN - 1 + 3 && strcmp(e->d_name + l - 3, ".up") == 0)
+            snprintf(names[n++], sizeof(names[0]), "%s", e->d_name);
+        }
+        more = n == 16;
+        for (int i = 0; i < n; i++) {
+          char p[112];
+          snprintf(p, sizeof(p), "%s/%s", dir, names[i]);
+          remove(p);
+        }
+        if (n == 0) break;
+      }
+      closedir(d);
+    }
+    return true;
+  }
+
   // Uploaded (or refused by the server): out of the way, kept under sent/ or failed/.
   void moveDone(const char* name, bool sent) {
     char from[96], to[112];
+    snprintf(from, sizeof(from), "%s/%.*s.up", _dir, NAME_LEN - 1, name);
+    remove(from);   // the begun mark
     snprintf(from, sizeof(from), "%s/%s", _dir, name);
     snprintf(to, sizeof(to), "%s/%s", _dir, sent ? "sent" : "failed");
     mkdir(to, 0777);
@@ -207,10 +306,61 @@ private:
     if (!_fix_ok || _in_home || t < 1700000000UL) return false;
     return _ready && _ready();
   }
-  bool inHome(const Fix& f) const {
+  bool homeSet() const {
+    return _prefs && NodePrefs::covHomeRadiusM(_prefs->cov_home_r) && (_prefs->cov_home_lat || _prefs->cov_home_lon);
+  }
+  bool inHome(const Fix& f) const { return inHome(f.lat, f.lon); }
+  bool inHome(int32_t lat, int32_t lon) const {
+    if (!homeSet()) return false;
     const uint32_t r = NodePrefs::covHomeRadiusM(_prefs->cov_home_r);
-    if (!r || (!_prefs->cov_home_lat && !_prefs->cov_home_lon)) return false;
-    return geo::haversineKm(f.lat, f.lon, _prefs->cov_home_lat, _prefs->cov_home_lon) * 1000.0f < (float)r;
+    return geo::haversineKm(lat, lon, _prefs->cov_home_lat, _prefs->cov_home_lon) * 1000.0f < (float)r;
+  }
+
+  // An upload of this file has begun (its .up mark, made by scrubForUpload).
+  bool begun(const char* name) const {
+    char mark[96];
+    snprintf(mark, sizeof(mark), "%s/%.*s.up", _dir, NAME_LEN - 1, name);
+    struct stat st;
+    return stat(mark, &st) == 0;
+  }
+
+  // `name` (in _dir) without its rows in the home zone, through a .tmp copy;
+  // the # lines (header, #RPT, #END) as they were. A finished file left with
+  // no rows is deleted (`finished`; the one being written stays, header only).
+  // The rows taken out, -1 when it can't be read or written.
+  int scrubFile(const char* name, bool finished) {
+    char path[96], tmp[96];
+    snprintf(path, sizeof(path), "%s/%s", _dir, name);
+    snprintf(tmp, sizeof(tmp), "%s/%.*s.tmp", _dir, NAME_LEN - 1, name);
+    FILE* in = fopen(path, "r");
+    if (!in) return -1;
+    FILE* out = fopen(tmp, "w");
+    if (!out) { fclose(in); return -1; }
+    char line[160];
+    int gone = 0, kept = 0;
+    bool ok = true;
+    while (fgets(line, sizeof(line), in)) {
+      if (line[0] != '#') {
+        // t,lat,lon,...
+        const char* la = strchr(line, ',');
+        const char* lo = la ? strchr(la + 1, ',') : nullptr;
+        if (la && lo) {
+          const int32_t lat = (int32_t)lround(strtod(la + 1, nullptr) * 1e6), lon = (int32_t)lround(strtod(lo + 1, nullptr) * 1e6);
+          if (inHome(lat, lon)) { gone++; continue; }
+        }
+        kept++;
+      }
+      const size_t l = strlen(line);
+      if (fwrite(line, 1, l, out) != l) { ok = false; break; }
+    }
+    fclose(in);
+    if (fclose(out) != 0) ok = false;
+    if (!ok) { remove(tmp); return -1; }
+    if (gone == 0) { remove(tmp); return 0; }
+    remove(path);
+    if (finished && kept == 0) { remove(tmp); return gone; }
+    if (rename(tmp, path) != 0) return -1;
+    return gone;
   }
 
   static void fmtDeg(char* b, int n, int32_t v) {   // 1e6 degrees, 5 decimals, rounded
@@ -397,5 +547,7 @@ public:
   void tick(bool, const Fix&, uint32_t) { }
   int pending(char[][NAME_LEN + 4], int) const { return 0; }
   Status status() const { return Status{}; }
+  int scrubHome() { return -1; }
+  bool clearAll() { return false; }
 };
 #endif
