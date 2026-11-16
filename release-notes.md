@@ -1,3 +1,74 @@
+## Solo v2.3.0
+
+**New**
+- **Planned routes.** Plan a route on a computer in any planner that saves GPX, put it on the device, and follow it:
+  - The navigation view points to the next bend and shows the distance left and the time to the end.
+  - **Off route** plays a tune when you stray more than 50 m. **Back on route** tells you when you're on it again, and **Route finished** at the end.
+  - Follow it either way round. It keeps going on any screen and through a restart, and picks up where you were, even after a detour.
+  - Home's map draws it, and the compass marks the next bend.
+  - The device keeps 8 routes of up to 4,000 points. Send them from the [configurator](https://solo.marekzegarek.com/configure.html) or with `tools/route.py`. On the device: Tools > Trail, hold Enter, **Routes...**
+  - On the Wio Tracker L1 (OLED and e-ink), the L2, the Watch13, the Heltec V3/V4 and the Cardputer.
+- **Track back.** Your trail, followed back to where you began, the same way as a route: **Off route**, corners you cut are skipped, the time to the start, on any screen and through a restart.
+- **One button.** The whole interface from a single button:
+  - The Heltec V3/V4 have new `-button` firmware files that run on the PRG button alone, with nothing wired up. On the GAT562 Watch13 the second button is Back.
+  - **Click** goes to the next row, **double click** goes back, **hold** is OK. Hold **2 s** for the menu or to unlock, **5 s** for SOS.
+  - Text is typed by letter groups, a PIN on a combination lock, and the ringtone editor works too. See [One button](https://github.com/MarekZegare4/MeshCore-Solo/blob/main/docs/solo/one-button.md).
+- **Configurator.** A web page that sets up the device over USB from Chrome or Edge on a computer: [solo.marekzegarek.com/configure.html](https://solo.marekzegarek.com/configure.html).
+  - Every setting, Home's pages, quick messages, the two melodies (paste a ringtone, hear it, send it), routes and the trail, waypoints, screenshots and the console.
+  - A backup to a file and back, also to set up a second device the same way.
+  - The same works without a browser: `tools/config.py`, `tools/route.py` and `tools/console.py`.
+- **Set the clock by hand (#59).** **Settings > Clock**, before Time zone:
+  - Setting it more than 5 minutes back asks first. Other nodes keep the newest time they've had from this one, so for that long they ignore its adverts and its logins to repeaters and rooms. Messages go as usual.
+  - **Time from GPS** can be turned off, for a GPS that gives a wrong time. It's on by default.
+  - The phone app may now set the clock up to an hour back, to correct a clock that ran ahead.
+- **Radio power save is back.** **Settings > Radio > Power save**:
+  - **On** hears every node and the radio sleeps about a third of the time.
+  - **Max** sleeps about two thirds of the time at SF8 and below, but misses nodes on firmware older than companion v1.16.
+  - It's off by default, off while repeating, and SX1262 radios only. The radio also wakes faster from each sleep.
+- **Waypoints:** **+ Mark here** at the end of the list. With a target set, Locator offers **Navigate**.
+
+**L2**
+- **Coverage map (MatterMap)**, voluntary and off by default. **Settings > Coverage map** records where the mesh is heard as you walk: every packet with your position and its signal, saved to the SD card and uploaded to [MatterMap](https://mattermeshos.com/coverage/) over your saved WiFi.
+  - Nothing is recorded inside your **home zone**. Setting the zone also takes out points already recorded there.
+  - **Delete recorded points** removes everything on the card.
+  - See [Coverage map](https://github.com/MarekZegare4/MeshCore-Solo/blob/main/docs/solo/coverage-map.md).
+- **GPX routes from the SD card:** Map tools > Route > **Import** reads a `.gpx` from `/routes` or the card's top folder. The Gallery has a **Routes** tab.
+- **Map:**
+  - Lines are easier to see on any map layer: the trail is blue, the route magenta, Track back dashed over the trail.
+  - Home's mini map shows your trail, route and target.
+  - Recent packets lists every packet heard.
+- **Faster:**
+  - Screens build about twice as fast and draw 25-40% faster.
+  - Moving the map is about 40% faster, and map tiles are read off the card twice as fast.
+  - With 8 packet flows on the map, the device is no longer busy all the time.
+- **Longer battery:**
+  - With the screen off on battery, the processor slows down while it waits.
+  - With the screen off, the device is now busy 3% of the time instead of 46%.
+- **If it ever hangs,** it restarts by itself within 30 s, and your trail comes back. It then writes a report to `meshcore/crash/` on the card: please attach it to a bug report.
+- **Settings > Clock** sets the date and time on wheels, like the alarm.
+- **Map tools:** Reset is red, and grey when there's no trail. After a reset the height chart goes too.
+
+**Other devices (OLED and e-ink)**
+- The M5Stack Cardputer ADV takes screenshots.
+- The Simpson, the Cardputer and the T-Echo Lite + KeyShield keep their keyboard or keypad. One-button mode is only on one-button boards. A CardKB keeps the normal keyboard.
+
+**Fixes**
+- **Heading at walking pace.** Below 5.4 km/h the heading never updated. It now comes after about 12 m and holds while you stand.
+  - The direction to a target close by is right: it was up to 9° off at 5 m.
+  - The time to arrive no longer jumps about.
+- **Battery time left** no longer promises days after a quiet night.
+- **A clock set back** no longer comes forward again at the next start.
+- **The phone app on Bluetooth and a tool on USB together:**
+  - Each now gets only its own replies. Before, they read each other's and showed stray errors.
+  - Messages still reach both.
+- **Heltec V4 over USB:** some replies to the configurator and the console never arrived.
+
+**Notes**
+- No settings are reset. New options start at their defaults: Power save Off, Time from GPS On, Coverage map Off.
+- The configurator and the USB tools need Solo 2.3 on the device.
+- **Not tested on hardware this time:** the GAT562 Watch13, the M5Stack Cardputer ADV, the T-Echo Lite + KeyShield and the Simpson. They build and share the code tested on the L1, the L2 and the Heltec V4. Reports are welcome.
+- L2 updates over WiFi from Settings > Firmware update once this release is published.
+
 ## Solo v2.2.1
 
 A quick fix release.
