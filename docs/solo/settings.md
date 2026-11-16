@@ -38,7 +38,8 @@ A few notes:
   the winter one, e.g. UTC+1 for Poland. The alarm and quiet hours follow it.
 - **Clock** sets the date and time by hand, as local time: on joystick
   devices a field at a time (Left / Right between year, month, day, hour and
-  minute, Up / Down to change it), on the L2 typed as `2026-11-14 12:30`.
+  minute, Up / Down to change it), on the L2 on wheels, as the alarm's (year, month, day, hour, minute), then
+  **Set the clock**.
   Otherwise the clock comes from the GPS, the phone app or the network (L2
   WiFi). Putting it more than 5 minutes back asks first, because other
   nodes keep the newest time they had from this one: until the clock is past

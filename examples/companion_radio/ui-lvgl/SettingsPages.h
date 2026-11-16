@@ -298,9 +298,12 @@ void UITask::blePinDone(bool ok) {
   navClosePopup();
 }
 
-// Time & units > Clock: the date and time typed in, local; asked first when
-// that puts it more than a few minutes back (UiCore::CLOCK_ASK_BACK).
-static void onClockSetKb(lv_event_t* e)   { s_ui->clockSetDone(lv_event_get_code(e) == LV_EVENT_READY); }
+// Time & units > Clock: the local date and time on wheels (year, month, day,
+// hour, minute), as the alarm's; asked first when that puts it more than a few
+// minutes back (UiCore::CLOCK_ASK_BACK). A day past the month's end is its last.
+static lv_obj_t* s_clk_w[5];   // year (from 2024), month, day, hour, minute
+static void onClockWheel(lv_event_t* e) { (void)e; }
+static void onClockSetGo(lv_event_t* e)   { (void)e; s_ui->clockSetDone(true); }
 static void onClockSetBack(lv_event_t* e) { (void)e; s_ui->clockSetApply(); }
 
 void UITask::clockText(char* b, size_t n) {
@@ -311,28 +314,49 @@ void UITask::clockText(char* b, size_t n) {
 }
 
 void UITask::clockSetPopup() {
-  char cur[24] = "";
   struct tm t;
-  if (_core->localNow(t)) clockText(cur, sizeof(cur));
-  TextEntry te = { "Clock", onClockSetKb };
-  te.text = cur;
-  te.hint = "2026-11-14 12:30, local time";
-  te.max_bytes = 16;
-  te.accepted = "0123456789-: ";
-  te.symbols = true;
-  navTextEntry(te);
+  if (!_core->localNow(t)) { memset(&t, 0, sizeof(t)); t.tm_year = 126; t.tm_mday = 1; t.tm_hour = 12; }   // unset: 2026-01-01 12:00
+  int y = t.tm_year + 1900 - 2024;
+  if (y < 0) y = 0;
+  if (y > 35) y = 35;
+  lv_obj_t* panel = navPopupPanel("Clock", false);
+  lv_obj_t* r = centerRow(panel);
+  lv_obj_set_style_pad_column(r, 2, 0);
+  using clockview::wheel;
+  const int W = 46;
+  s_clk_w[0] = wheel(r, 36, y, onClockWheel, 0, 24);
+  label(r, "-", THEME_FONT_LARGE, theme::TEXT_MUTED);
+  s_clk_w[1] = wheel(r, 12, t.tm_mon, onClockWheel, 1, 1);
+  label(r, "-", THEME_FONT_LARGE, theme::TEXT_MUTED);
+  s_clk_w[2] = wheel(r, 31, t.tm_mday - 1, onClockWheel, 2, 1);
+  lv_obj_t* gap = lv_obj_create(r);
+  styleSurface(gap, theme::BG);
+  lv_obj_set_size(gap, 6, 1);
+  s_clk_w[3] = wheel(r, 24, t.tm_hour, onClockWheel, 3);
+  clockview::colon(r);
+  s_clk_w[4] = wheel(r, 60, t.tm_min, onClockWheel, 4);
+  for (lv_obj_t* w : s_clk_w) lv_obj_set_width(w, W);
+  noteLabel(panel, "Year - month - day, hour : minute; local time.");
+  lv_obj_t* b = lv_button_create(panel);
+  lv_obj_set_size(b, LV_PCT(100), 40);
+  lv_obj_set_style_shadow_width(b, 0, 0);
+  lv_obj_set_style_radius(b, theme::RADIUS, 0);
+  lv_obj_set_style_bg_color(b, lv_color_hex(theme::ACCENT), 0);
+  lv_obj_add_event_cb(b, onClockSetGo, LV_EVENT_CLICKED, NULL);
+  lv_obj_center(label(b, "Set the clock", THEME_FONT_BODY, theme::TEXT));
 }
 
 void UITask::clockSetDone(bool ok) {
-  if (!ok || !_nav_ta || !_prefs) { navClosePopup(); return; }
-  int y, mo, d, h, mi;
-  uint32_t utc = 0;
-  if (sscanf(lv_textarea_get_text(_nav_ta), "%d-%d-%d %d:%d", &y, &mo, &d, &h, &mi) == 5)
-    utc = utcFromLocal(*_prefs, y, mo, d, h, mi, 0);
-  if (!utc) {
-    showToast("Type it as 2026-11-14 12:30");
-    return;   // the field stays, to fix it
-  }
+  if (!ok || !_prefs || !s_clk_w[0] || !_nav_overlay) { navClosePopup(); return; }
+  static const uint8_t DAYS[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+  using clockview::wheelValue;
+  const int y = 2024 + wheelValue(s_clk_w[0]), mo = 1 + wheelValue(s_clk_w[1]);
+  int d = 1 + wheelValue(s_clk_w[2]);
+  int last = DAYS[mo - 1];
+  if (mo == 2 && y % 4 == 0 && (y % 100 != 0 || y % 400 == 0)) last = 29;
+  if (d > last) d = last;
+  const uint32_t utc = utcFromLocal(*_prefs, y, mo, d, wheelValue(s_clk_w[3]), wheelValue(s_clk_w[4]), 0);
+  if (!utc) { showToast("Not a date"); return; }
   _clock_pending = utc;
   uint32_t back = UiCore::clockBackBy(utc);
   if (back <= UiCore::CLOCK_ASK_BACK) { clockSetApply(); return; }

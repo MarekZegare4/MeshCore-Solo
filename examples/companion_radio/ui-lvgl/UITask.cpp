@@ -1655,6 +1655,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_open(const char* name) {
   if (!strcmp(name, "unlock")) { s_ui->simLock(false); return; }
   if (!strcmp(name, "vector")) { s_ui->setVectorMap(true); return; }
   if (!strcmp(name, "maptools")) { s_ui->navToolsPopup(); return; }
+  if (!strcmp(name, "clockset")) { s_ui->clockSetPopup(); return; }   // Settings > Time & units > Clock
   if (!strcmp(name, "routes")) { s_ui->routesPopup(); return; }
   if (!strncmp(name, "gallery@", 8)) { s_ui->showGallery(); s_ui->galleryTab(atoi(name + 8)); return; }
   if (!strcmp(name, "routegpx")) { s_ui->routeGpxPopup(); return; }

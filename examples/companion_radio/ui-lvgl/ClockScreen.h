@@ -105,6 +105,7 @@ struct Wheel {
   int32_t pos;     // the selected row, in 1/256 rows: dragging moves it between rows
   int32_t vel;     // the finger's recent speed, px per input read (smoothed)
   int32_t drag;    // px the finger has moved since it went down
+  uint8_t base;    // shown as value + base (a day or month from 1)
 };
 static const int32_t WHEEL_LINE = 4;   // between rows
 static char s_nums[60][3];             // "00".."59"
@@ -178,7 +179,7 @@ static void wheelDraw(lv_event_t* e) {
     for (int32_t k = -span; k <= span; k++) {
       int32_t y = mid + ((k << 8) - frac) * pitch / 256;   // the row's middle
       if (y + fh < layer->_clip_area.y1 || y - fh > layer->_clip_area.y2) continue;
-      td.text = s_nums[(((base + k) % w->n) + w->n) % w->n];
+      td.text = s_nums[(((base + k) % w->n) + w->n) % w->n + w->base];
       lv_area_t ta = { a.x1, y - fh / 2, a.x2, y - fh / 2 + fh - 1 };
       lv_draw_label(layer, &td, &ta);
     }
@@ -230,10 +231,11 @@ static void wheelEvent(lv_event_t* e) {
   }
 }
 
-static lv_obj_t* wheel(lv_obj_t* parent, uint8_t n, int sel, lv_event_cb_t cb, uintptr_t which) {
+// `base`: the rows read base..base+n-1 (n + base at most 60); the value is still 0..n-1.
+static lv_obj_t* wheel(lv_obj_t* parent, uint8_t n, int sel, lv_event_cb_t cb, uintptr_t which, uint8_t base = 0) {
   if (!s_nums[0][0]) for (int i = 0; i < 60; i++) snprintf(s_nums[i], sizeof(s_nums[i]), "%02d", i);
   Wheel* w = (Wheel*)lv_malloc(sizeof(Wheel));
-  *w = { n, (int32_t)(sel % n) * 256, 0, 0 };
+  *w = { n, (int32_t)(sel % n) * 256, 0, 0, base };
   lv_obj_t* o = lv_obj_create(parent);
   styleSurface(o, theme::SURFACE);
   lv_obj_set_style_radius(o, theme::RADIUS, 0);
