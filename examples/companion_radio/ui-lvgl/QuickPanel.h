@@ -337,6 +337,7 @@ void UITask::quickPanelRefresh() {
 // A tap switches; a hold opens the settings behind the tile (the panel goes).
 void UITask::quickPanelTile(int t, bool hold) {
   using namespace qpanel;
+  crashlog::note("panel %d%s", t, hold ? " hold" : "");
   if (hold || t == T_ADVERT || t == T_LOCK) {
     quickPanelClose(false);
     switch (t) {

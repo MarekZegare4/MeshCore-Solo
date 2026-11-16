@@ -1925,6 +1925,7 @@ void UITask::mapDownloadResume() {
   if (!lvport::wifiAllowed()) { showToast("WiFi is off - Settings > WiFi"); return; }
   if (!lvport::loadWifi(ssid, sizeof(ssid), pass, sizeof(pass))) { showToast("Pick a WiFi network first - Settings > WiFi", 3000); return; }
   if (!lvport::mountStorage()) { showToast("No SD card"); return; }
+  crashlog::note("tiles download");
   if (!mapview::s_dl.start(a, ssid, pass)) { showToast(mapview::s_dl.message()); return; }
   refreshDownloadPopup();
 }

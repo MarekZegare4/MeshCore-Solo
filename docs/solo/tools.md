@@ -328,6 +328,14 @@ the last one may be old. SOS doesn't ask: it turns the GPS on itself.
 > saving and the **Fixed position**, which stands in for the GPS while it's
 > off).
 > Your contact's QR code and the manual's are in Settings › About.
+>
+> If the L2 ever stops answering, it starts again by itself within 30
+> seconds (the trail you were recording comes back). After that, or after
+> a crash or a brown-out, it writes a report to the SD card,
+> `meshcore/crash/<date>.txt`, and says so: where it stopped, and the last
+> few things you did before (taps, screens, map tools, WiFi). Nothing is
+> logged while it runs normally. If it happens, send the file with your bug
+> report.
 
 ## GPIO
 

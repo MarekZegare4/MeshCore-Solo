@@ -233,6 +233,7 @@ bool UITask::coverageUpload(bool asked) {
   s_msg[0] = '\0';
   s_file_i = 0;
   s_sent_b = s_size_b = 0;
+  crashlog::note("cov upload %d", s_nfiles);
   if (lvport::netState() == lvport::NET_UP) { s_we_joined = false; coverageStartTask(); }
   else { s_we_joined = true; lvport::netBegin(ssid, pass); s_state = CONNECTING; s_since = millis(); }
   return true;
@@ -272,6 +273,7 @@ void UITask::coverageTick() {
       s_state = FAILED;
     }
   } else if (s_state == DONE || s_state == FAILED) {
+    crashlog::note("cov %s", s_state == DONE ? "sent" : "failed");
     if (s_we_joined && !wifiInUse() && !mapview::s_dl.liveNet() && !_wifi_scanning) lvport::netEnd();
     s_we_joined = false;
     s_next_auto = millis() + (s_state == FAILED ? COV_AUTO_RETRY_MS : 60000);

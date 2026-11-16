@@ -97,6 +97,7 @@ static volatile bool s_test_hang = false;   // "hang" (SettingsPages.h): the loo
 #include "../ui-core/SiteQr.h"
 #include "Theme.h"
 #include "Anim.h"
+#include "CrashLog.h"   // after a crash: a report on the card, with the last things done
 #include "LvglPort.h"
 #include "lv_mem_psram.h"
 #include "HistoryStore.h"
@@ -145,7 +146,10 @@ extern "C" EMSCRIPTEN_KEEPALIVE int sim_buzzer_get_volume() { return s_ui ? (int
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
+static char s_crash_file[32] = "";   // the report written at this start (CrashLog.h)
+
 void UITask::begin(DisplayDriver* display_drv, SensorManager* sensors, NodePrefs* node_prefs) {
+  crashlog::begin();   // the run before kept, if it ended in a crash, before anything is noted
   s_ui = this;
   _ui_started_ms = millis();
   _display = display_drv;
@@ -167,6 +171,11 @@ void UITask::begin(DisplayDriver* display_drv, SensorManager* sensors, NodePrefs
     _core->history.setArchive(&s_archive);
   }
   trailJournalRestore();   // a trail cut off by a restart or a flat battery
+  {
+    char fw[32];
+    snprintf(fw, sizeof(fw), "solo-%s", FIRMWARE_VERSION);
+    crashlog::writeReport(lvport::mountStorage(), fw, "wio-l2", lvport::resetReason(), s_crash_file, sizeof(s_crash_file));
+  }
   _tap_wake = lvport::loadTapWake();
   msgtext::seedQuick(node_prefs);   // "OK" in quick message 1 on first boot
   _nearby = new NearbyModel();
@@ -206,6 +215,11 @@ void UITask::begin(DisplayDriver* display_drv, SensorManager* sensors, NodePrefs
   showHome();
   if (pinSet()) lockScreen();   // a reboot doesn't get round the PIN
   showSplash();                // over both; fades out by itself
+  if (s_crash_file[0]) {
+    char t[80];
+    snprintf(t, sizeof(t), "Restarted after a fault - report in meshcore/crash/%s", s_crash_file);
+    showToast(t, 6000);
+  }
 }
 
 MyMesh::Listener* UITask::meshListener() { return _core; }
@@ -1313,6 +1327,7 @@ lv_obj_t* UITask::newScreen(const char* title, bool with_back) {
   _shown_screen = _screen;
   snprintf(_shown_title, sizeof(_shown_title), "%s", title ? title : "");
   _scr = scr;
+  if (!same) crashlog::note("scr %d %.14s", (int)_screen, title ? title : "");
   if (_fade_next && prev && !_asleep && prev == lv_screen_active()) {
     // A cross-fade: the new screen dissolves in over the old one, deleted after.
     lv_screen_load_anim(scr, LV_SCR_LOAD_ANIM_FADE_IN, anim::FADE_MS, 0, true);

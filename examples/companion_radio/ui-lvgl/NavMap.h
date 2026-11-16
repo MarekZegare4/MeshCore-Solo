@@ -670,6 +670,7 @@ void UITask::navToNode(const uint8_t* key, int32_t lat, int32_t lon, const char*
 // ── Popups: target list, waypoint menu, rename ────────────────────────────────
 
 lv_obj_t* UITask::navPopupPanel(const char* title, bool full, bool bottom) {
+  crashlog::note("pop %.16s", title ? title : "");
   navClosePopup();
   lv_obj_t* panel = popupOpen(screen(), bottom ? POP_BOTTOM : full ? POP_FULL : POP_FIT, _nav_overlay);
   lv_obj_set_style_pad_row(panel, 6, 0);
@@ -1028,6 +1029,8 @@ void UITask::navToolsPopup(bool back) {
   lv_obj_set_style_bg_color(rb, lv_color_hex(theme::FAIL), 0);
   lv_obj_set_style_bg_color(rb, lv_color_hex(theme::mix(theme::FAIL, theme::BG, 75)), LV_STATE_PRESSED);
   textUnder(rb, theme::TEXT);
+  lv_obj_set_style_bg_color(rb, lv_color_hex(theme::SURFACE), LV_STATE_DISABLED);   // grey: no trail to reset
+  lv_obj_set_style_text_opa(rb, LV_OPA_40, LV_STATE_DISABLED);   // the label inherits it
   listRow(group(list, nullptr), "Trail options", "Point spacing, auto-pause, low battery", onNavTool,
           (void*)(uintptr_t)navmap::TL_OPT_TRAIL);
 
@@ -1122,6 +1125,10 @@ void UITask::refreshNavTools() {
   if (ts.empty()) setText(_nav_trail_lbl, state);
   else setTextFmt(_nav_trail_lbl, "%s  -  %s, %s, %d points", state, dist, dur, ts.count());
   setText(_nav_trail_btn, ts.isActive() ? LV_SYMBOL_STOP " Stop" : LV_SYMBOL_PLAY " Record");
+  if (_nav_reset_lbl) {   // nothing to reset: grey, no tap
+    lv_obj_t* rb = lv_obj_get_parent(_nav_reset_lbl);
+    if (ts.empty()) lv_obj_add_state(rb, LV_STATE_DISABLED); else lv_obj_remove_state(rb, LV_STATE_DISABLED);
+  }
   setText(_nav_tb_btn, _core->guide.trackBack() ? LV_SYMBOL_STOP " Stop back" : LV_SYMBOL_LOOP " Track back");
   refreshRouteTools();
 
@@ -1361,6 +1368,7 @@ void UITask::savedTrailAction(uint8_t act) {
 }
 
 void UITask::navToolAction(uint8_t act) {
+  crashlog::note("tool %u", (unsigned)act);
   if (act >= navmap::TL_ROUTE_BASE) { routeAction(act); return; }
   TrailEngine& tr = _core->trail;
   switch (act) {

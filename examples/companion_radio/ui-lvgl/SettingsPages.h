@@ -463,6 +463,31 @@ bool UITask::cliCommand(const char* command, char* reply, int n) {
     snprintf(reply, n, "> %s,%s", lvport::resetReason(), c);
     return true;
   }
+  // "crash": the report written at this start (CrashLog.h), "> <file>,<things
+  // noted in it>,<backtrace 0/1>,<the last thing noted>" ("> " alone: none);
+  // "crash rm" deletes it.
+  if (!strcmp(command, "crash") || !strcmp(command, "crash rm")) {
+    if (!s_crash_file[0]) { snprintf(reply, n, "> "); return true; }
+    char path[72];
+    snprintf(path, sizeof(path), "/sdcard/meshcore/crash/%s", s_crash_file);
+    if (command[5]) { snprintf(reply, n, remove(path) == 0 ? "OK" : "Error, can't delete"); s_crash_file[0] = '\0'; return true; }
+    FILE* f = fopen(path, "r");
+    if (!f) { snprintf(reply, n, "Error, %s not readable", s_crash_file); return true; }
+    char line[96], last[64] = "";
+    int ev = 0, bt = 0;
+    while (fgets(line, sizeof(line), f)) {
+      if (!strncmp(line, "Backtrace", 9) && strstr(line, "0x")) bt = 1;
+      if (!strncmp(line, "  ", 2)) {
+        ev++;
+        const char* w = strstr(line, " KB  ");
+        snprintf(last, sizeof(last), "%s", w ? w + 5 : line);
+        last[strcspn(last, "\r\n")] = '\0';
+      }
+    }
+    fclose(f);
+    snprintf(reply, n, "> %s,%d,%d,%s", s_crash_file, ev, bt, last);
+    return true;
+  }
   if (!strcmp(command, "sdbench")) { sdbench::run(reply, n); return true; }   // SdBench.h
   if (!strncmp(command, "tilebench", 9)) { sdbench::tiles(reply, n, atoi(command + 9)); return true; }   // [zoom]
 #endif

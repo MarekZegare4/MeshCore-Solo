@@ -950,6 +950,43 @@ def t_loop_watchdog(d, out):
     return f"restarted after {secs:.0f} s, last crash {crash}"
 
 
+@test("crash-report", needs_reboot=True)
+def t_crash_report(d, out):
+    """A hang after a few screens: after the watchdog's restart a report is on
+    the card (meshcore/crash/) with the backtrace and the last things done,
+    the screen opened just before the hang the last of them. Deleted after."""
+    need_hooks(d)
+    if not d.knows("crash"):
+        raise Skip("no crash report on this board")
+    for w in ("map", "settings", "diag"):
+        d.cli.put(f"idle {w}")
+        time.sleep(0.8)
+    try:
+        d.cli.run("hang")
+    except (DeviceError, serial.SerialException, OSError):
+        pass
+    t0 = time.time()
+    d.close()
+    while time.time() - t0 < 45 and d.port in candidate_ports():
+        time.sleep(0.3)
+    p = wait_port(60, board=d.board, prefer=d.port)
+    check(p, "the device didn't come back from the hang")
+    d.port = p
+    time.sleep(1)
+    d.open()
+    r = d.cli.get("crash")
+    try:
+        check(r, "no report written after the watchdog restart (an SD card in?)")
+        name, ev, bt, last = r.split(",", 3)
+        check(bt == "1", f"{name}: no backtrace in it")
+        check(int(ev) >= 3, f"{name}: {ev} things noted, not the screens opened")
+        check(last.startswith("scr ") and "Diag" in last, f"{name}: the last thing noted is {last!r}, not the Diagnostics screen")
+    finally:
+        if r:
+            d.cli.run("crash rm")
+    return f"{name}: {ev} things noted, the last {last!r}"
+
+
 @test("coverage-crash", needs_reboot=True)
 def t_coverage_crash(d, out):
     """Rows recorded, then a hang and the watchdog's restart: the rows are in

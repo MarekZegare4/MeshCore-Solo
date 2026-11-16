@@ -337,6 +337,7 @@ bool UITask::areaStartDownload(const mapview::TileArea& box, bool force, bool tr
   if (!lvport::wifiAllowed()) { showToast("WiFi is off - Settings > WiFi"); return false; }
   if (!lvport::loadWifi(ssid, sizeof(ssid), pass, sizeof(pass))) { showToast("Pick a WiFi network first - Settings > WiFi", 3000); return false; }
   if (!lvport::mountStorage()) { showToast("No SD card"); return false; }
+  crashlog::note("tiles download");
   if (!mapview::s_dl.start(box, ssid, pass, force, trails ? 1 : 0)) { showToast(mapview::s_dl.message()); return false; }
   return true;
 }

@@ -228,6 +228,7 @@ static void touchCb(lv_indev_t* indev, lv_indev_data_t* data) {
   }
   if (down) {
     cpuSlow(false);   // the frame this touch causes: at the full clock
+    if (s_touch_id < 0) crashlog::note("tap %d,%d", (int)tp.x, (int)tp.y);
     s_touch_id = tp.id;
     data->state = LV_INDEV_STATE_PRESSED;
     data->point.x = tp.x;
@@ -370,6 +371,7 @@ static void swallowTouch() { s_swallow = true; }
 // wake the screen. Screen on: back.
 static bool s_touch_asleep = false;
 static void powerSave(bool on, bool keep_touch) {
+  crashlog::note(on ? "screen off" : "screen on");
   cpuSlow(on);
   if (on && !keep_touch) { board.touchSleep(); s_touch_asleep = true; }
   else if (!on && s_touch_asleep) { board.touchWake(); s_touch_asleep = false; }
@@ -688,6 +690,7 @@ static bool s_net_scanning = false;
 static char s_fb_ssid[33], s_fb_pass[65];
 static void ntpAskDhcp();
 static void netBegin(const char* ssid, const char* pass) {
+  crashlog::note("wifi on");
   dmaForWifi();
   WiFi.mode(WIFI_STA);
   ntpAskDhcp();
@@ -760,6 +763,7 @@ static uint32_t ntpTake() { uint32_t t = s_ntp_secs; s_ntp_secs = 0; return t; }
 
 static void fetchFreeBuffer();
 static void netEnd() {
+  crashlog::note("wifi off");
   if (s_net_scanning) { s_net_scanning = false; WiFi.scanDelete(); }
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
