@@ -72,6 +72,21 @@ static void scan() {
   });
 }
 
+// A picture buffer of n pixels, in PSRAM. Short of it (the map's decoded
+// tiles keep 3 MB once it's been panned round): the tiles go -- the map
+// decodes them again when next open -- and it's asked for again. Never
+// internal RAM, which is what WiFi and BLE need.
+static uint16_t* bigBuf(size_t n) {
+#if defined(ESP32)
+  if (void* p = heap_caps_calloc(n, 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)) return (uint16_t*)p;
+  for (int i = 0; i < 50 && mapview::s_cache.decoding(); i++) delay(10);   // a tile takes ~130 ms
+  if (!mapview::s_cache.release()) return nullptr;
+  return (uint16_t*)heap_caps_calloc(n, 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+#else
+  return (uint16_t*)calloc(n, 2);
+#endif
+}
+
 static void path(int i, char* out, size_t n) { snprintf(out, n, "%s/%s", SHOTS_DIR, s_names[i]); }
 
 // In the display's byte order, as the map tiles are (UI_FLUSH_DMA: big-endian).
@@ -336,7 +351,7 @@ void UITask::buildGallery() {
   const int first = s_page * PAGE;
   const int cells = s_n - first < PAGE ? s_n - first : PAGE;
 
-  uint16_t* px = (uint16_t*)psramBuf<uint16_t>((size_t)cells * TW * TH);
+  uint16_t* px = bigBuf((size_t)cells * TW * TH);
   if (!px) { noteLabel(list, "Out of memory", THEME_FONT_BODY); return; }
   s_thumbs = px;
   s_cells = cells;
@@ -418,7 +433,7 @@ void UITask::galleryOpen(int i) {
   using namespace gallery;
   if (i < 0 || i >= s_n) return;
   s_dec.end();   // the view reads into the same rows: that thumbnail starts again after
-  if (!s_full) s_full = (uint16_t*)psramBuf<uint16_t>((size_t)SW * SH);
+  if (!s_full) s_full = bigBuf((size_t)SW * SH);
   if (!s_full) { showToast("Out of memory"); return; }
   if (s_view_img) lv_image_cache_drop(&s_fdsc);
   if (!decode(i, s_full, SW, SH, false)) {

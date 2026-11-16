@@ -132,6 +132,30 @@ public:
     if (_job_state != JOB_IDLE) _job_stale = true;   // rendered from what's gone
   }
 
+  // A tile is being decoded on the other core (into _spare, the task's then).
+  bool decoding() const { return _job_state == JOB_RUNNING; }
+
+  // The decoded tiles' buffers (3 MB once the map has been panned round) back
+  // to the heap, for a screen needing a large one: the map decodes them again
+  // when it's next shown. Not while decoding(); a tile finished meanwhile is
+  // thrown away. Only with the map off the screen: its images point at slots.
+  bool release() {
+    if (_job_state == JOB_RUNNING) return false;
+    _job_state = JOB_IDLE;
+    for (Slot& s : _slots) {
+      if (s.px) {
+        lv_image_cache_drop(&s.dsc);
+        free(s.px);
+        s.px = nullptr;
+      }
+      s.z = -1; s.used = 0; s.present = false;
+      s.dsc.data = nullptr; s.dsc.data_size = 0;
+    }
+    free(_spare);
+    _spare = nullptr;
+    return true;
+  }
+
 private:
   enum : uint8_t { JOB_IDLE, JOB_RUNNING, JOB_DONE };
   struct Job { TileProvider* src = nullptr; int16_t z = 0; int32_t x = 0, y = 0; bool present = false, overlay_missed = false; };
