@@ -102,6 +102,25 @@ struct Panel_WioTrackerL2 : public lgfx::Panel_NV3031B {
     _bus->wait();
     end_qspi();
   }
+#ifdef LCD_READ_TEST
+  // Experiment: a register read, framed like write_cmd() with read opcode `op`
+  // (0x03 / 0x0B), the answer on IO1 after `dummy` clocks.
+  uint32_t readReg(uint8_t op, uint8_t cmd, uint8_t dummy, uint8_t bits) {
+    startWrite();
+    cs_control(false);
+    _bus->writeCommand(op, 8);
+    _bus->writeCommand(0x00, 8);
+    _bus->writeCommand(cmd, 8);
+    _bus->writeCommand(0x00, 8);
+    _bus->wait();
+    _bus->beginRead(dummy);
+    uint32_t v = _bus->readData(bits);
+    _bus->endRead();
+    cs_control(true);
+    endWrite();
+    return v;
+  }
+#endif
 };
 
 class LGFX_WioTrackerL2 : public lgfx::LGFX_Device {

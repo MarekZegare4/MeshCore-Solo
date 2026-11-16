@@ -342,6 +342,26 @@ void UITask::loop() {
                   (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM), esp_get_idf_version());
   }
 #endif
+#if defined(LCD_READ_TEST) && defined(ESP32)
+  // Experiment: can the panel be read (0x0A power mode, 0x04 ID, 0x45 scanline)?
+  static bool lcd_done = false;
+  if (!lcd_done && millis() > 12000) {
+    lcd_done = true;
+    auto& p = display.panel();
+    for (uint8_t op : {0x03, 0x0B})
+      for (uint8_t dummy : {0, 1, 8}) {
+        uint32_t pm = p.readReg(op, 0x0A, dummy, 8), id = p.readReg(op, 0x04, dummy, 24);
+        Serial.printf("LCD op %02X dummy %u: 0A=%08lX 04=%08lX 45:", op, dummy, (unsigned long)pm, (unsigned long)id);
+        for (int i = 0; i < 12; i++) {
+          uint32_t t = micros();
+          uint32_t s = p.readReg(op, 0x45, dummy, 16);
+          Serial.printf(" %04lX@%lu", (unsigned long)s, (unsigned long)(t % 100000));
+          delayMicroseconds(1300);
+        }
+        Serial.println();
+      }
+  }
+#endif
 #if defined(UI_PERF_TEST) && defined(ESP32)
   perfWalk();   // PerfTest.h
 #endif
