@@ -66,6 +66,11 @@ delete it. When the open GPX has waypoints, **Add them to the device** puts
 them after the device's own, leaving out any already there and any past what
 the device holds (16, the Wio Tracker L2 64). A name is cut to 11 bytes.
 
+To add one by hand, type a name and its coordinates under the list and press
+**Add**: latitude, longitude in degrees, as a map app copies them
+(`50.06143, 19.93658`, or `50°03'41.1"N 19°56'11.7"E`). Without a name it is
+called `WP` and its number.
+
 ### Backup
 
 A backup holds the radio, the settings, Home's pages, the quick messages, the
