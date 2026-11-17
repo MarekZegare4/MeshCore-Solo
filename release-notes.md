@@ -28,7 +28,7 @@
 - **Waypoints:** **+ Mark here** at the end of the list. With a target set, Locator offers **Navigate**.
 
 **L2**
-- **Coverage map (MatterMap)**, voluntary and off by default. **Settings > Coverage map** records where the mesh is heard as you walk: every packet with your position and its signal, saved to the SD card and uploaded to [MatterMap](https://mattermeshos.com/coverage/) over your saved WiFi.
+- **Coverage map (MatterMap)**, voluntary and off by default. **Settings > Coverage map** records where the mesh is heard as you walk: every packet with your position and its signal, saved to the SD card and uploaded to [MatterMap](https://mattermeshos.com/coverage/), the coverage map by Andrea Quartararo ([MatterMesh OS](https://mattermeshos.com)), over your saved WiFi.
   - Nothing is recorded inside your **home zone**. Setting the zone also takes out points already recorded there.
   - **Delete recorded points** removes everything on the card.
   - See [Coverage map](https://github.com/MarekZegare4/MeshCore-Solo/blob/main/docs/solo/coverage-map.md).

@@ -96,4 +96,6 @@ Big thanks to [vanous](https://github.com/vanous), [marczykm](https://github.com
 
 RX power save is timed after [IoTThinks](https://github.com/IoTThinks)' [PowerSaving firmware](https://github.com/IoTThinks/MeshCore/tree/PowerSaving-v18).
 
+The coverage map is [MatterMap](https://mattermeshos.com/coverage/) by Andrea Quartararo ([MatterMesh OS](https://mattermeshos.com)).
+
 Built on upstream [MeshCore](https://github.com/meshcore-dev/MeshCore) and its [community](https://github.com/meshcore-dev/MeshCore/graphs/contributors).
