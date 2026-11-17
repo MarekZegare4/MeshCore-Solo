@@ -7,8 +7,8 @@ fixes to older versions.
 
 | Version | Supported |
 |---------|-----------|
-| 1.15+ | ✅ |
-| <1.15 | ❌ |
+| The latest Solo release | ✅ |
+| Older releases | ❌ |
 
 ## Reporting a Vulnerability
 
@@ -47,6 +47,8 @@ In scope:
   radio packets
 - Authentication or encryption bypasses
 - Vulnerabilities in the packet routing or path handling logic
+- On the device: the screen lock's PIN or the Bluetooth PIN got round from
+  the interface, the console or the companion protocol
 
 Out of scope:
 - Physical access attacks (e.g., JTAG, UART extraction of keys)
@@ -55,3 +57,8 @@ Out of scope:
 - Issues in third-party libraries (RadioLib, Crypto, etc.) — report those
   upstream
 - "Best practice" suggestions without a demonstrated attack path
+
+Something in the mesh itself (encryption, routing, the packet format) that
+stock MeshCore has too belongs to
+[MeshCore](https://github.com/meshcore-dev/MeshCore/security); report it
+there. If you aren't sure which it is, report it here.
