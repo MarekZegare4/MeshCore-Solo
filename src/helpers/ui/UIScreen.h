@@ -73,6 +73,9 @@ public:
   // the next row by default (lists wrap); a screen with tabs or pages says
   // KEY_RIGHT on its last row, so one click walks through everything.
   virtual char stepKey() { return KEY_DOWN; }
+  // Four buttons (UI_FOUR_BUTTONS): Up, the step back. Its own, not stepKey()
+  // turned round: on the first row of a page back is the previous page, not up.
+  virtual char stepBackKey() { return KEY_UP; }
   // One-button boards: the selected row is a value changed with left/right, so
   // a long press edits it (click +1, double -1, long done) instead of Enter.
   virtual bool valueRow() { return false; }

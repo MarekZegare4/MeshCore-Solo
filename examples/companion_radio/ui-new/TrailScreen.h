@@ -175,6 +175,16 @@ public:
     if (_view == V_LIST)    return _list_scroll < _list_max_scroll ? KEY_DOWN : KEY_RIGHT;
     return KEY_RIGHT;
   }
+  char stepBackKey() override {
+    if (_wp.active()) return KEY_UP;
+#if FEAT_ROUTES
+    if (_routes.active()) return KEY_UP;
+#endif
+    if (_action_menu.active) return KEY_UP;
+    if (_view == V_SUMMARY) return _summary_scroll > 0 ? KEY_UP : KEY_LEFT;
+    if (_view == V_LIST)    return _list_scroll > 0 ? KEY_UP : KEY_LEFT;
+    return KEY_LEFT;
+  }
   uint8_t editMode() override { return _wp.active() ? _wp.editMode() : EDIT_NONE; }
 
   bool handleInput(char c) override {

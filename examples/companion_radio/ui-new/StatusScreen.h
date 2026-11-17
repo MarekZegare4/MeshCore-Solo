@@ -497,6 +497,7 @@ public:
 
   // One button: a click scrolls the tab, then on to the next tab.
   char stepKey() override { return _reset_menu.active || _qr || _more ? KEY_DOWN : KEY_RIGHT; }
+  char stepBackKey() override { return _reset_menu.active || _qr || _more ? KEY_UP : KEY_LEFT; }
 
   bool handleInput(char c) override {
     if (_reset_menu.active) {

@@ -1517,7 +1517,11 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   _prefs.msg_wake = 1;           // a new message turns the screen on
   _prefs.dm_resend_count = 2;    // auto-resend on-device DMs twice by default
   memset(_prefs.dm_notif, 0, sizeof(_prefs.dm_notif));
+#ifdef DISPLAY_AUTO_OFF_SECS
+  _prefs.auto_off_secs = DISPLAY_AUTO_OFF_SECS;   // the build's own (a memory LCD: 0, never)
+#else
   _prefs.auto_off_secs = 15;    // 15 seconds auto-off by default
+#endif
   _prefs.clock_hide_seconds = Features::CLOCK_HIDE_SECONDS_DEFAULT ? 1 : 0;
   _prefs.eink_full_refresh_every = 2;   // e-ink: a full refresh every 10 partials, against ghosting
   _prefs.tz_offset_hours = 0;  // UTC by default

@@ -1570,6 +1570,12 @@ public:
     if (_route_pick || _pick_admin_target) return KEY_DOWN;
     return _sel + 1 < _count ? KEY_DOWN : KEY_RIGHT;
   }
+  char stepBackKey() override {
+    if (_confirm.active || _ping_menu.active || _menu.active || _detail) return KEY_UP;
+    if (_map) return KEY_LEFT;
+    if (_route_pick || _pick_admin_target) return KEY_UP;
+    return _sel > 0 ? KEY_UP : KEY_LEFT;
+  }
 
   bool handleInput(char c) override {
     // ── path view: modal; Add hands the Nodes list over for one repeater ──────

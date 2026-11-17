@@ -1687,6 +1687,13 @@ public:
     return KEY_RIGHT;
   }
 
+  char stepBackKey() override {
+    if (_tile_menu.active) return KEY_UP;
+    if (_page == HomePage::FAVOURITES && _fav_sel > 0) return KEY_PREV;
+    if (isQuickPage(_page) && _quick_sel > 0) return KEY_UP;
+    return KEY_LEFT;
+  }
+
   uint8_t editMode() override { return isQuickPage(_page) && _quick_edit ? EDIT_VALUE : EDIT_NONE; }
 
   bool handleInput(char c) override {
@@ -1726,7 +1733,8 @@ public:
       int row = _fav_sel / cols;
       if ((c == KEY_LEFT  || c == KEY_PREV) && col > 0)        { _fav_sel--;        return true; }
       if ((c == KEY_RIGHT || c == KEY_NEXT) && col < cols - 1) { _fav_sel++;        return true; }
-      if (c == KEY_NEXT && _task->oneButtonUi() && _fav_sel + 1 < NodePrefs::FAVOURITES_COUNT) { _fav_sel++; return true; }   // one button: on to the next row
+      if (c == KEY_NEXT && _task->stepUi() && _fav_sel + 1 < NodePrefs::FAVOURITES_COUNT) { _fav_sel++; return true; }   // one button: on to the next row
+      if (c == KEY_PREV && _task->stepUi() && _fav_sel > 0) { _fav_sel--; return true; }   // four buttons' Up: back to the row before
       if (c == KEY_UP    && row > 0)                            { _fav_sel -= cols; return true; }
       if (c == KEY_DOWN  && row < rows - 1)                     { _fav_sel += cols; return true; }
       if (c == KEY_CONTEXT_MENU) {

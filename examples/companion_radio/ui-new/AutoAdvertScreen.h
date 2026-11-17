@@ -43,6 +43,7 @@ public:
 
   // One button: the screen is one value; a click steps it.
   char stepKey() override { return KEY_RIGHT; }
+  char stepBackKey() override { return KEY_LEFT; }
 
   bool handleInput(char c) override {
     if (c == KEY_CANCEL) {

@@ -1,5 +1,12 @@
 #pragma once
 
+// Four buttons, Up/Down/OK/Back, no left/right (the Sharp devboard): Up/Down
+// step through each screen (stepBackKey() / stepKey()), OK on a value row
+// edits it with Up/Down.
+#ifndef UI_FOUR_BUTTONS
+  #define UI_FOUR_BUTTONS 0
+#endif
+
 #include <MeshCore.h>
 #include <helpers/ui/DisplayDriver.h>
 #include <helpers/ui/UIScreen.h>
@@ -576,6 +583,12 @@ public:
   // Not with a CardKB plugged in: its arrows and Enter drive it, hints as for a joystick.
   bool oneButtonUi() const { return (UI_ONE_BUTTON || _ob_used) && !hasCardKB(); }
   bool oneButtonEditing() const { return _ob_edit; }
+  // Stepping through screens with stepKey() / stepBackKey(): one button, or
+  // four (Up/Down/OK/Back).
+  bool stepUi() const { return oneButtonUi() || UI_FOUR_BUTTONS; }
+#if UI_FOUR_BUTTONS
+  void fourButtonStep(bool fwd);
+#endif
   bool lockHintShown() const { return _lock_seq_count > 0 || (_lock_hint_ms && millis() - _lock_hint_ms < 3000); }
   bool hasCardKB() const {
 #if defined(CARDKB_I2C)

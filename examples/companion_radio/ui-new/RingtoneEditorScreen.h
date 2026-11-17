@@ -74,6 +74,7 @@ public:
   static const int SCALE_N = (soundctl::OCT_MAX - soundctl::OCT_MIN + 1) * 7 + 1;
 
   char stepKey() override { return _menu.active ? KEY_DOWN : KEY_RIGHT; }   // the menu: its rows
+  char stepBackKey() override { return _menu.active ? KEY_UP : KEY_LEFT; }
   uint8_t editMode() override { return _ob_note && !_menu.active ? EDIT_VALUE : EDIT_NONE; }
 
   void openMenu() {

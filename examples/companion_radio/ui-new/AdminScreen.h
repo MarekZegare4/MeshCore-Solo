@@ -227,6 +227,10 @@ public:
     if (!listInFront()) return KEY_DOWN;
     return _row_sel + 1 < admin::rowCount(_tab) ? KEY_DOWN : KEY_RIGHT;
   }
+  char stepBackKey() override {
+    if (!listInFront()) return KEY_UP;
+    return _row_sel > 0 ? KEY_UP : KEY_LEFT;
+  }
   uint8_t editMode() override {
     if (!_value_editing || _kb_active) return EDIT_NONE;
     const admin::Field* f = S().currentField();

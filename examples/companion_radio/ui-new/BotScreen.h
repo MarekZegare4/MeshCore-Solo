@@ -207,6 +207,10 @@ public:
     const int n = botcfg::isLog(_tab) ? the_mesh.botLog().count() : botcfg::rowCount(_tab);
     return _sel + 1 < n ? KEY_DOWN : KEY_RIGHT;
   }
+  char stepBackKey() override {
+    if (_kb_row >= 0 || _cmd_off || _stepper_row >= 0) return KEY_UP;
+    return _sel > 0 ? KEY_UP : KEY_LEFT;
+  }
   uint8_t editMode() override { return _stepper_row >= 0 && _kb_row < 0 ? EDIT_VALUE : EDIT_NONE; }
 
   bool handleInput(char c) override {

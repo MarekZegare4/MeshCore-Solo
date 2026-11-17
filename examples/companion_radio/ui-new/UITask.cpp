@@ -12,6 +12,8 @@
 // One button's click, queued as this and turned into the screen's stepKey() as
 // it is handed over: the screen decides then, from where its selection is.
 static const char KEY_STEP = (char)0xF4;
+// Four buttons (UI_FOUR_BUTTONS): Up, the screen's stepBackKey().
+static const char KEY_STEP_BACK = (char)0xF5;
 #include "target.h"
 
 #include "CardKB.h"
@@ -1585,6 +1587,17 @@ void UITask::loop() {
         _lock_seq_count = 0;
         _lock_seq_ms = 0;
       }
+#if UI_FOUR_BUTTONS
+      // No left/right: OK on a value row edits it with Up/Down, OK again done.
+      if (_ob_edit) { _ob_edit = false; checkDisplayOn(0); _next_refresh = 0; return; }
+      if (_display && _display->isOn() && !_locked && curr && !_kb.isVisible()
+          && _kq_head == _kq_tail && curr->valueRow()) {
+        checkDisplayOn(0);
+        _ob_edit = true;
+        _next_refresh = 0;
+        return;
+      }
+#endif
       enqueueKey(checkDisplayOn(KEY_ENTER));
     }
   };
@@ -1612,7 +1625,10 @@ void UITask::loop() {
   // Drain each direction fully: a burst of taps captured during a blocking
   // refresh replays as several CLICKs, queued here and applied before one
   // redraw (see enqueueKey / the dispatch at the end of loop()).
-#if UI_HAS_JOYSTICK_UPDOWN
+#if UI_FOUR_BUTTONS
+  while (joystick_up.check() == BUTTON_EVENT_CLICK)   fourButtonStep(false);
+  while (joystick_down.check() == BUTTON_EVENT_CLICK) fourButtonStep(true);
+#elif UI_HAS_JOYSTICK_UPDOWN
   while (joystick_up.check() == BUTTON_EVENT_CLICK)
     enqueueKey(checkDisplayOn(rotateJoystickKey(KEY_UP, joy_rot)));
   while (joystick_down.check() == BUTTON_EVENT_CLICK)
@@ -1655,6 +1671,10 @@ void UITask::loop() {
       _lock_seq_count = 0;
       _lock_seq_used = false;
     } else {
+#if UI_FOUR_BUTTONS
+      if (_ob_edit) { _ob_edit = false; checkDisplayOn(0); _next_refresh = 0; }
+      else
+#endif
       enqueueKey(checkDisplayOn(KEY_CANCEL));
     }
   } else if (ev == BUTTON_EVENT_TRIPLE_CLICK) {
@@ -1852,7 +1872,8 @@ void UITask::loop() {
       // Apply the whole queued burst, then redraw once — N taps captured during
       // a blocking refresh become N navigation steps at the cost of one refresh.
       char k;
-      while (dequeueKey(k)) curr->handleInput(k == KEY_STEP ? curr->stepKey() : k);
+      while (dequeueKey(k))
+        curr->handleInput(k == KEY_STEP ? curr->stepKey() : k == KEY_STEP_BACK ? curr->stepBackKey() : k);
       { uint32_t aoff = autoOffMillis(); if (aoff > 0) _auto_off = millis() + aoff; }  // extend auto-off timer
       // Note timing no longer depends on render cadence (TIMER1 IRQ advances
       // notes directly — see buzzer.cpp), so a redraw right after a keypress
@@ -2241,6 +2262,22 @@ void UITask::oneButtonGesture(OneButton::Gesture g) {
     default: enqueueKey(handleLongPress(KEY_ENTER)); break;   // very long: the context menu (CLI rescue at boot)
   }
 }
+
+#if UI_FOUR_BUTTONS
+// Up (fwd false) / Down on a four-button board: a value being edited -/+, the
+// keyboard or PIN pad as on the one-button strip, otherwise the screen's own
+// next step (stepKey()) or its step back (stepBackKey()).
+void UITask::fourButtonStep(bool fwd) {
+  const uint8_t em = _kb.isVisible() || _unlock_kb ? UIScreen::EDIT_DIGITS
+                   : curr ? curr->editMode() : UIScreen::EDIT_NONE;
+  char k;
+  if (em == UIScreen::EDIT_DIGITS)                  k = fwd ? KEY_DOWN : KEY_UP;
+  else if (_ob_edit || em == UIScreen::EDIT_VALUE)  k = fwd ? KEY_LEFT : KEY_RIGHT;
+  else                                              k = fwd ? KEY_STEP : KEY_STEP_BACK;
+  enqueueKey(checkDisplayOn(k));
+  _next_refresh = 0;
+}
+#endif
 
 // The edit mode's cue: "-/+" in a box at the bottom right, over the screen.
 void UITask::renderEditCue() {

@@ -2111,6 +2111,12 @@ public:
     if (_phase == CHANNEL_HIST && _fs.active) return _fs.stepKey();
     return KEY_DOWN;
   }
+  char stepBackKey() override {
+    if (_ch_view.active() || _ctx_menu.active) return KEY_UP;
+    if (_phase == DM_HIST && _dm_fs.active) return _dm_fs.stepBackKey();
+    if (_phase == CHANNEL_HIST && _fs.active) return _fs.stepBackKey();
+    return KEY_UP;
+  }
 
   bool handleInput(char c) override {
     // Channel Add/Edit form consumes all input while active.
