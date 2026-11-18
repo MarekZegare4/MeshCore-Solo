@@ -163,13 +163,14 @@ so its documentation applies:
 | `rxdelay`, `int.thresh`, `cad`, `radio.rxgain`, `path.hash.mode`, `multi.acks` | The advanced radio options, with `get` / `set` |
 | `txdelay`, `direct.txdelay` | How long a repeated packet waits, as a share of its airtime (0–2; 0.5 and 0.2 by default), with `get` / `set` |
 | `agc.reset.interval` | Seconds between radio gain resets (in steps of 4, `0` off), with `get` / `set` |
+| `get radio.fem.rxgain`, `set radio.fem.rxgain on` | Heltec V4 only: the extra receive amplifier in front of the radio, `on` / `off` |
 | `get name`, `set name …` | The device name |
 | `get pin`, `set pin 123456` | The Bluetooth PIN, `0` for a random one; used from the next start |
 | `get tz.offset`, `set tz.offset 1` | Time zone, in hours from UTC (the winter one when summer time is on) |
 | `clock`, `time 2026-11-14 12:30`, `time 1794655800` | The local date and time; set it as local time or as seconds since 1970 (UTC), back too |
 | `get lat`, `set lat …`, `get lon`, `set lon …` | The fixed position |
 | `ver`, `board` | Firmware version, hardware |
-| `reboot`, `poweroff` | Restart or turn off |
+| `reboot`, `poweroff` (or `shutdown`) | Restart or turn off |
 
 Every other setting has a key: `keys` lists them a page at a time (`keys 2`,
 `keys 3` …). `get` shows a value as the Settings screen does, and `set`
@@ -197,5 +198,6 @@ settings key:
 | --- | --- |
 | `msgs`, `get msg.3`, `set msg.3 …`, `set msg.3` | The quick messages, numbered from 1; the last empties one |
 | `get melody.1`, `set melody.1 120 292a2b` | A melody of the Ringtone editor: BPM and a hex byte a note |
+| `wpts`, `get wpt.2`, `set wpt.2 50.061,19.937 Camp`, `set wpt.2` | The waypoints, numbered from 1 as the list shows them: `wpts` says how many there are and how many fit; `set` replaces one, or adds one with the number after the last; the last form deletes it, and the ones after move up |
 | `pages`, `set pages Clock, Messages, Status` | Home's pages in order; the ones left out are hidden (not on the L2) |
 | `batch on` … `batch off` | The `set`s in between are saved once, at `batch off` (or 5 s after the last command): a configurator's backup put back in seconds, not minutes |
