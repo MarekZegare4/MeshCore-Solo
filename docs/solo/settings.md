@@ -206,6 +206,10 @@ else a contact's), and `share.scope` (`Target's` follows the target, or a
 name from the scope list); the channels' own options, as lists of names:
 `channels.favourite`, `channels.muted`, `channels.always` (a sound even in
 quiet hours) and, where messages are kept on flash, `channels.unsaved`.
+What is switched on: `gps`, `share` (live share, a session as from the
+Map), `bluetooth`, `sound` (`On`, `Off`, `Auto`); on the L1 `trail.pace`;
+on the L2 `display.tap.wake`, `display.accent` and `display.theme`
+(changing it restarts the device).
 `opts` marks
 a text `#text:<max bytes>` and a list or a name to pick `#list` / `#pick`,
 with the choices after it (`...` when they don't all fit). `get` shows a value as the Settings screen does, and `set`

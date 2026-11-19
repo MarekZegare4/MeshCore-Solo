@@ -42,7 +42,7 @@ enum Section : uint8_t { SEC_TRAIL, SEC_LIVE_SHARE, SEC_LOCATOR, SEC_MAP_VIEW, S
                          SEC_BOT_CH1, SEC_BOT_CH2, SEC_BOT_ROOM, SEC_BOT_DM, SEC_BOT_OTHER,
                          SEC_SOS_START, SEC_SOS_TO, SEC_SOS_RUN,
                          SEC_ALARM, SEC_COVERAGE, SEC_GPIO,
-                         SEC_SCREEN, SEC_KEYBOARD, SEC_CHATS, SEC_RX, SEC_COUNT };
+                         SEC_SCREEN, SEC_KEYBOARD, SEC_CHATS, SEC_RX, SEC_FEATURES, SEC_COUNT };
 
 static const char* pageTitle(uint8_t p) {
   static const char* T[PG_COUNT] = { "Map options", "Advert", "Display & power", "Messages & contacts", "Sound",
@@ -60,7 +60,7 @@ static const char* sectionTitle(uint8_t s) {
                                       "CHANNEL BOT 1", "CHANNEL BOT 2", "ROOM", "DIRECT MESSAGES", "OTHER",
                                       "START", "SENT TO", "WHILE IT RUNS",
                                       "ALARM", "COVERAGE", "GPIO",
-                                      "SCREEN", "KEYBOARD", "IN THE CHAT LIST", "RADIO" };
+                                      "SCREEN", "KEYBOARD", "IN THE CHAT LIST", "RADIO", "ON / OFF" };
   return s < SEC_COUNT ? T[s] : "";
 }
 static uint8_t sectionPage(uint8_t s) {
@@ -73,7 +73,7 @@ static uint8_t sectionPage(uint8_t s) {
                                         PG_BOT, PG_BOT, PG_BOT, PG_BOT, PG_BOT,
                                         PG_SOS, PG_SOS, PG_SOS,
                                         PG_TOOLS, PG_TOOLS, PG_TOOLS,
-                                        PG_MORE, PG_MORE, PG_MORE, PG_MORE };
+                                        PG_MORE, PG_MORE, PG_MORE, PG_MORE, PG_MORE };
   return s < SEC_COUNT ? P[s] : PG_DEVICE;
 }
 
@@ -315,6 +315,9 @@ static void applyBrightness(UiCore& c) {
 #else
 static void applyBrightness(UiCore& c)   { c.host()->applyDisplayPrefs(); }
 #endif
+// The field is written already: the GPS powered to match, sharing begun or ended.
+static void applyGps(UiCore& c)          { if (c.prefs()) c.setGpsEnabled(c.prefs()->gps_enabled, false); }
+static void applyShare(UiCore& c)        { if (c.prefs()) c.live_share.setEnabled(c.prefs()->loc_share_enabled); }
 #if FEAT_RX_POWERSAVE
 static void applyPowerSave(UiCore& c)    { if (c.prefs()) rptctl::applyPowerSave(c.prefs()); }   // stays off while repeating
 #endif
@@ -531,6 +534,9 @@ static const Setting ALL[] = {
 #if FEAT_JOYSTICK_ROTATION_SETTING
   IDX("Joystick", "Its directions turned by", SEC_SCREEN, joystick_rotation, 4, optJoystick, nullptr),
 #endif
+#ifndef LV_CONF_INCLUDE_SIMPLE   // ui-new's trail screen
+  SW("Pace on the trail", "Min per km beside the speed", SEC_SCREEN, trail_show_pace, nullptr),
+#endif
 #if FEAT_FULL_REFRESH_SETTING
   IDX("Full refresh", "Clears the ghosting of partial ones", SEC_SCREEN, eink_full_refresh_every, 5,
       optFullRefresh, applyDisplay),
@@ -548,6 +554,9 @@ static const Setting ALL[] = {
   MAP("Direct messages", nullptr, SEC_CHATS, dm_show_all, INVERTED, optAllFav, nullptr),
   IDX("Channels", nullptr, SEC_CHATS, ch_fav_only, 2, optAllFav, nullptr),
   IDX("Rooms", nullptr, SEC_CHATS, room_fav_only, 2, optAllFav, nullptr),
+  // Bluetooth, the sound's On / Off / Auto: SettingsCli's, through the frontend.
+  SW("GPS", "Off: the fixed position in adverts", SEC_FEATURES, gps_enabled, applyGps),
+  SW("Live share", "Your position, sent while you move", SEC_FEATURES, loc_share_enabled, applyShare),
 #if FEAT_RX_POWERSAVE
   IDX("RX power save", "Off while repeating; Max misses nodes before v1.16", SEC_RX, rx_powersave, 3,
       optPowerSave, applyPowerSave),

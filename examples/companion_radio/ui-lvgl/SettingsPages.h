@@ -139,6 +139,50 @@ void UITask::setTapWake(bool on) {
   lvport::saveTapWake(on);
 }
 
+// The console's keys for what this frontend keeps or applies itself
+// (UiCoreHost::FrontKey).
+int UITask::frontValue(uint8_t k) {
+  switch (k) {
+    case FK_BLUETOOTH: return isBluetoothEnabled() ? 0 : 1;
+#ifdef PIN_BUZZER
+    case FK_SOUND:     return _prefs ? soundctl::mode(_prefs) : -1;
+#endif
+    case FK_TAP_WAKE:  return _tap_wake ? 0 : 1;
+    case FK_THEME:     return theme::s_light ? 1 : 0;
+    case FK_ACCENT:    return theme::s_accent;
+  }
+  return -1;
+}
+const char* UITask::frontChoice(uint8_t k, int i) {
+  static const char* const ON_OFF[] = { "On", "Off" };
+  static const char* const THEMES[] = { "Dark", "Light" };
+  if (i < 0) return nullptr;
+  switch (k) {
+    case FK_BLUETOOTH: case FK_TAP_WAKE: return i < 2 ? ON_OFF[i] : nullptr;
+    case FK_SOUND:  return i < soundctl::MODE_COUNT ? soundctl::modeLabel((uint8_t)i) : nullptr;
+    case FK_THEME:  return i < 2 ? THEMES[i] : nullptr;
+    case FK_ACCENT: return i < theme::ACCENT_COUNT ? theme::ACCENTS[i].name : nullptr;
+  }
+  return nullptr;
+}
+// A new theme restarts the device, as from Settings > Display: a moment after
+// the console's "OK" has gone out.
+static void restartForTheme(lv_timer_t* t) {
+  lv_timer_delete(t);
+  restartScreen(theme::s_light ? "Starting in the dark theme." : "Starting in the light theme.");
+}
+void UITask::setFrontValue(uint8_t k, int v) {
+  switch (k) {
+    case FK_BLUETOOTH: if (v == 0) enableBluetooth(); else disableBluetooth(); break;
+    case FK_SOUND:     setSoundMode(v); break;
+    case FK_TAP_WAKE:  setTapWake(v == 0); break;
+    case FK_THEME:
+      if ((v == 1) != theme::s_light) { lvport::saveLight(v == 1); lv_timer_create(restartForTheme, 300, NULL); }
+      break;
+    case FK_ACCENT:    setAccent(v); break;
+  }
+}
+
 static void onClockSet(lv_event_t* e)     { (void)e; s_ui->clockSetPopup(); }
 
 void UITask::buildSchemaSettings() {

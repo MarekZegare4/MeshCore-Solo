@@ -81,6 +81,9 @@ public:
   void onSosRunning(bool running) override;
   int battPercent() override;
   bool cliCommand(const char* command, char* reply, int n) override;
+  int frontValue(uint8_t k) override;   // Bluetooth, sound, tap to wake, theme, accent (SettingsCli)
+  const char* frontChoice(uint8_t k, int i) override;
+  void setFrontValue(uint8_t k, int v) override;
 
   // ── Navigation (called from LVGL event callbacks) ────────────────────────
   void showHome();

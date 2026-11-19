@@ -34,7 +34,10 @@ enum XId : uint8_t {
   XS_CHANNELS, XS_DM1, XS_DM2, XS_DM3, XS_MSG, XS_ACK,
   XA_TIME, XA_DAYS, XC_HOME,
   XL_TO, XL_SCOPE, XN_FAV, XN_UNSAVED, XN_MUTED, XN_ALWAYS,
+  XF_FIRST, XF_LAST = XF_FIRST + UiCoreHost::FK_COUNT - 1,   // the frontend's (UiCoreHost::FrontKey), in its order
 };
+static bool frontKey(uint8_t id) { return id >= XF_FIRST && id <= XF_LAST; }
+static UiCoreHost* s_host = nullptr;   // the frontend, for its keys (set by handle())
 struct XKey { uint8_t section; const char* label; uint8_t kind; };
 static const XKey XKEYS[] = {
   { settings::SEC_BOT_CH1, "Channel", XK_PICK }, { settings::SEC_BOT_CH1, "Allowed", XK_LIST },
@@ -53,7 +56,11 @@ static const XKey XKEYS[] = {
   { settings::SEC_LIVE_SHARE, "Share to", XK_PICK }, { settings::SEC_LIVE_SHARE, "Scope", XK_PICK },
   { settings::SEC_CHATS, "Favourite channels", XK_LIST }, { settings::SEC_MESSAGES, "Channels not kept", XK_LIST },
   { settings::SEC_SOUND_FOR, "Muted channels", XK_LIST },  { settings::SEC_SOUND_FOR, "Channels always heard", XK_LIST },
+  { settings::SEC_FEATURES, "Bluetooth", XK_PICK },  { settings::SEC_FEATURES, "Sound", XK_PICK },
+  { settings::SEC_SCREEN, "Tap to wake", XK_PICK },   { settings::SEC_SCREEN, "Theme", XK_PICK },
+  { settings::SEC_SCREEN, "Accent colour", XK_PICK },
 };
+static_assert(sizeof(XKEYS) / sizeof(XKEYS[0]) == XF_LAST + 1, "an XKEYS row for each XId");
 static const Key KEYS[] = {
   K("advert.interval", advert_auto_interval_sec), K("advert.loc", advert_loc_policy),
   K("advert.loc.precision", advert_loc_prec),
@@ -111,6 +118,10 @@ static const Key KEYS[] = {
   K("keyboard.additional", keyboard_alt_alphabet), K("keyboard.cardkb", keyboard_cardkb_compact),
   K("chats.dm", dm_show_all), K("chats.channels", ch_fav_only), K("chats.rooms", room_fav_only),
   K("radio.powersave", rx_powersave),
+  K("gps", gps_enabled), K("share", loc_share_enabled), K("trail.pace", trail_show_pace),
+  KX("bluetooth", XF_FIRST + UiCoreHost::FK_BLUETOOTH), KX("sound", XF_FIRST + UiCoreHost::FK_SOUND),
+  KX("display.tap.wake", XF_FIRST + UiCoreHost::FK_TAP_WAKE), KX("display.theme", XF_FIRST + UiCoreHost::FK_THEME),
+  KX("display.accent", XF_FIRST + UiCoreHost::FK_ACCENT),
   KX("share.to", XL_TO), KX("share.scope", XL_SCOPE), KX("channels.favourite", XN_FAV),
 #ifdef HIST_FLASH   // the flash log is what a channel is kept out of
   KX("channels.unsaved", XN_UNSAVED),
@@ -255,6 +266,12 @@ static const char* const SCOPE_TARGET = "Target's";
 // A pick's choices by index (channels by slot, rooms in the contact list's
 // order; live share's target the channels, then the chat contacts).
 static bool xPickName(uint8_t id, int i, char* out, size_t n) {
+  if (frontKey(id)) {
+    const char* c = s_host ? s_host->frontChoice(id - XF_FIRST, i) : nullptr;
+    if (!c) return false;
+    snprintf(out, n, "%s", c);
+    return true;
+  }
   if (id == XB_ROOM || (id >= XS_DM1 && id <= XS_DM3)) return nthContact(id == XB_ROOM ? ADV_TYPE_ROOM : ADV_TYPE_CHAT, i, out, n);
   if (id == XL_TO) {
     const int nch = channelCount();
@@ -269,6 +286,7 @@ static bool xPickName(uint8_t id, int i, char* out, size_t n) {
   return nthChannel(i, out, n);
 }
 static bool xPickGet(const NodePrefs* p, uint8_t id, char* out, size_t n) {
+  if (frontKey(id)) return s_host && xPickName(id, s_host->frontValue(id - XF_FIRST), out, n);
   if (id == XB_ROOM || (id >= XS_DM1 && id <= XS_DM3))
     return contactName(id == XB_ROOM ? p->bot_room_prefix : p->sos_dm[id - XS_DM1], out, n);
   if (id == XL_TO && p->loc_share_target_type == 1) return contactName(p->loc_share_dm_prefix, out, n);
@@ -285,6 +303,12 @@ static bool xPickGet(const NodePrefs* p, uint8_t id, char* out, size_t n) {
 }
 // Picks by name (case ignored); false when there is none of that name.
 static bool xPickSet(NodePrefs* p, uint8_t id, const char* name) {
+  if (frontKey(id)) {
+    char nm[24];
+    for (int i = 0; xPickName(id, i, nm, sizeof(nm)); i++)
+      if (!strcasecmp(nm, name)) { s_host->setFrontValue(id - XF_FIRST, i); return true; }
+    return false;
+  }
   if (id == XB_ROOM || xDm(p, id)) {
     uint8_t* key = id == XB_ROOM ? p->bot_room_prefix : xDm(p, id);
     if (!strcasecmp(name, "none")) { memset(key, 0, NodePrefs::FAVOURITE_PREFIX_LEN); return true; }
@@ -423,6 +447,8 @@ static void xOpts(NodePrefs* p, uint8_t id, char* reply, int n) {
 static bool hereKey(UiCore& core, const Key& k) {
   if (!strncmp(k.key, "coverage", 8)) return core.coverage.available();
   if (!strncmp(k.key, "keyboard.", 9)) return !core.host() || core.host()->hasKeyboard();
+  if (!strcmp(k.key, "gps")) return core.gpsAvailable();
+  if (k.offset == XKEY && frontKey(k.bit)) return core.host() && core.host()->frontValue(k.bit - XF_FIRST) >= 0;
   return true;
 }
 
@@ -678,6 +704,7 @@ static bool repeaterScopes(NodePrefs* p, const char* cmd, char* reply, int n) {
 static bool handle(UiCore& core, const char* cmd, char* reply, int n) {
   NodePrefs* p = core.prefs();
   if (!p) return false;
+  s_host = core.host();
   if (quickMessages(p, cmd, reply, n)) return true;
   if (melodies(p, cmd, reply, n)) return true;
   if (waypoints(core, cmd, reply, n)) return true;

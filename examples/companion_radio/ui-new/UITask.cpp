@@ -2675,6 +2675,35 @@ static bool homePagesCli(NodePrefs* p, const char* cmd, char* reply, int n) {
 }
 
 // The companion CLI's settings keys (ui-core/SettingsCli.h), and Home's pages.
+// The console's keys for what this frontend applies itself (UiCoreHost::FrontKey).
+int UITask::frontValue(uint8_t k) {
+  switch (k) {
+#ifdef BLE_PIN_CODE   // not on a board without Bluetooth (the Sharp's ESP-NOW build)
+    case FK_BLUETOOTH: return isBluetoothEnabled() ? 0 : 1;
+#endif
+#ifdef PIN_BUZZER
+    case FK_SOUND: return getBuzzerMode();
+#endif
+  }
+  return -1;
+}
+const char* UITask::frontChoice(uint8_t k, int i) {
+  static const char* const ON_OFF[] = { "On", "Off" };
+  if (k == FK_BLUETOOTH) return i >= 0 && i < 2 ? ON_OFF[i] : nullptr;
+  if (k == FK_SOUND) return i >= 0 && i < soundctl::MODE_COUNT ? soundctl::modeLabel((uint8_t)i) : nullptr;
+  return nullptr;
+}
+void UITask::setFrontValue(uint8_t k, int v) {
+  if (k == FK_BLUETOOTH) { if (v == 0) enableBluetooth(); else disableBluetooth(); }
+#ifdef PIN_BUZZER
+  if (k == FK_SOUND && _node_prefs) {
+    soundctl::setMode(_node_prefs, buzzer, (uint8_t)v, isClientConnected());
+    if (v == soundctl::MODE_ON) notify(UIEventType::ack);
+  }
+#endif
+  _next_refresh = 0;
+}
+
 bool UITask::cliCommand(const char* command, char* reply, int n) {
 #ifdef SOLO_TEST_HOOKS
   if (testCli(command, reply, n)) return true;
