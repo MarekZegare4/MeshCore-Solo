@@ -25,19 +25,21 @@ namespace settings {
 // PG_NAV is the Map's options (its trail / live share / target tools),
 // PG_ADVERT sits in Nearby's advert popup; the rest are Settings pages.
 // PG_PRIVACY and PG_RADIO (Radio's advanced options) are Settings pages too.
-// PG_REPEATER is for the console and the configurator (issue #62): the
-// frontends have their own Repeater screens over ui-core/RepeaterControl.h.
-enum Page : uint8_t { PG_NAV, PG_ADVERT, PG_DEVICE, PG_MESSAGES, PG_SOUND, PG_PRIVACY, PG_RADIO, PG_REPEATER, PG_COUNT };
+// PG_REPEATER and PG_BOT are for the console and the configurator (issue #62):
+// the frontends have their own Repeater and Bot screens (RepeaterControl.h,
+// BotConfig.h). The bot's texts, targets and command lists are SettingsCli's.
+enum Page : uint8_t { PG_NAV, PG_ADVERT, PG_DEVICE, PG_MESSAGES, PG_SOUND, PG_PRIVACY, PG_RADIO, PG_REPEATER, PG_BOT, PG_COUNT };
 enum Section : uint8_t { SEC_TRAIL, SEC_LIVE_SHARE, SEC_LOCATOR, SEC_MAP_VIEW, SEC_ADVERT,
                          SEC_DISPLAY, SEC_POWER, SEC_TIME, SEC_UNITS,
                          SEC_MESSAGES, SEC_CONTACTS, SEC_AUTO_ADD,
                          SEC_SOUND, SEC_SOUND_FOR, SEC_QUIET,
                          SEC_PRIVACY, SEC_TELEMETRY, SEC_RADIO_ADV,
-                         SEC_RPT, SEC_RPT_RELAYS, SEC_COUNT };
+                         SEC_RPT, SEC_RPT_RELAYS,
+                         SEC_BOT_CH1, SEC_BOT_CH2, SEC_BOT_ROOM, SEC_BOT_DM, SEC_BOT_OTHER, SEC_COUNT };
 
 static const char* pageTitle(uint8_t p) {
   static const char* T[PG_COUNT] = { "Map options", "Advert", "Display & power", "Messages & contacts", "Sound",
-                                     "Privacy", "Advanced radio", "Repeater" };
+                                     "Privacy", "Advanced radio", "Repeater", "Bot" };
   return p < PG_COUNT ? T[p] : "";
 }
 static const char* sectionTitle(uint8_t s) {
@@ -46,7 +48,8 @@ static const char* sectionTitle(uint8_t s) {
                                       "MESSAGES", "CONTACTS", "ADDING CONTACTS",
                                       "SOUND", "PLAYS FOR", "QUIET HOURS",
                                       "ADVERTS", "WHO CAN ASK FOR", "ADVANCED",
-                                      "REPEATER", "WHAT IT RELAYS" };
+                                      "REPEATER", "WHAT IT RELAYS",
+                                      "CHANNEL BOT 1", "CHANNEL BOT 2", "ROOM", "DIRECT MESSAGES", "OTHER" };
   return s < SEC_COUNT ? T[s] : "";
 }
 static uint8_t sectionPage(uint8_t s) {
@@ -55,7 +58,8 @@ static uint8_t sectionPage(uint8_t s) {
                                         PG_MESSAGES, PG_MESSAGES, PG_MESSAGES,
                                         PG_SOUND, PG_SOUND, PG_SOUND,
                                         PG_PRIVACY, PG_PRIVACY, PG_RADIO,
-                                        PG_REPEATER, PG_REPEATER };
+                                        PG_REPEATER, PG_REPEATER,
+                                        PG_BOT, PG_BOT, PG_BOT, PG_BOT, PG_BOT };
   return s < SEC_COUNT ? P[s] : PG_DEVICE;
 }
 
@@ -234,6 +238,10 @@ static void optRptSnr(uint8_t v, char* b, int n, const NodePrefs&) {
 }
 static void optRptNet(uint8_t v, char* b, int n, const NodePrefs&) { snprintf(b, n, "%s", v ? "Custom" : "Current"); }
 
+// The bot's: who (a favourites-only flag), and the reply gap.
+static void optAllFav(uint8_t v, char* b, int n, const NodePrefs&) { snprintf(b, n, "%s", v ? "Favourites" : "All"); }
+static void optBotGap(uint8_t v, char* b, int n, const NodePrefs&) { fmtSecs(b, n, NodePrefs::botGapSecs(v), "Off"); }
+
 // ── Side effects ──────────────────────────────────────────────────────────────
 static void rearmLocator(UiCore& c)      { c.locator.reset(); }
 static void restartShareClock(UiCore& c) { c.live_share.restartClock(); }   // a new length starts over
@@ -380,6 +388,25 @@ static const Setting ALL[] = {
   MAP("Min SNR (dB)", "Ignore weaker packets", SEC_RPT_RELAYS, repeat_min_snr, RPT_SNR, optRptSnr, nullptr),
   SW("Skip duplicates", "Skip if already relayed", SEC_RPT_RELAYS, repeat_suppress_dup, nullptr),
   SW("Scope only", "Only floods in your scopes", SEC_RPT_RELAYS, repeat_scope_only, nullptr),
+
+  SW("Enable", "Answer on its channel", SEC_BOT_CH1, bot_channel_enabled, nullptr),
+  SW("Commands", "!ping, !help, ...", SEC_BOT_CH1, bot_commands_ch, nullptr),
+  SW("Actions", "!gps, !gpio (this device)", SEC_BOT_CH1, bot_actions_ch, nullptr),
+  SW("Enable", "Answer on its channel", SEC_BOT_CH2, bot_ch2_enabled, nullptr),
+  SW("Commands", "!ping, !help, ...", SEC_BOT_CH2, bot_commands_ch2, nullptr),
+  SW("Actions", "!gps, !gpio (this device)", SEC_BOT_CH2, bot_actions_ch2, nullptr),
+  SW("Enable", "Answer in one room server", SEC_BOT_ROOM, bot_room_enabled, nullptr),
+  SW("Commands", "!ping, !help, ...", SEC_BOT_ROOM, bot_commands_room, nullptr),
+  SW("Actions", "!gps, !gpio (this device)", SEC_BOT_ROOM, bot_actions_room, nullptr),
+  SW("Enable", "Answer direct messages", SEC_BOT_DM, bot_enabled, nullptr),
+  IDX("DM allow", "Everyone, or favourites only", SEC_BOT_DM, bot_dm_scope, 2, optAllFav, nullptr),
+  IDX("Position", "Favourites: only they get it", SEC_BOT_DM, bot_pos_scope, 2, optAllFav, nullptr),
+  SW("Commands", "!ping, !help, ...", SEC_BOT_DM, bot_commands_enabled, nullptr),
+  SW("Actions", "!gps, !gpio (this device)", SEC_BOT_DM, bot_actions_dm, nullptr),
+  IDX("Quiet from", "No replies in these hours", SEC_BOT_OTHER, bot_quiet_start, 24, optHour, nullptr),
+  IDX("Quiet to", "Same hour = always on", SEC_BOT_OTHER, bot_quiet_end, 24, optHour, nullptr),
+  IDX("Actions by", "Favourites only: a channel name can be faked", SEC_BOT_OTHER, bot_actions_scope, 2, optAllFav, nullptr),
+  IDX("Reply gap", "On the channel and in the room", SEC_BOT_OTHER, bot_gap_idx, NodePrefs::BOT_GAP_COUNT, optBotGap, nullptr),
 };
 static const int COUNT = (int)(sizeof(ALL) / sizeof(ALL[0]));
 

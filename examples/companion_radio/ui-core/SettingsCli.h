@@ -9,12 +9,40 @@
 
 #include "SettingsSchema.h"
 #include "Battery.h"
+#include "BotCommands.h"
 
 namespace settingscli {
 
 struct Key { const char* key; uint16_t offset; uint8_t bit; };
 #define K(name, f)        { name, (uint16_t)offsetof(NodePrefs, f), 0 }
 #define KB(name, f, mask) { name, (uint16_t)offsetof(NodePrefs, f), mask }
+#define KX(name, id)      { name, XKEY, id }   // not a schema row: XKEYS[id]
+static const uint16_t XKEY = 0xFFFF;
+
+// Keys the schema has no row kind for (#62): a text (a bot's trigger and
+// reply), a list of names picked from a set (the commands a bot answers), or
+// one name picked (the channel or room a bot answers in). "opts" gives them as
+// "> Page/SECTION|Label|#text:<max bytes>", "...|#list|a|b|c" or
+// "...|#pick|a|b|c" -- the value is "get"'s, a text being too long to fit
+// beside the rest -- and "set" takes the text, "a,b" or a name.
+enum XKind : uint8_t { XK_TEXT, XK_LIST, XK_PICK };
+enum XId : uint8_t {
+  XB_CH1_CHANNEL, XB_CH1_ALLOWED, XB_CH1_TRIGGER, XB_CH1_REPLY,
+  XB_CH2_CHANNEL, XB_CH2_ALLOWED, XB_CH2_TRIGGER, XB_CH2_REPLY,
+  XB_ROOM, XB_ROOM_ALLOWED, XB_ROOM_TRIGGER, XB_ROOM_REPLY,
+  XB_DM_ALLOWED, XB_DM_TRIGGER, XB_DM_REPLY,
+};
+struct XKey { uint8_t section; const char* label; uint8_t kind; };
+static const XKey XKEYS[] = {
+  { settings::SEC_BOT_CH1, "Channel", XK_PICK }, { settings::SEC_BOT_CH1, "Allowed", XK_LIST },
+  { settings::SEC_BOT_CH1, "Trigger", XK_TEXT }, { settings::SEC_BOT_CH1, "Reply", XK_TEXT },
+  { settings::SEC_BOT_CH2, "Channel", XK_PICK }, { settings::SEC_BOT_CH2, "Allowed", XK_LIST },
+  { settings::SEC_BOT_CH2, "Trigger", XK_TEXT }, { settings::SEC_BOT_CH2, "Reply", XK_TEXT },
+  { settings::SEC_BOT_ROOM, "Room", XK_PICK },   { settings::SEC_BOT_ROOM, "Allowed", XK_LIST },
+  { settings::SEC_BOT_ROOM, "Trigger", XK_TEXT }, { settings::SEC_BOT_ROOM, "Reply", XK_TEXT },
+  { settings::SEC_BOT_DM, "Allowed", XK_LIST },
+  { settings::SEC_BOT_DM, "Trigger", XK_TEXT },   { settings::SEC_BOT_DM, "Reply", XK_TEXT },
+};
 static const Key KEYS[] = {
   K("advert.interval", advert_auto_interval_sec), K("advert.loc", advert_loc_policy),
   K("advert.loc.precision", advert_loc_prec),
@@ -41,16 +69,193 @@ static const Key KEYS[] = {
   K("repeater.skip.adverts", repeat_skip_adverts), K("repeater.max.hops", repeat_max_hops),
   K("repeater.yield", repeat_delay_boost), K("repeater.min.snr", repeat_min_snr),
   K("repeater.skip.dups", repeat_suppress_dup), K("repeater.scope.only", repeat_scope_only),
+  K("bot.ch1", bot_channel_enabled), KX("bot.ch1.channel", XB_CH1_CHANNEL), K("bot.ch1.commands", bot_commands_ch),
+  KX("bot.ch1.allowed", XB_CH1_ALLOWED), K("bot.ch1.actions", bot_actions_ch),
+  KX("bot.ch1.trigger", XB_CH1_TRIGGER), KX("bot.ch1.reply", XB_CH1_REPLY),
+  K("bot.ch2", bot_ch2_enabled), KX("bot.ch2.channel", XB_CH2_CHANNEL), K("bot.ch2.commands", bot_commands_ch2),
+  KX("bot.ch2.allowed", XB_CH2_ALLOWED), K("bot.ch2.actions", bot_actions_ch2),
+  KX("bot.ch2.trigger", XB_CH2_TRIGGER), KX("bot.ch2.reply", XB_CH2_REPLY),
+  K("bot.room", bot_room_enabled), KX("bot.room.room", XB_ROOM), K("bot.room.commands", bot_commands_room),
+  KX("bot.room.allowed", XB_ROOM_ALLOWED), K("bot.room.actions", bot_actions_room),
+  KX("bot.room.trigger", XB_ROOM_TRIGGER), KX("bot.room.reply", XB_ROOM_REPLY),
+  K("bot.dm", bot_enabled), K("bot.dm.allow", bot_dm_scope), K("bot.dm.position", bot_pos_scope),
+  K("bot.dm.commands", bot_commands_enabled), KX("bot.dm.allowed", XB_DM_ALLOWED), K("bot.dm.actions", bot_actions_dm),
+  KX("bot.dm.trigger", XB_DM_TRIGGER), KX("bot.dm.reply", XB_DM_REPLY),
+  K("bot.quiet.from", bot_quiet_start), K("bot.quiet.to", bot_quiet_end), K("bot.actions.by", bot_actions_scope),
+  K("bot.gap", bot_gap_idx),
 };
 #undef K
 #undef KB
+#undef KX
 static const int KEY_COUNT = sizeof(KEYS) / sizeof(KEYS[0]);
 
 // The schema row of a key, or -1 (this board leaves it out).
 static int row(const Key& k) {
+  if (k.offset == XKEY) return -1;
   for (int i = 0; i < settings::COUNT; i++)
     if (settings::ALL[i].offset == k.offset && settings::ALL[i].bit == k.bit) return i;
   return -1;
+}
+
+// ── XKEYS: texts, lists and picks ────────────────────────────────────────────
+
+static char* xText(NodePrefs* p, uint8_t id, int& cap) {
+  switch (id) {
+    case XB_CH1_TRIGGER:  cap = sizeof(p->bot_trigger_ch);   return p->bot_trigger_ch;
+    case XB_CH1_REPLY:    cap = sizeof(p->bot_reply_ch);     return p->bot_reply_ch;
+    case XB_CH2_TRIGGER:  cap = sizeof(p->bot_trigger_ch2);  return p->bot_trigger_ch2;
+    case XB_CH2_REPLY:    cap = sizeof(p->bot_reply_ch2);    return p->bot_reply_ch2;
+    case XB_ROOM_TRIGGER: cap = sizeof(p->bot_trigger_room); return p->bot_trigger_room;
+    case XB_ROOM_REPLY:   cap = sizeof(p->bot_reply_room);   return p->bot_reply_room;
+    case XB_DM_TRIGGER:   cap = sizeof(p->bot_trigger);      return p->bot_trigger;
+    case XB_DM_REPLY:     cap = sizeof(p->bot_reply_dm);     return p->bot_reply_dm;
+  }
+  cap = 0;
+  return nullptr;
+}
+static uint16_t* xCmdOff(NodePrefs* p, uint8_t id) {
+  switch (id) {
+    case XB_CH1_ALLOWED:  return &p->bot_cmd_off_ch;
+    case XB_CH2_ALLOWED:  return &p->bot_cmd_off_ch2;
+    case XB_ROOM_ALLOWED: return &p->bot_cmd_off_room;
+    case XB_DM_ALLOWED:   return &p->bot_cmd_off_dm;
+  }
+  return nullptr;
+}
+
+// A list's members by index: the bot's commands.
+static int xListCount(uint8_t) { return botcmd::COUNT; }
+static const char* xListName(uint8_t, int i) { return botcmd::CMDS[i].name; }
+
+// A pick's choices by index (channels by slot, rooms in the contact list's
+// order) and the one picked, -1 for none.
+static bool xPickName(uint8_t id, int i, char* out, size_t n) {
+  if (id == XB_ROOM) {
+    ContactInfo c;
+    int seen = 0;
+    for (int idx = MAX_ANON_CONTACTS; the_mesh.getContactByIdx(idx, c); idx++) {
+      if (c.type != ADV_TYPE_ROOM) continue;
+      if (seen++ == i) { snprintf(out, n, "%s", c.name); return true; }
+    }
+    return false;
+  }
+  for (int slot = 0, seen = 0; slot < 64; slot++) {
+    ChannelDetails ch;
+    if (!the_mesh.getChannel(slot, ch)) break;
+    if (!ch.name[0]) continue;
+    if (seen++ == i) { snprintf(out, n, "%s", ch.name); return true; }
+  }
+  return false;
+}
+static bool xPickGet(const NodePrefs* p, uint8_t id, char* out, size_t n) {
+  if (id == XB_ROOM) {
+    ContactInfo* c = the_mesh.lookupContactByPubKey(p->bot_room_prefix, NodePrefs::FAVOURITE_PREFIX_LEN);
+    if (!c || !c->name[0]) return false;
+    snprintf(out, n, "%s", c->name);
+    return true;
+  }
+  ChannelDetails ch;
+  if (!the_mesh.getChannel(id == XB_CH1_CHANNEL ? p->bot_channel_idx : p->bot_ch2_idx, ch) || !ch.name[0]) return false;
+  snprintf(out, n, "%s", ch.name);
+  return true;
+}
+// Picks by name (case ignored); false when there is none of that name.
+static bool xPickSet(NodePrefs* p, uint8_t id, const char* name) {
+  if (id == XB_ROOM) {
+    ContactInfo c;
+    for (int idx = MAX_ANON_CONTACTS; the_mesh.getContactByIdx(idx, c); idx++)
+      if (c.type == ADV_TYPE_ROOM && !strcasecmp(c.name, name)) {
+        memcpy(p->bot_room_prefix, c.id.pub_key, NodePrefs::FAVOURITE_PREFIX_LEN);
+        return true;
+      }
+    return false;
+  }
+  for (int slot = 0; slot < 64; slot++) {
+    ChannelDetails ch;
+    if (!the_mesh.getChannel(slot, ch)) break;
+    if (ch.name[0] && !strcasecmp(ch.name, name)) {
+      (id == XB_CH1_CHANNEL ? p->bot_channel_idx : p->bot_ch2_idx) = (uint8_t)slot;
+      return true;
+    }
+  }
+  return false;
+}
+
+static void xGet(NodePrefs* p, uint8_t id, char* reply, int n) {
+  const XKey& x = XKEYS[id];
+  if (x.kind == XK_TEXT) { int cap; snprintf(reply, n, "> %s", xText(p, id, cap)); return; }
+  if (x.kind == XK_PICK) {
+    char nm[40];
+    snprintf(reply, n, "> %s", xPickGet(p, id, nm, sizeof(nm)) ? nm : "none");
+    return;
+  }
+  const uint16_t off = *xCmdOff(p, id);
+  int o = snprintf(reply, n, "> ");
+  bool any = false;
+  for (int i = 0; i < xListCount(id) && o < n - 1; i++)
+    if (!(off & botcmd::flag(i))) { o += snprintf(reply + o, n - o, "%s%s", any ? "," : "", xListName(id, i)); any = true; }
+  if (!any) snprintf(reply + o, n - o, "none");
+}
+
+// The value after "set <key> " (empty: none / an empty text).
+static void xSet(NodePrefs* p, uint8_t id, const char* v, char* reply, int n) {
+  const XKey& x = XKEYS[id];
+  if (x.kind == XK_TEXT) {
+    int cap;
+    char* t = xText(p, id, cap);
+    if ((int)strlen(v) >= cap) { snprintf(reply, n, "Error, at most %d bytes", cap - 1); return; }
+    snprintf(t, cap, "%s", v);
+  } else if (x.kind == XK_PICK) {
+    if (!xPickSet(p, id, v)) {
+      int o = snprintf(reply, n, "Error, one of: ");
+      char nm[40];
+      for (int i = 0; xPickName(id, i, nm, sizeof(nm)) && o < n - 1; i++) o += snprintf(reply + o, n - o, "%s%s", i ? ", " : "", nm);
+      if (!o || reply[o - 2] == ':') snprintf(reply + o, n - o, "none here");
+      return;
+    }
+  } else {   // a list: what's named is on, the rest off ("none": all off)
+    uint16_t on = 0;
+    if (*v && strcasecmp(v, "none")) {
+      while (*v) {
+        while (*v == ' ' || *v == ',') v++;
+        const char* e = v;
+        while (*e && *e != ',') e++;
+        const char* t = e;
+        while (t > v && t[-1] == ' ') t--;
+        if (t == v) { v = e; continue; }
+        int hit = -1;
+        for (int i = 0; i < xListCount(id); i++) {
+          const char* nm = xListName(id, i);
+          if ((int)strlen(nm) == (int)(t - v) && !strncasecmp(nm, v, t - v)) { hit = i; break; }
+        }
+        if (hit < 0) {
+          int o = snprintf(reply, n, "Error, of: ");
+          for (int i = 0; i < xListCount(id) && o < n - 1; i++) o += snprintf(reply + o, n - o, "%s%s", i ? ", " : "", xListName(id, i));
+          return;
+        }
+        on |= botcmd::flag(hit);
+        v = e;
+      }
+    }
+    *xCmdOff(p, id) = (uint16_t)(~on & (botcmd::flag(botcmd::COUNT) - 1));
+  }
+  the_mesh.savePrefs();
+  snprintf(reply, n, "OK");
+}
+
+static void xOpts(NodePrefs* p, uint8_t id, char* reply, int n) {
+  const XKey& x = XKEYS[id];
+  int o = snprintf(reply, n, "> %s/%s|%s|", settings::pageTitle(settings::sectionPage(x.section)),
+                   settings::sectionTitle(x.section), x.label);
+  if (x.kind == XK_TEXT) { int cap; xText(p, id, cap); snprintf(reply + o, n - o, "#text:%d", cap - 1); return; }
+  o += snprintf(reply + o, n - o, x.kind == XK_LIST ? "#list" : "#pick");
+  char nm[40];
+  for (int i = 0; o < n - 1; i++) {
+    if (x.kind == XK_LIST) { if (i >= xListCount(id)) break; snprintf(nm, sizeof(nm), "%s", xListName(id, i)); }
+    else if (!xPickName(id, i, nm, sizeof(nm))) break;
+    if (o + 1 + (int)strlen(nm) >= n - 5) { snprintf(reply + o, n - o, "|..."); break; }
+    o += snprintf(reply + o, n - o, "|%s", nm);
+  }
 }
 
 static bool sameText(const char* a, const char* b) {
@@ -315,7 +520,7 @@ static bool handle(UiCore& core, const char* cmd, char* reply, int n) {
     bool more = false;
     reply[0] = 0;
     for (int k = 0; k < KEY_COUNT; k++) {
-      if (row(KEYS[k]) < 0) continue;
+      if (KEYS[k].offset != XKEY && row(KEYS[k]) < 0) continue;
       int len = (o ? 1 : 0) + (int)strlen(KEYS[k].key);   // as printed: a space before all but the first
       if (o + len > n - 20) {   // room left for " (more: keys N)"
         if (pg == page) { more = true; break; }
@@ -335,6 +540,7 @@ static bool handle(UiCore& core, const char* cmd, char* reply, int n) {
   if (!strncmp(cmd, "opts ", 5)) {
     for (int k = 0; k < KEY_COUNT; k++) {
       if (strcmp(KEYS[k].key, cmd + 5)) continue;
+      if (KEYS[k].offset == XKEY) { xOpts(p, KEYS[k].bit, reply, n); return true; }
       int i = row(KEYS[k]);
       if (i < 0) { snprintf(reply, n, "Error, not on this device"); return true; }
       const settings::Setting& st = settings::ALL[i];
@@ -359,6 +565,11 @@ static bool handle(UiCore& core, const char* cmd, char* reply, int n) {
   size_t name_len = value ? (size_t)(value - name) : strlen(name);
   for (int k = 0; k < KEY_COUNT; k++) {
     if (strlen(KEYS[k].key) != name_len || strncmp(KEYS[k].key, name, name_len)) continue;
+    if (KEYS[k].offset == XKEY) {
+      if (set) xSet(p, KEYS[k].bit, value ? value + 1 : "", reply, n);
+      else xGet(p, KEYS[k].bit, reply, n);
+      return true;
+    }
     int i = row(KEYS[k]);
     if (i < 0) { snprintf(reply, n, "Error, not on this device"); return true; }
     const settings::Setting& st = settings::ALL[i];

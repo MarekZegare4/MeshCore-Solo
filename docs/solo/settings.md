@@ -178,7 +178,16 @@ Every other setting has a key: `keys` lists them a page at a time (`keys 2`,
 `keys 3` …). The repeater's are there too (`repeater`, `repeater.network`,
 `repeater.skip.adverts`, `repeater.max.hops`, `repeater.yield`,
 `repeater.min.snr`, `repeater.skip.dups`, `repeater.scope.only`), so a
-one-button device can be set up as a repeater from the configurator. `get` shows a value as the Settings screen does, and `set`
+one-button device can be set up as a repeater from the configurator.
+The bot's too: `bot.ch1`, `bot.ch2`, `bot.room` and `bot.dm` switch each
+target on, and each has `.commands`, `.actions`, `.allowed` (the commands it
+answers, `set bot.dm.allowed ping,batt,help` or `none`), `.trigger` and
+`.reply` (a text: `set bot.dm.reply Away, back at {time}`; nothing after the
+key empties it); `bot.ch1.channel` / `bot.ch2.channel` and `bot.room.room`
+pick where by name; `bot.dm.allow`, `bot.dm.position`, `bot.quiet.from`,
+`bot.quiet.to`, `bot.actions.by` and `bot.gap` the rest. `opts` marks a text
+`#text:<max bytes>` and a list or a name to pick `#list` / `#pick`, with the
+choices after it. `get` shows a value as the Settings screen does, and `set`
 takes it the same way, case ignored:
 
 ```
