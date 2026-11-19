@@ -188,7 +188,13 @@ pick where by name; `bot.dm.allow`, `bot.dm.position`, `bot.quiet.from`,
 `bot.quiet.to`, `bot.actions.by` and `bot.gap` the rest. And the SOS's: `sos` (the top
 button), `sos.countdown`, `sos.channels` (by name, `none` for none),
 `sos.contact1` to `sos.contact3` (a contact's name, `none` to clear),
-`sos.msg`, `sos.repeat`, `sos.advert`, `sos.beep` and `sos.ack`. `opts` marks
+`sos.msg`, `sos.repeat`, `sos.advert`, `sos.beep` and `sos.ack`. The
+alarm: `alarm` (on / off), `alarm.time` (`set alarm.time 6:45`) and
+`alarm.days` (`mon,tue,wed,thu,fri`, `none` for once). On the L2,
+coverage: `coverage`, `coverage.home` (`50.06143,19.93658` or `none`),
+`coverage.home.radius` and `coverage.upload`. On the L1, the pins:
+`gpio.1` to `gpio.4` (`Off`, `Input`, `Output low`, `Output high`, and
+`Analog` on 1 and 2). `opts` marks
 a text `#text:<max bytes>` and a list or a name to pick `#list` / `#pick`,
 with the choices after it (`...` when they don't all fit). `get` shows a value as the Settings screen does, and `set`
 takes it the same way, case ignored:

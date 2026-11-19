@@ -621,7 +621,7 @@ public:
   bool botGetGPIO(int idx, bool& is_output, bool& value) override;
   bool botGetGPIOAnalog(int idx, int& millivolts) override;
   bool gpioSupportsAnalog(int idx) const;    // true only for GPIO1/GPIO2 (AIN0/AIN5)
-  void setGpioMode(int idx, uint8_t mode);   // 0=Off 1=In 2=Out-low 3=Out-high 4=Analog; applies + persists
+  void setGpioMode(int idx, uint8_t mode) override;   // 0=Off 1=In 2=Out-low 3=Out-high 4=Analog; applies + persists
   void applyAllGpioModes();                  // boot-time restore from NodePrefs, called from begin()
   void applyBrightness();
   // Settings changed through the schema (ui-core/SettingsSchema.h).

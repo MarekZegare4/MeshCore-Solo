@@ -37,6 +37,8 @@ public:
   virtual int battPercent() { return -1; }
   virtual void botBuzz(int seconds) {}
   virtual bool botSetGPIO(int idx, bool on) { return false; }
+  // A user GPIO pin's mode (0 Off, 1 Input, 2 Output low, 3 Output high, 4 Analog): applied and saved.
+  virtual void setGpioMode(int idx, uint8_t mode) {}
   virtual bool botGetGPIO(int idx, bool& is_output, bool& value) { return false; }
   virtual bool botGetGPIOAnalog(int idx, int& millivolts) { return false; }
 

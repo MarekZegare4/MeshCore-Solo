@@ -25,10 +25,10 @@ namespace settings {
 // PG_NAV is the Map's options (its trail / live share / target tools),
 // PG_ADVERT sits in Nearby's advert popup; the rest are Settings pages.
 // PG_PRIVACY and PG_RADIO (Radio's advanced options) are Settings pages too.
-// PG_REPEATER, PG_BOT and PG_SOS are for the console and the configurator
+// PG_REPEATER, PG_BOT, PG_SOS and PG_TOOLS are for the console and the configurator
 // (issue #62): the frontends have their own screens for them. Their texts,
 // targets and lists (the bot's reply, the SOS channels ...) are SettingsCli's.
-enum Page : uint8_t { PG_NAV, PG_ADVERT, PG_DEVICE, PG_MESSAGES, PG_SOUND, PG_PRIVACY, PG_RADIO, PG_REPEATER, PG_BOT, PG_SOS, PG_COUNT };
+enum Page : uint8_t { PG_NAV, PG_ADVERT, PG_DEVICE, PG_MESSAGES, PG_SOUND, PG_PRIVACY, PG_RADIO, PG_REPEATER, PG_BOT, PG_SOS, PG_TOOLS, PG_COUNT };
 enum Section : uint8_t { SEC_TRAIL, SEC_LIVE_SHARE, SEC_LOCATOR, SEC_MAP_VIEW, SEC_ADVERT,
                          SEC_DISPLAY, SEC_POWER, SEC_TIME, SEC_UNITS,
                          SEC_MESSAGES, SEC_CONTACTS, SEC_AUTO_ADD,
@@ -36,11 +36,12 @@ enum Section : uint8_t { SEC_TRAIL, SEC_LIVE_SHARE, SEC_LOCATOR, SEC_MAP_VIEW, S
                          SEC_PRIVACY, SEC_TELEMETRY, SEC_RADIO_ADV,
                          SEC_RPT, SEC_RPT_RELAYS,
                          SEC_BOT_CH1, SEC_BOT_CH2, SEC_BOT_ROOM, SEC_BOT_DM, SEC_BOT_OTHER,
-                         SEC_SOS_START, SEC_SOS_TO, SEC_SOS_RUN, SEC_COUNT };
+                         SEC_SOS_START, SEC_SOS_TO, SEC_SOS_RUN,
+                         SEC_ALARM, SEC_COVERAGE, SEC_GPIO, SEC_COUNT };
 
 static const char* pageTitle(uint8_t p) {
   static const char* T[PG_COUNT] = { "Map options", "Advert", "Display & power", "Messages & contacts", "Sound",
-                                     "Privacy", "Advanced radio", "Repeater", "Bot", "SOS" };
+                                     "Privacy", "Advanced radio", "Repeater", "Bot", "SOS", "Tools" };
   return p < PG_COUNT ? T[p] : "";
 }
 static const char* sectionTitle(uint8_t s) {
@@ -51,7 +52,8 @@ static const char* sectionTitle(uint8_t s) {
                                       "ADVERTS", "WHO CAN ASK FOR", "ADVANCED",
                                       "REPEATER", "WHAT IT RELAYS",
                                       "CHANNEL BOT 1", "CHANNEL BOT 2", "ROOM", "DIRECT MESSAGES", "OTHER",
-                                      "START", "SENT TO", "WHILE IT RUNS" };
+                                      "START", "SENT TO", "WHILE IT RUNS",
+                                      "ALARM", "COVERAGE", "GPIO" };
   return s < SEC_COUNT ? T[s] : "";
 }
 static uint8_t sectionPage(uint8_t s) {
@@ -62,7 +64,8 @@ static uint8_t sectionPage(uint8_t s) {
                                         PG_PRIVACY, PG_PRIVACY, PG_RADIO,
                                         PG_REPEATER, PG_REPEATER,
                                         PG_BOT, PG_BOT, PG_BOT, PG_BOT, PG_BOT,
-                                        PG_SOS, PG_SOS, PG_SOS };
+                                        PG_SOS, PG_SOS, PG_SOS,
+                                        PG_TOOLS, PG_TOOLS, PG_TOOLS };
   return s < SEC_COUNT ? P[s] : PG_DEVICE;
 }
 
@@ -251,6 +254,15 @@ static void optSosRepeat(uint8_t v, char* b, int n, const NodePrefs&) { fmtSecs(
 static void optSosBeep(uint8_t v, char* b, int n, const NodePrefs&) { fmtSecs(b, n, NodePrefs::sosBeepSecs(v), "Off"); }
 static void optSosAdvert(uint8_t v, char* b, int n, const NodePrefs&) { snprintf(b, n, "%s", NodePrefs::sosAdvertLabel(v)); }
 
+// The tools': coverage's home radius, the GPIO pins' modes.
+static void optCovHome(uint8_t v, char* b, int n, const NodePrefs&) {
+  if (v == 0) snprintf(b, n, "Off"); else snprintf(b, n, "%lu m", (unsigned long)NodePrefs::covHomeRadiusM(v));
+}
+static void optGpio(uint8_t v, char* b, int n, const NodePrefs&) {
+  static const char* const L[] = { "Off", "Input", "Output low", "Output high", "Analog" };
+  snprintf(b, n, "%s", L[v < 5 ? v : 0]);
+}
+
 // ── Side effects ──────────────────────────────────────────────────────────────
 static void rearmLocator(UiCore& c)      { c.locator.reset(); }
 static void restartShareClock(UiCore& c) { c.live_share.restartClock(); }   // a new length starts over
@@ -261,6 +273,17 @@ static void applyGpsTime(UiCore& c)     { if (c.prefs()) LocationProvider::timeF
 static void applyRxGain(UiCore& c)       { if (c.prefs()) radio_driver.setRxBoostedGainMode(c.prefs()->rx_boosted_gain); }
 // The repeater's switch and network: the radio, RX power save and auto power follow.
 static void applyRepeater(UiCore& c)     { if (c.prefs()) rptctl::setEnabled(c.prefs(), c.prefs()->client_repeat); }
+static void applyAlarm(UiCore& c)        { c.clock.onAlarmChanged(); }
+#if defined(ESP32) || defined(SIM_PLATFORM)
+static void applyCoverage(UiCore& c)     { c.coverage.apply(); }
+#endif
+#if defined(PIN_GPIO1)
+// The field is written already; the host applies it to the pin (and saves).
+static void applyGpio1(UiCore& c) { c.host()->setGpioMode(1, c.prefs()->gpio1_mode); }
+static void applyGpio2(UiCore& c) { c.host()->setGpioMode(2, c.prefs()->gpio2_mode); }
+static void applyGpio3(UiCore& c) { c.host()->setGpioMode(3, c.prefs()->gpio3_mode); }
+static void applyGpio4(UiCore& c) { c.host()->setGpioMode(4, c.prefs()->gpio4_mode); }
+#endif
 static void applyRptNetwork(UiCore& c)   { if (c.prefs()) rptctl::setUseProfile(c.prefs(), c.prefs()->repeater_use_profile); }
 
 #define NP_OFF(f)  (uint16_t)offsetof(NodePrefs, f)
@@ -422,6 +445,20 @@ static const Setting ALL[] = {
   IDX("Repeat", nullptr, SEC_SOS_RUN, sos_repeat_idx, NodePrefs::SOS_REPEAT_COUNT, optSosRepeat, nullptr),
   IDX("Advert", "With each send", SEC_SOS_RUN, sos_advert, NodePrefs::SOS_ADVERT_COUNT, optSosAdvert, nullptr),
   IDX("Beep", "To be found by", SEC_SOS_RUN, sos_beep_idx, NodePrefs::SOS_BEEP_COUNT, optSosBeep, nullptr),
+
+  SW("Alarm", "Rings at its time (alarm.time)", SEC_ALARM, alarm_on, applyAlarm),
+#if defined(ESP32) || defined(SIM_PLATFORM)   // only where a frontend begins the recorder (SettingsCli: coverageKey)
+  SW("Record coverage", "Off: nothing is recorded or sent", SEC_COVERAGE, cov_on, applyCoverage),
+  IDX("Home radius", "Nothing recorded this close to home", SEC_COVERAGE, cov_home_r,
+      NodePrefs::COV_HOME_COUNT, optCovHome, nullptr),
+  SW("Upload automatically", "Over the saved WiFi, joined for it", SEC_COVERAGE, cov_auto, nullptr),
+#endif
+#if defined(PIN_GPIO1)   // gpio1 and 2 can read volts (Analog), 3 and 4 can't
+  IDX("GPIO 1", nullptr, SEC_GPIO, gpio1_mode, 5, optGpio, applyGpio1),
+  IDX("GPIO 2", nullptr, SEC_GPIO, gpio2_mode, 5, optGpio, applyGpio2),
+  IDX("GPIO 3", nullptr, SEC_GPIO, gpio3_mode, 4, optGpio, applyGpio3),
+  IDX("GPIO 4", nullptr, SEC_GPIO, gpio4_mode, 4, optGpio, applyGpio4),
+#endif
 };
 static const int COUNT = (int)(sizeof(ALL) / sizeof(ALL[0]));
 

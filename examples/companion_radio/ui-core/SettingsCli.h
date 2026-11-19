@@ -32,6 +32,7 @@ enum XId : uint8_t {
   XB_ROOM, XB_ROOM_ALLOWED, XB_ROOM_TRIGGER, XB_ROOM_REPLY,
   XB_DM_ALLOWED, XB_DM_TRIGGER, XB_DM_REPLY,
   XS_CHANNELS, XS_DM1, XS_DM2, XS_DM3, XS_MSG, XS_ACK,
+  XA_TIME, XA_DAYS, XC_HOME,
 };
 struct XKey { uint8_t section; const char* label; uint8_t kind; };
 static const XKey XKEYS[] = {
@@ -46,6 +47,8 @@ static const XKey XKEYS[] = {
   { settings::SEC_SOS_TO, "Channels", XK_LIST },   { settings::SEC_SOS_TO, "Contact 1", XK_PICK },
   { settings::SEC_SOS_TO, "Contact 2", XK_PICK },  { settings::SEC_SOS_TO, "Contact 3", XK_PICK },
   { settings::SEC_SOS_TO, "Message", XK_TEXT },    { settings::SEC_SOS_RUN, "ACK word", XK_TEXT },
+  { settings::SEC_ALARM, "Time", XK_TEXT },         { settings::SEC_ALARM, "Days", XK_LIST },
+  { settings::SEC_COVERAGE, "Home", XK_TEXT },
 };
 static const Key KEYS[] = {
   K("advert.interval", advert_auto_interval_sec), K("advert.loc", advert_loc_policy),
@@ -91,6 +94,13 @@ static const Key KEYS[] = {
   KX("sos.channels", XS_CHANNELS), KX("sos.contact1", XS_DM1), KX("sos.contact2", XS_DM2), KX("sos.contact3", XS_DM3),
   KX("sos.msg", XS_MSG), K("sos.repeat", sos_repeat_idx), K("sos.advert", sos_advert), K("sos.beep", sos_beep_idx),
   KX("sos.ack", XS_ACK),
+  K("alarm", alarm_on), KX("alarm.time", XA_TIME), KX("alarm.days", XA_DAYS),
+#if defined(ESP32) || defined(SIM_PLATFORM)
+  K("coverage", cov_on), KX("coverage.home", XC_HOME), K("coverage.home.radius", cov_home_r), K("coverage.upload", cov_auto),
+#endif
+#if defined(PIN_GPIO1)
+  K("gpio.1", gpio1_mode), K("gpio.2", gpio2_mode), K("gpio.3", gpio3_mode), K("gpio.4", gpio4_mode),
+#endif
 };
 #undef K
 #undef KB
@@ -135,8 +145,11 @@ static uint16_t* xCmdOff(NodePrefs* p, uint8_t id) {
 
 // A list's members by bit: the bot's commands, or the channels by slot (an
 // empty slot has no name: false). Its mask: of those on.
-static int xListCount(uint8_t id) { return id == XS_CHANNELS ? 64 : botcmd::COUNT; }
+// The alarm's days: bit i = 1 << tm_wday, Sunday first.
+static const char* const DAYS[7] = { "sun", "mon", "tue", "wed", "thu", "fri", "sat" };
+static int xListCount(uint8_t id) { return id == XS_CHANNELS ? 64 : id == XA_DAYS ? 7 : botcmd::COUNT; }
 static bool xListName(uint8_t id, int i, char* out, size_t n) {
+  if (id == XA_DAYS) { snprintf(out, n, "%s", DAYS[i]); return true; }
   if (id != XS_CHANNELS) { snprintf(out, n, "%s", botcmd::CMDS[i].name); return true; }
   ChannelDetails ch;
   if (!the_mesh.getChannel(i, ch) || !ch.name[0]) return false;
@@ -145,10 +158,12 @@ static bool xListName(uint8_t id, int i, char* out, size_t n) {
 }
 static uint64_t xListGet(const NodePrefs* p, uint8_t id) {
   if (id == XS_CHANNELS) return p->sos_ch_mask;
+  if (id == XA_DAYS) return p->alarm_repeat_mask;
   return (uint16_t)~*xCmdOff((NodePrefs*)p, id) & (botcmd::flag(botcmd::COUNT) - 1);
 }
 static void xListSet(NodePrefs* p, uint8_t id, uint64_t on) {
   if (id == XS_CHANNELS) p->sos_ch_mask = on;
+  else if (id == XA_DAYS) p->alarm_repeat_mask = (uint8_t)(on & 0x7F);
   else *xCmdOff(p, id) = (uint16_t)(~on & (botcmd::flag(botcmd::COUNT) - 1));
 }
 static uint8_t* xDm(NodePrefs* p, uint8_t id) {
@@ -218,6 +233,12 @@ static bool xPickSet(NodePrefs* p, uint8_t id, const char* name) {
 
 static void xGet(NodePrefs* p, uint8_t id, char* reply, int n) {
   const XKey& x = XKEYS[id];
+  if (id == XA_TIME) { snprintf(reply, n, "> %02u:%02u", (unsigned)p->alarm_hour, (unsigned)p->alarm_min); return; }
+  if (id == XC_HOME) {
+    if (!p->cov_home_lat && !p->cov_home_lon) { snprintf(reply, n, "> none"); return; }
+    snprintf(reply, n, "> %.6f,%.6f", p->cov_home_lat / 1e6, p->cov_home_lon / 1e6);
+    return;
+  }
   if (x.kind == XK_TEXT) { int cap; snprintf(reply, n, "> %s", xText(p, id, cap)); return; }
   if (x.kind == XK_PICK) {
     char nm[40];
@@ -234,9 +255,25 @@ static void xGet(NodePrefs* p, uint8_t id, char* reply, int n) {
 }
 
 // The value after "set <key> " (empty: none / an empty text).
-static void xSet(NodePrefs* p, uint8_t id, const char* v, char* reply, int n) {
+static void xSet(UiCore& core, NodePrefs* p, uint8_t id, const char* v, char* reply, int n) {
   const XKey& x = XKEYS[id];
-  if (x.kind == XK_TEXT) {
+  if (id == XA_TIME) {   // "7:30" / "07:30"
+    char* e;
+    const long h = strtol(v, &e, 10);
+    const long m = *e == ':' ? strtol(e + 1, &e, 10) : -1;
+    if (*e || h < 0 || h > 23 || m < 0 || m > 59) { snprintf(reply, n, "Error, a time as HH:MM"); return; }
+    p->alarm_hour = (uint8_t)h; p->alarm_min = (uint8_t)m;
+  } else if (id == XC_HOME) {   // "50.06143,19.93658" or none
+    if (!strcasecmp(v, "none") || !*v) { p->cov_home_lat = p->cov_home_lon = 0; }
+    else {
+      char* e;
+      const double la = strtod(v, &e);
+      const double lo = *e == ',' ? strtod(e + 1, &e) : 999;
+      if (*e || la < -90 || la > 90 || lo < -180 || lo > 180) { snprintf(reply, n, "Error, lat,lon in degrees or none"); return; }
+      p->cov_home_lat = (int32_t)(la * 1e6 + (la < 0 ? -0.5 : 0.5));
+      p->cov_home_lon = (int32_t)(lo * 1e6 + (lo < 0 ? -0.5 : 0.5));
+    }
+  } else if (x.kind == XK_TEXT) {
     int cap;
     char* t = xText(p, id, cap);
     if ((int)strlen(v) >= cap) { snprintf(reply, n, "Error, at most %d bytes", cap - 1); return; }
@@ -276,6 +313,7 @@ static void xSet(NodePrefs* p, uint8_t id, const char* v, char* reply, int n) {
     }
     xListSet(p, id, on);
   }
+  if (id == XA_TIME || id == XA_DAYS) core.clock.onAlarmChanged();
   the_mesh.savePrefs();
   snprintf(reply, n, "OK");
 }
@@ -284,7 +322,12 @@ static void xOpts(NodePrefs* p, uint8_t id, char* reply, int n) {
   const XKey& x = XKEYS[id];
   int o = snprintf(reply, n, "> %s/%s|%s|", settings::pageTitle(settings::sectionPage(x.section)),
                    settings::sectionTitle(x.section), x.label);
-  if (x.kind == XK_TEXT) { int cap; xText(p, id, cap); snprintf(reply + o, n - o, "#text:%d", cap - 1); return; }
+  if (x.kind == XK_TEXT) {
+    int cap = id == XA_TIME ? 6 : id == XC_HOME ? 24 : 0;
+    if (!cap) xText(p, id, cap);
+    snprintf(reply + o, n - o, "#text:%d", cap - 1);
+    return;
+  }
   o += snprintf(reply + o, n - o, x.kind == XK_LIST ? "#list" : "#pick");
   if (id == XB_ROOM || (id >= XS_DM1 && id <= XS_DM3)) o += snprintf(reply + o, n - o, "|none");   // a contact pick may be cleared
   char nm[40];
@@ -294,6 +337,13 @@ static void xOpts(NodePrefs* p, uint8_t id, char* reply, int n) {
     if (o + 1 + (int)strlen(nm) >= n - 5) { snprintf(reply + o, n - o, "|..."); break; }
     o += snprintf(reply + o, n - o, "|%s", nm);
   }
+}
+
+// Coverage's keys are only where a frontend has begun the recorder (ui-lvgl
+// with a card): on another ESP32 there is nothing to record or upload.
+static bool hereKey(UiCore& core, const Key& k) {
+  if (!strncmp(k.key, "coverage", 8)) return core.coverage.available();
+  return true;
 }
 
 static bool sameText(const char* a, const char* b) {
@@ -558,7 +608,7 @@ static bool handle(UiCore& core, const char* cmd, char* reply, int n) {
     bool more = false;
     reply[0] = 0;
     for (int k = 0; k < KEY_COUNT; k++) {
-      if (KEYS[k].offset != XKEY && row(KEYS[k]) < 0) continue;
+      if ((KEYS[k].offset != XKEY && row(KEYS[k]) < 0) || !hereKey(core, KEYS[k])) continue;
       int len = (o ? 1 : 0) + (int)strlen(KEYS[k].key);   // as printed: a space before all but the first
       if (o + len > n - 20) {   // room left for " (more: keys N)"
         if (pg == page) { more = true; break; }
@@ -578,6 +628,7 @@ static bool handle(UiCore& core, const char* cmd, char* reply, int n) {
   if (!strncmp(cmd, "opts ", 5)) {
     for (int k = 0; k < KEY_COUNT; k++) {
       if (strcmp(KEYS[k].key, cmd + 5)) continue;
+      if (!hereKey(core, KEYS[k])) { snprintf(reply, n, "Error, not on this device"); return true; }
       if (KEYS[k].offset == XKEY) { xOpts(p, KEYS[k].bit, reply, n); return true; }
       int i = row(KEYS[k]);
       if (i < 0) { snprintf(reply, n, "Error, not on this device"); return true; }
@@ -603,8 +654,9 @@ static bool handle(UiCore& core, const char* cmd, char* reply, int n) {
   size_t name_len = value ? (size_t)(value - name) : strlen(name);
   for (int k = 0; k < KEY_COUNT; k++) {
     if (strlen(KEYS[k].key) != name_len || strncmp(KEYS[k].key, name, name_len)) continue;
+    if (!hereKey(core, KEYS[k])) { snprintf(reply, n, "Error, not on this device"); return true; }
     if (KEYS[k].offset == XKEY) {
-      if (set) xSet(p, KEYS[k].bit, value ? value + 1 : "", reply, n);
+      if (set) xSet(core, p, KEYS[k].bit, value ? value + 1 : "", reply, n);
       else xGet(p, KEYS[k].bit, reply, n);
       return true;
     }
