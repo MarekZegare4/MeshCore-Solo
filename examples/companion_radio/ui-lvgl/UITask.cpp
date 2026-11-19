@@ -888,9 +888,10 @@ void UITask::fitHeader() {
   }
 }
 
-// Four rising bars, `lit` of them in `col`, the rest faint: the status bar's
-// signal, as tall as the icon font's glyphs.
-static void signalBars(lv_obj_t* parent, int lit, uint32_t col) {
+// Four rising bars, `lit` of them in the grey of the other status icons, the
+// rest faint: the status bar's signal, as tall as the icon font's glyphs. An
+// old reading (`stale`) has its lit bars faded halfway.
+static void signalBars(lv_obj_t* parent, int lit, bool stale) {
   static const int8_t H[4] = { 4, 7, 10, 13 };
   lv_obj_t* box = lv_obj_create(parent);
   lv_obj_remove_style_all(box);
@@ -901,8 +902,8 @@ static void signalBars(lv_obj_t* parent, int lit, uint32_t col) {
     lv_obj_remove_style_all(b);
     lv_obj_set_size(b, 3, H[i]);
     lv_obj_set_pos(b, i * 4, 14 - H[i]);
-    lv_obj_set_style_bg_opa(b, i < lit ? LV_OPA_COVER : LV_OPA_30, 0);
-    lv_obj_set_style_bg_color(b, lv_color_hex(i < lit ? col : theme::TEXT_MUTED), 0);
+    lv_obj_set_style_bg_opa(b, i >= lit ? LV_OPA_30 : stale ? LV_OPA_60 : LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(b, lv_color_hex(theme::TEXT_MUTED), 0);
     lv_obj_set_style_radius(b, 1, 0);
   }
 }
@@ -971,12 +972,13 @@ void UITask::refreshStatusBar() {
     bool fix = _core->course.currentLocation(lat, lon);
     icons[n++] = { LV_SYMBOL_GPS, fix ? theme::OK : theme::TEXT_MUTED };
   }
-  // Signal (#60): bars for how well repeaters were heard, grey once the last
+  // Signal (#60): bars for how well repeaters were heard, faded once the last
   // was 10-30 min ago, empty after that; none before the first since boot.
+  // The colour only tells fresh (TEXT_MUTED) from old (anything else) here.
   static const char* const SIG_SYM[5] = { "#s0", "#s1", "#s2", "#s3", "#s4" };   // bars drawn, not a glyph
   const SignalMeter::Reading sr = _core->signalNow();
   if (_prefs && _prefs->signal_show && sr.age != SignalMeter::NEVER)
-    icons[n++] = { SIG_SYM[sr.level], sr.age == SignalMeter::FRESH ? theme::TEXT : theme::TEXT_MUTED };
+    icons[n++] = { SIG_SYM[sr.level], sr.age == SignalMeter::FRESH ? theme::TEXT_MUTED : theme::SURFACE_2 };
   if (_prefs && _prefs->alarm_on) icons[n++] = { LV_SYMBOL_BELL, theme::TEXT_MUTED };
 #ifdef PIN_BUZZER
   if (_buzzer.isQuiet()) icons[n++] = { UI_SYMBOL_MUTE, theme::TEXT_MUTED };
@@ -994,7 +996,7 @@ void UITask::refreshStatusBar() {
     strcpy(_status_sig, sig);
     lv_obj_clean(_status_icons);
     for (int i = n - 1; i >= 0; i--) {   // the icon font gives each the same size and cell
-      if (!strncmp(icons[i].sym, "#s", 2)) { signalBars(_status_icons, icons[i].sym[2] - '0', icons[i].col); continue; }
+      if (!strncmp(icons[i].sym, "#s", 2)) { signalBars(_status_icons, icons[i].sym[2] - '0', icons[i].col != theme::TEXT_MUTED); continue; }
       label(_status_icons, icons[i].sym, icons[i].sym == SOS_SYM ? THEME_FONT_BODY : THEME_FONT_ICONS, icons[i].col);
     }
   }
