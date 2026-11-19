@@ -8,6 +8,7 @@
 // the index for a list, one of the stored values for a table (seconds, mV ...).
 
 #include "SettingsSchema.h"
+#include "Battery.h"
 
 namespace settingscli {
 
@@ -205,6 +206,49 @@ static bool waypoints(UiCore& core, const char* cmd, char* reply, int n) {
   return true;
 }
 
+// The battery curve (Settings > Battery curve): "get batt.curve" is "> <mV at
+// 0 %>,<10 %>,...,<100 %>" (11 values) or "> builtin"; "set batt.curve" takes
+// the same list -- rising, 2500..4500 mV -- or "builtin". The whole curve in one
+// line: one measured on one device pasted into another.
+static bool battCurve(NodePrefs* p, const char* cmd, char* reply, int n) {
+  const bool set = !strncmp(cmd, "set batt.curve", 14);
+  if (!set && strcmp(cmd, "get batt.curve")) return false;
+  if (set && cmd[14] && cmd[14] != ' ') return false;
+  if (!set) {
+    if (!battery::validCurve(p->batt_curve_mv)) { snprintf(reply, n, "> builtin"); return true; }
+    int o = snprintf(reply, n, "> ");
+    for (int i = 0; i < battery::CURVE_PTS && o < n; i++) o += snprintf(reply + o, n - o, i ? ",%u" : "%u", p->batt_curve_mv[i]);
+    return true;
+  }
+  const char* a = cmd + 14;
+  while (*a == ' ') a++;
+  uint16_t c[battery::CURVE_PTS] = {};
+  if (!strcmp(a, "builtin")) {
+    memset(p->batt_curve_mv, 0, sizeof(p->batt_curve_mv));
+  } else {
+    int k = 0;
+    while (*a && k < battery::CURVE_PTS) {
+      char* e;
+      const long v = strtol(a, &e, 10);
+      if (e == a || v < 0 || v > 65535) break;
+      c[k++] = (uint16_t)v;
+      a = e;
+      while (*a == ' ') a++;
+      if (*a == ',') a++;
+      while (*a == ' ') a++;
+    }
+    if (k != battery::CURVE_PTS || *a || !battery::validCurve(c)) {
+      snprintf(reply, n, "Error, set batt.curve <11 mV values for 0..100 %%, rising, %d-%d> or builtin",
+               battery::CURVE_MIN_MV, battery::CURVE_MAX_MV);
+      return true;
+    }
+    memcpy(p->batt_curve_mv, c, sizeof(c));
+  }
+  the_mesh.savePrefs();
+  snprintf(reply, n, "OK");
+  return true;
+}
+
 // True when the command was a settings one (reply set either way).
 static bool handle(UiCore& core, const char* cmd, char* reply, int n) {
   NodePrefs* p = core.prefs();
@@ -212,6 +256,7 @@ static bool handle(UiCore& core, const char* cmd, char* reply, int n) {
   if (quickMessages(p, cmd, reply, n)) return true;
   if (melodies(p, cmd, reply, n)) return true;
   if (waypoints(core, cmd, reply, n)) return true;
+  if (battCurve(p, cmd, reply, n)) return true;
   if (!strcmp(cmd, "keys") || !strncmp(cmd, "keys ", 5)) {   // the key names, a frame's worth a page
     int page = cmd[4] ? atoi(cmd + 5) : 1, pg = 1, o = 0;
     bool more = false;

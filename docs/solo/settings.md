@@ -198,6 +198,7 @@ settings key:
 | --- | --- |
 | `msgs`, `get msg.3`, `set msg.3 …`, `set msg.3` | The quick messages, numbered from 1; the last empties one |
 | `get melody.1`, `set melody.1 120 292a2b` | A melody of the Ringtone editor: BPM and a hex byte a note |
+| `get batt.curve`, `set batt.curve 3400,3690,3720,3750,3780,3820,3860,3920,3990,4060,4170`, `set batt.curve builtin` | The battery curve: the voltage in mV at 0, 10, ... 100 %, rising, or `builtin` for the built-in LiPo curve -- a whole curve at once, e.g. one measured on another device |
 | `wpts`, `get wpt.2`, `set wpt.2 50.061,19.937 Camp`, `set wpt.2` | The waypoints, numbered from 1 as the list shows them: `wpts` says how many there are and how many fit; `set` replaces one, or adds one with the number after the last; the last form deletes it, and the ones after move up |
 | `pages`, `set pages Clock, Messages, Status` | Home's pages in order; the ones left out are hidden (not on the L2) |
 | `batch on` … `batch off` | The `set`s in between are saved once, at `batch off` (or 5 s after the last command): a configurator's backup put back in seconds, not minutes |
