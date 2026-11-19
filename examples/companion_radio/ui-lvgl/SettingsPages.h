@@ -167,6 +167,7 @@ void UITask::buildSchemaSettings() {
       g = group(body, "LOOK");
       choiceRow(g, "Theme", "Changing it restarts the device", "Dark\nLight", theme::s_light ? 1 : 0, onThemeChoice);
       accentRow(g);   // DeviceScreen.h
+      schemaRow(g, SETTING(signal_show));
       return;
     }
     case PG_POWER: {   // one group: the page title says it (the GPS's power saving is under GPS > Options)

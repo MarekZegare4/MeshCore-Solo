@@ -35,7 +35,10 @@ class SimRadio : public mesh::Radio {
   // Dispatcher for scoring/logging and by MyMesh for the advert path's SNR
   // display) with plausible non-zero numbers instead of the base class's
   // default 0/0.
-  float _last_snr = 40.0f;   // Packet::_snr stores this * 4 as an int8_t (see Dispatcher.cpp)
+  float _last_snr = 12.0f;   // Packet::_snr stores this * 4 as an int8_t (see Dispatcher.cpp): under 32 dB
+public:
+  void setLinkSnr(float snr) { _last_snr = snr; }   // sim_radio_set_snr(): what the next packets are heard at
+private:
   float _last_rssi = -60.0f;
 
   struct QueuedPacket {
@@ -226,4 +229,5 @@ extern "C" inline EMSCRIPTEN_KEEPALIVE int sim_radio_poll_tx(uint8_t* out_buf, i
 extern "C" inline EMSCRIPTEN_KEEPALIVE void sim_radio_inject_rx(const uint8_t* data, int len) {
   radio_driver.injectRx(data, len);
 }
+extern "C" inline EMSCRIPTEN_KEEPALIVE void sim_radio_set_snr(float snr) { radio_driver.setLinkSnr(snr); }
 #endif

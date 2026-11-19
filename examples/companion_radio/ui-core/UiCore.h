@@ -26,6 +26,7 @@
 #include "PathEditor.h"
 #include "CourseEngine.h"
 #include "PacketFlow.h"
+#include "SignalMeter.h"
 #include "LiveShareEngine.h"
 #include "LocatorEngine.h"
 #include "TrailEngine.h"
@@ -128,12 +129,41 @@ public:
   }
 #endif
 
+  // The status bar's signal reading, against the spreading factor the radio
+  // is on now (a repeater profile's while relaying on it).
+  SignalMeter::Reading signalNow() const {
+    uint8_t sf = _prefs ? _prefs->sf : 10;
+    if (_prefs && _prefs->client_repeat && _prefs->repeater_use_profile && the_mesh.repeaterProfileValid())
+      sf = _prefs->repeater_sf;
+    return sig_meter.read(millis(), sf);
+  }
+  // The repeater behind it for Status / Diag: its name (a contact's, else
+  // ?hash) and "-4.5 dB 12 min ago" (fits a Diag row); false with "none in 30 min" or "none
+  // yet" in name when there is none to show.
+  bool signalRepeater(char* name, size_t n, char* snr, size_t m, bool compact = false) const {
+    const SignalMeter::Reading r = signalNow();
+    if (snr && m) snr[0] = 0;
+    if (r.age < SignalMeter::STALE) {
+      snprintf(name, n, "%s", r.age == SignalMeter::NONE ? (compact ? "none 30m" : "none in 30 min") : "none yet");
+      return false;
+    }
+    contactctl::hopName((uint8_t)((r.hash_len - 1) << 6 | 1), r.hash, 0, name, n);
+    const unsigned mins = (unsigned)(r.ago_ms / 60000);
+    if (snr && m) {
+      if (compact) snprintf(snr, m, "%.1fdB %um", r.snr_x4 / 4.0f, mins);   // a 128 px row
+      else if (mins) snprintf(snr, m, "%.1f dB %u min ago", r.snr_x4 / 4.0f, mins);
+      else      snprintf(snr, m, "%.1f dB just now", r.snr_x4 / 4.0f);
+    }
+    return true;
+  }
+
   // ── Engines ───────────────────────────────────────────────────────────────
   ClockEngine clock;        // alarm / countdown / ring
   PingEngine  ping;         // single in-flight ping / trace + last result
   PathEditor  route;        // route to a node: edit, trace out and back, save
   CourseEngine course;      // GPS position + course-over-ground ring
   PacketFlow  flow;         // packets heard, as lines between nodes for the map
+  SignalMeter sig_meter;    // how well repeaters were heard lately (status bar bars)
   HopRoute    hop_route;    // a route written in a message ({path}), placed for the map
   LiveShareEngine live_share; // [LOC] auto-share session + peers' shared positions
   LocatorEngine locator;    // active target, geofence crossings, proximity beeper
@@ -342,6 +372,7 @@ public:
   }
   void onPacketHeard(const mesh::Packet* pkt) override {
     flow.onHeard(pkt);
+    sig_meter.onHeard(pkt, millis());
     if (coverage.available() && _prefs && _prefs->cov_on) {
       CoverageRecorder::Fix f;
       bool have = coverageFix(f);

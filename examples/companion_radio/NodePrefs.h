@@ -640,6 +640,9 @@ struct NodePrefsFields {
   // Map > options > "Packet flow": what the radio hears drawn on the map as
   // lines between the nodes (ui-core/PacketFlow.h). 0 = off (default).
   uint8_t  flow_show;
+  // Settings > Display > "Signal bars": the status bar's bars for how well
+  // repeaters were heard lately (ui-core/SignalMeter.h). 1 = shown (default).
+  uint8_t  signal_show;
 
   // Single source of truth for the live-share option tables (shared by the Map
   // UI labels and the auto-send engine in UITask).
@@ -938,7 +941,7 @@ class NodePrefs : public NodePrefsFields, public ConfigSerializer {
     s.def("text_scale", ui_text_scale); s.def("icon_scale", ui_icon_scale);
     s.def("pages", home_pages_mask); s.hex("dash", dashboard_fields);
     s.hex("order", page_order); s.def("order_set", page_order_set);
-    s.def("ch_sort", ch_sort); s.def("flow", flow_show);
+    s.def("ch_sort", ch_sort); s.def("flow", flow_show); s.def("signal", signal_show);
     s.def("kb", keyboard_type); s.def("kb_alt", keyboard_alt_alphabet);
     s.def("kb_main", keyboard_main_alphabet); s.def("kb_cardkb", keyboard_cardkb_compact);
   }

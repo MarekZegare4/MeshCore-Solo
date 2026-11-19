@@ -7,7 +7,7 @@ board supports are shown.
 
 | Section | What's there |
 | ------- | ------------ |
-| **Display** | Brightness, auto-off, wake on message, the message alert (banner, corner envelope or off), lock screen, the lock clock's look and the [PIN](./lock.md), battery as icon / % / volts, the clock set by hand, time zone and summer time, clock format and seconds, time from GPS; on e-ink also rotation and full refresh, and on a 4.26" panel the text and icon size |
+| **Display** | Brightness, auto-off, wake on message, the message alert (banner, corner envelope or off), lock screen, the lock clock's look and the [PIN](./lock.md), battery as icon / % / volts, the signal bars, the clock set by hand, time zone and summer time, clock format and seconds, time from GPS; on e-ink also rotation and full refresh, and on a 4.26" panel the text and icon size |
 | **Sound** | Buzzer on / off / auto (quiet while the app is connected), volume, quiet hours, the melody for messages, channels and adverts |
 | **Home Pages** | Order of the home pages, and which are shown |
 | **Radio** | TX power, preset, frequency, SF / BW / CR, saved presets, Auto pwr, Power save, the scope list, then the advanced options (below) |

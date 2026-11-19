@@ -594,7 +594,7 @@ class HomeScreen : public UIScreen {
     // icon won't fit above the reserved area, every lower-priority icon after
     // it is dropped too (the list is ordered high→low).
     //
-    // Priority: power > BT > GPS fix > alarm > mute > auto-advert > trail > live-share >
+    // Priority: power > BT > GPS fix > signal > alarm > mute > auto-advert > trail > live-share >
     // repeater. Battery (drawn above) is always rightmost. The background modes
     // (advert / trail / live-share / repeater) stay outside any BT gate — they
     // keep running with Bluetooth off, so their cue must not vanish with it.
@@ -608,11 +608,16 @@ class HomeScreen : public UIScreen {
     // Bluetooth only once a phone is connected (it's on nearly always; the
     // Bluetooth page tells the rest), GPS as a broken reticle until a fix.
     const bool gps_fix = gps_on && loc->isValid();
+    // Signal (#60): bars from the repeaters heard in the last half hour, empty
+    // ones once nothing has been for longer; none before the first since boot.
+    const SignalMeter::Reading sig = _task->core().signalNow();
+    const bool sig_on = _node_prefs && _node_prefs->signal_show && sig.age != SignalMeter::NEVER;
     struct Sicon { bool active; const MiniIcon* icon; };
     const Sicon icons[] = {
       { board.isExternalPowered(),                                 &ICON_CHARGE },   // USB power: next to the battery
       { _task->isBluetoothEnabled() && _task->isBLEConnected(),       &ICON_BLUETOOTH },
       { gps_on,                                                    gps_fix ? &ICON_GPS : &ICON_GPS_SEARCH },
+      { sig_on,                                                    ICON_SIGNAL[sig.level] },
       { _node_prefs && _node_prefs->alarm_on,                      &ICON_ALARM },
       { mute_on,                                                   &ICON_MUTE },
       { _node_prefs && _node_prefs->advert_auto_interval_sec > 0,  &ICON_ADVERT },

@@ -587,6 +587,60 @@ MINI_ICON(ICON_GPS_SEARCH, 9,   // the reticle broken: still searching
   packRow(".##...##."),
   packRow("...#.#..."));
 
+// Signal in the status bar (#60): how well repeaters were heard lately, 0-4
+// bars; unlit ones leave a 1 px stub, so 0 = heard nothing lately.
+MINI_ICON(ICON_SIGNAL0, 7,
+  packRow("......."),
+  packRow("......."),
+  packRow("......."),
+  packRow("......."),
+  packRow("......."),
+  packRow("......."),
+  packRow("......."),
+  packRow("......."),
+  packRow("#.#.#.#"));
+MINI_ICON(ICON_SIGNAL1, 7,
+  packRow("......."),
+  packRow("......."),
+  packRow("......."),
+  packRow("......."),
+  packRow("......."),
+  packRow("......."),
+  packRow("#......"),
+  packRow("#......"),
+  packRow("#.#.#.#"));
+MINI_ICON(ICON_SIGNAL2, 7,
+  packRow("......."),
+  packRow("......."),
+  packRow("......."),
+  packRow("......."),
+  packRow("..#...."),
+  packRow("..#...."),
+  packRow("#.#...."),
+  packRow("#.#...."),
+  packRow("#.#.#.#"));
+MINI_ICON(ICON_SIGNAL3, 7,
+  packRow("......."),
+  packRow("......."),
+  packRow("....#.."),
+  packRow("....#.."),
+  packRow("..#.#.."),
+  packRow("..#.#.."),
+  packRow("#.#.#.."),
+  packRow("#.#.#.."),
+  packRow("#.#.#.#"));
+MINI_ICON(ICON_SIGNAL4, 7,
+  packRow("......#"),
+  packRow("......#"),
+  packRow("....#.#"),
+  packRow("....#.#"),
+  packRow("..#.#.#"),
+  packRow("..#.#.#"),
+  packRow("#.#.#.#"),
+  packRow("#.#.#.#"),
+  packRow("#.#.#.#"));
+static const MiniIcon* const ICON_SIGNAL[5] = { &ICON_SIGNAL0, &ICON_SIGNAL1, &ICON_SIGNAL2, &ICON_SIGNAL3, &ICON_SIGNAL4 };
+
 MINI_ICON(ICON_CHART, 9,   // ascending bars — Home › Status
   packRow("........#"),
   packRow("......#.#"),
@@ -680,6 +734,50 @@ MINI_ICON(ICON_GPS_SEARCH, 7,   // the reticle broken: still searching
   packRow(".#...#."),
   packRow("..#.#.."));
 
+// Signal in the status bar (#60): how well repeaters were heard lately, 0-4
+// bars; unlit ones leave a 1 px stub, so 0 = heard nothing lately.
+MINI_ICON(ICON_SIGNAL0, 7,
+  packRow("......."),
+  packRow("......."),
+  packRow("......."),
+  packRow("......."),
+  packRow("......."),
+  packRow("......."),
+  packRow("#.#.#.#"));
+MINI_ICON(ICON_SIGNAL1, 7,
+  packRow("......."),
+  packRow("......."),
+  packRow("......."),
+  packRow("......."),
+  packRow("......."),
+  packRow("#......"),
+  packRow("#.#.#.#"));
+MINI_ICON(ICON_SIGNAL2, 7,
+  packRow("......."),
+  packRow("......."),
+  packRow("......."),
+  packRow("......."),
+  packRow("..#...."),
+  packRow("#.#...."),
+  packRow("#.#.#.#"));
+MINI_ICON(ICON_SIGNAL3, 7,
+  packRow("......."),
+  packRow("......."),
+  packRow("....#.."),
+  packRow("....#.."),
+  packRow("..#.#.."),
+  packRow("#.#.#.."),
+  packRow("#.#.#.#"));
+MINI_ICON(ICON_SIGNAL4, 7,
+  packRow("......#"),
+  packRow("......#"),
+  packRow("....#.#"),
+  packRow("....#.#"),
+  packRow("..#.#.#"),
+  packRow("#.#.#.#"),
+  packRow("#.#.#.#"));
+static const MiniIcon* const ICON_SIGNAL[5] = { &ICON_SIGNAL0, &ICON_SIGNAL1, &ICON_SIGNAL2, &ICON_SIGNAL3, &ICON_SIGNAL4 };
+
 MINI_ICON(ICON_CHART, 7,   // ascending bars — Home › Status
   packRow("......#"),
   packRow("....#.#"),
@@ -762,6 +860,40 @@ MINI_ICON(ICON_GPS_SEARCH, 5,   // the reticle broken, no dot: GPS on, still sea
   packRow("....."),
   packRow("#...#"),
   packRow(".#.#."));
+
+// Signal in the status bar (#60): how well repeaters were heard lately, 0-4
+// bars; unlit ones leave a 1 px stub, so 0 = heard nothing lately.
+MINI_ICON(ICON_SIGNAL0, 7,
+  packRow("......."),
+  packRow("......."),
+  packRow("......."),
+  packRow("......."),
+  packRow("#.#.#.#"));
+MINI_ICON(ICON_SIGNAL1, 7,
+  packRow("......."),
+  packRow("......."),
+  packRow("......."),
+  packRow("#......"),
+  packRow("#.#.#.#"));
+MINI_ICON(ICON_SIGNAL2, 7,
+  packRow("......."),
+  packRow("......."),
+  packRow("..#...."),
+  packRow("#.#...."),
+  packRow("#.#.#.#"));
+MINI_ICON(ICON_SIGNAL3, 7,
+  packRow("......."),
+  packRow("....#.."),
+  packRow("..#.#.."),
+  packRow("#.#.#.."),
+  packRow("#.#.#.#"));
+MINI_ICON(ICON_SIGNAL4, 7,
+  packRow("......#"),
+  packRow("....#.#"),
+  packRow("..#.#.#"),
+  packRow("#.#.#.#"),
+  packRow("#.#.#.#"));
+static const MiniIcon* const ICON_SIGNAL[5] = { &ICON_SIGNAL0, &ICON_SIGNAL1, &ICON_SIGNAL2, &ICON_SIGNAL3, &ICON_SIGNAL4 };
 
 // The Status page's glyph.
 MINI_ICON(ICON_CHART, 5,   // ascending bars — Home › Status

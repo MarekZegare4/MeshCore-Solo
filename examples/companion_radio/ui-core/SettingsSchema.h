@@ -276,6 +276,7 @@ static const Setting ALL[] = {
   SW("Lock screen", "Slide to unlock after sleep", SEC_DISPLAY, auto_lock, nullptr),
   IDX("Lock clock", "Big, or compact with the clock fields", SEC_DISPLAY, lock_compact, 2, optLockLook, nullptr),
   IDX("Battery display", "In the status bar", SEC_DISPLAY, batt_display_mode, 3, optBattDisplay, nullptr),
+  SW("Signal bars", "How well repeaters were heard lately", SEC_DISPLAY, signal_show, nullptr),
   // Only the builds that ask for them (big e-ink panels): each screen elsewhere
   // is laid out for one cell size.
 #ifdef EINK_FONT_SCALE
@@ -359,7 +360,7 @@ static const struct { uint16_t offset; const char* text; } SHORT_LABELS[] = {
   { NP_OFF(display_brightness), "Bright" },      { NP_OFF(auto_off_secs), "Auto off" },
   { NP_OFF(msg_wake), "Msg wake" },              { NP_OFF(auto_lock), "Auto lock" },
   { NP_OFF(msg_alert), "Msg alert" },
-  { NP_OFF(batt_display_mode), "Batt disp" },    { NP_OFF(low_batt_mv), "Low batt" },
+  { NP_OFF(batt_display_mode), "Batt disp" },    { NP_OFF(signal_show), "Signal" },    { NP_OFF(low_batt_mv), "Low batt" },
   { NP_OFF(gps_interval), "GPS pwr" },           { NP_OFF(clock_12h), "12h clock" },
   { NP_OFF(clock_hide_seconds), "Seconds" },     { NP_OFF(gps_time_off), "GPS time" },     { NP_OFF(units_imperial), "Imperial" },
   { NP_OFF(dm_resend_count), "Resend" },         { NP_OFF(contact_expiry_idx), "Expire" },

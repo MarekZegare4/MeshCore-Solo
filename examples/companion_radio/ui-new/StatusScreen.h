@@ -156,6 +156,11 @@ private:
     snprintf(b, sizeof(b), "%.1f dB", radio_driver.getLastSNR());
     if (Features::IS_EINK) chartBlock(d, f, rsv, "SNR", b, _hist.snr, 20, false, "32 pkts", info::axisQuarterDb);
     else row(d, f, rsv, "Last SNR", b);
+    // The repeater behind the status bar's bars (#60), and how it was heard.
+    char rs[24];
+    const bool rpt = _task->core().signalRepeater(b, sizeof(b), rs, sizeof(rs), true);
+    row(d, f, rsv, "Best rpt", b);
+    if (rpt) row(d, f, rsv, "Rpt SNR", rs);
   }
 
 #if ENV_INCLUDE_GPS == 1

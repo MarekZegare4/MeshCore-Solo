@@ -93,6 +93,16 @@ The battery sits at the top right, as an icon, a percentage or the voltage
 (Settings › Display). A small bolt beside it means external power is
 connected over USB.
 
+The bars beside it are how well the repeaters around you were heard lately
+(Settings › Display › **Signal bars**): the best of the last ten minutes,
+against what the spreading factor in use can still decode. It is what this
+device received, not whether they hear you back; for that, Ping or Discover
+a route. A quiet mesh sends little, so the bars don't drop at once: after ten
+minutes without a repeater they stay as they were (grey on the L2), after
+half an hour they show empty. Until the first repeater is heard after a
+start there are none. Status › Radio (Diag › Live on the L2) names the
+repeater and its SNR.
+
 > [!NOTE]
 > Boards without a way to sense USB power (the Heltec V3, V4 and the
 > Cardputer ADV) don't show the bolt.

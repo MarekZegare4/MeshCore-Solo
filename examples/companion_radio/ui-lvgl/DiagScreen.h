@@ -18,7 +18,7 @@ namespace diagview {
 enum : uint8_t { TAB_LIVE, TAB_HISTORY, TAB_SYSTEM, TAB_FONT, TAB_NOISE, TAB_COUNT };
 static uint8_t s_tab = TAB_LIVE;   // kept across visits
 static lv_obj_t* s_list = nullptr;
-static const int EXTRA = 7;   // GPS, power, last reset, last crash (L2 only), PSRAM x3
+static const int EXTRA = 9;   // GPS, power, last reset, last crash (L2 only), PSRAM x3, best repeater x2
 // A Live row's value labels: `in` / `out` for a packet count ("12/3" from
 // ui-core), else `val` alone.
 struct LiveVal { lv_obj_t* val; lv_obj_t* in; lv_obj_t* out; };
@@ -195,8 +195,12 @@ static void extraRow(diag::Row* rows, int& n, const char* lbl, const char* fmt, 
 
 // ui-core's live rows plus the receiver's state and why the device last
 // started -- what to look at when GPS gets no fix or the device restarted.
-static int allRows(diag::Row* rows, bool gps_on) {
+static int allRows(diag::Row* rows, bool gps_on, const UiCore& core) {
   int n = diag::liveRows(rows);
+  char rn[20], rs[20];
+  if (!core.signalRepeater(rn, sizeof(rn), rs, sizeof(rs))) strcpy(rs, "-");   // the same rows either way
+  extraRow(rows, n, "Best rpt", "%s", rn);
+  extraRow(rows, n, "Best rpt SNR", "%s", rs);
 #if defined(SEEED_WIO_TRACKER_L2)
   static uint32_t s_chars = 0, s_moved_ms = 0;
   uint32_t c = gps.rxChars();
@@ -235,6 +239,7 @@ static const Name NAMES[] = {
   { "Noise floor", SEC_RADIO, "Noise floor", false },  { "RSSI/SNR", SEC_RADIO, "Last packet", false },
   { "Queue", SEC_RADIO, "Send queue", false },         { "Errors", SEC_RADIO, "Errors", false },
   { "RXPS wd s/h", SEC_RADIO, "RX watchdog soft / hard", false },
+  { "Best rpt", SEC_RADIO, "Best repeater (30 min)", false }, { "Best rpt SNR", SEC_RADIO, "Its SNR", false },
   { "Heap free", SEC_MEMORY, "Heap free", false },     { "Stack free", SEC_MEMORY, "UI stack free (lowest)", false },
   { "Pool free", SEC_MEMORY, "Packet pool free", false },
   { "PSRAM free", SEC_MEMORY, "PSRAM free", false },  { "PSRAM block", SEC_MEMORY, "PSRAM largest free block", false },
@@ -444,7 +449,7 @@ void UITask::buildDiag() {
   if (s_tab == TAB_LIVE) {
     // Section by section, the first at once, the others as the loop goes (fill).
     diag::Row rows[diag::MAX_ROWS + EXTRA];
-    s_rows = allRows(rows, _core->gpsEnabled());
+    s_rows = allRows(rows, _core->gpsEnabled(), *_core);
     for (int i = 0; i < s_rows; i++) s_vals[i] = { nullptr, nullptr, nullptr };
     fillStart(SEC_COUNT, 1, &UITask::diagSection);
     return;
@@ -535,7 +540,7 @@ void UITask::buildDiag() {
 void UITask::diagSection(int sec) {
   using namespace diagview;
   diag::Row rows[diag::MAX_ROWS + EXTRA];
-  int n = allRows(rows, _core->gpsEnabled());
+  int n = allRows(rows, _core->gpsEnabled(), *_core);
   if (n != s_rows) return;   // changed meanwhile: refreshDiag() builds it again
   lv_obj_t* card = nullptr;
   for (int i = 0; i < n; i++) {
@@ -608,7 +613,7 @@ void UITask::refreshDiag() {
   }
   if (_screen != SCR_DIAG || s_tab != TAB_LIVE || _nav_overlay) return;
   diag::Row rows[diag::MAX_ROWS + EXTRA];
-  int n = allRows(rows, _core->gpsEnabled());
+  int n = allRows(rows, _core->gpsEnabled(), *_core);
   if (n != s_rows) { buildDiag(); return; }
   for (int i = 0; i < n; i++) setLive(i, rows[i]);   // unchanged text isn't redrawn (UITask.cpp)
 }
