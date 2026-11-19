@@ -33,6 +33,7 @@ enum XId : uint8_t {
   XB_DM_ALLOWED, XB_DM_TRIGGER, XB_DM_REPLY,
   XS_CHANNELS, XS_DM1, XS_DM2, XS_DM3, XS_MSG, XS_ACK,
   XA_TIME, XA_DAYS, XC_HOME,
+  XL_TO, XL_SCOPE, XN_FAV, XN_UNSAVED, XN_MUTED, XN_ALWAYS,
 };
 struct XKey { uint8_t section; const char* label; uint8_t kind; };
 static const XKey XKEYS[] = {
@@ -49,6 +50,9 @@ static const XKey XKEYS[] = {
   { settings::SEC_SOS_TO, "Message", XK_TEXT },    { settings::SEC_SOS_RUN, "ACK word", XK_TEXT },
   { settings::SEC_ALARM, "Time", XK_TEXT },         { settings::SEC_ALARM, "Days", XK_LIST },
   { settings::SEC_COVERAGE, "Home", XK_TEXT },
+  { settings::SEC_LIVE_SHARE, "Share to", XK_PICK }, { settings::SEC_LIVE_SHARE, "Scope", XK_PICK },
+  { settings::SEC_CHATS, "Favourite channels", XK_LIST }, { settings::SEC_MESSAGES, "Channels not kept", XK_LIST },
+  { settings::SEC_SOUND_FOR, "Muted channels", XK_LIST },  { settings::SEC_SOUND_FOR, "Channels always heard", XK_LIST },
 };
 static const Key KEYS[] = {
   K("advert.interval", advert_auto_interval_sec), K("advert.loc", advert_loc_policy),
@@ -107,6 +111,13 @@ static const Key KEYS[] = {
   K("keyboard.additional", keyboard_alt_alphabet), K("keyboard.cardkb", keyboard_cardkb_compact),
   K("chats.dm", dm_show_all), K("chats.channels", ch_fav_only), K("chats.rooms", room_fav_only),
   K("radio.powersave", rx_powersave),
+  KX("share.to", XL_TO), KX("share.scope", XL_SCOPE), KX("channels.favourite", XN_FAV),
+#ifdef HIST_FLASH   // the flash log is what a channel is kept out of
+  KX("channels.unsaved", XN_UNSAVED),
+#endif
+#ifdef PIN_BUZZER
+  KX("channels.muted", XN_MUTED), KX("channels.always", XN_ALWAYS),
+#endif
 };
 #undef K
 #undef KB
@@ -153,10 +164,12 @@ static uint16_t* xCmdOff(NodePrefs* p, uint8_t id) {
 // empty slot has no name: false). Its mask: of those on.
 // The alarm's days: bit i = 1 << tm_wday, Sunday first.
 static const char* const DAYS[7] = { "sun", "mon", "tue", "wed", "thu", "fri", "sat" };
-static int xListCount(uint8_t id) { return id == XS_CHANNELS ? 64 : id == XA_DAYS ? 7 : botcmd::COUNT; }
+// The lists of channels by slot: the SOS's, and the channels' own options.
+static bool chanList(uint8_t id) { return id == XS_CHANNELS || (id >= XN_FAV && id <= XN_ALWAYS); }
+static int xListCount(uint8_t id) { return chanList(id) ? 64 : id == XA_DAYS ? 7 : botcmd::COUNT; }
 static bool xListName(uint8_t id, int i, char* out, size_t n) {
   if (id == XA_DAYS) { snprintf(out, n, "%s", DAYS[i]); return true; }
-  if (id != XS_CHANNELS) { snprintf(out, n, "%s", botcmd::CMDS[i].name); return true; }
+  if (!chanList(id)) { snprintf(out, n, "%s", botcmd::CMDS[i].name); return true; }
   ChannelDetails ch;
   if (!the_mesh.getChannel(i, ch) || !ch.name[0]) return false;
   snprintf(out, n, "%s", ch.name);
@@ -165,30 +178,31 @@ static bool xListName(uint8_t id, int i, char* out, size_t n) {
 static uint64_t xListGet(const NodePrefs* p, uint8_t id) {
   if (id == XS_CHANNELS) return p->sos_ch_mask;
   if (id == XA_DAYS) return p->alarm_repeat_mask;
+  if (id == XN_FAV) return p->ch_fav_bitmask;
+  if (id == XN_UNSAVED) return p->ch_no_save;
+  if (id == XN_MUTED) return p->ch_notif_override & p->ch_notif_muted;
+  if (id == XN_ALWAYS) return p->ch_notif_override & ~p->ch_notif_muted;
   return (uint16_t)~*xCmdOff((NodePrefs*)p, id) & (botcmd::flag(botcmd::COUNT) - 1);
 }
 static void xListSet(NodePrefs* p, uint8_t id, uint64_t on) {
   if (id == XS_CHANNELS) p->sos_ch_mask = on;
   else if (id == XA_DAYS) p->alarm_repeat_mask = (uint8_t)(on & 0x7F);
+  else if (id == XN_FAV) p->ch_fav_bitmask = on;
+  else if (id == XN_UNSAVED) p->ch_no_save = on;
+  else if (id == XN_MUTED || id == XN_ALWAYS) {   // one state per channel: listed in one, out of the other
+    const uint8_t st = id == XN_MUTED ? chanctl::NOTIF_MUTED : chanctl::NOTIF_ALWAYS;
+    for (uint8_t i = 0; i < 64; i++)
+      if (on >> i & 1) chanctl::setNotif(p, i, st);
+      else if (chanctl::notif(p, i) == st) chanctl::setNotif(p, i, chanctl::NOTIF_DEFAULT);
+  }
   else *xCmdOff(p, id) = (uint16_t)(~on & (botcmd::flag(botcmd::COUNT) - 1));
 }
 static uint8_t* xDm(NodePrefs* p, uint8_t id) {
   return id >= XS_DM1 && id <= XS_DM3 ? p->sos_dm[id - XS_DM1] : nullptr;
 }
 
-// A pick's choices by index (channels by slot, rooms in the contact list's
-// order) and the one picked, -1 for none.
-static bool xPickName(uint8_t id, int i, char* out, size_t n) {
-  if (id == XB_ROOM || (id >= XS_DM1 && id <= XS_DM3)) {
-    const uint8_t type = id == XB_ROOM ? ADV_TYPE_ROOM : ADV_TYPE_CHAT;
-    ContactInfo c;
-    int seen = 0;
-    for (int idx = MAX_ANON_CONTACTS; the_mesh.getContactByIdx(idx, c); idx++) {
-      if (c.type != type) continue;
-      if (seen++ == i) { snprintf(out, n, "%s", c.name); return true; }
-    }
-    return false;
-  }
+// The i-th channel with a name, and the i-th contact of a type, in list order.
+static bool nthChannel(int i, char* out, size_t n) {
   for (int slot = 0, seen = 0; slot < 64; slot++) {
     ChannelDetails ch;
     if (!the_mesh.getChannel(slot, ch)) break;
@@ -197,18 +211,75 @@ static bool xPickName(uint8_t id, int i, char* out, size_t n) {
   }
   return false;
 }
+static bool nthContact(uint8_t type, int i, char* out, size_t n) {
+  ContactInfo c;
+  int seen = 0;
+  for (int idx = MAX_ANON_CONTACTS; the_mesh.getContactByIdx(idx, c); idx++) {
+    if (c.type != type) continue;
+    if (seen++ == i) { snprintf(out, n, "%s", c.name); return true; }
+  }
+  return false;
+}
+static int channelCount() {
+  char nm[2];
+  int k = 0;
+  while (nthChannel(k, nm, sizeof(nm))) k++;
+  return k;
+}
+// A channel's slot / a contact's key prefix, by name (case ignored).
+static int channelSlot(const char* name) {
+  for (int slot = 0; slot < 64; slot++) {
+    ChannelDetails ch;
+    if (!the_mesh.getChannel(slot, ch)) break;
+    if (ch.name[0] && !strcasecmp(ch.name, name)) return slot;
+  }
+  return -1;
+}
+static bool contactKey(uint8_t type, const char* name, uint8_t* key) {
+  ContactInfo c;
+  for (int idx = MAX_ANON_CONTACTS; the_mesh.getContactByIdx(idx, c); idx++)
+    if (c.type == type && !strcasecmp(c.name, name)) { memcpy(key, c.id.pub_key, NodePrefs::FAVOURITE_PREFIX_LEN); return true; }
+  return false;
+}
+static bool contactName(const uint8_t* key, char* out, size_t n) {
+  static const uint8_t ZERO[NodePrefs::FAVOURITE_PREFIX_LEN] = {0};
+  if (!memcmp(key, ZERO, sizeof(ZERO))) return false;
+  ContactInfo* c = the_mesh.lookupContactByPubKey(key, NodePrefs::FAVOURITE_PREFIX_LEN);
+  if (!c || !c->name[0]) return false;
+  snprintf(out, n, "%s", c->name);
+  return true;
+}
+// Live share's scope: 0 follows the target, n the scope list's entry n-1 ("*" first).
+static const char* const SCOPE_TARGET = "Target's";
+
+// A pick's choices by index (channels by slot, rooms in the contact list's
+// order; live share's target the channels, then the chat contacts).
+static bool xPickName(uint8_t id, int i, char* out, size_t n) {
+  if (id == XB_ROOM || (id >= XS_DM1 && id <= XS_DM3)) return nthContact(id == XB_ROOM ? ADV_TYPE_ROOM : ADV_TYPE_CHAT, i, out, n);
+  if (id == XL_TO) {
+    const int nch = channelCount();
+    return i < nch ? nthChannel(i, out, n) : nthContact(ADV_TYPE_CHAT, i - nch, out, n);
+  }
+  if (id == XL_SCOPE) {
+    const ScopeList& sl = the_mesh.scopeList();
+    if (i > sl.count + 1) return false;
+    snprintf(out, n, "%s", i == 0 ? SCOPE_TARGET : sl.name((uint8_t)(i - 1)));
+    return true;
+  }
+  return nthChannel(i, out, n);
+}
 static bool xPickGet(const NodePrefs* p, uint8_t id, char* out, size_t n) {
-  if (id == XB_ROOM || (id >= XS_DM1 && id <= XS_DM3)) {
-    const uint8_t* key = id == XB_ROOM ? p->bot_room_prefix : p->sos_dm[id - XS_DM1];
-    static const uint8_t ZERO[NodePrefs::FAVOURITE_PREFIX_LEN] = {0};
-    if (!memcmp(key, ZERO, sizeof(ZERO))) return false;
-    ContactInfo* c = the_mesh.lookupContactByPubKey(key, NodePrefs::FAVOURITE_PREFIX_LEN);
-    if (!c || !c->name[0]) return false;
-    snprintf(out, n, "%s", c->name);
+  if (id == XB_ROOM || (id >= XS_DM1 && id <= XS_DM3))
+    return contactName(id == XB_ROOM ? p->bot_room_prefix : p->sos_dm[id - XS_DM1], out, n);
+  if (id == XL_TO && p->loc_share_target_type == 1) return contactName(p->loc_share_dm_prefix, out, n);
+  if (id == XL_SCOPE) {
+    const ScopeList& sl = the_mesh.scopeList();
+    snprintf(out, n, "%s", p->loc_share_scope == 0 ? SCOPE_TARGET : sl.name((uint8_t)(p->loc_share_scope - 1)));
     return true;
   }
   ChannelDetails ch;
-  if (!the_mesh.getChannel(id == XB_CH1_CHANNEL ? p->bot_channel_idx : p->bot_ch2_idx, ch) || !ch.name[0]) return false;
+  const uint8_t slot = id == XL_TO ? p->loc_share_channel_idx : id == XB_CH1_CHANNEL ? p->bot_channel_idx : p->bot_ch2_idx;
+  if (!the_mesh.getChannel(slot, ch) || !ch.name[0]) return false;
   snprintf(out, n, "%s", ch.name);
   return true;
 }
@@ -217,24 +288,25 @@ static bool xPickSet(NodePrefs* p, uint8_t id, const char* name) {
   if (id == XB_ROOM || xDm(p, id)) {
     uint8_t* key = id == XB_ROOM ? p->bot_room_prefix : xDm(p, id);
     if (!strcasecmp(name, "none")) { memset(key, 0, NodePrefs::FAVOURITE_PREFIX_LEN); return true; }
-    const uint8_t type = id == XB_ROOM ? ADV_TYPE_ROOM : ADV_TYPE_CHAT;
-    ContactInfo c;
-    for (int idx = MAX_ANON_CONTACTS; the_mesh.getContactByIdx(idx, c); idx++)
-      if (c.type == type && !strcasecmp(c.name, name)) {
-        memcpy(key, c.id.pub_key, NodePrefs::FAVOURITE_PREFIX_LEN);
-        return true;
-      }
+    return contactKey(id == XB_ROOM ? ADV_TYPE_ROOM : ADV_TYPE_CHAT, name, key);
+  }
+  if (id == XL_SCOPE) {
+    if (!strcasecmp(name, SCOPE_TARGET)) { p->loc_share_scope = 0; return true; }
+    const ScopeList& sl = the_mesh.scopeList();
+    for (uint8_t i = 0; i <= sl.count; i++)
+      if (!strcasecmp(sl.name(i), name)) { p->loc_share_scope = (uint8_t)(i + 1); return true; }
     return false;
   }
-  for (int slot = 0; slot < 64; slot++) {
-    ChannelDetails ch;
-    if (!the_mesh.getChannel(slot, ch)) break;
-    if (ch.name[0] && !strcasecmp(ch.name, name)) {
-      (id == XB_CH1_CHANNEL ? p->bot_channel_idx : p->bot_ch2_idx) = (uint8_t)slot;
-      return true;
-    }
+  const int slot = channelSlot(name);
+  if (id == XL_TO) {   // a channel of that name first, else a contact
+    if (slot >= 0) { p->loc_share_target_type = 0; p->loc_share_channel_idx = (uint8_t)slot; return true; }
+    if (!contactKey(ADV_TYPE_CHAT, name, p->loc_share_dm_prefix)) return false;
+    p->loc_share_target_type = 1;
+    return true;
   }
-  return false;
+  if (slot < 0) return false;
+  (id == XB_CH1_CHANNEL ? p->bot_channel_idx : p->bot_ch2_idx) = (uint8_t)slot;
+  return true;
 }
 
 static void xGet(NodePrefs* p, uint8_t id, char* reply, int n) {

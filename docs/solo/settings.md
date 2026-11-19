@@ -201,7 +201,12 @@ on the L1 also `keyboard.type` and, with a CardKB, `keyboard.cardkb`; none
 on a one-button device without a CardKB, whose strip types Latin only), the
 radio's `radio.powersave` (`Off`, `On`, `Max`), and on the e-ink L1s
 `display.rotation`, `display.joystick`, `display.full.refresh` and
-`display.panel.sleep`. `opts` marks
+`display.panel.sleep`. Live share's target, `share.to` (a channel's name,
+else a contact's), and `share.scope` (`Target's` follows the target, or a
+name from the scope list); the channels' own options, as lists of names:
+`channels.favourite`, `channels.muted`, `channels.always` (a sound even in
+quiet hours) and, where messages are kept on flash, `channels.unsaved`.
+`opts` marks
 a text `#text:<max bytes>` and a list or a name to pick `#list` / `#pick`,
 with the choices after it (`...` when they don't all fit). `get` shows a value as the Settings screen does, and `set`
 takes it the same way, case ignored:
