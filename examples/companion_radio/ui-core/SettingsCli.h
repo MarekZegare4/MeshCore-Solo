@@ -101,6 +101,12 @@ static const Key KEYS[] = {
 #if defined(PIN_GPIO1)
   K("gpio.1", gpio1_mode), K("gpio.2", gpio2_mode), K("gpio.3", gpio3_mode), K("gpio.4", gpio4_mode),
 #endif
+  K("display.rotation", display_rotation), K("display.joystick", joystick_rotation),
+  K("display.full.refresh", eink_full_refresh_every), K("display.panel.sleep", eink_panel_sleep),
+  K("keyboard.type", keyboard_type), K("keyboard.alphabet", keyboard_main_alphabet),
+  K("keyboard.additional", keyboard_alt_alphabet), K("keyboard.cardkb", keyboard_cardkb_compact),
+  K("chats.dm", dm_show_all), K("chats.channels", ch_fav_only), K("chats.rooms", room_fav_only),
+  K("radio.powersave", rx_powersave),
 };
 #undef K
 #undef KB

@@ -625,7 +625,7 @@ public:
   void applyAllGpioModes();                  // boot-time restore from NodePrefs, called from begin()
   void applyBrightness();
   // Settings changed through the schema (ui-core/SettingsSchema.h).
-  void applyDisplayPrefs() override { applyBrightness(); applyUiScale(); _next_refresh = 0; }
+  void applyDisplayPrefs() override { applyBrightness(); applyUiScale(); applyRotation(); applyFullRefreshInterval(); _next_refresh = 0; }
   void applySoundPrefs() override;
   void onSosRunning(bool running) override;
   int battPercent() override;

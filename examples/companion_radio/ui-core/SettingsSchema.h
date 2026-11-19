@@ -15,6 +15,7 @@
 
 #include <stddef.h>
 #include "../NodePrefs.h"
+#include "../Features.h"   // FEAT_*: which boards have the screen rows below
 #include "../Trail.h"
 #include "SoundControl.h"
 #include <helpers/sensors/LocationProvider.h>   // Time from GPS
@@ -28,7 +29,10 @@ namespace settings {
 // PG_REPEATER, PG_BOT, PG_SOS and PG_TOOLS are for the console and the configurator
 // (issue #62): the frontends have their own screens for them. Their texts,
 // targets and lists (the bot's reply, the SOS channels ...) are SettingsCli's.
-enum Page : uint8_t { PG_NAV, PG_ADVERT, PG_DEVICE, PG_MESSAGES, PG_SOUND, PG_PRIVACY, PG_RADIO, PG_REPEATER, PG_BOT, PG_SOS, PG_TOOLS, PG_COUNT };
+// PG_MORE is for them too: settings the frontends keep in rows of their own
+// (L1's screen, keyboard and list filters, the Radio screen's power save).
+enum Page : uint8_t { PG_NAV, PG_ADVERT, PG_DEVICE, PG_MESSAGES, PG_SOUND, PG_PRIVACY, PG_RADIO, PG_REPEATER, PG_BOT, PG_SOS, PG_TOOLS,
+                      PG_MORE, PG_COUNT };
 enum Section : uint8_t { SEC_TRAIL, SEC_LIVE_SHARE, SEC_LOCATOR, SEC_MAP_VIEW, SEC_ADVERT,
                          SEC_DISPLAY, SEC_POWER, SEC_TIME, SEC_UNITS,
                          SEC_MESSAGES, SEC_CONTACTS, SEC_AUTO_ADD,
@@ -37,11 +41,13 @@ enum Section : uint8_t { SEC_TRAIL, SEC_LIVE_SHARE, SEC_LOCATOR, SEC_MAP_VIEW, S
                          SEC_RPT, SEC_RPT_RELAYS,
                          SEC_BOT_CH1, SEC_BOT_CH2, SEC_BOT_ROOM, SEC_BOT_DM, SEC_BOT_OTHER,
                          SEC_SOS_START, SEC_SOS_TO, SEC_SOS_RUN,
-                         SEC_ALARM, SEC_COVERAGE, SEC_GPIO, SEC_COUNT };
+                         SEC_ALARM, SEC_COVERAGE, SEC_GPIO,
+                         SEC_SCREEN, SEC_KEYBOARD, SEC_CHATS, SEC_RX, SEC_COUNT };
 
 static const char* pageTitle(uint8_t p) {
   static const char* T[PG_COUNT] = { "Map options", "Advert", "Display & power", "Messages & contacts", "Sound",
-                                     "Privacy", "Advanced radio", "Repeater", "Bot", "SOS", "Tools" };
+                                     "Privacy", "Advanced radio", "Repeater", "Bot", "SOS", "Tools",
+                                     "More" };
   return p < PG_COUNT ? T[p] : "";
 }
 static const char* sectionTitle(uint8_t s) {
@@ -53,7 +59,8 @@ static const char* sectionTitle(uint8_t s) {
                                       "REPEATER", "WHAT IT RELAYS",
                                       "CHANNEL BOT 1", "CHANNEL BOT 2", "ROOM", "DIRECT MESSAGES", "OTHER",
                                       "START", "SENT TO", "WHILE IT RUNS",
-                                      "ALARM", "COVERAGE", "GPIO" };
+                                      "ALARM", "COVERAGE", "GPIO",
+                                      "SCREEN", "KEYBOARD", "IN THE CHAT LIST", "RADIO" };
   return s < SEC_COUNT ? T[s] : "";
 }
 static uint8_t sectionPage(uint8_t s) {
@@ -65,7 +72,8 @@ static uint8_t sectionPage(uint8_t s) {
                                         PG_REPEATER, PG_REPEATER,
                                         PG_BOT, PG_BOT, PG_BOT, PG_BOT, PG_BOT,
                                         PG_SOS, PG_SOS, PG_SOS,
-                                        PG_TOOLS, PG_TOOLS, PG_TOOLS };
+                                        PG_TOOLS, PG_TOOLS, PG_TOOLS,
+                                        PG_MORE, PG_MORE, PG_MORE, PG_MORE };
   return s < SEC_COUNT ? P[s] : PG_DEVICE;
 }
 
@@ -263,6 +271,33 @@ static void optGpio(uint8_t v, char* b, int n, const NodePrefs&) {
   snprintf(b, n, "%s", L[v < 5 ? v : 0]);
 }
 
+// PG_MORE's: the screen, the keyboard, the radio's power save.
+#if FEAT_DISPLAY_ROTATION_SETTING && defined(DISPLAY_ROTATION)
+// Each build turns its own shape upside down only (ui-new UITask::applyRotation).
+static const int32_t ROTATION[] = { DISPLAY_ROTATION & 3, (DISPLAY_ROTATION ^ 2) & 3 };
+static void optRotation(uint8_t v, char* b, int n, const NodePrefs&) { snprintf(b, n, "%s", v ? "Upside down" : "Normal"); }
+#endif
+#if FEAT_JOYSTICK_ROTATION_SETTING
+static void optJoystick(uint8_t v, char* b, int n, const NodePrefs&) { snprintf(b, n, "%u deg", (unsigned)(v & 3) * 90); }
+#endif
+#if FEAT_FULL_REFRESH_SETTING
+static void optFullRefresh(uint8_t v, char* b, int n, const NodePrefs&) {
+  static const char* const L[] = { "Off", "Every 5", "Every 10", "Every 20", "Every 30" };   // ui-new UITask::applyFullRefreshInterval
+  snprintf(b, n, "%s", L[v < 5 ? v : 0]);
+}
+#endif
+static void optKbType(uint8_t v, char* b, int n, const NodePrefs&) { snprintf(b, n, "%s", v ? "T9" : "ABC"); }
+static void optAlphabet(uint8_t v, char* b, int n, const NodePrefs&) { snprintf(b, n, "%s", NodePrefs::keyboardAlphabetLabel(v)); }
+#if defined(CARDKB_I2C)
+static void optCardKb(uint8_t v, char* b, int n, const NodePrefs&) { snprintf(b, n, "%s", v ? "Compact" : "Full"); }
+#endif
+#if FEAT_RX_POWERSAVE
+static void optPowerSave(uint8_t v, char* b, int n, const NodePrefs&) {
+  static const char* const L[] = { "Off", "On", "Max" };
+  snprintf(b, n, "%s", L[v < 3 ? v : 0]);
+}
+#endif
+
 // ── Side effects ──────────────────────────────────────────────────────────────
 static void rearmLocator(UiCore& c)      { c.locator.reset(); }
 static void restartShareClock(UiCore& c) { c.live_share.restartClock(); }   // a new length starts over
@@ -270,6 +305,19 @@ static void applyDisplay(UiCore& c)      { c.host()->applyDisplayPrefs(); }
 static void applyGpsDuty(UiCore& c)      { c.applyGpsInterval(); }
 static void applySound(UiCore& c)        { c.host()->applySoundPrefs(); }
 static void applyGpsTime(UiCore& c)     { if (c.prefs()) LocationProvider::timeFromGps() = !c.prefs()->gps_time_off; }
+#ifdef LV_CONF_INCLUDE_SIMPLE
+// ui-lvgl keeps a percentage beside the level (its slider) and lights by it:
+// a level set here (the console) becomes the percentage too.
+static void applyBrightness(UiCore& c) {
+  if (NodePrefs* p = c.prefs()) p->display_brightness_pct = p->display_brightness ? p->display_brightness * 25 : 5;
+  c.host()->applyDisplayPrefs();
+}
+#else
+static void applyBrightness(UiCore& c)   { c.host()->applyDisplayPrefs(); }
+#endif
+#if FEAT_RX_POWERSAVE
+static void applyPowerSave(UiCore& c)    { if (c.prefs()) rptctl::applyPowerSave(c.prefs()); }   // stays off while repeating
+#endif
 static void applyRxGain(UiCore& c)       { if (c.prefs()) radio_driver.setRxBoostedGainMode(c.prefs()->rx_boosted_gain); }
 // The repeater's switch and network: the radio, RX power save and auto power follow.
 static void applyRepeater(UiCore& c)     { if (c.prefs()) rptctl::setEnabled(c.prefs(), c.prefs()->client_repeat); }
@@ -328,7 +376,7 @@ static const Setting ALL[] = {
   MAP("Auto-advert", "Your advert, on a timer", SEC_ADVERT, advert_auto_interval_sec, AUTO_ADVERT,
       optAutoAdvert, nullptr),
 
-  IDX("Brightness", nullptr, SEC_DISPLAY, display_brightness, 5, optBrightness, applyDisplay),
+  IDX("Brightness", nullptr, SEC_DISPLAY, display_brightness, 5, optBrightness, applyBrightness),
   MAP("Screen off after", "Without a touch", SEC_DISPLAY, auto_off_secs, AUTO_OFF, optAutoOff, nullptr),
   SW("Wake on message", "Screen on for new messages", SEC_DISPLAY, msg_wake, nullptr),
   IDX("Message alert", "Banner, corner envelope or none", SEC_DISPLAY, msg_alert, 3, optMsgAlert, nullptr),
@@ -458,6 +506,35 @@ static const Setting ALL[] = {
   IDX("GPIO 2", nullptr, SEC_GPIO, gpio2_mode, 5, optGpio, applyGpio2),
   IDX("GPIO 3", nullptr, SEC_GPIO, gpio3_mode, 4, optGpio, applyGpio3),
   IDX("GPIO 4", nullptr, SEC_GPIO, gpio4_mode, 4, optGpio, applyGpio4),
+#endif
+
+  // PG_MORE: rows the frontends draw themselves, here for the console.
+#if FEAT_DISPLAY_ROTATION_SETTING && defined(DISPLAY_ROTATION)
+  MAP("Rotation", "The screen turned round", SEC_SCREEN, display_rotation, ROTATION, optRotation, applyDisplay),
+#endif
+#if FEAT_JOYSTICK_ROTATION_SETTING
+  IDX("Joystick", "Its directions turned by", SEC_SCREEN, joystick_rotation, 4, optJoystick, nullptr),
+#endif
+#if FEAT_FULL_REFRESH_SETTING
+  IDX("Full refresh", "Clears the ghosting of partial ones", SEC_SCREEN, eink_full_refresh_every, 5,
+      optFullRefresh, applyDisplay),
+  SW("Panel sleep", "Panel off between refreshes", SEC_SCREEN, eink_panel_sleep, applyDisplay),
+#endif
+#ifndef LV_CONF_INCLUDE_SIMPLE   // ui-lvgl's keyboard has no T9
+  IDX("Type", "Letters in a row, or T9", SEC_KEYBOARD, keyboard_type, 2, optKbType, nullptr),
+#endif
+  IDX("Alphabet", nullptr, SEC_KEYBOARD, keyboard_main_alphabet, NodePrefs::KB_ALPHABET_COUNT, optAlphabet, nullptr),
+  IDX("Additional", "The same as Alphabet: none", SEC_KEYBOARD, keyboard_alt_alphabet, NodePrefs::KB_ALPHABET_COUNT,
+      optAlphabet, nullptr),
+#if defined(CARDKB_I2C)
+  IDX("CardKB", "The external keyboard's layout", SEC_KEYBOARD, keyboard_cardkb_compact, 2, optCardKb, nullptr),
+#endif
+  MAP("Direct messages", nullptr, SEC_CHATS, dm_show_all, INVERTED, optAllFav, nullptr),
+  IDX("Channels", nullptr, SEC_CHATS, ch_fav_only, 2, optAllFav, nullptr),
+  IDX("Rooms", nullptr, SEC_CHATS, room_fav_only, 2, optAllFav, nullptr),
+#if FEAT_RX_POWERSAVE
+  IDX("RX power save", "Off while repeating; Max misses nodes before v1.16", SEC_RX, rx_powersave, 3,
+      optPowerSave, applyPowerSave),
 #endif
 };
 static const int COUNT = (int)(sizeof(ALL) / sizeof(ALL[0]));

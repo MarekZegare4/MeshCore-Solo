@@ -194,7 +194,13 @@ alarm: `alarm` (on / off), `alarm.time` (`set alarm.time 6:45`) and
 coverage: `coverage`, `coverage.home` (`50.06143,19.93658` or `none`),
 `coverage.home.radius` and `coverage.upload`. On the L1, the pins:
 `gpio.1` to `gpio.4` (`Off`, `Input`, `Output low`, `Output high`, and
-`Analog` on 1 and 2). `opts` marks
+`Analog` on 1 and 2). The rows the screens keep to themselves: which
+chats the lists show (`chats.dm`, `chats.channels`, `chats.rooms`: `All` /
+`Favourites`), the keyboard (`keyboard.alphabet`, `keyboard.additional`;
+on the L1 also `keyboard.type` and, with a CardKB, `keyboard.cardkb`), the
+radio's `radio.powersave` (`Off`, `On`, `Max`), and on the e-ink L1s
+`display.rotation`, `display.joystick`, `display.full.refresh` and
+`display.panel.sleep`. `opts` marks
 a text `#text:<max bytes>` and a list or a name to pick `#list` / `#pick`,
 with the choices after it (`...` when they don't all fit). `get` shows a value as the Settings screen does, and `set`
 takes it the same way, case ignored:
