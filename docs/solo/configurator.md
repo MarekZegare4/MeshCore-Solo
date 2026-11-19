@@ -21,7 +21,7 @@ a change goes to the device straight away.
 | Tab | Does |
 | --- | ---- |
 | **Device** | The board, firmware and battery; the name, Bluetooth PIN, radio (frequency, bandwidth, spreading factor, coding rate), TX power and time zone |
-| **Settings** | Every setting of the device's Settings, grouped the same way, with a search |
+| **Settings** | Every setting of the device's Settings, grouped the same way, with a search; since Solo 2.4 also the tools' own -- Repeater, Bot, SOS, the alarm, coverage (L2) and the GPIO pins (L1) -- so a device with one button is set up here |
 | **Home screen** | The pages Home turns through: drag them into order, untick the ones to hide. Not on the Wio Tracker L2, which arranges its home screen itself |
 | **Quick messages** | The ten messages a conversation offers to send with one press; `{loc}`, `{time}` and `{batt}` fill in when sent |
 | **Melodies** | The two melodies of the Ringtone editor, on a piano roll; play them, or start from a ringtone in RTTTL |
