@@ -62,7 +62,7 @@ bool UITask::sosViewOpen() const { return sosview::s_mode != sosview::NONE; }
 
 void UITask::sosViewClose() {
   using namespace sosview;
-  if (s_view) lv_obj_delete_async(s_view);   // may be closing from its own button
+  if (s_view) lvport::deleteLater(s_view);   // may be closing from its own button
   s_view = s_slider = s_title = s_digits = nullptr;
   s_line[0] = s_line[1] = s_line[2] = s_line[3] = nullptr;
   s_drag = SlideDrag();

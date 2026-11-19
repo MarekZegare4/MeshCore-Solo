@@ -851,7 +851,7 @@ static void choiceSetSelected(lv_obj_t* c, int i) {
 }
 
 static void pickerClose() {
-  if (s_pick_overlay) lv_obj_delete_async(s_pick_overlay);
+  if (s_pick_overlay) lvport::deleteLater(s_pick_overlay);
   s_pick_overlay = s_pick_target = nullptr;
 }
 

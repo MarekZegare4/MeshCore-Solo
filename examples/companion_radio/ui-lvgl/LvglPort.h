@@ -44,6 +44,52 @@ extern uint32_t g_loop_idle_us;   // main.cpp: tools/hwtest.py's "loops", the ti
 
 namespace lvport {
 
+// Objects to delete once the code that asked is done with them -- a screen
+// replaced from one of its own buttons, a popup closed from its own --
+// deleted at the top of the next loop pass, outside any LVGL event. Not
+// lv_obj_delete_async(): that waits for lv_timer_handler(), which doesn't
+// run while the screen is off, so every screen rebuilt then (a message
+// arriving, the lock screen) stayed in PSRAM until the screen came on --
+// found with tools/memwatch.py: 39 screens, 1100 objects, 380 KB held.
+static lv_obj_t* s_dead[32];
+static int s_dead_n = 0;
+static void deleteLater(lv_obj_t* o) {
+  if (!o) return;
+  for (int i = 0; i < s_dead_n; i++) if (s_dead[i] == o) return;
+  if (s_dead_n < (int)(sizeof(s_dead) / sizeof(s_dead[0]))) {
+    s_dead[s_dead_n++] = o;
+    lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);   // gone from this frame on, as if deleted
+  } else {
+    lv_obj_delete_async(o);   // never this many in one pass
+  }
+}
+// From the top of the loop. Only what is still in a tree (a screen or a
+// layer, walked once): one whose parent went first is freed already.
+static void deleteDue() {
+  if (!s_dead_n) return;
+  struct Q { lv_obj_t** o; int n; bool live[32]; } q = { s_dead, s_dead_n, {} };
+  auto find = [](lv_obj_t* obj, void* u) -> lv_obj_tree_walk_res_t {
+    Q* k = (Q*)u;
+    for (int i = 0; i < k->n; i++) if (k->o[i] == obj) k->live[i] = true;
+    return LV_OBJ_TREE_WALK_NEXT;
+  };
+  lv_obj_tree_walk(NULL, find, &q);   // every screen
+  lv_obj_tree_walk(lv_layer_top(), find, &q);
+  lv_obj_tree_walk(lv_layer_sys(), find, &q);
+  lv_obj_tree_walk(lv_layer_bottom(), find, &q);
+  const int n = s_dead_n;
+  s_dead_n = 0;
+  // One under another queued one goes with it: all of that worked out
+  // before the first delete (nothing read from freed memory).
+  bool del[32];
+  for (int i = 0; i < n; i++) {
+    del[i] = q.live[i];
+    for (lv_obj_t* p = del[i] ? lv_obj_get_parent(s_dead[i]) : nullptr; p && del[i]; p = lv_obj_get_parent(p))
+      for (int j = 0; j < n; j++) if (j != i && q.live[j] && p == s_dead[j]) { del[i] = false; break; }
+  }
+  for (int i = 0; i < n; i++) if (del[i]) lv_obj_delete(s_dead[i]);
+}
+
 // Screenshot: while s_shot points at a full-screen RGB565 buffer, the flush
 // callbacks also copy what they send to the panel into it.
 static uint16_t* s_shot = nullptr;

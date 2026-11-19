@@ -247,6 +247,7 @@ void UITask::loop() {
 #ifdef SOLO_TEST_HOOKS
   while (s_test_hang) { }   // stuck, as a hang would be: main.cpp's watchdog restarts it
 #endif
+  lvport::deleteDue();   // screens and popups closed last pass, asleep or not
   pollConnection();
   drainCoreEvents();
   sampleHistory();
@@ -1333,7 +1334,7 @@ lv_obj_t* UITask::newScreen(const char* title, bool with_back) {
     lv_screen_load_anim(scr, LV_SCR_LOAD_ANIM_FADE_IN, anim::FADE_MS, 0, true);
   } else {
     lv_screen_load(scr);
-    if (prev) lv_obj_delete_async(prev);   // this usually runs from one of its own widgets
+    if (prev) lvport::deleteLater(prev);   // this usually runs from one of its own widgets
     if (prev && !same && !_asleep) anim::screenIn(body, backward);
   }
   _fade_next = false;

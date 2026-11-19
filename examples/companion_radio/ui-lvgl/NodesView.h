@@ -114,7 +114,7 @@ void UITask::showScanPopup() {
 }
 
 void UITask::closeScanPopup() {
-  if (_scan_overlay) lv_obj_delete_async(_scan_overlay);   // may be closing from its own button
+  if (_scan_overlay) lvport::deleteLater(_scan_overlay);   // may be closing from its own button
   _scan_overlay = _scan_list = _scan_status = nullptr;
   _scanning = false;
 }

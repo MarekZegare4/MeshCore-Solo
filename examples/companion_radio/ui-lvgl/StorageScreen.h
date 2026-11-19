@@ -454,7 +454,7 @@ void UITask::storageFormatAsk() {
 void UITask::storageFormatTap(bool go) {
   using namespace storeview;
   if (!go) {
-    if (s_fmt_overlay) lv_obj_delete_async(s_fmt_overlay);
+    if (s_fmt_overlay) lvport::deleteLater(s_fmt_overlay);
     s_fmt_overlay = s_fmt_go_lbl = nullptr;
     return;
   }
@@ -466,7 +466,7 @@ void UITask::storageFormatTap(bool go) {
   storeview::releaseMapFiles();
   bool ok = lvport::formatCard();
   if (!ok) {
-    if (s_fmt_overlay) lv_obj_delete_async(s_fmt_overlay);
+    if (s_fmt_overlay) lvport::deleteLater(s_fmt_overlay);
     s_fmt_overlay = s_fmt_go_lbl = nullptr;
     showToast("Couldn't format - is a card in?", 3000);
     return;
@@ -550,7 +550,7 @@ void UITask::usbPoll() {
 
 void UITask::usbTap(bool drive) {
   using namespace usbview;
-  if (s_overlay) { lv_obj_delete_async(s_overlay); s_overlay = nullptr; }
+  if (s_overlay) { lvport::deleteLater(s_overlay); s_overlay = nullptr; }
   if (!drive || locked()) return;
   storeview::stopWalk();
   if (mapview::s_dl.active()) mapDownloadStop();

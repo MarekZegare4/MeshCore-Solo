@@ -200,7 +200,7 @@ void UITask::radioFreqDone(bool ok) {
 }
 
 void UITask::radioCloseFreq() {
-  if (radioview::s_overlay) lv_obj_delete_async(radioview::s_overlay);
+  if (radioview::s_overlay) lvport::deleteLater(radioview::s_overlay);
   radioview::s_overlay = radioview::s_ta = nullptr;
 }
 

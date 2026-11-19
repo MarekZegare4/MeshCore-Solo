@@ -1838,7 +1838,7 @@ void UITask::mapDownloadPopup() {
 }
 
 void UITask::mapDownloadClose() {
-  if (_dl_overlay) lv_obj_delete_async(_dl_overlay);   // may be closing from its own button
+  if (_dl_overlay) lvport::deleteLater(_dl_overlay);   // may be closing from its own button
   _dl_overlay = _dl_info = _dl_bar = _dl_sub = _dl_err = _dl_start_lbl = _dl_job_row = _dl_job_lbl = nullptr;
 }
 

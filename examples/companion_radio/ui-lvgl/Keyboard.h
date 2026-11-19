@@ -292,7 +292,7 @@ static void keepCursor(lv_obj_t* ta) {
 }
 
 static void closePopup() {
-  if (s_popup) { lv_obj_delete_async(s_popup); s_popup = nullptr; }
+  if (s_popup) { lvport::deleteLater(s_popup); s_popup = nullptr; }
   s_var_m = nullptr;
   s_var_sel = -1;
 }

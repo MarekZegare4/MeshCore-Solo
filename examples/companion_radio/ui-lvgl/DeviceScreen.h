@@ -272,7 +272,7 @@ void UITask::unlockScreen() {
   for (uint32_t i = 0; i < lv_obj_get_child_count(fading); i++)
     lv_obj_add_flag(lv_obj_get_child(fading, i), LV_OBJ_FLAG_HIDDEN);
   lv_obj_remove_flag(fading, LV_OBJ_FLAG_CLICKABLE);
-  if (_asleep) lv_obj_delete_async(fading);
+  if (_asleep) lvport::deleteLater(fading);
   else {
     anim::run(fading, anim::setBgOpa, LV_OPA_COVER, LV_OPA_TRANSP, anim::UNLOCK_MS, anim::coverDone);
     if (_body) anim::run(_body, anim::setTy, 12, 0, anim::UNLOCK_MS);

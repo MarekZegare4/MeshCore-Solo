@@ -689,7 +689,7 @@ lv_obj_t* UITask::navPopupPanel(const char* title, bool full, bool bottom) {
 
 void UITask::navClosePopup() {
   areaPreviewEnd();   // a map area's popup: the map goes back where it was
-  if (_nav_overlay) lv_obj_delete_async(_nav_overlay);   // may be closing from its own button
+  if (_nav_overlay) lvport::deleteLater(_nav_overlay);   // may be closing from its own button
   _nav_overlay = _nav_ta = _nav_kb = _nav_del_lbl = nullptr;
   _nav_trail_lbl = _nav_trail_btn = _nav_reset_lbl = _nav_share_lbl = _nav_share_btn = _nav_tb_btn = _nav_route_lbl = nullptr;
   navmap::s_tools_list = navmap::s_tools_chart = nullptr;

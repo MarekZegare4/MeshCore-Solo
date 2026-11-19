@@ -261,7 +261,7 @@ void UITask::areaSelectBegin() {
 void UITask::areaSelectEnd() {
   using namespace areas;
   s_sel = false;
-  if (s_bar) lv_obj_delete_async(s_bar);
+  if (s_bar) lvport::deleteLater(s_bar);
   s_bar = s_info = s_zoom = s_trails_btn = nullptr;
   for (lv_obj_t* h : s_handle) if (h && _map_area) lv_obj_add_flag(h, LV_OBJ_FLAG_HIDDEN);
   if (s_layer) lv_obj_invalidate(s_layer);
