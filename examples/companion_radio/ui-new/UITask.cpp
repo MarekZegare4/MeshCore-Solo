@@ -2708,39 +2708,35 @@ bool UITask::cliCommand(const char* command, char* reply, int n) {
 #ifdef SOLO_TEST_HOOKS
   if (testCli(command, reply, n)) return true;
 #endif
+  if (remoteInput(command, reply, n)) return true;
   if (_node_prefs && homePagesCli(_node_prefs, command, reply, n)) { _next_refresh = 0; return true; }
   if (!settingscli::handle(*_core, command, reply, n)) return false;
   _next_refresh = 0;   // a screen showing the value draws it anew
   return true;
 }
 
-#ifdef SOLO_TEST_HOOKS
-// tools/hwtest.py's commands (ui-core/TestHooks.h has the shared ones):
+// The device driven from the configurator's live view (or the console): the
+// same presses its own keys make, waking the screen as they do; a locked
+// screen stays locked, its PIN asked as on the device.
+//   input   "> keys" (a joystick or buttons) or "> button" (one button)
 //   key <up|down|left|right|enter|cancel|next|prev|select|home|menu> [long]
-//       a press of that key, waking the screen first as a real one does;
-//       "long" a held one (Enter held: the context menu)
-//   ui  "> <screen>|<banner or ->|<locked 0/1>|<display on/off>|<banners so far>"
-//   btn down|up  the one button (a one-button board) pressed / let go: its
-//       gestures timed by OneButton as for the real one
-//   screen on|off  the display on, or off as its timeout does
-bool UITask::testCli(const char* cmd, char* reply, int n) {
-  if (!strcmp(cmd, "screen on") || !strcmp(cmd, "screen off")) {
-    if (!_display) { snprintf(reply, n, "Error, no display"); return true; }
-    if (cmd[8] == 'n') { checkDisplayOn(0); }
-    else { _display->turnOff(); }
-    _next_refresh = 0;
-    snprintf(reply, n, "OK");
-    return true;
-  }
+//           a press of that key; "long" a held one (Enter held: the context menu)
+//   btn <click|double|long|hold>   the one button's gestures (a one-button UI
+//           only: on another, a gesture would turn it into one)
+bool UITask::remoteInput(const char* cmd, char* reply, int n) {
+  if (!strcmp(cmd, "input")) { snprintf(reply, n, "> %s", oneButtonUi() ? "button" : "keys"); return true; }
   if (!strncmp(cmd, "btn ", 4)) {
-#if defined(PIN_USER_BTN) && !UI_HAS_JOYSTICK
-    if (!strcmp(cmd + 4, "down")) _test_btn = true;
-    else if (!strcmp(cmd + 4, "up")) _test_btn = false;
-    else { snprintf(reply, n, "Error, btn down/up"); return true; }
-    snprintf(reply, n, "OK");
-#else
-    snprintf(reply, n, "Error, not a one-button board");
-#endif
+    static const struct { const char* name; OneButton::Gesture g; } G[] = {
+      { "click", OneButton::CLICK }, { "double", OneButton::DOUBLE }, { "long", OneButton::LONG }, { "hold", OneButton::VERY_LONG },
+    };
+    if (!oneButtonUi()) { snprintf(reply, n, "Error, not a one-button UI: key <name>"); return true; }
+    for (const auto& e : G) {
+      if (strcmp(cmd + 4, e.name)) continue;
+      oneButtonGesture(e.g);
+      snprintf(reply, n, "OK");
+      return true;
+    }
+    snprintf(reply, n, "Error, btn click/double/long/hold");
     return true;
   }
   if (!strncmp(cmd, "key ", 4)) {
@@ -2761,6 +2757,34 @@ bool UITask::testCli(const char* cmd, char* reply, int n) {
       return true;
     }
     snprintf(reply, n, "Error, key up/down/left/right/enter/cancel/next/prev/select/home/menu [long]");
+    return true;
+  }
+  return false;
+}
+
+#ifdef SOLO_TEST_HOOKS
+// tools/hwtest.py's commands (ui-core/TestHooks.h has the shared ones):
+//   ui  "> <screen>|<banner or ->|<locked 0/1>|<display on/off>|<banners so far>"
+//   btn down|up  the one button (a one-button board) pressed / let go: its
+//       gestures timed by OneButton as for the real one (remoteInput() has
+//       the gestures themselves, and the keys)
+//   screen on|off  the display on, or off as its timeout does
+bool UITask::testCli(const char* cmd, char* reply, int n) {
+  if (!strcmp(cmd, "screen on") || !strcmp(cmd, "screen off")) {
+    if (!_display) { snprintf(reply, n, "Error, no display"); return true; }
+    if (cmd[8] == 'n') { checkDisplayOn(0); }
+    else { _display->turnOff(); }
+    _next_refresh = 0;
+    snprintf(reply, n, "OK");
+    return true;
+  }
+  if (!strcmp(cmd, "btn down") || !strcmp(cmd, "btn up")) {
+#if defined(PIN_USER_BTN) && !UI_HAS_JOYSTICK
+    _test_btn = cmd[5] == 'd';
+    snprintf(reply, n, "OK");
+#else
+    snprintf(reply, n, "Error, not a one-button board");
+#endif
     return true;
   }
   if (!strcmp(cmd, "ui")) {

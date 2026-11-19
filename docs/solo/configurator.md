@@ -21,14 +21,29 @@ a change goes to the device straight away.
 | Tab | Does |
 | --- | ---- |
 | **Device** | The board, firmware and battery; the name, Bluetooth PIN, radio (frequency, bandwidth, spreading factor, coding rate), TX power and time zone |
-| **Settings** | Every setting of the device's Settings, grouped the same way, with a search; since Solo 2.4 also the tools' own -- Repeater, Bot, SOS, the alarm, coverage (L2) and the GPIO pins (L1) -- so a device with one button is set up here |
+| **Settings** | Every setting of the device's Settings, grouped the same way, with a search |
+| **Tools** | Since Solo 2.4: each tool's settings on a card of its own -- Trail, Live share, Locator, SOS, Repeater, Bot, the alarm, coverage (L2) and the GPIO pins (L1) -- so a device with one button is set up here |
 | **Home screen** | The pages Home turns through: drag them into order, untick the ones to hide. Not on the Wio Tracker L2, which arranges its home screen itself |
 | **Quick messages** | The ten messages a conversation offers to send with one press; `{loc}`, `{time}` and `{batt}` fill in when sent |
 | **Melodies** | The two melodies of the Ringtone editor, on a piano roll; play them, or start from a ringtone in RTTTL |
 | **Routes & trail** | A GPX to follow on the device, its waypoints, and the trail exported from it ([Navigation](./navigation.md#planned-routes)) |
-| **Screenshots** | What's on the screen, as a PNG |
+| **Screenshots** | What's on the screen, as a PNG; and the **Live view** button at the top (below) |
 | **Console** | The same text commands as the phone app's console ([Settings](./settings.md)) |
 | **Backup** | Everything above to a `.json` file, and back onto this device or another one |
+
+### Live view
+
+**Live view**, next to Connect, shows the device's screen in a window that
+stays over every tab: change a setting and see what it does. Drag it by its
+bar; 1x–3x sizes it, the arrow saves the frame to Screenshots. Up to about
+8 frames a second on the L1 and a few on the L2 (a colour frame is 150 KB);
+anything else asked of the device goes first.
+
+Since Solo 2.4 the device can be used from it, as from its own keys: a
+joystick or buttons get a pad (and the keyboard's arrows, **Enter**, **Esc**;
+**Shift** or holding a button for a long press), one button gets its click,
+double, long and 2-second hold, and on the L2 you tap and drag on the screen
+itself. A locked screen stays locked: its PIN is asked as on the device.
 
 ### Melodies
 

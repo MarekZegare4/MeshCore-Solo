@@ -446,6 +446,24 @@ void UITask::factoryResetStep(int stage) {
 // The companion CLI's settings keys (ui-core/SettingsCli.h); a Settings page
 // open on the screen is built again with the new value.
 bool UITask::cliCommand(const char* command, char* reply, int n) {
+#ifdef SEEED_WIO_TRACKER_L2
+  // The device driven from the configurator's live view (or the console):
+  // "input" says how ("> touch"); a locked screen stays locked.
+  if (!strcmp(command, "input")) { snprintf(reply, n, "> touch"); return true; }
+  // "tap <x> <y> [ms]" (a hold: ms, 600 and over), "swipe <x0> <y0> <x1> <y1> [ms]": a
+  // finger on the screen (320x240, landscape), as the panel would report it.
+  if (!strncmp(command, "tap ", 4) || !strncmp(command, "swipe ", 6)) {
+    int v[5] = { 0, 0, 0, 0, 0 };
+    const bool tap = command[0] == 't';
+    const int k = sscanf(command + (tap ? 4 : 6), "%d %d %d %d %d", &v[0], &v[1], &v[2], &v[3], &v[4]);
+    if (tap ? k < 2 : k < 4) { snprintf(reply, n, "Error: %s", tap ? "tap x y [ms]" : "swipe x0 y0 x1 y1 [ms]"); return true; }
+    if (!_display || !_display->isOn()) wake();
+    if (tap) lvport::fakeTouch(v[0], v[1], v[0], v[1], k > 2 ? v[2] : 80);
+    else lvport::fakeTouch(v[0], v[1], v[2], v[3], k > 4 ? v[4] : 300);
+    snprintf(reply, n, "OK");
+    return true;
+  }
+#endif
 #ifdef SOLO_TEST_HOOKS
   // tools/hwtest.py: ui-core/TestHooks.h's, and "ui" as ui-new's (the screen,
   // the toast showing, locked, display); no keys on a touch screen.
@@ -496,21 +514,6 @@ bool UITask::cliCommand(const char* command, char* reply, int n) {
     snprintf(reply, n, "> %s", _toast ? lv_label_get_text(lv_obj_get_child(_toast, 0)) : "");
     return true;
   }
-#ifdef SEEED_WIO_TRACKER_L2
-  // "tap <x> <y> [ms]" (a hold: ms, 600 and over), "swipe <x0> <y0> <x1> <y1> [ms]": a
-  // finger on the screen (320x240, landscape), as the panel would report it.
-  if (!strncmp(command, "tap ", 4) || !strncmp(command, "swipe ", 6)) {
-    int v[5] = { 0, 0, 0, 0, 0 };
-    const bool tap = command[0] == 't';
-    const int k = sscanf(command + (tap ? 4 : 6), "%d %d %d %d %d", &v[0], &v[1], &v[2], &v[3], &v[4]);
-    if (tap ? k < 2 : k < 4) { snprintf(reply, n, "Error: %s", tap ? "tap x y [ms]" : "swipe x0 y0 x1 y1 [ms]"); return true; }
-    if (!_display || !_display->isOn()) wake();
-    if (tap) lvport::fakeTouch(v[0], v[1], v[0], v[1], k > 2 ? v[2] : 80);
-    else lvport::fakeTouch(v[0], v[1], v[2], v[3], k > 4 ? v[4] : 300);
-    snprintf(reply, n, "OK");
-    return true;
-  }
-#endif
   if (!strcmp(command, "screen on")) { wake(); snprintf(reply, n, "OK"); return true; }
   if (!strcmp(command, "screen off")) { sleep(); snprintf(reply, n, "OK"); return true; }
   // flowdemo [n]: n packet flows (zigzags) over the open map, spread over the

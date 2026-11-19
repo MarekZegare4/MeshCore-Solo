@@ -261,18 +261,15 @@ static void flushWait(lv_display_t* disp) {
 // one press sliding from key to key (the first key lost, or a scroll begun).
 // A new finger (the panel's track id) is a release, then a press of its own.
 static int16_t s_touch_id = -1;   // the finger reported, -1 none
-#ifdef SOLO_TEST_HOOKS
-// A finger from the console (test builds: "tap", "swipe"): pressed from
-// (x0,y0), sliding to (x1,y1) over `ms`, then lifted.
+// A finger from the console ("tap", "swipe": the configurator's live view,
+// tools/hwtest.py): pressed from (x0,y0), sliding to (x1,y1) over `ms`, then lifted.
 struct FakeTouch { int16_t x0, y0, x1, y1; uint32_t t0, ms; bool on; };
 static FakeTouch s_fake = {};
 static void fakeTouch(int x0, int y0, int x1, int y1, uint32_t ms) {
   s_fake = { (int16_t)x0, (int16_t)y0, (int16_t)x1, (int16_t)y1, millis(), ms ? ms : 1, true };
 }
-#endif
 static void touchCb(lv_indev_t* indev, lv_indev_data_t* data) {
   (void)indev;
-#ifdef SOLO_TEST_HOOKS
   if (s_fake.on) {
     const uint32_t t = millis() - s_fake.t0;
     if (t >= s_fake.ms) {
@@ -286,7 +283,6 @@ static void touchCb(lv_indev_t* indev, lv_indev_data_t* data) {
     data->point.y = s_fake.y0 + (int32_t)(s_fake.y1 - s_fake.y0) * (int32_t)t / (int32_t)s_fake.ms;
     return;
   }
-#endif
   lgfx::touch_point_t tp;
   bool down = s_gfx->getTouch(&tp, 1) > 0;
   if (s_swallow) {

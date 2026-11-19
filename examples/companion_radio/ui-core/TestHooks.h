@@ -26,8 +26,10 @@
 //                              <watchdog soft>,<hard>,<packets received>"
 //   txpre <symbols>            send with this preamble (an older node's 16) until the radio is set again
 //
-// The frontends add their own (ui-new/UITask.cpp: key, ui; ui-lvgl/SettingsPages.h: ui,
-// screen on|off, and on the L2 sdbench -- the SD card's read speed, SdBench.h).
+// The frontends add their own (ui-new/UITask.cpp: ui, btn down|up, screen on|off;
+// ui-lvgl/SettingsPages.h: ui, screen on|off, and on the L2 sdbench -- the SD card's
+// read speed, SdBench.h). The keys, the one button's gestures and the L2's tap and
+// swipe are in every build (the configurator's live view): UITask::remoteInput().
 
 #ifdef SOLO_TEST_HOOKS
 #include <helpers/sensors/EnvironmentSensorManager.h>
