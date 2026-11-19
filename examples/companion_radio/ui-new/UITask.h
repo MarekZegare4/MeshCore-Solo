@@ -585,7 +585,6 @@ public:
   bool oneButtonEditing() const { return _ob_edit; }
   bool hasKeyboard() const override { return !oneButtonUi(); }
   int frontValue(uint8_t k) override;   // Bluetooth, the sound's mode (SettingsCli)
-  const char* frontChoice(uint8_t k, int i) override;
   void setFrontValue(uint8_t k, int v) override;
   // Stepping through screens with stepKey() / stepBackKey(): one button, or
   // four (Up/Down/OK/Back).

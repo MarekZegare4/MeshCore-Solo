@@ -47,7 +47,9 @@ public:
   // frontend has no such setting.
   enum FrontKey : uint8_t { FK_BLUETOOTH, FK_SOUND, FK_TAP_WAKE, FK_THEME, FK_ACCENT, FK_WIFI, FK_COUNT };
   virtual int frontValue(uint8_t k) { return -1; }
-  virtual const char* frontChoice(uint8_t k, int i) { return nullptr; }   // nullptr past the last
+  // A choice's label (nullptr past the last) where it is the frontend's own:
+  // the accent colours. On/Off, the sound's modes, Dark/Light: SettingsCli.
+  virtual const char* frontChoice(uint8_t k, int i) { return nullptr; }
   virtual void setFrontValue(uint8_t k, int v) {}
   // The WiFi networks a frontend keeps (ui-lvgl: map downloads, updates, the
   // clock): -1 when it keeps none.

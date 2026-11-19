@@ -27,20 +27,46 @@ static const uint16_t XKEY = 0xFFFF;
 // "...|#pick|a|b|c" -- the value is "get"'s, a text being too long to fit
 // beside the rest -- and "set" takes the text, "a,b" or a name.
 enum XKind : uint8_t { XK_TEXT, XK_LIST, XK_PICK };
-enum XId : uint8_t {
-  XB_CH1_CHANNEL, XB_CH1_ALLOWED, XB_CH1_TRIGGER, XB_CH1_REPLY,
-  XB_CH2_CHANNEL, XB_CH2_ALLOWED, XB_CH2_TRIGGER, XB_CH2_REPLY,
-  XB_ROOM, XB_ROOM_ALLOWED, XB_ROOM_TRIGGER, XB_ROOM_REPLY,
-  XB_DM_ALLOWED, XB_DM_TRIGGER, XB_DM_REPLY,
-  XS_CHANNELS, XS_DM1, XS_DM2, XS_DM3, XS_MSG, XS_ACK,
-  XA_TIME, XA_DAYS, XC_HOME,
-  XL_TO, XL_SCOPE, XN_FAV, XN_UNSAVED, XN_MUTED, XN_ALWAYS, XN_MEL1, XN_MEL2,
-  XP_FAV, XP_MUTED, XP_ALWAYS, XP_MEL1, XP_MEL2,
-  XH_FAV1, XH_FAV6 = XH_FAV1 + NodePrefs::FAVOURITES_COUNT - 1,   // Home's favourite slots
-  XR_PRE1, XR_PRE4 = XR_PRE1 + NodePrefs::USER_RADIO_PRESET_MAX - 1,   // the saved radio presets
-  XK_PIN, XW_NETS, XW_ADD,
-  XF_FIRST, XF_LAST = XF_FIRST + UiCoreHost::FK_COUNT - 1,   // the frontend's (UiCoreHost::FrontKey), in its order
-};
+// Each one once: its id, section, label and kind (the XId enum and XKEYS
+// are both made from this list, so they can't fall out of step).
+#define XKEY_LIST(X) \
+  X(XB_CH1_CHANNEL, SEC_BOT_CH1, "Channel", XK_PICK)  X(XB_CH1_ALLOWED, SEC_BOT_CH1, "Allowed", XK_LIST) \
+  X(XB_CH1_TRIGGER, SEC_BOT_CH1, "Trigger", XK_TEXT)  X(XB_CH1_REPLY, SEC_BOT_CH1, "Reply", XK_TEXT) \
+  X(XB_CH2_CHANNEL, SEC_BOT_CH2, "Channel", XK_PICK)  X(XB_CH2_ALLOWED, SEC_BOT_CH2, "Allowed", XK_LIST) \
+  X(XB_CH2_TRIGGER, SEC_BOT_CH2, "Trigger", XK_TEXT)  X(XB_CH2_REPLY, SEC_BOT_CH2, "Reply", XK_TEXT) \
+  X(XB_ROOM, SEC_BOT_ROOM, "Room", XK_PICK)           X(XB_ROOM_ALLOWED, SEC_BOT_ROOM, "Allowed", XK_LIST) \
+  X(XB_ROOM_TRIGGER, SEC_BOT_ROOM, "Trigger", XK_TEXT) X(XB_ROOM_REPLY, SEC_BOT_ROOM, "Reply", XK_TEXT) \
+  X(XB_DM_ALLOWED, SEC_BOT_DM, "Allowed", XK_LIST) \
+  X(XB_DM_TRIGGER, SEC_BOT_DM, "Trigger", XK_TEXT)    X(XB_DM_REPLY, SEC_BOT_DM, "Reply", XK_TEXT) \
+  X(XS_CHANNELS, SEC_SOS_TO, "Channels", XK_LIST)     X(XS_DM1, SEC_SOS_TO, "Contact 1", XK_PICK) \
+  X(XS_DM2, SEC_SOS_TO, "Contact 2", XK_PICK)         X(XS_DM3, SEC_SOS_TO, "Contact 3", XK_PICK) \
+  X(XS_MSG, SEC_SOS_TO, "Message", XK_TEXT)           X(XS_ACK, SEC_SOS_RUN, "ACK word", XK_TEXT) \
+  X(XA_TIME, SEC_ALARM, "Time", XK_TEXT)              X(XA_DAYS, SEC_ALARM, "Days", XK_LIST) \
+  X(XC_HOME, SEC_COVERAGE, "Home", XK_TEXT) \
+  X(XL_TO, SEC_LIVE_SHARE, "Share to", XK_PICK)       X(XL_SCOPE, SEC_LIVE_SHARE, "Scope", XK_PICK) \
+  X(XN_FAV, SEC_CHATS, "Favourite channels", XK_LIST) X(XN_UNSAVED, SEC_MESSAGES, "Channels not kept", XK_LIST) \
+  X(XN_MUTED, SEC_SOUND_FOR, "Muted channels", XK_LIST) X(XN_ALWAYS, SEC_SOUND_FOR, "Channels always heard", XK_LIST) \
+  X(XN_MEL1, SEC_SOUND_FOR, "Channels with melody 1", XK_LIST) X(XN_MEL2, SEC_SOUND_FOR, "Channels with melody 2", XK_LIST) \
+  X(XP_FAV, SEC_CHATS, "Favourite contacts", XK_LIST) \
+  X(XP_MUTED, SEC_SOUND_FOR, "Muted contacts", XK_LIST) X(XP_ALWAYS, SEC_SOUND_FOR, "Contacts always heard", XK_LIST) \
+  X(XP_MEL1, SEC_SOUND_FOR, "Contacts with melody 1", XK_LIST) X(XP_MEL2, SEC_SOUND_FOR, "Contacts with melody 2", XK_LIST) \
+  X(XH_FAV1, SEC_HOME, "Favourite 1", XK_PICK) X(XH_FAV2, SEC_HOME, "Favourite 2", XK_PICK) \
+  X(XH_FAV3, SEC_HOME, "Favourite 3", XK_PICK) X(XH_FAV4, SEC_HOME, "Favourite 4", XK_PICK) \
+  X(XH_FAV5, SEC_HOME, "Favourite 5", XK_PICK) X(XH_FAV6, SEC_HOME, "Favourite 6", XK_PICK) \
+  X(XR_PRE1, SEC_RADIO_ADV, "Preset 1", XK_TEXT) X(XR_PRE2, SEC_RADIO_ADV, "Preset 2", XK_TEXT) \
+  X(XR_PRE3, SEC_RADIO_ADV, "Preset 3", XK_TEXT) X(XR_PRE4, SEC_RADIO_ADV, "Preset 4", XK_TEXT) \
+  X(XK_PIN, SEC_DISPLAY, "New screen PIN (empty: none)", XK_TEXT) \
+  X(XW_NETS, SEC_WIFI, "Saved networks", XK_LIST)     X(XW_ADD, SEC_WIFI, "Add a network (name,password)", XK_TEXT) \
+  /* the frontend's (UiCoreHost::FrontKey), in its order */ \
+  X(XF_BLUETOOTH, SEC_FEATURES, "Bluetooth", XK_PICK) X(XF_SOUND, SEC_FEATURES, "Sound", XK_PICK) \
+  X(XF_TAP_WAKE, SEC_SCREEN, "Tap to wake", XK_PICK)  X(XF_THEME, SEC_SCREEN, "Theme", XK_PICK) \
+  X(XF_ACCENT, SEC_SCREEN, "Accent colour", XK_PICK)  X(XF_WIFI, SEC_WIFI, "WiFi", XK_PICK)
+#define XKEY_ID(id, sec, label, kind) id,
+enum XId : uint8_t { XKEY_LIST(XKEY_ID) XKEY_N, XF_FIRST = XF_BLUETOOTH, XF_LAST = XF_WIFI };
+#undef XKEY_ID
+static_assert(XH_FAV6 - XH_FAV1 + 1 == NodePrefs::FAVOURITES_COUNT, "a Home favourite key a slot");
+static_assert(XR_PRE4 - XR_PRE1 + 1 == NodePrefs::USER_RADIO_PRESET_MAX, "a preset key a slot");
+static_assert(XF_LAST - XF_FIRST + 1 == UiCoreHost::FK_COUNT && XF_LAST + 1 == XKEY_N, "the front keys last, in FrontKey's order");
 static bool frontKey(uint8_t id) { return id >= XF_FIRST && id <= XF_LAST; }
 static bool homeFav(uint8_t id) { return id >= XH_FAV1 && id <= XH_FAV6; }
 static bool radioPreset(uint8_t id) { return id >= XR_PRE1 && id <= XR_PRE4; }
@@ -53,39 +79,10 @@ static void fmtNum(char* b, int n, float v) {
 }
 static UiCoreHost* s_host = nullptr;   // the frontend, for its keys (set by handle())
 struct XKey { uint8_t section; const char* label; uint8_t kind; };
-static const XKey XKEYS[] = {
-  { settings::SEC_BOT_CH1, "Channel", XK_PICK }, { settings::SEC_BOT_CH1, "Allowed", XK_LIST },
-  { settings::SEC_BOT_CH1, "Trigger", XK_TEXT }, { settings::SEC_BOT_CH1, "Reply", XK_TEXT },
-  { settings::SEC_BOT_CH2, "Channel", XK_PICK }, { settings::SEC_BOT_CH2, "Allowed", XK_LIST },
-  { settings::SEC_BOT_CH2, "Trigger", XK_TEXT }, { settings::SEC_BOT_CH2, "Reply", XK_TEXT },
-  { settings::SEC_BOT_ROOM, "Room", XK_PICK },   { settings::SEC_BOT_ROOM, "Allowed", XK_LIST },
-  { settings::SEC_BOT_ROOM, "Trigger", XK_TEXT }, { settings::SEC_BOT_ROOM, "Reply", XK_TEXT },
-  { settings::SEC_BOT_DM, "Allowed", XK_LIST },
-  { settings::SEC_BOT_DM, "Trigger", XK_TEXT },   { settings::SEC_BOT_DM, "Reply", XK_TEXT },
-  { settings::SEC_SOS_TO, "Channels", XK_LIST },   { settings::SEC_SOS_TO, "Contact 1", XK_PICK },
-  { settings::SEC_SOS_TO, "Contact 2", XK_PICK },  { settings::SEC_SOS_TO, "Contact 3", XK_PICK },
-  { settings::SEC_SOS_TO, "Message", XK_TEXT },    { settings::SEC_SOS_RUN, "ACK word", XK_TEXT },
-  { settings::SEC_ALARM, "Time", XK_TEXT },         { settings::SEC_ALARM, "Days", XK_LIST },
-  { settings::SEC_COVERAGE, "Home", XK_TEXT },
-  { settings::SEC_LIVE_SHARE, "Share to", XK_PICK }, { settings::SEC_LIVE_SHARE, "Scope", XK_PICK },
-  { settings::SEC_CHATS, "Favourite channels", XK_LIST }, { settings::SEC_MESSAGES, "Channels not kept", XK_LIST },
-  { settings::SEC_SOUND_FOR, "Muted channels", XK_LIST },  { settings::SEC_SOUND_FOR, "Channels always heard", XK_LIST },
-  { settings::SEC_SOUND_FOR, "Channels with melody 1", XK_LIST }, { settings::SEC_SOUND_FOR, "Channels with melody 2", XK_LIST },
-  { settings::SEC_CHATS, "Favourite contacts", XK_LIST },
-  { settings::SEC_SOUND_FOR, "Muted contacts", XK_LIST },  { settings::SEC_SOUND_FOR, "Contacts always heard", XK_LIST },
-  { settings::SEC_SOUND_FOR, "Contacts with melody 1", XK_LIST }, { settings::SEC_SOUND_FOR, "Contacts with melody 2", XK_LIST },
-  { settings::SEC_HOME, "Favourite 1", XK_PICK }, { settings::SEC_HOME, "Favourite 2", XK_PICK },
-  { settings::SEC_HOME, "Favourite 3", XK_PICK }, { settings::SEC_HOME, "Favourite 4", XK_PICK },
-  { settings::SEC_HOME, "Favourite 5", XK_PICK }, { settings::SEC_HOME, "Favourite 6", XK_PICK },
-  { settings::SEC_RADIO_ADV, "Preset 1", XK_TEXT }, { settings::SEC_RADIO_ADV, "Preset 2", XK_TEXT },
-  { settings::SEC_RADIO_ADV, "Preset 3", XK_TEXT }, { settings::SEC_RADIO_ADV, "Preset 4", XK_TEXT },
-  { settings::SEC_DISPLAY, "New screen PIN (empty: none)", XK_TEXT },
-  { settings::SEC_WIFI, "Saved networks", XK_LIST }, { settings::SEC_WIFI, "Add a network (name,password)", XK_TEXT },
-  { settings::SEC_FEATURES, "Bluetooth", XK_PICK },  { settings::SEC_FEATURES, "Sound", XK_PICK },
-  { settings::SEC_SCREEN, "Tap to wake", XK_PICK },   { settings::SEC_SCREEN, "Theme", XK_PICK },
-  { settings::SEC_SCREEN, "Accent colour", XK_PICK }, { settings::SEC_WIFI, "WiFi", XK_PICK },
-};
-static_assert(sizeof(XKEYS) / sizeof(XKEYS[0]) == XF_LAST + 1, "an XKEYS row for each XId");
+#define XKEY_ROW(id, sec, label, kind) { settings::sec, label, kind },
+static const XKey XKEYS[] = { XKEY_LIST(XKEY_ROW) };
+#undef XKEY_ROW
+#undef XKEY_LIST
 static const Key KEYS[] = {
   K("advert.interval", advert_auto_interval_sec), K("advert.loc", advert_loc_policy),
   K("advert.loc.precision", advert_loc_prec),
@@ -317,9 +314,21 @@ static const char* const SCOPE_TARGET = "Target's";
 
 // A pick's choices by index (channels by slot, rooms in the contact list's
 // order; live share's target the channels, then the chat contacts).
+// A front key's choices: the same on every frontend but the accent colours.
+static const char* frontChoice(uint8_t k, int i) {
+  static const char* const ON_OFF[] = { "On", "Off" };
+  static const char* const THEMES[] = { "Dark", "Light" };
+  if (i < 0) return nullptr;
+  switch (k) {
+    case UiCoreHost::FK_BLUETOOTH: case UiCoreHost::FK_TAP_WAKE: case UiCoreHost::FK_WIFI: return i < 2 ? ON_OFF[i] : nullptr;
+    case UiCoreHost::FK_SOUND: return i < soundctl::MODE_COUNT ? soundctl::modeLabel((uint8_t)i) : nullptr;
+    case UiCoreHost::FK_THEME: return i < 2 ? THEMES[i] : nullptr;
+  }
+  return s_host ? s_host->frontChoice(k, i) : nullptr;
+}
 static bool xPickName(uint8_t id, int i, char* out, size_t n) {
   if (frontKey(id)) {
-    const char* c = s_host ? s_host->frontChoice(id - XF_FIRST, i) : nullptr;
+    const char* c = frontChoice(id - XF_FIRST, i);
     if (!c) return false;
     snprintf(out, n, "%s", c);
     return true;
@@ -414,6 +423,20 @@ static bool xPickSet(NodePrefs* p, uint8_t id, const char* name) {
   return true;
 }
 
+// The next name of a list "a, b,c" at `at` (moved past it): where it starts
+// and its length, spaces round it left out; 0 when only commas were left.
+static int nextName(const char*& at, const char*& name) {
+  while (*at == ' ' || *at == ',') at++;
+  name = at;
+  while (*at && *at != ',') at++;
+  const char* t = at;
+  while (t > name && t[-1] == ' ') t--;
+  return (int)(t - name);
+}
+static bool sameName(const char* s, const char* name, int len) {
+  return (int)strlen(s) == len && !strncasecmp(s, name, len);
+}
+
 // Lists of contacts (favourites, and the per-contact sound overrides): too
 // many for a mask, so by name. A favourite is any contact; the rest chat ones.
 static bool contactList(uint8_t id) { return id >= XP_FAV && id <= XP_MEL2; }
@@ -459,33 +482,22 @@ static void contactListGet(const NodePrefs* p, uint8_t id, char* reply, int n) {
 // "a,b": these on, the others off. Every name is checked before anything changes.
 static bool contactListSet(NodePrefs* p, uint8_t id, const char* v, char* reply, int n) {
   const bool none = !*v || !strcasecmp(v, "none");
-  for (const char* a = none ? "" : v; *a;) {
-    while (*a == ' ' || *a == ',') a++;
-    const char* e = a;
-    while (*e && *e != ',') e++;
-    const char* t = e;
-    while (t > a && t[-1] == ' ') t--;
-    if (t > a) {
-      bool hit = false;
-      ContactInfo c;
-      for (int idx = MAX_ANON_CONTACTS; !hit && the_mesh.getContactByIdx(idx, c); idx++)
-        hit = contactOfList(id, c) && (int)strlen(c.name) == (int)(t - a) && !strncasecmp(c.name, a, t - a);
-      if (!hit) { snprintf(reply, n, "Error, no contact %.*s", (int)(t - a), a); return false; }
-    }
-    a = e;
+  for (const char *a = none ? "" : v, *nm; *a;) {
+    const int len = nextName(a, nm);
+    if (!len) continue;
+    bool hit = false;
+    ContactInfo c;
+    for (int idx = MAX_ANON_CONTACTS; !hit && the_mesh.getContactByIdx(idx, c); idx++)
+      hit = contactOfList(id, c) && sameName(c.name, nm, len);
+    if (!hit) { snprintf(reply, n, "Error, no contact %.*s", len, nm); return false; }
   }
   ContactInfo c;
   for (int idx = MAX_ANON_CONTACTS; the_mesh.getContactByIdx(idx, c); idx++) {
     if (!contactOfList(id, c)) continue;
     bool want = false;
-    for (const char* a = none ? "" : v; *a && !want;) {
-      while (*a == ' ' || *a == ',') a++;
-      const char* e = a;
-      while (*e && *e != ',') e++;
-      const char* t = e;
-      while (t > a && t[-1] == ' ') t--;
-      want = t > a && (int)strlen(c.name) == (int)(t - a) && !strncasecmp(c.name, a, t - a);
-      a = e;
+    for (const char *a = none ? "" : v, *nm; *a && !want;) {
+      const int len = nextName(a, nm);
+      want = len && sameName(c.name, nm, len);
     }
     if (want != inContactList(p, id, c)) setInContactList(p, id, c, want);
   }
@@ -594,16 +606,12 @@ static void xSet(UiCore& core, NodePrefs* p, uint8_t id, const char* v, char* re
     uint64_t on = 0;
     char nm[40];
     if (*v && strcasecmp(v, "none")) {
-      while (*v) {
-        while (*v == ' ' || *v == ',') v++;
-        const char* e = v;
-        while (*e && *e != ',') e++;
-        const char* t = e;
-        while (t > v && t[-1] == ' ') t--;
-        if (t == v) { v = e; continue; }
+      for (const char* name; *v;) {
+        const int len = nextName(v, name);
+        if (!len) continue;
         int hit = -1;
         for (int i = 0; i < xListCount(id); i++)
-          if (xListName(id, i, nm, sizeof(nm)) && (int)strlen(nm) == (int)(t - v) && !strncasecmp(nm, v, t - v)) { hit = i; break; }
+          if (xListName(id, i, nm, sizeof(nm)) && sameName(nm, name, len)) { hit = i; break; }
         if (hit < 0) {
           int o = snprintf(reply, n, "Error, of: ");
           bool first = true;
@@ -612,7 +620,6 @@ static void xSet(UiCore& core, NodePrefs* p, uint8_t id, const char* v, char* re
           return;
         }
         on |= (uint64_t)1 << hit;
-        v = e;
       }
     }
     xListSet(p, id, on);
@@ -883,18 +890,12 @@ static bool repeaterScopes(NodePrefs* p, const char* cmd, char* reply, int n) {
   const char* a = cmd[19] ? cmd + 20 : "";
   uint16_t mask = 0;
   if (*a && strcmp(a, "none")) {
-    while (*a) {
-      while (*a == ' ' || *a == ',') a++;
-      const char* e = a;
-      while (*e && *e != ',') e++;
-      const char* t = e;
-      while (t > a && t[-1] == ' ') t--;   // "a, b": the spaces round a name aren't part of it
-      if (t == a) { a = e; continue; }
+    for (const char* name; *a;) {
+      const int len = nextName(a, name);
+      if (!len) continue;
       int hit = -1;
-      for (uint8_t i = 0; i < sl.count; i++) {
-        const char* nm = sl.name(i + 1);
-        if ((int)strlen(nm) == (int)(t - a) && !strncasecmp(nm, a, t - a)) { hit = i; break; }
-      }
+      for (uint8_t i = 0; i < sl.count; i++)
+        if (sameName(sl.name(i + 1), name, len)) { hit = i; break; }
       if (hit < 0) {
         int o = snprintf(reply, n, "Error, scopes: ");
         if (!sl.count) snprintf(reply + o, n - o, "none set up (Settings > Radio)");
@@ -902,7 +903,6 @@ static bool repeaterScopes(NodePrefs* p, const char* cmd, char* reply, int n) {
         return true;
       }
       mask |= (uint16_t)(1u << hit);
-      a = e;
     }
   }
   p->repeat_extra_scope_mask = mask;

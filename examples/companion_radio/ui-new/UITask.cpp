@@ -2687,12 +2687,6 @@ int UITask::frontValue(uint8_t k) {
   }
   return -1;
 }
-const char* UITask::frontChoice(uint8_t k, int i) {
-  static const char* const ON_OFF[] = { "On", "Off" };
-  if (k == FK_BLUETOOTH) return i >= 0 && i < 2 ? ON_OFF[i] : nullptr;
-  if (k == FK_SOUND) return i >= 0 && i < soundctl::MODE_COUNT ? soundctl::modeLabel((uint8_t)i) : nullptr;
-  return nullptr;
-}
 void UITask::setFrontValue(uint8_t k, int v) {
   if (k == FK_BLUETOOTH) { if (v == 0) enableBluetooth(); else disableBluetooth(); }
 #ifdef PIN_BUZZER

@@ -154,17 +154,8 @@ int UITask::frontValue(uint8_t k) {
   }
   return -1;
 }
-const char* UITask::frontChoice(uint8_t k, int i) {
-  static const char* const ON_OFF[] = { "On", "Off" };
-  static const char* const THEMES[] = { "Dark", "Light" };
-  if (i < 0) return nullptr;
-  switch (k) {
-    case FK_BLUETOOTH: case FK_TAP_WAKE: case FK_WIFI: return i < 2 ? ON_OFF[i] : nullptr;
-    case FK_SOUND:  return i < soundctl::MODE_COUNT ? soundctl::modeLabel((uint8_t)i) : nullptr;
-    case FK_THEME:  return i < 2 ? THEMES[i] : nullptr;
-    case FK_ACCENT: return i < theme::ACCENT_COUNT ? theme::ACCENTS[i].name : nullptr;
-  }
-  return nullptr;
+const char* UITask::frontChoice(uint8_t k, int i) {   // the rest: SettingsCli
+  return k == FK_ACCENT && i >= 0 && i < theme::ACCENT_COUNT ? theme::ACCENTS[i].name : nullptr;
 }
 int UITask::savedWifiCount() { return lvport::wifiSavedCount(); }
 const char* UITask::savedWifiName(int i) { const lvport::WifiNet* w = lvport::wifiSaved(i); return w ? w->ssid : nullptr; }
