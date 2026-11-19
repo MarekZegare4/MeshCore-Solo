@@ -3,7 +3,9 @@
 // System / Font / Noise; the rows come from ui-core/Diagnostics.h. Live
 // refreshes every second and its header button resets the counters (after a
 // confirm). History charts the last 8 hours (ui-core/StatusHistory.h, as on
-// e-ink): the battery, the noise floor, the SNR of the last packets, traffic.
+// e-ink): the battery, the noise floor, the SNR of the last packets, traffic;
+// and PSRAM since boot (what LVGL, the tiles and the big buffers live in:
+// a slow leak or fragmentation shows there long before "Out of memory").
 //
 // Single-TU fragment: included by ui-lvgl/UITask.cpp after DeviceScreen.h.
 
@@ -16,7 +18,7 @@ namespace diagview {
 enum : uint8_t { TAB_LIVE, TAB_HISTORY, TAB_SYSTEM, TAB_FONT, TAB_NOISE, TAB_COUNT };
 static uint8_t s_tab = TAB_LIVE;   // kept across visits
 static lv_obj_t* s_list = nullptr;
-static const int EXTRA = 4;   // GPS, power, last reset, last crash (L2 only)
+static const int EXTRA = 7;   // GPS, power, last reset, last crash (L2 only), PSRAM x3
 // A Live row's value labels: `in` / `out` for a packet count ("12/3" from
 // ui-core), else `val` alone.
 struct LiveVal { lv_obj_t* val; lv_obj_t* in; lv_obj_t* out; };
@@ -32,8 +34,51 @@ static PSRAM_BSS uicore::BattLog<chart::MAX> s_batt;
 static uint32_t s_batt_shown = 0;
 static lv_obj_t* s_batt_est = nullptr;   // "About 8 h left (5.0 %/h)"
 static char s_batt_under[4][12];         // the span along the bottom, as it grows
-static lv_obj_t* s_ch_obj[4];       // History's charts and their values now
-static lv_obj_t* s_ch_now[4];
+// PSRAM since boot, halved like the battery log: free and the largest free
+// block, in KB. Read through lv_mem_monitor(): on the L2 LVGL's heap is
+// PSRAM's (lv_mem_psram.h); in the sim, LVGL's own pool.
+struct MemLog {
+  static const int N = chart::MAX;
+  uicore::History<N> free_kb, big_kb;
+  unsigned long interval_ms = 60000UL;
+  uint32_t version = 0;
+  uint32_t low_kb = 0;   // the heap's lowest free since boot
+  bool due(unsigned long now) const { return !_next || (long)(now - _next) >= 0; }
+  void tick(unsigned long now) {
+    lv_mem_monitor_t m;
+    lv_mem_monitor(&m);
+    low_kb = (m.total_size - m.max_used) / 1024;
+    crashlog::memSample(m.free_biggest_size, m.total_size - m.max_used);
+    if (free_kb.n == N) compact();
+    free_kb.push(clampKb(m.free_size));
+    big_kb.push(clampKb(m.free_biggest_size));
+    _next = now + interval_ms;
+    version++;
+  }
+  uint32_t spanMinutes() const { return free_kb.n > 1 ? (uint32_t)(free_kb.n - 1) * (interval_ms / 60000UL) : 0; }
+  uint32_t agoMinutes(int i) const { return (uint32_t)(free_kb.n - 1 - i) * (interval_ms / 60000UL); }
+private:
+  unsigned long _next = 0;
+  static int16_t clampKb(size_t b) { b /= 1024; return (int16_t)(b > 32767 ? 32767 : b); }
+  void compact() {   // neighbours averaged in pairs, the interval doubled (BattLog's way)
+    int16_t f[N / 2], g[N / 2];
+    for (int i = 0; i < N / 2; i++) {
+      f[i] = (int16_t)((free_kb.at(2 * i) + free_kb.at(2 * i + 1)) / 2);
+      g[i] = (int16_t)((big_kb.at(2 * i) + big_kb.at(2 * i + 1)) / 2);
+    }
+    free_kb.n = free_kb.head = big_kb.n = big_kb.head = 0;
+    for (int i = 0; i < N / 2; i++) { free_kb.push(f[i]); big_kb.push(g[i]); }
+    interval_ms *= 2;
+  }
+};
+static PSRAM_BSS MemLog s_mem;
+static uint32_t s_mem_shown = 0;
+static lv_obj_t* s_mem_note = nullptr;   // "Largest block 1980 KB, lowest free 2900 KB"
+static char s_mem_under[4][12];
+
+static const int CHARTS = 5;
+static lv_obj_t* s_ch_obj[CHARTS];       // History's charts and their values now
+static lv_obj_t* s_ch_now[CHARTS];
 
 static uint32_t totalRecv() {
   uint32_t n = 0;
@@ -44,7 +89,7 @@ static uint32_t totalRecv() {
 // One chart's samples as drawn: a copy, so the draw callback needn't know
 // which ring (of which size) they came from. What the axis and the pill
 // say is set once (setupCharts()).
-static PSRAM_BSS chart::Chart s_charts[4];
+static PSRAM_BSS chart::Chart s_charts[CHARTS];
 template <int N>
 static void chartOf(int k, const uicore::History<N>& h) {
   chart::Chart& c = s_charts[k];
@@ -65,6 +110,19 @@ static void battChart() {
   c.under[4] = "now";
 }
 
+// PSRAM free since boot, as wide as it goes back (battChart()'s way).
+static void memChart() {
+  chart::Chart& c = s_charts[4];
+  c.n = s_mem.free_kb.n; c.cap = c.n > 1 ? c.n : 2;
+  for (int i = 0; i < c.n; i++) c.v[i] = s_mem.free_kb.at(i);
+  const uint32_t span = s_mem.spanMinutes();
+  for (int j = 0; j < 4; j++) {
+    uicore::spanText(span * (4 - j) / 4, s_mem_under[j], sizeof(s_mem_under[j]));
+    c.under[j] = span ? s_mem_under[j] : nullptr;
+  }
+  c.under[4] = "now";
+}
+
 // A sample's age: the charts sample every 5 minutes, SNR every packet.
 static void whenAgo(const chart::Chart& c, int i, char* out, size_t n) {
   chart::ago((uint32_t)(c.n - 1 - i) * (s_hist.INTERVAL_MS / 60000UL), out, n);
@@ -72,7 +130,7 @@ static void whenAgo(const chart::Chart& c, int i, char* out, size_t n) {
 static void setupCharts() {
   using chart::Chart;
   static const char* const HOURS[5] = { "8 h", "6 h", "4 h", "2 h", "now" };
-  for (int k = 0; k < 4; k++) {
+  for (int k = 0; k < CHARTS; k++) {
     Chart& c = s_charts[k];
     c.where = whenAgo;
     for (int j = 0; j < 5; j++) c.under[j] = HOURS[j];
@@ -103,6 +161,11 @@ static void setupCharts() {
   t.bars = true; t.min_span = 4;
   t.axis = [](int v, int, char* o, size_t n) { snprintf(o, n, "%d", v); };
   t.value = [](const Chart& c, int i, char* o, size_t n) { snprintf(o, n, "%d packet%s", c.v[i], c.v[i] == 1 ? "" : "s"); };
+  Chart& m = s_charts[4];   // KB free; since boot (memChart())
+  m.min_span = 100; m.unit = 10;
+  m.where = [](const Chart& c, int i, char* o, size_t n) { (void)c; chart::ago(s_mem.agoMinutes(i), o, n); };
+  m.axis = [](int v, int, char* o, size_t n) { snprintf(o, n, "%d", v); };
+  m.value = [](const Chart& c, int i, char* o, size_t n) { snprintf(o, n, "%d KB, block %d", c.v[i], s_mem.big_kb.at(i)); };
 }
 
 // A chart card: the title and the value now over the chart.
@@ -119,6 +182,7 @@ static void chartCard(lv_obj_t* parent, int k, const char* title) {
   lv_obj_align(s_ch_now[k], LV_ALIGN_RIGHT_MID, 0, 0);
   s_ch_obj[k] = chart::create(card, s_charts[k], 96);
   if (k == 0) s_batt_est = label(card, "", THEME_FONT_SMALL, theme::TEXT_MUTED);
+  if (k == 4) s_mem_note = label(card, "", THEME_FONT_SMALL, theme::TEXT_MUTED);
 }
 
 static void extraRow(diag::Row* rows, int& n, const char* lbl, const char* fmt, ...) {
@@ -148,6 +212,11 @@ static int allRows(diag::Row* rows, bool gps_on) {
   extraRow(rows, n, "Last start", "%s", lvport::resetReason());
   char crash[32];
   if (lvport::crashSummary(crash, sizeof(crash))) extraRow(rows, n, "Last crash", "%s", crash);
+  lv_mem_monitor_t m;   // walks the heap: once a second, only while Live is shown
+  lv_mem_monitor(&m);
+  extraRow(rows, n, "PSRAM free", "%lu of %lu KB", (unsigned long)(m.free_size / 1024), (unsigned long)(m.total_size / 1024));
+  extraRow(rows, n, "PSRAM block", "%lu KB", (unsigned long)(m.free_biggest_size / 1024));
+  extraRow(rows, n, "PSRAM lowest", "%lu KB", (unsigned long)((m.total_size - m.max_used) / 1024));
   return n;
 }
 
@@ -168,6 +237,8 @@ static const Name NAMES[] = {
   { "RXPS wd s/h", SEC_RADIO, "RX watchdog soft / hard", false },
   { "Heap free", SEC_MEMORY, "Heap free", false },     { "Stack free", SEC_MEMORY, "UI stack free (lowest)", false },
   { "Pool free", SEC_MEMORY, "Packet pool free", false },
+  { "PSRAM free", SEC_MEMORY, "PSRAM free", false },  { "PSRAM block", SEC_MEMORY, "PSRAM largest free block", false },
+  { "PSRAM lowest", SEC_MEMORY, "PSRAM lowest free", false },
 };
 static const Name* nameOf(const char* core) {
   for (const Name& n : NAMES) if (!strcmp(n.core, core)) return &n;
@@ -386,6 +457,7 @@ void UITask::buildDiag() {
     chartCard(s_list, 1, "Noise floor (dBm)");
     chartCard(s_list, 2, "SNR of the last packets (dB)");
     chartCard(s_list, 3, "Packets heard, per 5 min");
+    chartCard(s_list, 4, "PSRAM free since boot (KB)");
     fillHistory();
     return;
   }
@@ -485,11 +557,13 @@ void UITask::fillHistory() {
   using namespace diagview;
   s_hist_shown = s_hist.version;
   s_batt_shown = s_batt.version;
+  s_mem_shown = s_mem.version;
   battChart();
+  memChart();
   chartOf(1, s_hist.noise);
   chartOf(2, s_hist.snr);
   chartOf(3, s_hist.traffic);
-  for (int k = 0; k < 4; k++) lv_obj_invalidate(s_ch_obj[k]);
+  for (int k = 0; k < CHARTS; k++) lv_obj_invalidate(s_ch_obj[k]);
   setTextFmt(s_ch_now[0], "%.2f V", (_batt_mv ? _batt_mv : getBattMilliVolts()) / 1000.0f);
   const auto est = s_batt.estimate(_prefs ? _prefs->low_batt_mv : 0);
   char left[16];
@@ -502,6 +576,13 @@ void UITask::fillHistory() {
   if (nf) setTextFmt(s_ch_now[1], "%d dBm", nf); else setText(s_ch_now[1], "-");
   if (s_hist.snr.n) setTextFmt(s_ch_now[2], "%.1f dB", s_hist.snr.at(s_hist.snr.n - 1) / 4.0f); else setText(s_ch_now[2], "-");
   setTextFmt(s_ch_now[3], "%d", s_hist.traffic.n ? s_hist.traffic.at(s_hist.traffic.n - 1) : 0);
+  if (const int k = s_mem.free_kb.n) {
+    setTextFmt(s_ch_now[4], "%d KB", s_mem.free_kb.at(k - 1));
+    setTextFmt(s_mem_note, "Largest block %d KB, lowest free %lu KB", s_mem.big_kb.at(k - 1), (unsigned long)s_mem.low_kb);
+  } else {
+    setText(s_ch_now[4], "-");
+    setText(s_mem_note, "");
+  }
 }
 
 // From loop(): the history's readings (it keeps its own pace).
@@ -511,6 +592,7 @@ void UITask::sampleHistory() {
   // USB power an I2C one) unless a sample is due or a packet came in.
   const unsigned long now = millis();
   const uint32_t rx = totalRecv();
+  if (s_mem.due(now)) s_mem.tick(now);   // a heap walk, once a minute at first, then rarer
   const bool hist = s_hist.due(now, rx), batt = s_batt.due(now);
   if (!hist && !batt) return;
   const int mv = _batt_mv ? _batt_mv : getBattMilliVolts();
@@ -520,7 +602,7 @@ void UITask::sampleHistory() {
 
 void UITask::refreshDiag() {
   using namespace diagview;
-  if (_screen == SCR_DIAG && s_tab == TAB_HISTORY && !_nav_overlay && (s_hist.version != s_hist_shown || s_batt.version != s_batt_shown)) {
+  if (_screen == SCR_DIAG && s_tab == TAB_HISTORY && !_nav_overlay && (s_hist.version != s_hist_shown || s_batt.version != s_batt_shown || s_mem.version != s_mem_shown)) {
     fillHistory();   // a new sample: the charts in place, the list stays where it was scrolled
     return;
   }

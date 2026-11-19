@@ -90,18 +90,22 @@ static void deleteDue() {
   for (int i = 0; i < n; i++) if (del[i]) lv_obj_delete(s_dead[i]);
 }
 
-// Screenshot: while s_shot points at a full-screen RGB565 buffer, the flush
-// callbacks also copy what they send to the panel into it.
+// Screenshot: while s_shot points at a band of the screen (full width,
+// rows s_shot_y0 .. + s_shot_h, RGB565), the flush callbacks also copy
+// what they send to the panel inside it there.
 static uint16_t* s_shot = nullptr;
+static int32_t s_shot_y0 = 0, s_shot_h = 0;
 static void shotCopy(const lv_area_t* a, const uint8_t* px) {
   if (!s_shot) return;
   const int32_t W = lv_display_get_horizontal_resolution(NULL);
   const int32_t w = a->x2 - a->x1 + 1;
   const uint16_t* src = (const uint16_t*)px;
   for (int32_t y = a->y1; y <= a->y2; y++, src += w) {
-    memcpy(s_shot + y * W + a->x1, src, w * 2);
+    if (y < s_shot_y0 || y >= s_shot_y0 + s_shot_h) continue;
+    uint16_t* d = s_shot + (y - s_shot_y0) * W + a->x1;
+    memcpy(d, src, w * 2);
 #ifdef UI_FLUSH_DMA   // drawn big-endian for the panel
-    lv_draw_sw_rgb565_swap(s_shot + y * W + a->x1, w);
+    lv_draw_sw_rgb565_swap(d, w);
 #endif
   }
 }
@@ -257,8 +261,32 @@ static void flushWait(lv_display_t* disp) {
 // one press sliding from key to key (the first key lost, or a scroll begun).
 // A new finger (the panel's track id) is a release, then a press of its own.
 static int16_t s_touch_id = -1;   // the finger reported, -1 none
+#ifdef SOLO_TEST_HOOKS
+// A finger from the console (test builds: "tap", "swipe"): pressed from
+// (x0,y0), sliding to (x1,y1) over `ms`, then lifted.
+struct FakeTouch { int16_t x0, y0, x1, y1; uint32_t t0, ms; bool on; };
+static FakeTouch s_fake = {};
+static void fakeTouch(int x0, int y0, int x1, int y1, uint32_t ms) {
+  s_fake = { (int16_t)x0, (int16_t)y0, (int16_t)x1, (int16_t)y1, millis(), ms ? ms : 1, true };
+}
+#endif
 static void touchCb(lv_indev_t* indev, lv_indev_data_t* data) {
   (void)indev;
+#ifdef SOLO_TEST_HOOKS
+  if (s_fake.on) {
+    const uint32_t t = millis() - s_fake.t0;
+    if (t >= s_fake.ms) {
+      s_fake.on = false;
+      data->state = LV_INDEV_STATE_RELEASED;
+      return;
+    }
+    cpuSlow(false);
+    data->state = LV_INDEV_STATE_PRESSED;
+    data->point.x = s_fake.x0 + (int32_t)(s_fake.x1 - s_fake.x0) * (int32_t)t / (int32_t)s_fake.ms;
+    data->point.y = s_fake.y0 + (int32_t)(s_fake.y1 - s_fake.y0) * (int32_t)t / (int32_t)s_fake.ms;
+    return;
+  }
+#endif
   lgfx::touch_point_t tp;
   bool down = s_gfx->getTouch(&tp, 1) > 0;
   if (s_swallow) {

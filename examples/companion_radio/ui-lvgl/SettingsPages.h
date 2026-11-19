@@ -407,6 +407,58 @@ bool UITask::cliCommand(const char* command, char* reply, int n) {
              locked() ? 1 : 0, _display && _display->isOn() ? "on" : "off", (unsigned)_toast_seq);
     return true;
   }
+  // tools/memwatch.py. "psram": "> <PSRAM free>,<total>,<lowest free>,<largest block>,<blocks in
+  // use>,<free blocks>,<internal free>,<internal largest>,<LVGL objects>,<screens>,<timers>,
+  // <animations>,<uptime s>" (bytes; in the sim the PSRAM figures are LVGL's pool). Objects,
+  // timers or blocks that only ever grow while the same screens come and go are a leak.
+  if (!strcmp(command, "psram")) {
+    lv_mem_monitor_t m;
+    lv_mem_monitor(&m);
+    unsigned long in_free = 0, in_big = 0;
+#ifdef ESP32
+    in_free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+    in_big = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL);
+#endif
+    struct Cnt { uint32_t objs, screens; } c = { 0, 0 };
+    auto walk = [](lv_obj_t* o, void* u) -> lv_obj_tree_walk_res_t {
+      Cnt* k = (Cnt*)u;
+      k->objs++;
+      if (!lv_obj_get_parent(o)) k->screens++;
+      return LV_OBJ_TREE_WALK_NEXT;
+    };
+    lv_obj_tree_walk(NULL, walk, &c);   // every screen, loaded or not
+    lv_obj_tree_walk(lv_layer_top(), walk, &c);
+    lv_obj_tree_walk(lv_layer_sys(), walk, &c);
+    lv_obj_tree_walk(lv_layer_bottom(), walk, &c);
+    uint32_t timers = 0;
+    for (lv_timer_t* t = lv_timer_get_next(NULL); t; t = lv_timer_get_next(t)) timers++;
+    snprintf(reply, n, "> %lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%u,%lu", (unsigned long)m.free_size,
+             (unsigned long)m.total_size, (unsigned long)(m.total_size - m.max_used), (unsigned long)m.free_biggest_size,
+             (unsigned long)m.used_cnt, (unsigned long)m.free_cnt, in_free, in_big, (unsigned long)c.objs,
+             (unsigned long)c.screens, (unsigned long)timers, (unsigned)lv_anim_count_running(), (unsigned long)(millis() / 1000));
+    return true;
+  }
+  // "shot": a screenshot to the card, as the quick panel's; "> <the toast it left>".
+  if (!strcmp(command, "shot")) {
+    takeScreenshot();
+    snprintf(reply, n, "> %s", _toast ? lv_label_get_text(lv_obj_get_child(_toast, 0)) : "");
+    return true;
+  }
+#ifdef SEEED_WIO_TRACKER_L2
+  // "tap <x> <y> [ms]" (a hold: ms, 600 and over), "swipe <x0> <y0> <x1> <y1> [ms]": a
+  // finger on the screen (320x240, landscape), as the panel would report it.
+  if (!strncmp(command, "tap ", 4) || !strncmp(command, "swipe ", 6)) {
+    int v[5] = { 0, 0, 0, 0, 0 };
+    const bool tap = command[0] == 't';
+    const int k = sscanf(command + (tap ? 4 : 6), "%d %d %d %d %d", &v[0], &v[1], &v[2], &v[3], &v[4]);
+    if (tap ? k < 2 : k < 4) { snprintf(reply, n, "Error: %s", tap ? "tap x y [ms]" : "swipe x0 y0 x1 y1 [ms]"); return true; }
+    if (!_display || !_display->isOn()) wake();
+    if (tap) lvport::fakeTouch(v[0], v[1], v[0], v[1], k > 2 ? v[2] : 80);
+    else lvport::fakeTouch(v[0], v[1], v[2], v[3], k > 4 ? v[4] : 300);
+    snprintf(reply, n, "OK");
+    return true;
+  }
+#endif
   if (!strcmp(command, "screen on")) { wake(); snprintf(reply, n, "OK"); return true; }
   if (!strcmp(command, "screen off")) { sleep(); snprintf(reply, n, "OK"); return true; }
   // flowdemo [n]: n packet flows (zigzags) over the open map, spread over the

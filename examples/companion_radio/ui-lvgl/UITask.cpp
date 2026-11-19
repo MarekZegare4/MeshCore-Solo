@@ -1033,23 +1033,41 @@ static void restartScreen(const char* why) {
   lv_obj_delete(o);   // the sim carries on
 }
 
-// The screen as it is, toasts and popups included, re-rendered once into a
-// buffer the flush callback fills (lvport::shotCopy).
-uint16_t* UITask::captureFrame(int& w, int& h) {
+// The screen as it is, toasts and popups included, re-rendered band by
+// band (UITask.h) into a buffer the flush callback fills (lvport::shotCopy).
+// Each band is its own refresh of just that area, every layer in it; a
+// thin buffer, so a long-running device with fragmented PSRAM still gets
+// its screenshot (a whole frame needed one 150 KB block).
+bool UITask::captureBands(int& w, int& h, bool bottom_up, ShotBand band, void* ctx) {
   lv_display_t* d = lv_display_get_default();
   w = lv_display_get_horizontal_resolution(d);
   h = lv_display_get_vertical_resolution(d);
+  int rows = 40;   // 320 x 40 x 2 = 25 KB
+  uint16_t* px = nullptr;
+  for (; rows >= 5; rows /= 2) {   // thinner if even that much isn't there
 #ifdef ESP32
-  uint16_t* px = (uint16_t*)heap_caps_malloc(w * h * 2, MALLOC_CAP_SPIRAM);
+    px = (uint16_t*)heap_caps_malloc((size_t)w * rows * 2, MALLOC_CAP_SPIRAM);
 #else
-  uint16_t* px = (uint16_t*)malloc(w * h * 2);
+    px = (uint16_t*)malloc((size_t)w * rows * 2);
 #endif
-  if (!px) return nullptr;
-  lvport::s_shot = px;
-  lv_obj_invalidate(lv_screen_active());   // the whole display, every layer
-  lv_refr_now(d);
-  lvport::s_shot = nullptr;
-  return px;
+    if (px) break;
+  }
+  if (!px) return false;
+  const int nb = (h + rows - 1) / rows;
+  for (int k = 0; k < nb; k++) {
+    const int b = bottom_up ? nb - 1 - k : k;
+    const int y0 = b * rows, n = y0 + rows > h ? h - y0 : rows;
+    lv_area_t a = { 0, y0, w - 1, y0 + n - 1 };
+    lvport::s_shot = px;
+    lvport::s_shot_y0 = y0;
+    lvport::s_shot_h = n;
+    lv_obj_invalidate_area(lv_screen_active(), &a);   // every layer is drawn there
+    lv_refr_now(d);
+    lvport::s_shot = nullptr;
+    band(ctx, y0, n, px);
+  }
+  free(px);
+  return true;
 }
 
 // The screen, written to the card as a 24-bit BMP: /sdcard/screenshots/scr_NNNN.bmp.
@@ -1070,34 +1088,38 @@ void UITask::takeScreenshot() {
   if (++n > 9999) { showToast("Screenshots folder full"); return; }
   char path[48];
   snprintf(path, sizeof(path), "/sdcard/screenshots/scr_%04d.bmp", n);
-  int W, H;
-  uint16_t* px = captureFrame(W, H);
-  if (!px) { showToast("Out of memory"); return; }
+  FILE* f = fopen(path, "wb");
+  if (!f) { showToast("Couldn't save the screenshot"); return; }
 
-  bool ok = false;
-  if (FILE* f = fopen(path, "wb")) {
-    const uint32_t row = (uint32_t)W * 3, size = 54 + row * H;   // W*3 is a multiple of 4 at 320
-    uint8_t hdr[54] = {'B', 'M'};
-    auto put32 = [&](int at, uint32_t v) { for (int i = 0; i < 4; i++) hdr[at + i] = (uint8_t)(v >> (8 * i)); };
-    put32(2, size); put32(10, 54); put32(14, 40); put32(18, W); put32(22, H);
-    hdr[26] = 1; hdr[28] = 24; put32(34, row * H);
-    ok = fwrite(hdr, 1, 54, f) == 54;
+  // Bottom-up BGR rows, as a BMP keeps them: the bands come bottom first.
+  struct Out { FILE* f; bool ok; int w; };
+  Out out = { f, true, 0 };
+  int W = lv_display_get_horizontal_resolution(NULL), H = lv_display_get_vertical_resolution(NULL);
+  const uint32_t row = (uint32_t)W * 3, size = 54 + row * H;   // W*3 is a multiple of 4 at 320
+  uint8_t hdr[54] = {'B', 'M'};
+  auto put32 = [&](int at, uint32_t v) { for (int i = 0; i < 4; i++) hdr[at + i] = (uint8_t)(v >> (8 * i)); };
+  put32(2, size); put32(10, 54); put32(14, 40); put32(18, W); put32(22, H);
+  hdr[26] = 1; hdr[28] = 24; put32(34, row * H);
+  out.ok = fwrite(hdr, 1, 54, f) == 54;
+  out.w = W;
+  const bool have = captureBands(W, H, true, [](void* ctx, int y0, int rows, const uint16_t* px) {
+    (void)y0;
+    Out& o = *(Out*)ctx;
     static PSRAM_BSS uint8_t line[320 * 3];   // not on the loop task's stack
-    for (int32_t y = H - 1; ok && y >= 0; y--) {   // bottom-up, BGR
-      const uint16_t* s = px + y * W;
-      for (int32_t x = 0; x < W && x < 320; x++) {
+    for (int y = rows - 1; o.ok && y >= 0; y--) {   // bottom-up, BGR
+      const uint16_t* s = px + y * o.w;
+      for (int32_t x = 0; x < o.w && x < 320; x++) {
         uint16_t c = s[x];
         uint8_t r = (c >> 11) & 0x1F, g = (c >> 5) & 0x3F, b = c & 0x1F;
         line[x * 3 + 0] = (uint8_t)((b << 3) | (b >> 2));
         line[x * 3 + 1] = (uint8_t)((g << 2) | (g >> 4));
         line[x * 3 + 2] = (uint8_t)((r << 3) | (r >> 2));
       }
-      ok = fwrite(line, 1, row, f) == row;
+      o.ok = fwrite(line, 1, (size_t)o.w * 3, o.f) == (size_t)o.w * 3;
     }
-    ok = (fclose(f) == 0) && ok;
-  }
-  free(px);
-  if (!ok) { remove(path); showToast("Couldn't save the screenshot"); return; }
+  }, &out);
+  bool ok = (fclose(f) == 0) && out.ok && have;
+  if (!ok) { remove(path); showToast(have ? "Couldn't save the screenshot" : "Out of memory"); return; }
 
   // A white frame flashing round the edges, then where it went. Four thin
   // strips, not a full-screen layer: each frame of the fade redraws only

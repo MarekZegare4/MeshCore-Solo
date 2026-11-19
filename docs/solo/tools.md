@@ -321,7 +321,8 @@ the last one may be old. SOS doesn't ask: it turns the GPS on itself.
 > **Wio Tracker L2:** the Diagnostics app, with a **Noise** tab that
 > measures the noise floor over time and history charts you can touch for the
 > value at that moment (the battery's goes back to when the device was
-> switched on, with the time left under it), and the **GPS** app, on four tabs: **Sky** (a plot
+> switched on, with the time left under it; the memory's too, so a slow leak
+> shows), and the **GPS** app, on four tabs: **Sky** (a plot
 > of the satellites and the fix), **Signal** (a bar per satellite with its
 > strength, and the constellations), **Details** (position, precision,
 > time to first fix and what the receiver reports) and **Options** (GPS power
@@ -333,7 +334,8 @@ the last one may be old. SOS doesn't ask: it turns the GPS on itself.
 > seconds (the trail you were recording comes back). After that, or after
 > a crash or a brown-out, it writes a report to the SD card,
 > `meshcore/crash/<date>.txt`, and says so: where it stopped, and the last
-> few things you did before (taps, screens, map tools, WiFi). Nothing is
+> few things you did before (taps, screens, map tools, WiFi), with the free
+> memory at each. Nothing is
 > logged while it runs normally. If it happens, send the file with your bug
 > report.
 

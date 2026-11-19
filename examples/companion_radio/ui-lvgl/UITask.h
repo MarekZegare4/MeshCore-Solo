@@ -61,9 +61,14 @@ public:
   void shutdown(bool restart = false) override;
   MyMesh::Listener* meshListener() override;
   // The screen as it is now: RGB565 (native, little-endian), row-major, w x h.
-  // For CMD_GET_SCREENSHOT (MyMesh, -D ENABLE_SCREENSHOT, display type 2);
-  // nullptr without the memory for it. The caller frees it with free().
-  uint16_t* captureFrame(int& w, int& h);
+  // The screen as it is, re-rendered a band at a time into a small buffer
+  // (no 150 KB frame at once): band(ctx, y0, rows, px) for each, px full
+  // width (w) and `rows` lines of RGB565, top to bottom or (bottom_up, for
+  // a BMP) bottom to top. false without the memory for even a thin band.
+  // For takeScreenshot() and CMD_GET_SCREENSHOT (MyMesh, -D ENABLE_SCREENSHOT,
+  // display type 2).
+  typedef void (*ShotBand)(void* ctx, int y0, int rows, const uint16_t* px);
+  bool captureBands(int& w, int& h, bool bottom_up, ShotBand band, void* ctx);
 #define UI_SCREENSHOT_RGB565 1
 
   // UiCoreHost

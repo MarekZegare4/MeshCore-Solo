@@ -8,15 +8,42 @@ void MyMesh::handleScreenshotRequest() {
     #ifdef DISPLAY_CLASS
     extern UITask ui_task;   // main.cpp -- the Listener may be the UI Core, not UITask
     #ifdef UI_SCREENSHOT_RGB565
-    // A colour UI renders a frame for it (RGB565, display type 2).
-    int w, h;
-    uint16_t* px = ui_task.captureFrame(w, h);
-    if (!px) {
-        writeErrFrame(ERR_CODE_UNSUPPORTED_CMD);
-        return;
-    }
-    sendScreenshotResponse(SCREENSHOT_TYPE_RGB565, 0, (uint16_t)w, (uint16_t)h, (const uint8_t*)px, (uint32_t)w * h * 2);
-    free(px);
+    // A colour UI renders the frame for it band by band (RGB565, display
+    // type 2); the bands go out as they come, in the same frames
+    // sendScreenshotResponse() would cut a whole buffer into.
+    struct Tx { MyMesh* m; int w, h; uint32_t total, done; uint16_t chunk, chunks; uint32_t fill; };
+    Tx tx = { this, 0, 0, 0, 0, 0, 0, 0 };
+    const bool ok = ui_task.captureBands(tx.w, tx.h, false, [](void* ctx, int y0, int rows, const uint16_t* px) {
+        (void)y0;
+        Tx& t = *(Tx*)ctx;
+        const int HEADER_SIZE = 11;
+        const uint32_t MAX_DATA = MAX_FRAME_SIZE - HEADER_SIZE;
+        if (!t.total) {
+            t.total = (uint32_t)t.w * t.h * 2;
+            t.chunks = (uint16_t)((t.total + MAX_DATA - 1) / MAX_DATA);
+        }
+        const uint8_t* b = (const uint8_t*)px;
+        uint32_t left = (uint32_t)t.w * rows * 2;
+        while (left) {
+            const uint32_t k = min(left, MAX_DATA - t.fill);
+            memcpy(&t.m->out_frame[HEADER_SIZE + t.fill], b, k);
+            t.fill += k; b += k; left -= k; t.done += k;
+            if (t.fill == MAX_DATA || t.done == t.total) {
+                uint8_t* o = t.m->out_frame;
+                o[0] = RESP_CODE_SCREENSHOT;
+                o[1] = SCREENSHOT_TYPE_RGB565;
+                o[2] = 0;
+                o[3] = t.w & 0xFF; o[4] = t.w >> 8;
+                o[5] = t.h & 0xFF; o[6] = t.h >> 8;
+                o[7] = t.chunk & 0xFF; o[8] = t.chunk >> 8;
+                o[9] = t.chunks & 0xFF; o[10] = t.chunks >> 8;
+                t.m->_serial->writeFrame(o, HEADER_SIZE + t.fill);
+                t.chunk++;
+                t.fill = 0;
+            }
+        }
+    }, &tx);
+    if (!ok) writeErrFrame(ERR_CODE_UNSUPPORTED_CMD);
     #else
     if (!ui_task.hasDisplay()) {
         writeErrFrame(ERR_CODE_UNSUPPORTED_CMD);

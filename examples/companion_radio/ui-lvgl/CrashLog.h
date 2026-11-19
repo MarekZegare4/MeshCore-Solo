@@ -4,8 +4,9 @@
 // again, the crashed task's backtrace from the core dump (decode it with the
 // build's firmware.elf: xtensa-esp32s3-elf-addr2line -pfiaC -e firmware.elf
 // <addresses>), and the last things done before it -- taps, screens, popups,
-// map tools, WiFi, the screen going off -- each with the time and the free
-// internal heap.
+// map tools, WiFi, the screen going off -- each with the time, the free
+// internal heap and the free PSRAM -- and PSRAM's largest free block and
+// lowest free as last sampled (memSample()).
 //
 // Those last things are kept in RTC memory that a restart doesn't clear
 // (RTC_NOINIT): nothing is written while the device runs, so it costs no
@@ -29,18 +30,21 @@
 
 namespace crashlog {
 
-static const uint32_t MAGIC = 0x534C4F47;   // "SLOG"
+static const uint32_t MAGIC = 0x534C4F32;   // "SLO2" ("SLOG" had no PSRAM)
 static const int N = 32;
 struct Ev {
   uint32_t ms;        // since the start
   uint32_t t;         // UTC, 0 when the clock wasn't set
   uint16_t heap_kb;   // free internal heap
+  uint16_t psram_kb;  // free PSRAM
   char what[22];
 };
 struct Ring {
   uint32_t magic;
   uint32_t head;      // events noted so far (the ring holds the last N)
   uint32_t boot_t;    // UTC at the start, or 0
+  uint32_t mem_ms;    // PSRAM as last sampled (memSample()), 0 = not yet
+  uint16_t psram_big_kb, psram_low_kb;
   Ev ev[N];
 };
 
@@ -53,6 +57,8 @@ static Ring s_prev;              // the run before, when it ended badly
 static bool s_report = false;    // s_prev is to be written out
 static int s_reason = 0;
 
+static uint16_t kb(size_t b) { b /= 1024; return (uint16_t)(b > 0xFFFF ? 0xFFFF : b); }
+
 static uint32_t clockNow() {
   const uint32_t t = rtc_clock.getCurrentTime();
   return t >= 1700000000UL ? t : 0;
@@ -64,16 +70,26 @@ static void note(const char* fmt, ...) {
   e.ms = millis();
   e.t = clockNow();
 #ifdef CRASHLOG_ON
-  const size_t fr = heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024;
-  e.heap_kb = (uint16_t)(fr > 0xFFFF ? 0xFFFF : fr);
+  e.heap_kb = kb(heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+  e.psram_kb = kb(heap_caps_get_free_size(MALLOC_CAP_SPIRAM));   // a counter, no walk
 #else
-  e.heap_kb = 0;
+  e.heap_kb = e.psram_kb = 0;
 #endif
   va_list ap;
   va_start(ap, fmt);
   vsnprintf(e.what, sizeof(e.what), fmt, ap);
   va_end(ap);
   s_ring.head++;
+}
+
+// PSRAM's largest free block and lowest free, from the loop now and then
+// (the Diag memory log's sample): walking the heap at every note would
+// cost each tap.
+static void memSample(size_t big, size_t low) {
+  if (s_ring.magic != MAGIC) return;
+  s_ring.mem_ms = millis();
+  s_ring.psram_big_kb = kb(big);
+  s_ring.psram_low_kb = kb(low);
 }
 
 // First thing at the start: the run before kept if it ended badly, the ring
@@ -154,13 +170,16 @@ static bool writeReport(bool card, const char* fw, const char* board, const char
 #endif
   const uint32_t cnt = s_prev.head < (uint32_t)N ? s_prev.head : (uint32_t)N;
   fmtUtc(ts, sizeof(ts), s_prev.boot_t, true);
-  fprintf(f, "\nThe run before: started %s; %lu things noted, the last %lu (seconds since its start, UTC, free heap):\n",
+  fprintf(f, "\nThe run before: started %s; %lu things noted, the last %lu (seconds since its start, UTC, free heap, free PSRAM):\n",
           ts, (unsigned long)s_prev.head, (unsigned long)cnt);
   for (uint32_t k = s_prev.head - cnt; k < s_prev.head; k++) {
     const Ev& e = s_prev.ev[k % N];
     fmtUtc(ts, sizeof(ts), e.t, false);
-    fprintf(f, "  %8.1f s  %s  %3u KB  %s\n", e.ms / 1000.0f, ts, (unsigned)e.heap_kb, e.what);
+    fprintf(f, "  %8.1f s  %s  %3u KB  %4u KB  %s\n", e.ms / 1000.0f, ts, (unsigned)e.heap_kb, (unsigned)e.psram_kb, e.what);
   }
+  if (s_prev.mem_ms)
+    fprintf(f, "PSRAM at %.1f s: largest free block %u KB, lowest free since the start %u KB\n", s_prev.mem_ms / 1000.0f,
+            (unsigned)s_prev.psram_big_kb, (unsigned)s_prev.psram_low_kb);
   const bool ok = fclose(f) == 0;
   if (ok && nn) snprintf(name, nn, "%s", fn);
   return ok;
