@@ -50,14 +50,20 @@ size_t ArduinoSerialInterface::writeFrame(const uint8_t src[], size_t len) {
   // bridge's Serial always reads true, so those boards are unaffected.
   if (_serial == (Stream*)&Serial && !Serial) return 0;
 
-  uint8_t hdr[3];
-  hdr[0] = '>';
-  hdr[1] = (len & 0xFF);  // LSB
-  hdr[2] = (len >> 8);    // MSB
+  // Header and payload in one write: written apart, the 3-byte header went
+  // out as a USB packet of its own (the ESP32's USBCDC sends each write as it
+  // comes; an L2 screenshot is ~930 frames).
+  uint8_t buf[3 + MAX_FRAME_SIZE];
+  buf[0] = '>';
+  buf[1] = (len & 0xFF);  // LSB
+  buf[2] = (len >> 8);    // MSB
+  memcpy(buf + 3, src, len);
+  const size_t total = 3 + len;
 
-  // Single deadline shared across header + payload, so a stalled host costs
-  // at most SERIAL_WRITE_TIMEOUT_MS total, not that much per write() call.
+  // One deadline for the whole frame, so a stalled host costs at most
+  // SERIAL_WRITE_TIMEOUT_MS. See StreamUtils.h.
   uint32_t deadline = millis() + SERIAL_WRITE_TIMEOUT_MS;
+  size_t sent = 0;
 #if defined(ESP32) && ARDUINO_USB_MODE && ARDUINO_USB_CDC_ON_BOOT
   if (_serial == (Stream*)&Serial) {
     // The ESP32-S3's USB Serial/JTAG (HWCDC as Serial: the Heltec V4) moves
@@ -66,21 +72,16 @@ size_t ArduinoSerialInterface::writeFrame(const uint8_t src[], size_t len) {
     // next frame (tools/hwtest.py: CLI replies of 67 and 123 bytes never
     // arrived). Pieces of 63 bytes, each sent before the next, are all short
     // packets, which end a transfer by themselves. About 1 ms a piece.
-    uint8_t buf[3 + MAX_FRAME_SIZE];
-    memcpy(buf, hdr, 3);
-    memcpy(buf + 3, src, len);
-    size_t sent = 0, total = 3 + len;
     while (sent < total) {
       size_t k = total - sent > 63 ? 63 : total - sent;
       if (streamWriteUntil(*_serial, buf + sent, k, deadline) < k) break;
       Serial.flush();   // until the ISR has it in the FIFO
       sent += k;
     }
-    return sent < 3 ? 0 : sent - 3;
-  }
+  } else
 #endif
-  if (streamWriteUntil(*_serial, hdr, 3, deadline) < 3) return 0;
-  return streamWriteUntil(*_serial, src, len, deadline);
+  sent = streamWriteUntil(*_serial, buf, total, deadline);
+  return sent < 3 ? 0 : sent - 3;
 }
 
 size_t ArduinoSerialInterface::checkRecvFrame(uint8_t dest[]) {
