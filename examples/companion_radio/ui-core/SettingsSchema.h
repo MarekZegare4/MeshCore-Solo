@@ -25,16 +25,19 @@ namespace settings {
 // PG_NAV is the Map's options (its trail / live share / target tools),
 // PG_ADVERT sits in Nearby's advert popup; the rest are Settings pages.
 // PG_PRIVACY and PG_RADIO (Radio's advanced options) are Settings pages too.
-enum Page : uint8_t { PG_NAV, PG_ADVERT, PG_DEVICE, PG_MESSAGES, PG_SOUND, PG_PRIVACY, PG_RADIO, PG_COUNT };
+// PG_REPEATER is for the console and the configurator (issue #62): the
+// frontends have their own Repeater screens over ui-core/RepeaterControl.h.
+enum Page : uint8_t { PG_NAV, PG_ADVERT, PG_DEVICE, PG_MESSAGES, PG_SOUND, PG_PRIVACY, PG_RADIO, PG_REPEATER, PG_COUNT };
 enum Section : uint8_t { SEC_TRAIL, SEC_LIVE_SHARE, SEC_LOCATOR, SEC_MAP_VIEW, SEC_ADVERT,
                          SEC_DISPLAY, SEC_POWER, SEC_TIME, SEC_UNITS,
                          SEC_MESSAGES, SEC_CONTACTS, SEC_AUTO_ADD,
                          SEC_SOUND, SEC_SOUND_FOR, SEC_QUIET,
-                         SEC_PRIVACY, SEC_TELEMETRY, SEC_RADIO_ADV, SEC_COUNT };
+                         SEC_PRIVACY, SEC_TELEMETRY, SEC_RADIO_ADV,
+                         SEC_RPT, SEC_RPT_RELAYS, SEC_COUNT };
 
 static const char* pageTitle(uint8_t p) {
   static const char* T[PG_COUNT] = { "Map options", "Advert", "Display & power", "Messages & contacts", "Sound",
-                                     "Privacy", "Advanced radio" };
+                                     "Privacy", "Advanced radio", "Repeater" };
   return p < PG_COUNT ? T[p] : "";
 }
 static const char* sectionTitle(uint8_t s) {
@@ -42,7 +45,8 @@ static const char* sectionTitle(uint8_t s) {
                                       "DISPLAY", "POWER", "TIME", "UNITS",
                                       "MESSAGES", "CONTACTS", "ADDING CONTACTS",
                                       "SOUND", "PLAYS FOR", "QUIET HOURS",
-                                      "ADVERTS", "WHO CAN ASK FOR", "ADVANCED" };
+                                      "ADVERTS", "WHO CAN ASK FOR", "ADVANCED",
+                                      "REPEATER", "WHAT IT RELAYS" };
   return s < SEC_COUNT ? T[s] : "";
 }
 static uint8_t sectionPage(uint8_t s) {
@@ -50,7 +54,8 @@ static uint8_t sectionPage(uint8_t s) {
                                         PG_DEVICE, PG_DEVICE, PG_DEVICE, PG_DEVICE,
                                         PG_MESSAGES, PG_MESSAGES, PG_MESSAGES,
                                         PG_SOUND, PG_SOUND, PG_SOUND,
-                                        PG_PRIVACY, PG_PRIVACY, PG_RADIO };
+                                        PG_PRIVACY, PG_PRIVACY, PG_RADIO,
+                                        PG_REPEATER, PG_REPEATER };
   return s < SEC_COUNT ? P[s] : PG_DEVICE;
 }
 
@@ -218,6 +223,17 @@ static void optAirtime(uint8_t v, char* b, int n, const NodePrefs&) {
   snprintf(b, n, "%ld.%ld x", (long)(AIRTIME[v] / 100), (long)(AIRTIME[v] % 100 / 10));
 }
 
+// The repeater's filters, as its screens show them (RepeaterControl.h).
+static void optRptHops(uint8_t v, char* b, int n, const NodePrefs&) { rptctl::fmtHops(b, n, v); }
+static void optRptYield(uint8_t v, char* b, int n, const NodePrefs&) { rptctl::fmtYield(b, n, v); }
+// Off, then -20 .. 10 dB: bare numbers, so the 32 of them fit an "opts" reply.
+static const int32_t RPT_SNR[] = { NodePrefs::REPEAT_SNR_DISABLED, -20, -19, -18, -17, -16, -15, -14, -13, -12, -11,
+                                   -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
+static void optRptSnr(uint8_t v, char* b, int n, const NodePrefs&) {
+  if (v == 0) snprintf(b, n, "Off"); else snprintf(b, n, "%ld", (long)RPT_SNR[v]);
+}
+static void optRptNet(uint8_t v, char* b, int n, const NodePrefs&) { snprintf(b, n, "%s", v ? "Custom" : "Current"); }
+
 // ── Side effects ──────────────────────────────────────────────────────────────
 static void rearmLocator(UiCore& c)      { c.locator.reset(); }
 static void restartShareClock(UiCore& c) { c.live_share.restartClock(); }   // a new length starts over
@@ -226,6 +242,9 @@ static void applyGpsDuty(UiCore& c)      { c.applyGpsInterval(); }
 static void applySound(UiCore& c)        { c.host()->applySoundPrefs(); }
 static void applyGpsTime(UiCore& c)     { if (c.prefs()) LocationProvider::timeFromGps() = !c.prefs()->gps_time_off; }
 static void applyRxGain(UiCore& c)       { if (c.prefs()) radio_driver.setRxBoostedGainMode(c.prefs()->rx_boosted_gain); }
+// The repeater's switch and network: the radio, RX power save and auto power follow.
+static void applyRepeater(UiCore& c)     { if (c.prefs()) rptctl::setEnabled(c.prefs(), c.prefs()->client_repeat); }
+static void applyRptNetwork(UiCore& c)   { if (c.prefs()) rptctl::setUseProfile(c.prefs(), c.prefs()->repeater_use_profile); }
 
 #define NP_OFF(f)  (uint16_t)offsetof(NodePrefs, f)
 #define NP_SIZE(f) (uint8_t)sizeof(((NodePrefs*)0)->f)
@@ -351,6 +370,16 @@ static const Setting ALL[] = {
 #endif
   MAPF("RX delay", "Repeaters wait to pick the best path", SEC_RADIO_ADV, rx_delay_base, RX_DELAY, optRxDelay),
   MAPF("Airtime factor", "Pause after sending, times airtime", SEC_RADIO_ADV, airtime_factor, AIRTIME, optAirtime),
+
+  SW("Repeater", "Relay others' messages", SEC_RPT, client_repeat, applyRepeater),
+  IDX("Relay on", "Your chat frequency, or its own", SEC_RPT, repeater_use_profile, 2,
+      optRptNet, applyRptNetwork),
+  SW("Skip adverts", "Relay messages, not adverts", SEC_RPT_RELAYS, repeat_skip_adverts, nullptr),
+  IDX("Max hops", "Hop limit for floods", SEC_RPT_RELAYS, repeat_max_hops, rptctl::MAX_HOPS + 1, optRptHops, nullptr),
+  IDX("Yield", "Let fixed repeaters go first", SEC_RPT_RELAYS, repeat_delay_boost, rptctl::MAX_YIELD + 1, optRptYield, nullptr),
+  MAP("Min SNR (dB)", "Ignore weaker packets", SEC_RPT_RELAYS, repeat_min_snr, RPT_SNR, optRptSnr, nullptr),
+  SW("Skip duplicates", "Skip if already relayed", SEC_RPT_RELAYS, repeat_suppress_dup, nullptr),
+  SW("Scope only", "Only floods in your scopes", SEC_RPT_RELAYS, repeat_scope_only, nullptr),
 };
 static const int COUNT = (int)(sizeof(ALL) / sizeof(ALL[0]));
 

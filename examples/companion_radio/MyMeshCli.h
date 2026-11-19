@@ -207,6 +207,31 @@ bool MyMesh::cliRadioCommand(const char* command, char* reply, int n) {
     }
     return true;
   }
+  // The repeater's own radio profile (Relay on: Custom), "freq,bw,sf,cr" as
+  // for radio; applied at once while relaying on it.
+  if (strcmp(command, "get repeater.radio") == 0) {
+    char freq[16], bw[16];
+    strcpy(freq, StrHelper::ftoa3(_prefs.repeater_freq));   // 869.525, not float's 869.5250244
+    strcpy(bw, StrHelper::ftoa3(_prefs.repeater_bw));
+    snprintf(reply, n, "> %s,%s,%d,%d", freq, bw, (int)_prefs.repeater_sf, (int)_prefs.repeater_cr);
+    return true;
+  }
+  if (memcmp(command, "set repeater.radio ", 19) == 0) {
+    char* p = (char*)&command[19];
+    float freq = strtof(p, &p);
+    float bw = *p == ',' ? strtof(p + 1, &p) : 0;
+    int sf = *p == ',' ? (int)strtol(p + 1, &p, 10) : 0;
+    int cr = *p == ',' ? (int)strtol(p + 1, &p, 10) : 0;
+    if (freq >= 150.0f && freq <= 2500.0f && sf >= 5 && sf <= 12 && cr >= 5 && cr <= 8 && bw >= 7.0f && bw <= 500.0f) {
+      _prefs.repeater_freq = freq; _prefs.repeater_bw = bw; _prefs.repeater_sf = sf; _prefs.repeater_cr = cr;
+      savePrefs();
+      applyRepeaterRadio();
+      snprintf(reply, n, "OK");
+    } else {
+      snprintf(reply, n, "Error, invalid radio params");
+    }
+    return true;
+  }
   if (strcmp(command, "get freq") == 0) { snprintf(reply, n, "> %s", StrHelper::ftoa(_prefs.freq)); return true; }
 
   if (strcmp(command, "get af") == 0) { snprintf(reply, n, "> %s", StrHelper::ftoa(_prefs.airtime_factor)); return true; }

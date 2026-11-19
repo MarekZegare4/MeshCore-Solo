@@ -158,6 +158,7 @@ so its documentation applies:
 | Command | Does |
 | --- | --- |
 | `get radio`, `set radio 869.525,250,11,5` | Frequency, bandwidth, SF and CR, applied at once |
+| `get repeater.radio`, `set repeater.radio 869.525,62.5,8,8` | The repeater's own frequency, bandwidth, SF and CR (Repeater › Relay on: Custom; `set repeater.network Custom`), applied at once while it relays on them |
 | `get tx`, `set tx 14` | TX power in dBm |
 | `get af` / `set af`, `get dutycycle` / `set dutycycle` | Airtime factor, or the same as a duty cycle in % |
 | `rxdelay`, `int.thresh`, `cad`, `radio.rxgain`, `path.hash.mode`, `multi.acks` | The advanced radio options, with `get` / `set` |
@@ -173,7 +174,10 @@ so its documentation applies:
 | `reboot`, `poweroff` (or `shutdown`) | Restart or turn off |
 
 Every other setting has a key: `keys` lists them a page at a time (`keys 2`,
-`keys 3` …). `get` shows a value as the Settings screen does, and `set`
+`keys 3` …). The repeater's are there too (`repeater`, `repeater.network`,
+`repeater.skip.adverts`, `repeater.max.hops`, `repeater.yield`,
+`repeater.min.snr`, `repeater.skip.dups`, `repeater.scope.only`), so a
+one-button device can be set up as a repeater from the configurator. `get` shows a value as the Settings screen does, and `set`
 takes it the same way, case ignored:
 
 ```

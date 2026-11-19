@@ -37,6 +37,10 @@ static const Key KEYS[] = {
   K("share.every", loc_share_interval_idx), K("share.heartbeat", loc_share_heartbeat_idx),
   K("alert", locator_enabled), K("alert.radius", locator_radius_idx), K("alert.on", locator_mode),
   K("alert.beeper", locator_beeper),
+  K("repeater", client_repeat), K("repeater.network", repeater_use_profile),
+  K("repeater.skip.adverts", repeat_skip_adverts), K("repeater.max.hops", repeat_max_hops),
+  K("repeater.yield", repeat_delay_boost), K("repeater.min.snr", repeat_min_snr),
+  K("repeater.skip.dups", repeat_suppress_dup), K("repeater.scope.only", repeat_scope_only),
 };
 #undef K
 #undef KB
