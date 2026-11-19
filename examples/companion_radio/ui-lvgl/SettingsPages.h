@@ -150,6 +150,7 @@ int UITask::frontValue(uint8_t k) {
     case FK_TAP_WAKE:  return _tap_wake ? 0 : 1;
     case FK_THEME:     return theme::s_light ? 1 : 0;
     case FK_ACCENT:    return theme::s_accent;
+    case FK_WIFI:      return lvport::wifiAllowed() ? 0 : 1;
   }
   return -1;
 }
@@ -158,13 +159,18 @@ const char* UITask::frontChoice(uint8_t k, int i) {
   static const char* const THEMES[] = { "Dark", "Light" };
   if (i < 0) return nullptr;
   switch (k) {
-    case FK_BLUETOOTH: case FK_TAP_WAKE: return i < 2 ? ON_OFF[i] : nullptr;
+    case FK_BLUETOOTH: case FK_TAP_WAKE: case FK_WIFI: return i < 2 ? ON_OFF[i] : nullptr;
     case FK_SOUND:  return i < soundctl::MODE_COUNT ? soundctl::modeLabel((uint8_t)i) : nullptr;
     case FK_THEME:  return i < 2 ? THEMES[i] : nullptr;
     case FK_ACCENT: return i < theme::ACCENT_COUNT ? theme::ACCENTS[i].name : nullptr;
   }
   return nullptr;
 }
+int UITask::savedWifiCount() { return lvport::wifiSavedCount(); }
+const char* UITask::savedWifiName(int i) { const lvport::WifiNet* w = lvport::wifiSaved(i); return w ? w->ssid : nullptr; }
+void UITask::forgetSavedWifi(int i) { lvport::forgetWifi(i); }
+void UITask::addSavedWifi(const char* ssid, const char* pass) { lvport::saveWifi(ssid, pass); }
+
 // A new theme restarts the device, as from Settings > Display: a moment after
 // the console's "OK" has gone out.
 static void restartForTheme(lv_timer_t* t) {
@@ -180,6 +186,7 @@ void UITask::setFrontValue(uint8_t k, int v) {
       if ((v == 1) != theme::s_light) { lvport::saveLight(v == 1); lv_timer_create(restartForTheme, 300, NULL); }
       break;
     case FK_ACCENT:    setAccent(v); break;
+    case FK_WIFI:      wifiSetAllowed(v == 0); break;
   }
 }
 

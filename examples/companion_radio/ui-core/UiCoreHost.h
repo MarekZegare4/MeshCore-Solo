@@ -45,10 +45,16 @@ public:
   // Settings a frontend keeps or applies itself, for the console's keys
   // (SettingsCli): a value is an index into its choices; -1 when this
   // frontend has no such setting.
-  enum FrontKey : uint8_t { FK_BLUETOOTH, FK_SOUND, FK_TAP_WAKE, FK_THEME, FK_ACCENT, FK_COUNT };
+  enum FrontKey : uint8_t { FK_BLUETOOTH, FK_SOUND, FK_TAP_WAKE, FK_THEME, FK_ACCENT, FK_WIFI, FK_COUNT };
   virtual int frontValue(uint8_t k) { return -1; }
   virtual const char* frontChoice(uint8_t k, int i) { return nullptr; }   // nullptr past the last
   virtual void setFrontValue(uint8_t k, int v) {}
+  // The WiFi networks a frontend keeps (ui-lvgl: map downloads, updates, the
+  // clock): -1 when it keeps none.
+  virtual int savedWifiCount() { return -1; }
+  virtual const char* savedWifiName(int i) { return nullptr; }
+  virtual void forgetSavedWifi(int i) {}
+  virtual void addSavedWifi(const char* ssid, const char* pass) {}
 
   // Text is typed on a keyboard that Settings > Keyboard sets up (false:
   // one button's strip, Latin only, with no CardKB plugged in).

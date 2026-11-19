@@ -10,6 +10,7 @@
 #include "SettingsSchema.h"
 #include "Battery.h"
 #include "BotCommands.h"
+#include "Favourites.h"   // Home's favourite slots
 
 namespace settingscli {
 
@@ -33,10 +34,23 @@ enum XId : uint8_t {
   XB_DM_ALLOWED, XB_DM_TRIGGER, XB_DM_REPLY,
   XS_CHANNELS, XS_DM1, XS_DM2, XS_DM3, XS_MSG, XS_ACK,
   XA_TIME, XA_DAYS, XC_HOME,
-  XL_TO, XL_SCOPE, XN_FAV, XN_UNSAVED, XN_MUTED, XN_ALWAYS,
+  XL_TO, XL_SCOPE, XN_FAV, XN_UNSAVED, XN_MUTED, XN_ALWAYS, XN_MEL1, XN_MEL2,
+  XP_FAV, XP_MUTED, XP_ALWAYS, XP_MEL1, XP_MEL2,
+  XH_FAV1, XH_FAV6 = XH_FAV1 + NodePrefs::FAVOURITES_COUNT - 1,   // Home's favourite slots
+  XR_PRE1, XR_PRE4 = XR_PRE1 + NodePrefs::USER_RADIO_PRESET_MAX - 1,   // the saved radio presets
+  XK_PIN, XW_NETS, XW_ADD,
   XF_FIRST, XF_LAST = XF_FIRST + UiCoreHost::FK_COUNT - 1,   // the frontend's (UiCoreHost::FrontKey), in its order
 };
 static bool frontKey(uint8_t id) { return id >= XF_FIRST && id <= XF_LAST; }
+static bool homeFav(uint8_t id) { return id >= XH_FAV1 && id <= XH_FAV6; }
+static bool radioPreset(uint8_t id) { return id >= XR_PRE1 && id <= XR_PRE4; }
+// A number as the console shows radio settings: no trailing zeroes ("869.4625", "62.5", "250").
+static void fmtNum(char* b, int n, float v) {
+  snprintf(b, n, "%.4f", v);
+  char* e = b + strlen(b) - 1;
+  while (e > b && *e == '0') *e-- = 0;
+  if (*e == '.') *e = 0;
+}
 static UiCoreHost* s_host = nullptr;   // the frontend, for its keys (set by handle())
 struct XKey { uint8_t section; const char* label; uint8_t kind; };
 static const XKey XKEYS[] = {
@@ -56,9 +70,20 @@ static const XKey XKEYS[] = {
   { settings::SEC_LIVE_SHARE, "Share to", XK_PICK }, { settings::SEC_LIVE_SHARE, "Scope", XK_PICK },
   { settings::SEC_CHATS, "Favourite channels", XK_LIST }, { settings::SEC_MESSAGES, "Channels not kept", XK_LIST },
   { settings::SEC_SOUND_FOR, "Muted channels", XK_LIST },  { settings::SEC_SOUND_FOR, "Channels always heard", XK_LIST },
+  { settings::SEC_SOUND_FOR, "Channels with melody 1", XK_LIST }, { settings::SEC_SOUND_FOR, "Channels with melody 2", XK_LIST },
+  { settings::SEC_CHATS, "Favourite contacts", XK_LIST },
+  { settings::SEC_SOUND_FOR, "Muted contacts", XK_LIST },  { settings::SEC_SOUND_FOR, "Contacts always heard", XK_LIST },
+  { settings::SEC_SOUND_FOR, "Contacts with melody 1", XK_LIST }, { settings::SEC_SOUND_FOR, "Contacts with melody 2", XK_LIST },
+  { settings::SEC_HOME, "Favourite 1", XK_PICK }, { settings::SEC_HOME, "Favourite 2", XK_PICK },
+  { settings::SEC_HOME, "Favourite 3", XK_PICK }, { settings::SEC_HOME, "Favourite 4", XK_PICK },
+  { settings::SEC_HOME, "Favourite 5", XK_PICK }, { settings::SEC_HOME, "Favourite 6", XK_PICK },
+  { settings::SEC_RADIO_ADV, "Preset 1", XK_TEXT }, { settings::SEC_RADIO_ADV, "Preset 2", XK_TEXT },
+  { settings::SEC_RADIO_ADV, "Preset 3", XK_TEXT }, { settings::SEC_RADIO_ADV, "Preset 4", XK_TEXT },
+  { settings::SEC_DISPLAY, "New screen PIN (empty: none)", XK_TEXT },
+  { settings::SEC_WIFI, "Saved networks", XK_LIST }, { settings::SEC_WIFI, "Add a network (name,password)", XK_TEXT },
   { settings::SEC_FEATURES, "Bluetooth", XK_PICK },  { settings::SEC_FEATURES, "Sound", XK_PICK },
   { settings::SEC_SCREEN, "Tap to wake", XK_PICK },   { settings::SEC_SCREEN, "Theme", XK_PICK },
-  { settings::SEC_SCREEN, "Accent colour", XK_PICK },
+  { settings::SEC_SCREEN, "Accent colour", XK_PICK }, { settings::SEC_WIFI, "WiFi", XK_PICK },
 };
 static_assert(sizeof(XKEYS) / sizeof(XKEYS[0]) == XF_LAST + 1, "an XKEYS row for each XId");
 static const Key KEYS[] = {
@@ -122,12 +147,24 @@ static const Key KEYS[] = {
   KX("bluetooth", XF_FIRST + UiCoreHost::FK_BLUETOOTH), KX("sound", XF_FIRST + UiCoreHost::FK_SOUND),
   KX("display.tap.wake", XF_FIRST + UiCoreHost::FK_TAP_WAKE), KX("display.theme", XF_FIRST + UiCoreHost::FK_THEME),
   KX("display.accent", XF_FIRST + UiCoreHost::FK_ACCENT),
+  KX("wifi", XF_FIRST + UiCoreHost::FK_WIFI), KX("wifi.networks", XW_NETS), KX("wifi.add", XW_ADD),
   KX("share.to", XL_TO), KX("share.scope", XL_SCOPE), KX("channels.favourite", XN_FAV),
 #ifdef HIST_FLASH   // the flash log is what a channel is kept out of
   KX("channels.unsaved", XN_UNSAVED),
 #endif
 #ifdef PIN_BUZZER
   KX("channels.muted", XN_MUTED), KX("channels.always", XN_ALWAYS),
+  KX("channels.melody1", XN_MEL1), KX("channels.melody2", XN_MEL2),
+#endif
+  K("home.field1", dashboard_fields[0]), K("home.field2", dashboard_fields[1]), K("home.field3", dashboard_fields[2]),
+  KX("home.fav1", XH_FAV1), KX("home.fav2", XH_FAV1 + 1), KX("home.fav3", XH_FAV1 + 2),
+  KX("home.fav4", XH_FAV1 + 3), KX("home.fav5", XH_FAV1 + 4), KX("home.fav6", XH_FAV1 + 5),
+  KX("radio.preset1", XR_PRE1), KX("radio.preset2", XR_PRE1 + 1), KX("radio.preset3", XR_PRE1 + 2),
+  KX("radio.preset4", XR_PRE1 + 3), KX("lock.pin", XK_PIN),
+  KX("contacts.favourite", XP_FAV),
+#ifdef PIN_BUZZER
+  KX("contacts.muted", XP_MUTED), KX("contacts.always", XP_ALWAYS),
+  KX("contacts.melody1", XP_MEL1), KX("contacts.melody2", XP_MEL2),
 #endif
 };
 #undef K
@@ -176,10 +213,14 @@ static uint16_t* xCmdOff(NodePrefs* p, uint8_t id) {
 // The alarm's days: bit i = 1 << tm_wday, Sunday first.
 static const char* const DAYS[7] = { "sun", "mon", "tue", "wed", "thu", "fri", "sat" };
 // The lists of channels by slot: the SOS's, and the channels' own options.
-static bool chanList(uint8_t id) { return id == XS_CHANNELS || (id >= XN_FAV && id <= XN_ALWAYS); }
-static int xListCount(uint8_t id) { return chanList(id) ? 64 : id == XA_DAYS ? 7 : botcmd::COUNT; }
+static bool chanList(uint8_t id) { return id == XS_CHANNELS || (id >= XN_FAV && id <= XN_MEL2); }
+static int xListCount(uint8_t id) {
+  if (id == XW_NETS) return s_host && s_host->savedWifiCount() > 0 ? s_host->savedWifiCount() : 0;
+  return chanList(id) ? 64 : id == XA_DAYS ? 7 : botcmd::COUNT;
+}
 static bool xListName(uint8_t id, int i, char* out, size_t n) {
   if (id == XA_DAYS) { snprintf(out, n, "%s", DAYS[i]); return true; }
+  if (id == XW_NETS) { const char* w = s_host ? s_host->savedWifiName(i) : nullptr; snprintf(out, n, "%s", w ? w : ""); return w != nullptr; }
   if (!chanList(id)) { snprintf(out, n, "%s", botcmd::CMDS[i].name); return true; }
   ChannelDetails ch;
   if (!the_mesh.getChannel(i, ch) || !ch.name[0]) return false;
@@ -190,21 +231,32 @@ static uint64_t xListGet(const NodePrefs* p, uint8_t id) {
   if (id == XS_CHANNELS) return p->sos_ch_mask;
   if (id == XA_DAYS) return p->alarm_repeat_mask;
   if (id == XN_FAV) return p->ch_fav_bitmask;
+  if (id == XW_NETS) return xListCount(id) ? ((uint64_t)1 << xListCount(id)) - 1 : 0;   // every one saved
   if (id == XN_UNSAVED) return p->ch_no_save;
   if (id == XN_MUTED) return p->ch_notif_override & p->ch_notif_muted;
   if (id == XN_ALWAYS) return p->ch_notif_override & ~p->ch_notif_muted;
+  if (id == XN_MEL1) return p->ch_notif_melody_set & ~p->ch_notif_melody_2;
+  if (id == XN_MEL2) return p->ch_notif_melody_set & p->ch_notif_melody_2;
   return (uint16_t)~*xCmdOff((NodePrefs*)p, id) & (botcmd::flag(botcmd::COUNT) - 1);
 }
 static void xListSet(NodePrefs* p, uint8_t id, uint64_t on) {
   if (id == XS_CHANNELS) p->sos_ch_mask = on;
   else if (id == XA_DAYS) p->alarm_repeat_mask = (uint8_t)(on & 0x7F);
   else if (id == XN_FAV) p->ch_fav_bitmask = on;
+  else if (id == XW_NETS) {   // only forgets: wifi.add adds
+    for (int i = xListCount(id) - 1; i >= 0; i--) if (!(on >> i & 1)) s_host->forgetSavedWifi(i);
+  }
   else if (id == XN_UNSAVED) p->ch_no_save = on;
   else if (id == XN_MUTED || id == XN_ALWAYS) {   // one state per channel: listed in one, out of the other
     const uint8_t st = id == XN_MUTED ? chanctl::NOTIF_MUTED : chanctl::NOTIF_ALWAYS;
     for (uint8_t i = 0; i < 64; i++)
       if (on >> i & 1) chanctl::setNotif(p, i, st);
       else if (chanctl::notif(p, i) == st) chanctl::setNotif(p, i, chanctl::NOTIF_DEFAULT);
+  } else if (id == XN_MEL1 || id == XN_MEL2) {   // the same: melody 1 or 2, never both
+    const uint8_t slot = id == XN_MEL1 ? 1 : 2;
+    for (uint8_t i = 0; i < 64; i++)
+      if (on >> i & 1) chanctl::setMelody(p, i, slot);
+      else if (chanctl::melody(p, i) == slot) chanctl::setMelody(p, i, 0);
   }
   else *xCmdOff(p, id) = (uint16_t)(~on & (botcmd::flag(botcmd::COUNT) - 1));
 }
@@ -277,6 +329,17 @@ static bool xPickName(uint8_t id, int i, char* out, size_t n) {
     const int nch = channelCount();
     return i < nch ? nthChannel(i, out, n) : nthContact(ADV_TYPE_CHAT, i - nch, out, n);
   }
+  if (homeFav(id)) {   // the channels, then chat contacts and rooms
+    const int nch = channelCount();
+    if (i < nch) return nthChannel(i, out, n);
+    ContactInfo c;
+    int seen = nch;
+    for (int idx = MAX_ANON_CONTACTS; the_mesh.getContactByIdx(idx, c); idx++) {
+      if ((c.type != ADV_TYPE_CHAT && c.type != ADV_TYPE_ROOM) || !c.name[0]) continue;
+      if (seen++ == i) { snprintf(out, n, "%s", c.name); return true; }
+    }
+    return false;
+  }
   if (id == XL_SCOPE) {
     const ScopeList& sl = the_mesh.scopeList();
     if (i > sl.count + 1) return false;
@@ -290,6 +353,15 @@ static bool xPickGet(const NodePrefs* p, uint8_t id, char* out, size_t n) {
   if (id == XB_ROOM || (id >= XS_DM1 && id <= XS_DM3))
     return contactName(id == XB_ROOM ? p->bot_room_prefix : p->sos_dm[id - XS_DM1], out, n);
   if (id == XL_TO && p->loc_share_target_type == 1) return contactName(p->loc_share_dm_prefix, out, n);
+  if (homeFav(id)) {
+    const int slot = id - XH_FAV1;
+    if (favslots::isEmpty(p, slot)) return false;
+    if (favslots::kind(p, slot) != NodePrefs::FAV_KIND_CHANNEL) return contactName(p->favourite_contacts[slot], out, n);
+    ChannelDetails ch;
+    if (!the_mesh.getChannel(p->favourite_contacts[slot][0], ch) || !ch.name[0]) return false;
+    snprintf(out, n, "%s", ch.name);
+    return true;
+  }
   if (id == XL_SCOPE) {
     const ScopeList& sl = the_mesh.scopeList();
     snprintf(out, n, "%s", p->loc_share_scope == 0 ? SCOPE_TARGET : sl.name((uint8_t)(p->loc_share_scope - 1)));
@@ -322,6 +394,15 @@ static bool xPickSet(NodePrefs* p, uint8_t id, const char* name) {
     return false;
   }
   const int slot = channelSlot(name);
+  if (homeFav(id)) {   // a channel of that name first, else a chat contact or room; moved here if pinned elsewhere
+    const int at = id - XH_FAV1;
+    if (!strcasecmp(name, "none")) { favslots::clear(p, at); return true; }
+    if (slot >= 0) { favslots::pinChannel(p, at, (uint8_t)slot); return true; }
+    uint8_t key[NodePrefs::FAVOURITE_PREFIX_LEN];
+    if (!contactKey(ADV_TYPE_CHAT, name, key) && !contactKey(ADV_TYPE_ROOM, name, key)) return false;
+    favslots::pinContact(p, at, key);
+    return true;
+  }
   if (id == XL_TO) {   // a channel of that name first, else a contact
     if (slot >= 0) { p->loc_share_target_type = 0; p->loc_share_channel_idx = (uint8_t)slot; return true; }
     if (!contactKey(ADV_TYPE_CHAT, name, p->loc_share_dm_prefix)) return false;
@@ -333,8 +414,96 @@ static bool xPickSet(NodePrefs* p, uint8_t id, const char* name) {
   return true;
 }
 
+// Lists of contacts (favourites, and the per-contact sound overrides): too
+// many for a mask, so by name. A favourite is any contact; the rest chat ones.
+static bool contactList(uint8_t id) { return id >= XP_FAV && id <= XP_MEL2; }
+static uint8_t contactListType(uint8_t id) { return id == XP_FAV ? 0 : ADV_TYPE_CHAT; }   // 0: any
+static bool inContactList(const NodePrefs* p, uint8_t id, const ContactInfo& c) {
+  switch (id) {
+    case XP_FAV:    return contactctl::favourite(c);
+    case XP_MUTED:  return contactctl::notif(p, c.id.pub_key) == contactctl::NOTIF_MUTED;
+    case XP_ALWAYS: return contactctl::notif(p, c.id.pub_key) == contactctl::NOTIF_ALWAYS;
+    case XP_MEL1:   return contactctl::melody(p, c.id.pub_key) == 1;
+    case XP_MEL2:   return contactctl::melody(p, c.id.pub_key) == 2;
+  }
+  return false;
+}
+static void setInContactList(NodePrefs* p, uint8_t id, const ContactInfo& c, bool on) {
+  switch (id) {
+    case XP_FAV: contactctl::setFavourite(c.id.pub_key, on); break;
+    case XP_MUTED: case XP_ALWAYS: {
+      const uint8_t st = id == XP_MUTED ? contactctl::NOTIF_MUTED : contactctl::NOTIF_ALWAYS;
+      if (on) contactctl::setNotif(p, c.id.pub_key, st);
+      else if (contactctl::notif(p, c.id.pub_key) == st) contactctl::setNotif(p, c.id.pub_key, contactctl::NOTIF_DEFAULT);
+      break;
+    }
+    case XP_MEL1: case XP_MEL2: {
+      const uint8_t slot = id == XP_MEL1 ? 1 : 2;
+      if (on) contactctl::setMelody(p, c.id.pub_key, slot);
+      else if (contactctl::melody(p, c.id.pub_key) == slot) contactctl::setMelody(p, c.id.pub_key, 0);
+      break;
+    }
+  }
+}
+static bool contactOfList(uint8_t id, const ContactInfo& c) {
+  return c.name[0] && (!contactListType(id) || c.type == contactListType(id));
+}
+static void contactListGet(const NodePrefs* p, uint8_t id, char* reply, int n) {
+  int o = snprintf(reply, n, "> ");
+  bool any = false;
+  ContactInfo c;
+  for (int idx = MAX_ANON_CONTACTS; the_mesh.getContactByIdx(idx, c) && o < n - 1; idx++)
+    if (contactOfList(id, c) && inContactList(p, id, c)) { o += snprintf(reply + o, n - o, "%s%s", any ? "," : "", c.name); any = true; }
+  if (!any) snprintf(reply + o, n - o, "none");
+}
+// "a,b": these on, the others off. Every name is checked before anything changes.
+static bool contactListSet(NodePrefs* p, uint8_t id, const char* v, char* reply, int n) {
+  const bool none = !*v || !strcasecmp(v, "none");
+  for (const char* a = none ? "" : v; *a;) {
+    while (*a == ' ' || *a == ',') a++;
+    const char* e = a;
+    while (*e && *e != ',') e++;
+    const char* t = e;
+    while (t > a && t[-1] == ' ') t--;
+    if (t > a) {
+      bool hit = false;
+      ContactInfo c;
+      for (int idx = MAX_ANON_CONTACTS; !hit && the_mesh.getContactByIdx(idx, c); idx++)
+        hit = contactOfList(id, c) && (int)strlen(c.name) == (int)(t - a) && !strncasecmp(c.name, a, t - a);
+      if (!hit) { snprintf(reply, n, "Error, no contact %.*s", (int)(t - a), a); return false; }
+    }
+    a = e;
+  }
+  ContactInfo c;
+  for (int idx = MAX_ANON_CONTACTS; the_mesh.getContactByIdx(idx, c); idx++) {
+    if (!contactOfList(id, c)) continue;
+    bool want = false;
+    for (const char* a = none ? "" : v; *a && !want;) {
+      while (*a == ' ' || *a == ',') a++;
+      const char* e = a;
+      while (*e && *e != ',') e++;
+      const char* t = e;
+      while (t > a && t[-1] == ' ') t--;
+      want = t > a && (int)strlen(c.name) == (int)(t - a) && !strncasecmp(c.name, a, t - a);
+      a = e;
+    }
+    if (want != inContactList(p, id, c)) setInContactList(p, id, c, want);
+  }
+  return true;
+}
+
 static void xGet(NodePrefs* p, uint8_t id, char* reply, int n) {
   const XKey& x = XKEYS[id];
+  if (contactList(id)) { contactListGet(p, id, reply, n); return; }
+  if (id == XK_PIN || id == XW_ADD) { snprintf(reply, n, "> "); return; }   // a hash only / nothing kept
+  if (radioPreset(id)) {   // "name,freq,bw,sf,cr", empty when the slot is free
+    const NodePrefs::UserRadioPreset& u = p->user_radio_presets[id - XR_PRE1];
+    if (!u.name[0]) { snprintf(reply, n, "> "); return; }
+    char f[16], b[16];
+    fmtNum(f, sizeof(f), u.freq); fmtNum(b, sizeof(b), u.bw);
+    snprintf(reply, n, "> %s,%s,%s,%u,%u", u.name, f, b, (unsigned)u.sf, (unsigned)u.cr);
+    return;
+  }
   if (id == XA_TIME) { snprintf(reply, n, "> %02u:%02u", (unsigned)p->alarm_hour, (unsigned)p->alarm_min); return; }
   if (id == XC_HOME) {
     if (!p->cov_home_lat && !p->cov_home_lon) { snprintf(reply, n, "> none"); return; }
@@ -359,7 +528,40 @@ static void xGet(NodePrefs* p, uint8_t id, char* reply, int n) {
 // The value after "set <key> " (empty: none / an empty text).
 static void xSet(UiCore& core, NodePrefs* p, uint8_t id, const char* v, char* reply, int n) {
   const XKey& x = XKEYS[id];
-  if (id == XA_TIME) {   // "7:30" / "07:30"
+  if (contactList(id)) {
+    if (!contactListSet(p, id, v, reply, n)) return;
+  } else if (id == XW_ADD) {   // "name,password": up to the first comma the network's name
+    const char* c = strchr(v, ',');
+    const int nl = c ? (int)(c - v) : (int)strlen(v);
+    if (!nl || nl > 32 || (c && strlen(c + 1) > 64)) { snprintf(reply, n, "Error, name,password (a name up to 32, a password up to 64)"); return; }
+    char ssid[33];
+    memcpy(ssid, v, nl); ssid[nl] = '\0';
+    s_host->addSavedWifi(ssid, c ? c + 1 : "");
+  } else if (id == XK_PIN) {   // 4-8 digits (the L2 takes up to 8), empty: none
+    const size_t len = strlen(v);
+    bool digits = len >= 4 && len <= 8;
+    for (size_t i = 0; digits && i < len; i++) digits = v[i] >= '0' && v[i] <= '9';
+    if (len && !digits) { snprintf(reply, n, "Error, 4 to 8 digits, or nothing for none"); return; }
+    screenlock::set(*p, v, the_mesh.getRNG());
+  } else if (radioPreset(id)) {
+    NodePrefs::UserRadioPreset& u = p->user_radio_presets[id - XR_PRE1];
+    if (!*v || !strcasecmp(v, "none")) u.name[0] = '\0';
+    else {
+      const char* c = strchr(v, ',');
+      char* e = nullptr;
+      const float f = c ? strtof(c + 1, &e) : 0;
+      const float b = e && *e == ',' ? strtof(e + 1, &e) : 0;
+      const long sf = e && *e == ',' ? strtol(e + 1, &e, 10) : 0;
+      const long cr = e && *e == ',' ? strtol(e + 1, &e, 10) : 0;
+      const int nl = c ? (int)(c - v) : 0;
+      if (!c || !nl || nl >= (int)sizeof(u.name) || *e || f < 100 || f > 1100 || b <= 0 || b > 1625 || sf < 5 || sf > 12 || cr < 5 || cr > 8) {
+        snprintf(reply, n, "Error, name,freq,bw,sf,cr (869.525,250,11,5), a name up to %d", (int)sizeof(u.name) - 1);
+        return;
+      }
+      memcpy(u.name, v, nl); u.name[nl] = '\0';
+      u.freq = f; u.bw = b; u.sf = (uint8_t)sf; u.cr = (uint8_t)cr;
+    }
+  } else if (id == XA_TIME) {   // "7:30" / "07:30"
     char* e;
     const long h = strtol(v, &e, 10);
     const long m = *e == ':' ? strtol(e + 1, &e, 10) : -1;
@@ -425,14 +627,23 @@ static void xOpts(NodePrefs* p, uint8_t id, char* reply, int n) {
   int o = snprintf(reply, n, "> %s/%s|%s|", settings::pageTitle(settings::sectionPage(x.section)),
                    settings::sectionTitle(x.section), x.label);
   if (x.kind == XK_TEXT) {
-    int cap = id == XA_TIME ? 6 : id == XC_HOME ? 24 : 0;
+    int cap = id == XA_TIME ? 6 : id == XC_HOME ? 24 : id == XK_PIN ? 9 : radioPreset(id) ? 48 : id == XW_ADD ? 98 : 0;
     if (!cap) xText(p, id, cap);
     snprintf(reply + o, n - o, "#text:%d", cap - 1);
     return;
   }
   o += snprintf(reply + o, n - o, x.kind == XK_LIST ? "#list" : "#pick");
-  if (id == XB_ROOM || (id >= XS_DM1 && id <= XS_DM3)) o += snprintf(reply + o, n - o, "|none");   // a contact pick may be cleared
+  if (id == XB_ROOM || (id >= XS_DM1 && id <= XS_DM3) || homeFav(id)) o += snprintf(reply + o, n - o, "|none");   // a contact pick may be cleared
   char nm[40];
+  if (contactList(id)) {
+    ContactInfo c;
+    for (int idx = MAX_ANON_CONTACTS; the_mesh.getContactByIdx(idx, c) && o < n - 1; idx++) {
+      if (!contactOfList(id, c)) continue;
+      if (o + 1 + (int)strlen(c.name) >= n - 5) { snprintf(reply + o, n - o, "|..."); break; }
+      o += snprintf(reply + o, n - o, "|%s", c.name);
+    }
+    return;
+  }
   for (int i = 0; o < n - 1; i++) {
     if (x.kind == XK_LIST) { if (i >= xListCount(id)) break; if (!xListName(id, i, nm, sizeof(nm))) continue; }
     else if (!xPickName(id, i, nm, sizeof(nm))) break;
@@ -448,6 +659,7 @@ static bool hereKey(UiCore& core, const Key& k) {
   if (!strncmp(k.key, "coverage", 8)) return core.coverage.available();
   if (!strncmp(k.key, "keyboard.", 9)) return !core.host() || core.host()->hasKeyboard();
   if (!strcmp(k.key, "gps")) return core.gpsAvailable();
+  if (k.offset == XKEY && (k.bit == XW_NETS || k.bit == XW_ADD)) return core.host() && core.host()->savedWifiCount() >= 0;
   if (k.offset == XKEY && frontKey(k.bit)) return core.host() && core.host()->frontValue(k.bit - XF_FIRST) >= 0;
   return true;
 }

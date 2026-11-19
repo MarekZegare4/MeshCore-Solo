@@ -84,6 +84,10 @@ public:
   int frontValue(uint8_t k) override;   // Bluetooth, sound, tap to wake, theme, accent (SettingsCli)
   const char* frontChoice(uint8_t k, int i) override;
   void setFrontValue(uint8_t k, int v) override;
+  int savedWifiCount() override;   // the networks Settings > WiFi keeps (SettingsCli)
+  const char* savedWifiName(int i) override;
+  void forgetSavedWifi(int i) override;
+  void addSavedWifi(const char* ssid, const char* pass) override;
 
   // ── Navigation (called from LVGL event callbacks) ────────────────────────
   void showHome();

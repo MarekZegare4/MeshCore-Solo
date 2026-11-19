@@ -18,6 +18,7 @@
 #include "../Features.h"   // FEAT_*: which boards have the screen rows below
 #include "../Trail.h"
 #include "SoundControl.h"
+#include "Telemetry.h"   // the dashboard's fields
 #include <helpers/sensors/LocationProvider.h>   // Time from GPS
 
 namespace settings {
@@ -42,7 +43,7 @@ enum Section : uint8_t { SEC_TRAIL, SEC_LIVE_SHARE, SEC_LOCATOR, SEC_MAP_VIEW, S
                          SEC_BOT_CH1, SEC_BOT_CH2, SEC_BOT_ROOM, SEC_BOT_DM, SEC_BOT_OTHER,
                          SEC_SOS_START, SEC_SOS_TO, SEC_SOS_RUN,
                          SEC_ALARM, SEC_COVERAGE, SEC_GPIO,
-                         SEC_SCREEN, SEC_KEYBOARD, SEC_CHATS, SEC_RX, SEC_FEATURES, SEC_COUNT };
+                         SEC_SCREEN, SEC_KEYBOARD, SEC_CHATS, SEC_RX, SEC_FEATURES, SEC_HOME, SEC_WIFI, SEC_COUNT };
 
 static const char* pageTitle(uint8_t p) {
   static const char* T[PG_COUNT] = { "Map options", "Advert", "Display & power", "Messages & contacts", "Sound",
@@ -60,7 +61,7 @@ static const char* sectionTitle(uint8_t s) {
                                       "CHANNEL BOT 1", "CHANNEL BOT 2", "ROOM", "DIRECT MESSAGES", "OTHER",
                                       "START", "SENT TO", "WHILE IT RUNS",
                                       "ALARM", "COVERAGE", "GPIO",
-                                      "SCREEN", "KEYBOARD", "IN THE CHAT LIST", "RADIO", "ON / OFF" };
+                                      "SCREEN", "KEYBOARD", "IN THE CHAT LIST", "RADIO", "ON / OFF", "HOME", "WIFI" };
   return s < SEC_COUNT ? T[s] : "";
 }
 static uint8_t sectionPage(uint8_t s) {
@@ -73,7 +74,7 @@ static uint8_t sectionPage(uint8_t s) {
                                         PG_BOT, PG_BOT, PG_BOT, PG_BOT, PG_BOT,
                                         PG_SOS, PG_SOS, PG_SOS,
                                         PG_TOOLS, PG_TOOLS, PG_TOOLS,
-                                        PG_MORE, PG_MORE, PG_MORE, PG_MORE, PG_MORE };
+                                        PG_MORE, PG_MORE, PG_MORE, PG_MORE, PG_MORE, PG_MORE, PG_MORE };
   return s < SEC_COUNT ? P[s] : PG_DEVICE;
 }
 
@@ -286,6 +287,9 @@ static void optFullRefresh(uint8_t v, char* b, int n, const NodePrefs&) {
   snprintf(b, n, "%s", L[v < 5 ? v : 0]);
 }
 #endif
+static void optDashField(uint8_t v, char* b, int n, const NodePrefs&) {
+  snprintf(b, n, "%s", telemetry::NAME[v < telemetry::COUNT ? v : 0]);
+}
 static void optKbType(uint8_t v, char* b, int n, const NodePrefs&) { snprintf(b, n, "%s", v ? "T9" : "ABC"); }
 static void optAlphabet(uint8_t v, char* b, int n, const NodePrefs&) { snprintf(b, n, "%s", NodePrefs::keyboardAlphabetLabel(v)); }
 #if defined(CARDKB_I2C)
@@ -554,6 +558,10 @@ static const Setting ALL[] = {
   MAP("Direct messages", nullptr, SEC_CHATS, dm_show_all, INVERTED, optAllFav, nullptr),
   IDX("Channels", nullptr, SEC_CHATS, ch_fav_only, 2, optAllFav, nullptr),
   IDX("Rooms", nullptr, SEC_CHATS, room_fav_only, 2, optAllFav, nullptr),
+  // The clock's three fields (L2: Home; L1: the clock page and lock screen).
+  IDX("Field 1", "Beside the clock", SEC_HOME, dashboard_fields[0], telemetry::COUNT, optDashField, nullptr),
+  IDX("Field 2", nullptr, SEC_HOME, dashboard_fields[1], telemetry::COUNT, optDashField, nullptr),
+  IDX("Field 3", nullptr, SEC_HOME, dashboard_fields[2], telemetry::COUNT, optDashField, nullptr),
   // Bluetooth, the sound's On / Off / Auto: SettingsCli's, through the frontend.
   SW("GPS", "Off: the fixed position in adverts", SEC_FEATURES, gps_enabled, applyGps),
   SW("Live share", "Your position, sent while you move", SEC_FEATURES, loc_share_enabled, applyShare),

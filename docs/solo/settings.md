@@ -209,7 +209,17 @@ quiet hours) and, where messages are kept on flash, `channels.unsaved`.
 What is switched on: `gps`, `share` (live share, a session as from the
 Map), `bluetooth`, `sound` (`On`, `Off`, `Auto`); on the L1 `trail.pace`;
 on the L2 `display.tap.wake`, `display.accent` and `display.theme`
-(changing it restarts the device).
+(changing it restarts the device). Sounds for one channel or contact, as
+lists of names: `channels.melody1` / `channels.melody2`, `contacts.muted`,
+`contacts.always`, `contacts.melody1` / `contacts.melody2`; and
+`contacts.favourite`. Home: `home.field1` to `home.field3` (the clock's
+fields) and `home.fav1` to `home.fav6` (a channel's or a contact's name,
+`none` for an empty slot). The saved radio presets, `radio.preset1` to
+`radio.preset4` (`Alps,869.4625,62.5,8,8`, empty to delete). `lock.pin`
+sets the screen PIN (4 to 8 digits, empty for none); it reads back empty,
+as only a hash of it is kept. On the L2, WiFi: `wifi` (allowed or not),
+`wifi.networks` (the saved ones: leave one out to forget it) and
+`wifi.add Home,password`.
 `opts` marks
 a text `#text:<max bytes>` and a list or a name to pick `#list` / `#pick`,
 with the choices after it (`...` when they don't all fit). `get` shows a value as the Settings screen does, and `set`
