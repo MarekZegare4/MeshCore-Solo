@@ -31,6 +31,7 @@ enum XId : uint8_t {
   XB_CH2_CHANNEL, XB_CH2_ALLOWED, XB_CH2_TRIGGER, XB_CH2_REPLY,
   XB_ROOM, XB_ROOM_ALLOWED, XB_ROOM_TRIGGER, XB_ROOM_REPLY,
   XB_DM_ALLOWED, XB_DM_TRIGGER, XB_DM_REPLY,
+  XS_CHANNELS, XS_DM1, XS_DM2, XS_DM3, XS_MSG, XS_ACK,
 };
 struct XKey { uint8_t section; const char* label; uint8_t kind; };
 static const XKey XKEYS[] = {
@@ -42,6 +43,9 @@ static const XKey XKEYS[] = {
   { settings::SEC_BOT_ROOM, "Trigger", XK_TEXT }, { settings::SEC_BOT_ROOM, "Reply", XK_TEXT },
   { settings::SEC_BOT_DM, "Allowed", XK_LIST },
   { settings::SEC_BOT_DM, "Trigger", XK_TEXT },   { settings::SEC_BOT_DM, "Reply", XK_TEXT },
+  { settings::SEC_SOS_TO, "Channels", XK_LIST },   { settings::SEC_SOS_TO, "Contact 1", XK_PICK },
+  { settings::SEC_SOS_TO, "Contact 2", XK_PICK },  { settings::SEC_SOS_TO, "Contact 3", XK_PICK },
+  { settings::SEC_SOS_TO, "Message", XK_TEXT },    { settings::SEC_SOS_RUN, "ACK word", XK_TEXT },
 };
 static const Key KEYS[] = {
   K("advert.interval", advert_auto_interval_sec), K("advert.loc", advert_loc_policy),
@@ -83,6 +87,10 @@ static const Key KEYS[] = {
   KX("bot.dm.trigger", XB_DM_TRIGGER), KX("bot.dm.reply", XB_DM_REPLY),
   K("bot.quiet.from", bot_quiet_start), K("bot.quiet.to", bot_quiet_end), K("bot.actions.by", bot_actions_scope),
   K("bot.gap", bot_gap_idx),
+  K("sos", sos_enabled), K("sos.countdown", sos_countdown_idx),
+  KX("sos.channels", XS_CHANNELS), KX("sos.contact1", XS_DM1), KX("sos.contact2", XS_DM2), KX("sos.contact3", XS_DM3),
+  KX("sos.msg", XS_MSG), K("sos.repeat", sos_repeat_idx), K("sos.advert", sos_advert), K("sos.beep", sos_beep_idx),
+  KX("sos.ack", XS_ACK),
 };
 #undef K
 #undef KB
@@ -109,6 +117,8 @@ static char* xText(NodePrefs* p, uint8_t id, int& cap) {
     case XB_ROOM_REPLY:   cap = sizeof(p->bot_reply_room);   return p->bot_reply_room;
     case XB_DM_TRIGGER:   cap = sizeof(p->bot_trigger);      return p->bot_trigger;
     case XB_DM_REPLY:     cap = sizeof(p->bot_reply_dm);     return p->bot_reply_dm;
+    case XS_MSG:          cap = sizeof(p->sos_msg);          return p->sos_msg;
+    case XS_ACK:          cap = sizeof(p->sos_ack);          return p->sos_ack;
   }
   cap = 0;
   return nullptr;
@@ -123,18 +133,37 @@ static uint16_t* xCmdOff(NodePrefs* p, uint8_t id) {
   return nullptr;
 }
 
-// A list's members by index: the bot's commands.
-static int xListCount(uint8_t) { return botcmd::COUNT; }
-static const char* xListName(uint8_t, int i) { return botcmd::CMDS[i].name; }
+// A list's members by bit: the bot's commands, or the channels by slot (an
+// empty slot has no name: false). Its mask: of those on.
+static int xListCount(uint8_t id) { return id == XS_CHANNELS ? 64 : botcmd::COUNT; }
+static bool xListName(uint8_t id, int i, char* out, size_t n) {
+  if (id != XS_CHANNELS) { snprintf(out, n, "%s", botcmd::CMDS[i].name); return true; }
+  ChannelDetails ch;
+  if (!the_mesh.getChannel(i, ch) || !ch.name[0]) return false;
+  snprintf(out, n, "%s", ch.name);
+  return true;
+}
+static uint64_t xListGet(const NodePrefs* p, uint8_t id) {
+  if (id == XS_CHANNELS) return p->sos_ch_mask;
+  return (uint16_t)~*xCmdOff((NodePrefs*)p, id) & (botcmd::flag(botcmd::COUNT) - 1);
+}
+static void xListSet(NodePrefs* p, uint8_t id, uint64_t on) {
+  if (id == XS_CHANNELS) p->sos_ch_mask = on;
+  else *xCmdOff(p, id) = (uint16_t)(~on & (botcmd::flag(botcmd::COUNT) - 1));
+}
+static uint8_t* xDm(NodePrefs* p, uint8_t id) {
+  return id >= XS_DM1 && id <= XS_DM3 ? p->sos_dm[id - XS_DM1] : nullptr;
+}
 
 // A pick's choices by index (channels by slot, rooms in the contact list's
 // order) and the one picked, -1 for none.
 static bool xPickName(uint8_t id, int i, char* out, size_t n) {
-  if (id == XB_ROOM) {
+  if (id == XB_ROOM || (id >= XS_DM1 && id <= XS_DM3)) {
+    const uint8_t type = id == XB_ROOM ? ADV_TYPE_ROOM : ADV_TYPE_CHAT;
     ContactInfo c;
     int seen = 0;
     for (int idx = MAX_ANON_CONTACTS; the_mesh.getContactByIdx(idx, c); idx++) {
-      if (c.type != ADV_TYPE_ROOM) continue;
+      if (c.type != type) continue;
       if (seen++ == i) { snprintf(out, n, "%s", c.name); return true; }
     }
     return false;
@@ -148,8 +177,11 @@ static bool xPickName(uint8_t id, int i, char* out, size_t n) {
   return false;
 }
 static bool xPickGet(const NodePrefs* p, uint8_t id, char* out, size_t n) {
-  if (id == XB_ROOM) {
-    ContactInfo* c = the_mesh.lookupContactByPubKey(p->bot_room_prefix, NodePrefs::FAVOURITE_PREFIX_LEN);
+  if (id == XB_ROOM || (id >= XS_DM1 && id <= XS_DM3)) {
+    const uint8_t* key = id == XB_ROOM ? p->bot_room_prefix : p->sos_dm[id - XS_DM1];
+    static const uint8_t ZERO[NodePrefs::FAVOURITE_PREFIX_LEN] = {0};
+    if (!memcmp(key, ZERO, sizeof(ZERO))) return false;
+    ContactInfo* c = the_mesh.lookupContactByPubKey(key, NodePrefs::FAVOURITE_PREFIX_LEN);
     if (!c || !c->name[0]) return false;
     snprintf(out, n, "%s", c->name);
     return true;
@@ -161,11 +193,14 @@ static bool xPickGet(const NodePrefs* p, uint8_t id, char* out, size_t n) {
 }
 // Picks by name (case ignored); false when there is none of that name.
 static bool xPickSet(NodePrefs* p, uint8_t id, const char* name) {
-  if (id == XB_ROOM) {
+  if (id == XB_ROOM || xDm(p, id)) {
+    uint8_t* key = id == XB_ROOM ? p->bot_room_prefix : xDm(p, id);
+    if (!strcasecmp(name, "none")) { memset(key, 0, NodePrefs::FAVOURITE_PREFIX_LEN); return true; }
+    const uint8_t type = id == XB_ROOM ? ADV_TYPE_ROOM : ADV_TYPE_CHAT;
     ContactInfo c;
     for (int idx = MAX_ANON_CONTACTS; the_mesh.getContactByIdx(idx, c); idx++)
-      if (c.type == ADV_TYPE_ROOM && !strcasecmp(c.name, name)) {
-        memcpy(p->bot_room_prefix, c.id.pub_key, NodePrefs::FAVOURITE_PREFIX_LEN);
+      if (c.type == type && !strcasecmp(c.name, name)) {
+        memcpy(key, c.id.pub_key, NodePrefs::FAVOURITE_PREFIX_LEN);
         return true;
       }
     return false;
@@ -189,11 +224,12 @@ static void xGet(NodePrefs* p, uint8_t id, char* reply, int n) {
     snprintf(reply, n, "> %s", xPickGet(p, id, nm, sizeof(nm)) ? nm : "none");
     return;
   }
-  const uint16_t off = *xCmdOff(p, id);
+  const uint64_t on = xListGet(p, id);
   int o = snprintf(reply, n, "> ");
   bool any = false;
+  char nm[40];
   for (int i = 0; i < xListCount(id) && o < n - 1; i++)
-    if (!(off & botcmd::flag(i))) { o += snprintf(reply + o, n - o, "%s%s", any ? "," : "", xListName(id, i)); any = true; }
+    if ((on >> i & 1) && xListName(id, i, nm, sizeof(nm))) { o += snprintf(reply + o, n - o, "%s%s", any ? "," : "", nm); any = true; }
   if (!any) snprintf(reply + o, n - o, "none");
 }
 
@@ -214,7 +250,8 @@ static void xSet(NodePrefs* p, uint8_t id, const char* v, char* reply, int n) {
       return;
     }
   } else {   // a list: what's named is on, the rest off ("none": all off)
-    uint16_t on = 0;
+    uint64_t on = 0;
+    char nm[40];
     if (*v && strcasecmp(v, "none")) {
       while (*v) {
         while (*v == ' ' || *v == ',') v++;
@@ -224,20 +261,20 @@ static void xSet(NodePrefs* p, uint8_t id, const char* v, char* reply, int n) {
         while (t > v && t[-1] == ' ') t--;
         if (t == v) { v = e; continue; }
         int hit = -1;
-        for (int i = 0; i < xListCount(id); i++) {
-          const char* nm = xListName(id, i);
-          if ((int)strlen(nm) == (int)(t - v) && !strncasecmp(nm, v, t - v)) { hit = i; break; }
-        }
+        for (int i = 0; i < xListCount(id); i++)
+          if (xListName(id, i, nm, sizeof(nm)) && (int)strlen(nm) == (int)(t - v) && !strncasecmp(nm, v, t - v)) { hit = i; break; }
         if (hit < 0) {
           int o = snprintf(reply, n, "Error, of: ");
-          for (int i = 0; i < xListCount(id) && o < n - 1; i++) o += snprintf(reply + o, n - o, "%s%s", i ? ", " : "", xListName(id, i));
+          bool first = true;
+          for (int i = 0; i < xListCount(id) && o < n - 1; i++)
+            if (xListName(id, i, nm, sizeof(nm))) { o += snprintf(reply + o, n - o, "%s%s", first ? "" : ", ", nm); first = false; }
           return;
         }
-        on |= botcmd::flag(hit);
+        on |= (uint64_t)1 << hit;
         v = e;
       }
     }
-    *xCmdOff(p, id) = (uint16_t)(~on & (botcmd::flag(botcmd::COUNT) - 1));
+    xListSet(p, id, on);
   }
   the_mesh.savePrefs();
   snprintf(reply, n, "OK");
@@ -249,9 +286,10 @@ static void xOpts(NodePrefs* p, uint8_t id, char* reply, int n) {
                    settings::sectionTitle(x.section), x.label);
   if (x.kind == XK_TEXT) { int cap; xText(p, id, cap); snprintf(reply + o, n - o, "#text:%d", cap - 1); return; }
   o += snprintf(reply + o, n - o, x.kind == XK_LIST ? "#list" : "#pick");
+  if (id == XB_ROOM || (id >= XS_DM1 && id <= XS_DM3)) o += snprintf(reply + o, n - o, "|none");   // a contact pick may be cleared
   char nm[40];
   for (int i = 0; o < n - 1; i++) {
-    if (x.kind == XK_LIST) { if (i >= xListCount(id)) break; snprintf(nm, sizeof(nm), "%s", xListName(id, i)); }
+    if (x.kind == XK_LIST) { if (i >= xListCount(id)) break; if (!xListName(id, i, nm, sizeof(nm))) continue; }
     else if (!xPickName(id, i, nm, sizeof(nm))) break;
     if (o + 1 + (int)strlen(nm) >= n - 5) { snprintf(reply + o, n - o, "|..."); break; }
     o += snprintf(reply + o, n - o, "|%s", nm);

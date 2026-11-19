@@ -185,9 +185,12 @@ answers, `set bot.dm.allowed ping,batt,help` or `none`), `.trigger` and
 `.reply` (a text: `set bot.dm.reply Away, back at {time}`; nothing after the
 key empties it); `bot.ch1.channel` / `bot.ch2.channel` and `bot.room.room`
 pick where by name; `bot.dm.allow`, `bot.dm.position`, `bot.quiet.from`,
-`bot.quiet.to`, `bot.actions.by` and `bot.gap` the rest. `opts` marks a text
-`#text:<max bytes>` and a list or a name to pick `#list` / `#pick`, with the
-choices after it. `get` shows a value as the Settings screen does, and `set`
+`bot.quiet.to`, `bot.actions.by` and `bot.gap` the rest. And the SOS's: `sos` (the top
+button), `sos.countdown`, `sos.channels` (by name, `none` for none),
+`sos.contact1` to `sos.contact3` (a contact's name, `none` to clear),
+`sos.msg`, `sos.repeat`, `sos.advert`, `sos.beep` and `sos.ack`. `opts` marks
+a text `#text:<max bytes>` and a list or a name to pick `#list` / `#pick`,
+with the choices after it (`...` when they don't all fit). `get` shows a value as the Settings screen does, and `set`
 takes it the same way, case ignored:
 
 ```

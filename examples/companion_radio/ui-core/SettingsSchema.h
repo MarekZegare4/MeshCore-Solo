@@ -25,21 +25,22 @@ namespace settings {
 // PG_NAV is the Map's options (its trail / live share / target tools),
 // PG_ADVERT sits in Nearby's advert popup; the rest are Settings pages.
 // PG_PRIVACY and PG_RADIO (Radio's advanced options) are Settings pages too.
-// PG_REPEATER and PG_BOT are for the console and the configurator (issue #62):
-// the frontends have their own Repeater and Bot screens (RepeaterControl.h,
-// BotConfig.h). The bot's texts, targets and command lists are SettingsCli's.
-enum Page : uint8_t { PG_NAV, PG_ADVERT, PG_DEVICE, PG_MESSAGES, PG_SOUND, PG_PRIVACY, PG_RADIO, PG_REPEATER, PG_BOT, PG_COUNT };
+// PG_REPEATER, PG_BOT and PG_SOS are for the console and the configurator
+// (issue #62): the frontends have their own screens for them. Their texts,
+// targets and lists (the bot's reply, the SOS channels ...) are SettingsCli's.
+enum Page : uint8_t { PG_NAV, PG_ADVERT, PG_DEVICE, PG_MESSAGES, PG_SOUND, PG_PRIVACY, PG_RADIO, PG_REPEATER, PG_BOT, PG_SOS, PG_COUNT };
 enum Section : uint8_t { SEC_TRAIL, SEC_LIVE_SHARE, SEC_LOCATOR, SEC_MAP_VIEW, SEC_ADVERT,
                          SEC_DISPLAY, SEC_POWER, SEC_TIME, SEC_UNITS,
                          SEC_MESSAGES, SEC_CONTACTS, SEC_AUTO_ADD,
                          SEC_SOUND, SEC_SOUND_FOR, SEC_QUIET,
                          SEC_PRIVACY, SEC_TELEMETRY, SEC_RADIO_ADV,
                          SEC_RPT, SEC_RPT_RELAYS,
-                         SEC_BOT_CH1, SEC_BOT_CH2, SEC_BOT_ROOM, SEC_BOT_DM, SEC_BOT_OTHER, SEC_COUNT };
+                         SEC_BOT_CH1, SEC_BOT_CH2, SEC_BOT_ROOM, SEC_BOT_DM, SEC_BOT_OTHER,
+                         SEC_SOS_START, SEC_SOS_TO, SEC_SOS_RUN, SEC_COUNT };
 
 static const char* pageTitle(uint8_t p) {
   static const char* T[PG_COUNT] = { "Map options", "Advert", "Display & power", "Messages & contacts", "Sound",
-                                     "Privacy", "Advanced radio", "Repeater", "Bot" };
+                                     "Privacy", "Advanced radio", "Repeater", "Bot", "SOS" };
   return p < PG_COUNT ? T[p] : "";
 }
 static const char* sectionTitle(uint8_t s) {
@@ -49,7 +50,8 @@ static const char* sectionTitle(uint8_t s) {
                                       "SOUND", "PLAYS FOR", "QUIET HOURS",
                                       "ADVERTS", "WHO CAN ASK FOR", "ADVANCED",
                                       "REPEATER", "WHAT IT RELAYS",
-                                      "CHANNEL BOT 1", "CHANNEL BOT 2", "ROOM", "DIRECT MESSAGES", "OTHER" };
+                                      "CHANNEL BOT 1", "CHANNEL BOT 2", "ROOM", "DIRECT MESSAGES", "OTHER",
+                                      "START", "SENT TO", "WHILE IT RUNS" };
   return s < SEC_COUNT ? T[s] : "";
 }
 static uint8_t sectionPage(uint8_t s) {
@@ -59,7 +61,8 @@ static uint8_t sectionPage(uint8_t s) {
                                         PG_SOUND, PG_SOUND, PG_SOUND,
                                         PG_PRIVACY, PG_PRIVACY, PG_RADIO,
                                         PG_REPEATER, PG_REPEATER,
-                                        PG_BOT, PG_BOT, PG_BOT, PG_BOT, PG_BOT };
+                                        PG_BOT, PG_BOT, PG_BOT, PG_BOT, PG_BOT,
+                                        PG_SOS, PG_SOS, PG_SOS };
   return s < SEC_COUNT ? P[s] : PG_DEVICE;
 }
 
@@ -242,6 +245,12 @@ static void optRptNet(uint8_t v, char* b, int n, const NodePrefs&) { snprintf(b,
 static void optAllFav(uint8_t v, char* b, int n, const NodePrefs&) { snprintf(b, n, "%s", v ? "Favourites" : "All"); }
 static void optBotGap(uint8_t v, char* b, int n, const NodePrefs&) { fmtSecs(b, n, NodePrefs::botGapSecs(v), "Off"); }
 
+// The SOS's, as its screen shows them.
+static void optSosCountdown(uint8_t v, char* b, int n, const NodePrefs&) { fmtSecs(b, n, NodePrefs::sosCountdownSecs(v), "Off"); }
+static void optSosRepeat(uint8_t v, char* b, int n, const NodePrefs&) { fmtSecs(b, n, NodePrefs::sosRepeatMins(v) * 60, "Off"); }
+static void optSosBeep(uint8_t v, char* b, int n, const NodePrefs&) { fmtSecs(b, n, NodePrefs::sosBeepSecs(v), "Off"); }
+static void optSosAdvert(uint8_t v, char* b, int n, const NodePrefs&) { snprintf(b, n, "%s", NodePrefs::sosAdvertLabel(v)); }
+
 // ── Side effects ──────────────────────────────────────────────────────────────
 static void rearmLocator(UiCore& c)      { c.locator.reset(); }
 static void restartShareClock(UiCore& c) { c.live_share.restartClock(); }   // a new length starts over
@@ -407,6 +416,12 @@ static const Setting ALL[] = {
   IDX("Quiet to", "Same hour = always on", SEC_BOT_OTHER, bot_quiet_end, 24, optHour, nullptr),
   IDX("Actions by", "Favourites only: a channel name can be faked", SEC_BOT_OTHER, bot_actions_scope, 2, optAllFav, nullptr),
   IDX("Reply gap", "On the channel and in the room", SEC_BOT_OTHER, bot_gap_idx, NodePrefs::BOT_GAP_COUNT, optBotGap, nullptr),
+
+  SW("Top button", "Hold 5 s for the SOS slider", SEC_SOS_START, sos_enabled, nullptr),
+  IDX("Countdown", nullptr, SEC_SOS_START, sos_countdown_idx, NodePrefs::SOS_COUNTDOWN_COUNT, optSosCountdown, nullptr),
+  IDX("Repeat", nullptr, SEC_SOS_RUN, sos_repeat_idx, NodePrefs::SOS_REPEAT_COUNT, optSosRepeat, nullptr),
+  IDX("Advert", "With each send", SEC_SOS_RUN, sos_advert, NodePrefs::SOS_ADVERT_COUNT, optSosAdvert, nullptr),
+  IDX("Beep", "To be found by", SEC_SOS_RUN, sos_beep_idx, NodePrefs::SOS_BEEP_COUNT, optSosBeep, nullptr),
 };
 static const int COUNT = (int)(sizeof(ALL) / sizeof(ALL[0]));
 
