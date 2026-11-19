@@ -192,6 +192,8 @@ public:
   void mapRegionAction(uint8_t act);
   void mapAreaRenameDone(bool ok);
   void areaPreviewEnd();   // back to the view from before a map area's preview
+  void mapPreviewShow(lv_obj_t* panel);   // a trail's / route's points (navmap::pv) framed above its card
+  void mapPreviewEnd();                   // ... gone, the view back
   int  mapZoomLevel() const;
   void setTapWake(bool on);
   void mapDownloadClose();

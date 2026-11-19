@@ -67,6 +67,123 @@ static double normY(int32_t lat_e6) {
   return (1.0 - asinh(tan(r)) / M_PI) / 2.0;
 }
 
+// A polyline's screen points for the view (the followed route's, the
+// preview's): normalised Web-Mercator offsets from (ox, oy) scaled into the
+// layer `a`. A segment whose box misses the view breaks the line (one
+// crossing it, both ends outside, stays: a long straight stretch zoomed in),
+// and within a stretch points closer than 2 px to the last are left out but
+// for its end. Returns how many it wrote (at most `cap`).
+static int layoutLine(const float* nx, const float* ny, int n, double ox, double oy, const lv_area_t& a, double scale,
+                      lv_point_precise_t* pts, int cap) {
+  int pn = 0;
+  const float fs = (float)scale;
+  const float fx = (float)(ox * scale - mapview::s_left) + a.x1;
+  const float fy = (float)(oy * scale - mapview::s_top) + a.y1;
+  const float M = 8, L = a.x1 - M, R = a.x2 + M, T = a.y1 - M, B = a.y2 + M;
+  bool open = false, held = false;
+  float px = 0, py = 0, lx = 0, ly = 0, hx = 0, hy = 0;
+  auto push = [&](float x, float y) {
+    if (pn >= cap) return;
+    pts[pn].x = (lv_value_precise_t)lroundf(x);
+    pts[pn].y = (lv_value_precise_t)lroundf(y);
+    pn++;
+    lx = x; ly = y;
+  };
+  auto brk = [&]() {
+    if (held) push(hx, hy);
+    if (open && pn < cap) { pts[pn].x = LV_DRAW_LINE_POINT_NONE; pts[pn].y = LV_DRAW_LINE_POINT_NONE; pn++; }
+    open = held = false;
+  };
+  for (int i = 0; i < n; i++) {
+    const float x = nx[i] * fs + fx, y = ny[i] * fs + fy;
+    if (i > 0) {
+      const bool vis = fminf(px, x) <= R && fmaxf(px, x) >= L && fminf(py, y) <= B && fmaxf(py, y) >= T;
+      if (!vis) {
+        if (open) brk();
+      } else {
+        if (!open) { push(px, py); open = true; }
+        if (fabsf(x - lx) < 2 && fabsf(y - ly) < 2) { hx = x; hy = y; held = true; }
+        else { push(x, y); held = false; }
+      }
+    }
+    px = x; py = y;
+  }
+  if (held) push(hx, hy);
+  return pn;
+}
+
+// The preview: a saved trail or a planned route looked at from its card
+// (the Gallery, Map tools > Load / Routes) -- drawn dashed over the map and
+// framed above the card until the card closes; then the map goes back where
+// it was (as a map area's preview). Load / Follow draw the real one.
+namespace pv {
+static const int MAX = ROUTE_MAX_POINTS;   // a route whole; a longer trail every k-th point
+static float* s_x = nullptr;
+static float* s_y = nullptr;
+static double s_ox = 0, s_oy = 0;
+static int s_n = 0;
+static double s_x0 = 1, s_x1 = 0, s_y0 = 1, s_y1 = 0;   // its box, normalised
+static uint32_t s_col = 0;
+static lv_point_precise_t* s_pts = nullptr;
+static int s_pts_n = 0;
+static int32_t s_px0 = 0, s_py0 = 0;
+static lv_obj_t* s_line = nullptr;
+static bool s_on = false;              // framed: the view below kept to go back to
+static double s_prev_cx = 0, s_prev_cy = 0;
+static int s_prev_z = 0;
+static bool s_prev_follow = false;
+
+static bool begin(uint32_t col) {
+  if (!s_x) {
+    s_x = psramBuf<float>(MAX);
+    s_y = psramBuf<float>(MAX);
+    s_pts = psramBuf<lv_point_precise_t>(MAX + 8);
+  }
+  s_n = s_pts_n = 0;
+  s_col = col;
+  s_x0 = s_y0 = 1; s_x1 = s_y1 = 0;
+  return s_x && s_y && s_pts;
+}
+static void add(int32_t lat, int32_t lon) {
+  if (!s_x || s_n >= MAX) return;
+  const double x = normX(lon), y = normY(lat);
+  if (!s_n) { s_ox = x; s_oy = y; }
+  s_x[s_n] = (float)(x - s_ox);
+  s_y[s_n] = (float)(y - s_oy);
+  s_n++;
+  if (x < s_x0) s_x0 = x;
+  if (x > s_x1) s_x1 = x;
+  if (y < s_y0) s_y0 = y;
+  if (y > s_y1) s_y1 = y;
+}
+static void layout(double scale) {
+  s_pts_n = 0;
+  if (!s_line) return;
+  lv_obj_invalidate(s_line);
+  if (!s_pts || s_n < 2) return;
+  lv_area_t a;
+  lv_obj_get_coords(s_line, &a);
+  s_px0 = a.x1; s_py0 = a.y1;
+  s_pts_n = layoutLine(s_x, s_y, s_n, s_ox, s_oy, a, scale, s_pts, MAX + 6);
+}
+static void onDraw(lv_event_t* e) {
+  if (s_pts_n < 2) return;
+  lv_obj_t* obj = lv_event_get_current_target_obj(e);
+  lv_area_t a;
+  lv_obj_get_coords(obj, &a);
+  if (a.x1 != s_px0 || a.y1 != s_py0) {
+    for (int i = 0; i < s_pts_n; i++) {
+      if (s_pts[i].x == LV_DRAW_LINE_POINT_NONE) continue;
+      s_pts[i].x += a.x1 - s_px0;
+      s_pts[i].y += a.y1 - s_py0;
+    }
+    s_px0 = a.x1; s_py0 = a.y1;
+  }
+  mapstyle::dashedPolyline(lv_event_get_layer(e), s_pts, s_pts_n, s_col, mapstyle::ROUTE_W, mapstyle::LIGHT_CASE);
+}
+}  // namespace pv
+
+
 // The trail object's draw: s_pts in one draw task (the software renderer
 // walks it a segment at a time, clipped to the band being drawn).
 static void onTrailDraw(lv_event_t* e) {
@@ -195,6 +312,13 @@ void UITask::buildNavLayers() {
   lv_obj_add_event_cb(tr, navmap::onTrailDraw, LV_EVENT_DRAW_MAIN, nullptr);
   navmap::s_trail = tr;
   navmap::s_pts_n = 0;
+  lv_obj_t* pl = lv_obj_create(_map_marks);   // a trail or route looked at from its card: over both
+  lv_obj_remove_style_all(pl);
+  lv_obj_set_size(pl, LV_PCT(100), LV_PCT(100));
+  lv_obj_remove_flag(pl, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_event_cb(pl, navmap::pv::onDraw, LV_EVENT_DRAW_MAIN, nullptr);
+  navmap::pv::s_line = pl;
+  navmap::pv::s_pts_n = 0;
   navmap::s_target_line = lv_obj_create(_map_marks);
   lv_obj_remove_style_all(navmap::s_target_line);
   lv_obj_set_size(navmap::s_target_line, LV_PCT(100), LV_PCT(100));
@@ -417,6 +541,7 @@ void UITask::layoutNav() {
   double scale = (double)(1 << _map_z) * mapview::TILE_PX;
   layoutRoute(scale);
   layoutNavTrail(scale);
+  navmap::pv::layout(scale);
 
   int32_t tlat, tlon, mlat, mlon;
   char name[8];
@@ -608,6 +733,39 @@ void UITask::navFrameTrail() {
   layoutMap();
 }
 
+// The preview's points (navmap::pv) framed above its card `panel`, the view
+// before kept to go back to.
+void UITask::mapPreviewShow(lv_obj_t* panel) {
+  using namespace navmap;
+  if (pv::s_n < 1 || !_map_area) return;
+  layoutNow(panel);
+  const int w = lv_obj_get_width(_map_area), h = lv_obj_get_height(_map_area);
+  int above = h - (lv_obj_get_height(panel) + 8);   // its inset
+  if (above < 60) above = 60;
+  if (!pv::s_on) { pv::s_prev_cx = _map_cx; pv::s_prev_cy = _map_cy; pv::s_prev_z = _map_z; pv::s_prev_follow = _map_follow; }
+  pv::s_on = true;
+  const double dx = (pv::s_x1 - pv::s_x0) * mapview::TILE_PX, dy = (pv::s_y1 - pv::s_y0) * mapview::TILE_PX;
+  int z = mapview::MAX_Z - 1;
+  while (z > mapview::MIN_Z && (dx * (1 << z) > w - 40 || dy * (1 << z) > above - 30)) z--;
+  _map_z = z;
+  const double n = (double)(1 << z);
+  _map_cx = (pv::s_x0 + pv::s_x1) / 2 * n;
+  _map_cy = (pv::s_y0 + pv::s_y1) / 2 * n + (double)(h - above) / 2 / mapview::TILE_PX;   // centred in the part left showing
+  _map_follow = false;
+  layoutMap();
+}
+
+// The card closed: the preview gone, the map back where it was.
+void UITask::mapPreviewEnd() {
+  using namespace navmap;
+  pv::s_n = pv::s_pts_n = 0;
+  if (pv::s_line) lv_obj_invalidate(pv::s_line);
+  if (!pv::s_on) return;
+  pv::s_on = false;
+  _map_cx = pv::s_prev_cx; _map_cy = pv::s_prev_cy; _map_z = pv::s_prev_z; _map_follow = pv::s_prev_follow;
+  if (_screen == SCR_MAP && _map_area) layoutMap();
+}
+
 void UITask::navSetTarget(uint8_t kind, const uint8_t* key, int32_t lat, int32_t lon, const char* name) {
   _core->guide.stop();   // a chosen target replaces following a route or the trail back
   _core->locator.setTarget(kind, key, lat, lon, name);
@@ -689,6 +847,7 @@ lv_obj_t* UITask::navPopupPanel(const char* title, bool full, bool bottom) {
 
 void UITask::navClosePopup() {
   areaPreviewEnd();   // a map area's popup: the map goes back where it was
+  mapPreviewEnd();    // a trail's or route's, the same
   if (_nav_overlay) lvport::deleteLater(_nav_overlay);   // may be closing from its own button
   _nav_overlay = _nav_ta = _nav_kb = _nav_del_lbl = nullptr;
   _nav_trail_lbl = _nav_trail_btn = _nav_reset_lbl = _nav_share_lbl = _nav_share_btn = _nav_tb_btn = _nav_route_lbl = nullptr;
@@ -888,7 +1047,7 @@ namespace navmap {
 enum : uint8_t { TL_TRAIL_TOGGLE, TL_TRAIL_SAVE, TL_TRAIL_LOAD, TL_TRAIL_RESET, TL_TRAIL_GPX, TL_TRACKBACK,
                  TL_SHARE_TOGGLE, TL_SHARE_ONCE, TL_DOWNLOAD, TL_AREAS, TL_REGIONS,
                  TL_WP_HERE, TL_WP_COORDS, TL_SPOT_ADD, TL_SPOT_GO,
-                 TL_ST_LOAD, TL_ST_GPX, TL_ST_DELETE,
+                 TL_ST_LOAD, TL_ST_GPX, TL_ST_DELETE, TL_ST_PROF,
                  TL_OPT_TRAIL, TL_OPT_SHARE, TL_OPT_ALERT };
 static const uint8_t TL_ROUTE_BASE = 100;   // RouteMap.h's actions from here: Routes, Stop
 
@@ -930,6 +1089,7 @@ static const int ST_MAX = 40;
 static PSRAM_BSS char s_st_names[ST_MAX][28];   // newest first
 static int  s_st_n = 0;
 static int  s_st_sel = -2;            // the one the popup is about; -1 = the internal slot
+static bool s_st_prof = false;        // its card with the profile (centred), not the map preview's
 static lv_obj_t* s_st_del_lbl = nullptr;
 
 // "trail-20260926-1405.trl" -> "26 Sep 2026  14:05" (else the name).
@@ -942,15 +1102,18 @@ static void trailTitle(const char* name, char* out, size_t n) {
 
 // Points, distance and recorded time of a saved trail, from its file.
 template <typename F>
-static bool trailSummary(F& io, int& points, float& meters, uint32_t& secs, trailprofile::Sampler* prof = nullptr) {
+static bool trailSummary(F& io, int& points, float& meters, uint32_t& secs, trailprofile::Sampler* prof = nullptr,
+                         bool preview = false) {
   uint16_t cnt = 0;
   uint32_t accum = 0;
   if (!persist::readHeader(io, TrailStore::SAVE_MAGIC, TrailStore::SAVE_VERSION, cnt, 1)) return false;
   if (io.read((uint8_t*)&accum, sizeof(accum)) != (int)sizeof(accum)) return false;
   points = 0; meters = 0; secs = accum / 1000;
+  const int every = cnt > pv::MAX ? (cnt + pv::MAX - 2) / (pv::MAX - 1) : 1;   // the preview's points: the last one too
   TrailPoint prev, p;
   for (uint16_t i = 0; i < cnt; i++) {
     if (io.read((uint8_t*)&p, sizeof(p)) != (int)sizeof(p)) break;
+    if (preview && (i % every == 0 || i == cnt - 1)) pv::add(p.lat_1e6, p.lon_1e6);
     if (points > 0 && !(p.flags & TRAIL_FLAG_SEG_START))
       meters += TrailStore::haversineMeters(prev.lat_1e6, prev.lon_1e6, p.lat_1e6, p.lon_1e6);
     if (prof) prof->feed(p);
@@ -979,7 +1142,10 @@ static void scanTrails() {
 
 }  // namespace navmap
 
-static void onSavedTrail(lv_event_t* e) { s_ui->savedTrailPopup((int)(intptr_t)lv_event_get_user_data(e)); }
+static void onSavedTrail(lv_event_t* e) {
+  navmap::s_st_prof = false;   // on the map first
+  s_ui->savedTrailPopup((int)(intptr_t)lv_event_get_user_data(e));
+}
 
 static void onNavTools(lv_event_t* e)       { (void)e; s_ui->navToolsPopup(); }
 static void onMapLayer(lv_event_t* e) {   // the map shows it at once: Map tools out of the way
@@ -1293,18 +1459,22 @@ void UITask::savedTrailPopup(int idx) {
   char title[32];
   if (idx < 0) snprintf(title, sizeof(title), "Saved on the device");
   else navmap::trailTitle(navmap::s_st_names[idx], title, sizeof(title));
-  lv_obj_t* panel = navPopupPanel(title, false);
+  // On the map, framed above a card at the bottom; the profile on a
+  // centred card of its own (too tall for the bottom one).
+  const bool prof_on = navmap::s_st_prof;
+  lv_obj_t* panel = navPopupPanel(title, false, !prof_on);
 
   int pts = 0; float m = 0; uint32_t secs = 0; bool ok = false;
+  navmap::pv::begin(mapstyle::TRAIL);
   trailprofile::Sampler& prof = profileview::s_prof;
   prof = trailprofile::Sampler();
   if (idx >= 0) {
     char path[64];
     snprintf(path, sizeof(path), "%s/%s", navmap::TRAILS_DIR, navmap::s_st_names[idx]);
-    if (FILE* f = fopen(path, "rb")) { navmap::FileRW io{ f }; ok = navmap::trailSummary(io, pts, m, secs, &prof); fclose(f); }
+    if (FILE* f = fopen(path, "rb")) { navmap::FileRW io{ f }; ok = navmap::trailSummary(io, pts, m, secs, &prof, true); fclose(f); }
   } else if (DataStore* ds = the_mesh.getDataStore()) {
     File f = ds->openRead(TrailEngine::TRAIL_FILE);
-    if (f) { ok = navmap::trailSummary(f, pts, m, secs, &prof); f.close(); }
+    if (f) { ok = navmap::trailSummary(f, pts, m, secs, &prof, true); f.close(); }
   }
   char dist[12], dur[12], info[64];
   geo::fmtDist(dist, sizeof(dist), m / 1000.0f, _prefs && _prefs->units_imperial);
@@ -1312,14 +1482,16 @@ void UITask::savedTrailPopup(int idx) {
   if (ok) snprintf(info, sizeof(info), "%s  -  %s  -  %d points", dist, dur, pts);
   else snprintf(info, sizeof(info), "Can't read this file");
   label(panel, info, THEME_FONT_BODY, theme::TEXT);
-  if (ok) profileChart(panel, 104);
+  if (ok && prof_on) profileChart(panel, 104);
   if (!_core->trail.store().empty())
     label(panel, "Loading replaces the trail on the map.", THEME_FONT_SMALL, theme::TEXT_MUTED);
   lv_obj_t* r = buttonBar(panel);
   lv_obj_t* lb = toolButton(r, LV_SYMBOL_DIRECTORY " Load", navmap::TL_ST_LOAD, true);
   stylePrimary(lv_obj_get_parent(lb));
   if (idx >= 0) toolButton(r, LV_SYMBOL_SD_CARD " GPX", navmap::TL_ST_GPX, false);
+  if (ok) toolButton(r, prof_on ? LV_SYMBOL_GPS " Map" : LV_SYMBOL_UP " Profile", navmap::TL_ST_PROF, false);
   navmap::s_st_del_lbl = toolButton(r, LV_SYMBOL_TRASH " Delete", navmap::TL_ST_DELETE, false);
+  if (ok && !prof_on) mapPreviewShow(panel);
 }
 
 void UITask::savedTrailAction(uint8_t act) {
@@ -1408,6 +1580,10 @@ void UITask::navToolAction(uint8_t act) {
     case navmap::TL_ST_GPX:
     case navmap::TL_ST_DELETE:
       savedTrailAction(act);
+      return;
+    case navmap::TL_ST_PROF:   // the profile's card, or back to the map preview's
+      navmap::s_st_prof = !navmap::s_st_prof;
+      savedTrailPopup(navmap::s_st_sel);
       return;
     case navmap::TL_TRAIL_RESET:
       if (!tapConfirmed(_nav_reset_lbl, "Reset?")) return;

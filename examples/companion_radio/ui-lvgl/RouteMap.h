@@ -112,10 +112,7 @@ static bool sync(const RouteGuide& g) {
   return true;
 }
 
-// Screen points for the view: a segment whose box misses the view breaks the
-// line (one crossing it, both ends outside, stays: a long straight stretch
-// zoomed in), and within a stretch points closer than 2 px to the last are
-// left out but for its end.
+// Screen points for the view (navmap::layoutLine).
 static void layout(double scale) {
   s_pts_n = 0;
   if (!s_line) return;
@@ -124,40 +121,7 @@ static void layout(double scale) {
   lv_area_t a;
   lv_obj_get_coords(s_line, &a);
   s_pts_x0 = a.x1; s_pts_y0 = a.y1;
-  const float fs = (float)scale;
-  const float ox = (float)(s_ox * scale - mapview::s_left) + a.x1;
-  const float oy = (float)(s_oy * scale - mapview::s_top) + a.y1;
-  const float M = 8, L = a.x1 - M, R = a.x2 + M, T = a.y1 - M, B = a.y2 + M;
-  const int cap = PlannedRoutes::MAX_POINTS + 6;
-  bool open = false, held = false;
-  float px = 0, py = 0, lx = 0, ly = 0, hx = 0, hy = 0;
-  auto push = [&](float x, float y) {
-    if (s_pts_n >= cap) return;
-    s_pts[s_pts_n].x = (lv_value_precise_t)lroundf(x);
-    s_pts[s_pts_n].y = (lv_value_precise_t)lroundf(y);
-    s_pts_n++;
-    lx = x; ly = y;
-  };
-  auto brk = [&]() {
-    if (held) push(hx, hy);
-    if (open && s_pts_n < cap) { s_pts[s_pts_n].x = LV_DRAW_LINE_POINT_NONE; s_pts[s_pts_n].y = LV_DRAW_LINE_POINT_NONE; s_pts_n++; }
-    open = held = false;
-  };
-  for (int i = 0; i < s_n; i++) {
-    const float x = s_nx[i] * fs + ox, y = s_ny[i] * fs + oy;
-    if (i > 0) {
-      const bool vis = fminf(px, x) <= R && fmaxf(px, x) >= L && fminf(py, y) <= B && fmaxf(py, y) >= T;
-      if (!vis) {
-        if (open) brk();
-      } else {
-        if (!open) { push(px, py); open = true; }
-        if (fabsf(x - lx) < 2 && fabsf(y - ly) < 2) { hx = x; hy = y; held = true; }
-        else { push(x, y); held = false; }
-      }
-    }
-    px = x; py = y;
-  }
-  if (held) push(hx, hy);
+  s_pts_n = navmap::layoutLine(s_nx, s_ny, s_n, s_ox, s_oy, a, scale, s_pts, PlannedRoutes::MAX_POINTS + 6);
 }
 
 }  // namespace routemap
@@ -216,7 +180,7 @@ void UITask::routePopup(int slot) {
   RouteInfo ri;
   if (!PlannedRoutes::info(slot, ri)) { routesPopup(); return; }
   routemap::s_sel = slot;
-  lv_obj_t* panel = navPopupPanel(ri.name[0] ? ri.name : "Route", false);
+  lv_obj_t* panel = navPopupPanel(ri.name[0] ? ri.name : "Route", false, true);   // at the bottom: the route above it
   char d[12], info[64];
   geo::fmtDist(d, sizeof(d), ri.length_m / 1000.0f, _prefs && _prefs->units_imperial);
   snprintf(info, sizeof(info), "%s  -  %u points", d, (unsigned)ri.count);
@@ -229,6 +193,10 @@ void UITask::routePopup(int slot) {
     toolButton(r, LV_SYMBOL_LOOP " Reversed", routemap::RT_FOLLOW_REV, false);
   }
   routemap::s_del_lbl = toolButton(r, LV_SYMBOL_TRASH " Delete", routemap::RT_DELETE, false);
+  if (navmap::pv::begin(mapstyle::ROUTE)) {
+    PlannedRoutes::forEach(slot, [&](const RoutePoint& p, int) { navmap::pv::add(p.lat_1e6, p.lon_1e6); });
+    mapPreviewShow(panel);
+  }
 }
 
 void UITask::routeGpxPopup() {

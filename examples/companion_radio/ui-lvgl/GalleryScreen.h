@@ -415,6 +415,7 @@ void UITask::galleryTick() {
 
 void UITask::galleryTrail(int idx) {
   openMap(true);
+  navmap::s_st_prof = false;   // on the map first
   savedTrailPopup(idx);
 }
 
