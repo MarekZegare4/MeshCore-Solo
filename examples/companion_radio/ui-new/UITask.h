@@ -583,6 +583,7 @@ public:
   // Not with a CardKB plugged in: its arrows and Enter drive it, hints as for a joystick.
   bool oneButtonUi() const { return (UI_ONE_BUTTON || _ob_used) && !hasCardKB(); }
   bool oneButtonEditing() const { return _ob_edit; }
+  bool hasKeyboard() const override { return !oneButtonUi(); }
   // Stepping through screens with stepKey() / stepBackKey(): one button, or
   // four (Up/Down/OK/Back).
   bool stepUi() const { return oneButtonUi() || UI_FOUR_BUTTONS; }

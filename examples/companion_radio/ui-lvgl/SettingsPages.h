@@ -716,7 +716,6 @@ void UITask::schemaSection(int i) {
   if (sec == settings::SEC_PRIVACY) schemaRow(card, SETTING(advert_auto_interval_sec));   // all an advert carries, together
   for (int k = i; k < settings::COUNT && settings::ALL[k].section == sec; k++) {
     const settings::Setting& st = settings::ALL[k];
-    if (st.offset == offsetof(NodePrefs, lock_compact)) continue;   // ui-new's lock look; the slide card has one
     if (st.offset == offsetof(NodePrefs, msg_alert)) { msgBannerRow(card); continue; }   // no corner envelope here
     if (st.offset == offsetof(NodePrefs, autoadd_config) && st.bit > 0x01 && _prefs && !_prefs->manual_add_contacts)
       continue;   // the node types count only with "By type"

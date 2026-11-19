@@ -346,9 +346,11 @@ static void xOpts(NodePrefs* p, uint8_t id, char* reply, int n) {
 }
 
 // Coverage's keys are only where a frontend has begun the recorder (ui-lvgl
-// with a card): on another ESP32 there is nothing to record or upload.
+// with a card): on another ESP32 there is nothing to record or upload. The
+// keyboard's not where one button types on its strip (a CardKB brings them).
 static bool hereKey(UiCore& core, const Key& k) {
   if (!strncmp(k.key, "coverage", 8)) return core.coverage.available();
+  if (!strncmp(k.key, "keyboard.", 9)) return !core.host() || core.host()->hasKeyboard();
   return true;
 }
 

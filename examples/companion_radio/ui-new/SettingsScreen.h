@@ -181,7 +181,7 @@ class SettingsScreen : public UIScreen {
         _sec_count[cur]  = 0;
       } else if (cur >= 0 && isSchemaGroup(i)) {
         for (int k = 0; k < settings::COUNT && _sec_count[cur] < MAX_PER_SEC; k++)
-          if (schemaIn(i, settings::ALL[k].section) && schemaShown(settings::ALL[k])) {
+          if (schemaIn(i, settings::ALL[k].section)) {
             if (settings::ALL[k].offset == offsetof(NodePrefs, tz_offset_hours) && _sec_count[cur] < MAX_PER_SEC - 1)
               _sec_items[cur][_sec_count[cur]++] = (uint8_t)SET_CLOCK;
             _sec_items[cur][_sec_count[cur]++] = (uint8_t)(SCHEMA_ITEM + k);
@@ -216,30 +216,6 @@ class SettingsScreen : public UIScreen {
     }
     return false;
   }
-  // Settings this board has no use for.
-  static bool schemaShown(const settings::Setting& st) {
-    uint16_t o = st.offset;
-    (void)o;
-#if !FEAT_BRIGHTNESS_SETTING
-    if (o == offsetof(NodePrefs, display_brightness)) return false;
-#endif
-#if AUTO_OFF_MILLIS == 0
-    if (o == offsetof(NodePrefs, auto_off_secs)) return false;
-#endif
-#if !FEAT_CLOCK_SECONDS_SETTING
-    if (o == offsetof(NodePrefs, clock_hide_seconds)) return false;
-#endif
-#if ENV_INCLUDE_GPS != 1
-    if (o == offsetof(NodePrefs, gps_interval)) return false;
-#endif
-#ifndef PIN_BUZZER
-    if (o == offsetof(NodePrefs, buzzer_volume) || o == offsetof(NodePrefs, notif_melody_dm) ||
-        o == offsetof(NodePrefs, notif_melody_ch) || o == offsetof(NodePrefs, notif_melody_ad) ||
-        o == offsetof(NodePrefs, advert_sound_scope)) return false;
-#endif
-    return true;
-  }
-
   // The number pad for the lock PIN, with what it's asking for.
   void beginPinEntry(const char* prompt) {
     _kb->beginPin("", KeyboardWidget::PIN_MAX_LEN, false, prompt);

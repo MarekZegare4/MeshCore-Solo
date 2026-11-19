@@ -197,7 +197,8 @@ coverage: `coverage`, `coverage.home` (`50.06143,19.93658` or `none`),
 `Analog` on 1 and 2). The rows the screens keep to themselves: which
 chats the lists show (`chats.dm`, `chats.channels`, `chats.rooms`: `All` /
 `Favourites`), the keyboard (`keyboard.alphabet`, `keyboard.additional`;
-on the L1 also `keyboard.type` and, with a CardKB, `keyboard.cardkb`), the
+on the L1 also `keyboard.type` and, with a CardKB, `keyboard.cardkb`; none
+on a one-button device without a CardKB, whose strip types Latin only), the
 radio's `radio.powersave` (`Off`, `On`, `Max`), and on the e-ink L1s
 `display.rotation`, `display.joystick`, `display.full.refresh` and
 `display.panel.sleep`. `opts` marks

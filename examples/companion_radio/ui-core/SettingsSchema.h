@@ -376,12 +376,20 @@ static const Setting ALL[] = {
   MAP("Auto-advert", "Your advert, on a timer", SEC_ADVERT, advert_auto_interval_sec, AUTO_ADVERT,
       optAutoAdvert, nullptr),
 
+  // A row a board has no use for is left out here, so no frontend, console
+  // or configurator offers it.
+#if FEAT_BRIGHTNESS_SETTING
   IDX("Brightness", nullptr, SEC_DISPLAY, display_brightness, 5, optBrightness, applyBrightness),
+#endif
+#if !defined(AUTO_OFF_MILLIS) || AUTO_OFF_MILLIS != 0   // 0: the screen never goes off by itself
   MAP("Screen off after", "Without a touch", SEC_DISPLAY, auto_off_secs, AUTO_OFF, optAutoOff, nullptr),
+#endif
   SW("Wake on message", "Screen on for new messages", SEC_DISPLAY, msg_wake, nullptr),
   IDX("Message alert", "Banner, corner envelope or none", SEC_DISPLAY, msg_alert, 3, optMsgAlert, nullptr),
   SW("Lock screen", "Slide to unlock after sleep", SEC_DISPLAY, auto_lock, nullptr),
+#ifndef LV_CONF_INCLUDE_SIMPLE   // ui-new's lock screen; ui-lvgl's slide card has its own
   IDX("Lock clock", "Big, or compact with the clock fields", SEC_DISPLAY, lock_compact, 2, optLockLook, nullptr),
+#endif
   IDX("Battery display", "In the status bar", SEC_DISPLAY, batt_display_mode, 3, optBattDisplay, nullptr),
   SW("Signal bars", "How well repeaters were heard lately", SEC_DISPLAY, signal_show, nullptr),
   // Only the builds that ask for them (big e-ink panels): each screen elsewhere
@@ -395,12 +403,16 @@ static const Setting ALL[] = {
 #endif
 
   MAP("Battery shutdown", "Power off below this voltage", SEC_POWER, low_batt_mv, LOW_BATT, optLowBatt, nullptr),
+#if ENV_INCLUDE_GPS == 1
   MAP("GPS power saving", "Sleep between fixes", SEC_POWER, gps_interval, GPS_DUTY, optGpsDuty, applyGpsDuty),
+#endif
 
   MAP("Time zone", "Winter time: the clock and alarm", SEC_TIME, tz_offset_hours, TZ, optTz, nullptr),
   IDX("Summer time", "An hour ahead, changed by itself", SEC_TIME, dst_rule, NodePrefs::DST_COUNT, optDst, nullptr),
   SW("12-hour clock", "AM / PM instead of 24 h", SEC_TIME, clock_12h, nullptr),
+#if FEAT_CLOCK_SECONDS_SETTING   // not on e-ink: no redraw every second
   MAP("Clock seconds", "On the home clock", SEC_TIME, clock_hide_seconds, INVERTED, nullptr, nullptr),
+#endif
   MAP("Time from GPS", "Off: a fix leaves the clock as it is", SEC_TIME, gps_time_off, INVERTED, nullptr, applyGpsTime),
 
   SW("Imperial units", "Miles and feet", SEC_UNITS, units_imperial, nullptr),
@@ -430,15 +442,19 @@ static const Setting ALL[] = {
   FLAGBIT("Replace oldest", "When the list is full; not favourites", SEC_AUTO_ADD, autoadd_config, 0x01),
 
   // On / Off / Auto spans two fields (soundctl::setMode): the frontend's own row.
+#ifdef PIN_BUZZER   // quiet hours stay: the screen goes dark in them too
   IDX("Volume", nullptr, SEC_SOUND, buzzer_volume, 5, optVolume, applySound),
+#endif
   SW("Quiet hours", "Muted, screen dark; alarms ring", SEC_QUIET, quiet_hours, nullptr),
   IDX("From", nullptr, SEC_QUIET, quiet_from, 24, optHour, nullptr),
   IDX("Until", nullptr, SEC_QUIET, quiet_to, 24, optHour, nullptr),
 
+#ifdef PIN_BUZZER
   IDX("Direct messages", nullptr, SEC_SOUND_FOR, notif_melody_dm, soundctl::SOUND_COUNT, optSound, nullptr),
   IDX("Channels", nullptr, SEC_SOUND_FOR, notif_melody_ch, soundctl::SOUND_COUNT, optSound, nullptr),
   IDX("Adverts", "A node announcing itself", SEC_SOUND_FOR, notif_melody_ad, soundctl::SOUND_COUNT, optSound, nullptr),
   IDX("Advert sound for", "Direct: no repeaters", SEC_SOUND_FOR, advert_sound_scope, 2, optAdvertScope, nullptr),
+#endif
 
   SW("Position in adverts", "Your adverts carry your location", SEC_PRIVACY, advert_loc_policy, nullptr),
   IDX("Precision", "Rounded so it can't be pinpointed", SEC_PRIVACY, advert_loc_prec,

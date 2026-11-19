@@ -42,6 +42,10 @@ public:
   virtual bool botGetGPIO(int idx, bool& is_output, bool& value) { return false; }
   virtual bool botGetGPIOAnalog(int idx, int& millivolts) { return false; }
 
+  // Text is typed on a keyboard that Settings > Keyboard sets up (false:
+  // one button's strip, Latin only, with no CardKB plugged in).
+  virtual bool hasKeyboard() const { return true; }
+
   // A display pref changed through the settings schema (brightness, ...):
   // push it to the panel.
   virtual void applyDisplayPrefs() {}
