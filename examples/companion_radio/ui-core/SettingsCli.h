@@ -253,6 +253,54 @@ static bool battCurve(NodePrefs* p, const char* cmd, char* reply, int n) {
   return true;
 }
 
+// The scopes the repeater relays besides the default (Repeater > Extra
+// scopes, repeat_extra_scope_mask): "get repeater.scopes" is "> a,b" (or
+// "> none"), "set repeater.scopes a,b" picks those by name, "none" clears.
+// The names are the scope list's (Settings > Radio), which differs per device.
+static bool repeaterScopes(NodePrefs* p, const char* cmd, char* reply, int n) {
+  const bool set = !strncmp(cmd, "set repeater.scopes", 19) && (cmd[19] == ' ' || !cmd[19]);
+  if (!set && strcmp(cmd, "get repeater.scopes")) return false;
+  const ScopeList& sl = the_mesh.scopeList();
+  if (!set) {
+    int o = snprintf(reply, n, "> ");
+    bool any = false;
+    for (uint8_t i = 0; i < sl.count && o < n - 1; i++)
+      if (rptctl::extraScope(p, i)) { o += snprintf(reply + o, n - o, "%s%s", any ? "," : "", sl.name(i + 1)); any = true; }
+    if (!any) snprintf(reply + o, n - o, "none");
+    return true;
+  }
+  const char* a = cmd[19] ? cmd + 20 : "";
+  uint16_t mask = 0;
+  if (*a && strcmp(a, "none")) {
+    while (*a) {
+      while (*a == ' ' || *a == ',') a++;
+      const char* e = a;
+      while (*e && *e != ',') e++;
+      const char* t = e;
+      while (t > a && t[-1] == ' ') t--;   // "a, b": the spaces round a name aren't part of it
+      if (t == a) { a = e; continue; }
+      int hit = -1;
+      for (uint8_t i = 0; i < sl.count; i++) {
+        const char* nm = sl.name(i + 1);
+        if ((int)strlen(nm) == (int)(t - a) && !strncasecmp(nm, a, t - a)) { hit = i; break; }
+      }
+      if (hit < 0) {
+        int o = snprintf(reply, n, "Error, scopes: ");
+        if (!sl.count) snprintf(reply + o, n - o, "none set up (Settings > Radio)");
+        for (uint8_t i = 0; i < sl.count && o < n - 1; i++) o += snprintf(reply + o, n - o, "%s%s", i ? ", " : "", sl.name(i + 1));
+        return true;
+      }
+      mask |= (uint16_t)(1u << hit);
+      a = e;
+    }
+  }
+  p->repeat_extra_scope_mask = mask;
+  the_mesh.rebuildRepeatScopes();
+  the_mesh.savePrefs();
+  snprintf(reply, n, "OK");
+  return true;
+}
+
 // True when the command was a settings one (reply set either way).
 static bool handle(UiCore& core, const char* cmd, char* reply, int n) {
   NodePrefs* p = core.prefs();
@@ -261,6 +309,7 @@ static bool handle(UiCore& core, const char* cmd, char* reply, int n) {
   if (melodies(p, cmd, reply, n)) return true;
   if (waypoints(core, cmd, reply, n)) return true;
   if (battCurve(p, cmd, reply, n)) return true;
+  if (repeaterScopes(p, cmd, reply, n)) return true;
   if (!strcmp(cmd, "keys") || !strncmp(cmd, "keys ", 5)) {   // the key names, a frame's worth a page
     int page = cmd[4] ? atoi(cmd + 5) : 1, pg = 1, o = 0;
     bool more = false;

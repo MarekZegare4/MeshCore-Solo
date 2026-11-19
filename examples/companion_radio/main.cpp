@@ -942,4 +942,9 @@ extern "C" EMSCRIPTEN_KEEPALIVE const char* sim_cli(const char* command) {
   }
   return reply;
 }
+
+// Sim tests: a scope in the list (Settings > Radio > Scopes); its index, 0 when full.
+extern "C" EMSCRIPTEN_KEEPALIVE int sim_add_scope(const char* name) {
+  return g_sim_ready ? the_mesh.addScope(name) : 0;
+}
 #endif

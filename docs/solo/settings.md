@@ -159,6 +159,7 @@ so its documentation applies:
 | --- | --- |
 | `get radio`, `set radio 869.525,250,11,5` | Frequency, bandwidth, SF and CR, applied at once |
 | `get repeater.radio`, `set repeater.radio 869.525,62.5,8,8` | The repeater's own frequency, bandwidth, SF and CR (Repeater › Relay on: Custom; `set repeater.network Custom`), applied at once while it relays on them |
+| `get repeater.scopes`, `set repeater.scopes alps,tatry`, `set repeater.scopes none` | The scopes the repeater relays besides the default one (Repeater › Extra scopes), by name from the scope list (Settings › Radio) |
 | `get tx`, `set tx 14` | TX power in dBm |
 | `get af` / `set af`, `get dutycycle` / `set dutycycle` | Airtime factor, or the same as a duty cycle in % |
 | `rxdelay`, `int.thresh`, `cad`, `radio.rxgain`, `path.hash.mode`, `multi.acks` | The advanced radio options, with `get` / `set` |
