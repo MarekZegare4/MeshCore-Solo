@@ -13,6 +13,18 @@
 
 namespace soundctl {
 
+// The bot's !buzz [seconds]: a beep every half second for that long (1..30,
+// 0 = 5), as RTTTL into `buf` -- kept by the caller for the whole playback
+// (a player may read from it as it goes). 400 bytes hold 30 s.
+static const int BUZZ_BUF = 400;
+static void buzzMelody(char* buf, int n, int seconds) {
+  if (seconds < 1) seconds = 5;
+  if (seconds > 30) seconds = 30;
+  const int pairs = seconds * 2;   // b=120: an "8c,8p," pair is 250 + 250 ms
+  int k = snprintf(buf, n, "Buzz:b=120:");
+  for (int i = 0; i < pairs && k < n - 7; i++) k += snprintf(buf + k, n - k, "8c,8p,");
+}
+
 // ── Built-in sounds (RTTTL) ───────────────────────────────────────────────────
 static const char* const MEL_ALARM  = "alarm:d=8,o=6,b=125:c,c,c,c,p,c,c,c,c,p";   // clock alarm / timer ring
 static const char* const MEL_ARRIVE = "locarr:d=8,o=6,b=140:c,e,g";   // arrival alert: reached the target
@@ -91,6 +103,24 @@ static void setVolume(NodePrefs* p, genericBuzzer& b, uint8_t level) {
   if (p) p->buzzer_volume = level;
   b.setVolume(level);
   b.playForced(MEL_VOLUME);
+}
+
+// The bot's !buzz [seconds], played through mute into the caller's lasting
+// `buf` (BUZZ_BUF). The message that asked for it is notified just after,
+// and its sound would cut the buzz to a quarter of a second: notify() asks
+// buzzing() first and stays quiet till it ends.
+static uint32_t s_buzz_until = 0;
+static void botBuzz(genericBuzzer& b, char* buf, int n, int seconds) {
+  buzzMelody(buf, n, seconds);
+  b.playForced(buf);
+  if (seconds < 1) seconds = 5;
+  if (seconds > 30) seconds = 30;
+  s_buzz_until = (millis() + (uint32_t)seconds * 1000UL + 500) | 1;
+}
+static bool buzzing(genericBuzzer& b) {
+  if (!s_buzz_until) return false;
+  if ((int32_t)(millis() - s_buzz_until) >= 0 || !b.isPlaying()) { s_buzz_until = 0; return false; }
+  return true;
 }
 #endif
 

@@ -992,6 +992,18 @@ void UITask::setGps(bool on) {
 
 void UITask::botSetGPS(bool on) { if (_core->setGpsEnabled(on)) refreshStatusBar(); }
 
+// The bot's !buzz [seconds]: a find-me beep, through mute (a find-me that
+// respects mute defeats itself). Was never wired here: the L2 answered
+// "Buzzing" and stayed silent.
+void UITask::botBuzz(int seconds) {
+#ifdef PIN_BUZZER
+  static char buf[soundctl::BUZZ_BUF];   // read as it plays
+  soundctl::botBuzz(_buzzer, buf, sizeof(buf), seconds);
+#else
+  (void)seconds;
+#endif
+}
+
 bool UITask::ensureGps(GpsAsk what) {
   int32_t lat, lon;
   if (gpsAsked(what)) return false;   // off, its last fix still reads valid

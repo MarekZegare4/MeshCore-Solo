@@ -212,7 +212,8 @@ its own channel, trigger, reply, commands and actions (for example `test` →
   it, `!dist` is off too and `!gps fix` answers `GPS: fix off`. It doesn't touch
   a **Reply** you wrote yourself: a `{loc}` there still sends it.
 - **Actions** (off by default) let the command change the device: `!buzz`
-  (sounds the buzzer to find it), `!gps on` / `!gps off`, `!gps fix` (turns
+  (beeps for 5 seconds, even with the sound off, to find it; `!buzz 20`
+  for 20 seconds, 1 to 30), `!gps on` / `!gps off`, `!gps fix` (turns
   the GPS on, waits for a good fix and sends it), `!advert`. With **Actions** on,
   **Allowed** lists these too. During an
   [SOS](#sos) `!gps` is refused (`GPS: on for SOS`). **Actions by =

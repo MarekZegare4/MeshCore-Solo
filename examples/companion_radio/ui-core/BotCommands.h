@@ -30,7 +30,7 @@ static const Cmd CMDS[COUNT] = {
   { "status",  "!status",       "Battery, position and time" },
   { "help",    "!help",         "The list of commands" },
   { "gps",     "!gps",          "Action: on, off, fix" },
-  { "buzz",    "!buzz",         "Action: sounds the buzzer" },
+  { "buzz",    "!buzz",         "Action: buzzer, !buzz 20 = 20 s" },
   { "advert",  "!advert",       "Action: sends an advert" },
   { "gpio1-4", "!gpio1-4",      "Action: reads and sets the pins" },
 };

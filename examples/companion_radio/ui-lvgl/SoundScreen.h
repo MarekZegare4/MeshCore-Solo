@@ -210,6 +210,11 @@ uint16_t UITask::buzzerFreqHz() const {
 // An incoming message, advert or delivery tick: the sound its settings pick.
 void UITask::notify(UIEventType t) {
 #ifdef PIN_BUZZER
+  if (soundctl::buzzing(_buzzer)) {   // a bot !buzz plays on: this one's overrides dropped
+    _notif_dm_valid = false;
+    _notif_ch_idx = -1;
+    return;
+  }
   SoundNotifier sn(_buzzer, _prefs, _notif_mel_buf, sizeof(_notif_mel_buf));
   switch (t) {
     case UIEventType::contactMessage:

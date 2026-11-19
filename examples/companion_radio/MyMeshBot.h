@@ -395,7 +395,7 @@ bool MyMesh::botCommandReply(const char* cmd, const char* arg, const char* arg2,
       if (secs < 1) secs = 5;
       if (secs > 30) secs = 30;
       _bot_buzz_action_secs = secs;   // deferred -- see applyPendingBotActions()
-      snprintf(out, out_len, "Buzzing");
+      snprintf(out, out_len, "Buzzing %d s", secs);
       return true;
     }
     if (!strcmp(cmd, "advert")) {

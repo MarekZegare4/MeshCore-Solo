@@ -76,6 +76,7 @@ public:
   bool isViewingDM(const uint8_t* pub_key) override;
   void onViewedHistoryGrew(bool channel) override { (void)channel; _thread_dirty = true; }
   void botSetGPS(bool on) override;
+  void botBuzz(int seconds) override;
   void applySoundPrefs() override;
   void onSosRunning(bool running) override;
   int battPercent() override;

@@ -842,7 +842,10 @@ void UITask::showAlert(const char* text, int duration_millis) {
 
 void UITask::notify(UIEventType t) {
 #if defined(PIN_BUZZER)
-{
+if (soundctl::buzzing(buzzer)) {   // a bot !buzz plays on: this one's overrides dropped
+  _last_notif_dm_valid = false;
+  _last_notif_ch_idx = -1;
+} else {
   SoundNotifier sn(buzzer, _node_prefs, _notif_mel_buf, sizeof(_notif_mel_buf));
   switch(t){
   case UIEventType::contactMessage:
@@ -2330,20 +2333,14 @@ void UITask::botSetGPS(bool on) {
 // Bot !buzz [seconds] -- a find-me signal, so it deliberately uses
 // playForced() (bypasses the buzzer_quiet mute) rather than play(): a
 // find-me beep that respects mute defeats its own purpose. Builds a simple
-// repeating beep/rest RTTTL string sized to the requested duration into the
+// repeating beep/rest RTTTL string (soundctl::buzzMelody) into the
 // persistent _bot_buzz_buf -- the nRF52 RTTTL player keeps a raw pointer into
 // whatever buffer it's given and reads from it across loop() calls for the
 // whole playback (same constraint as _notif_mel_buf), so this can't be a
 // local/stack buffer.
 void UITask::botBuzz(int seconds) {
 #if defined(PIN_BUZZER)
-  if (seconds < 1) seconds = 5;
-  if (seconds > 30) seconds = 30;
-  int pairs = seconds * 2;   // b=120: an "8c,8p," pair is 250+250 = 500ms
-  int n = snprintf(_bot_buzz_buf, sizeof(_bot_buzz_buf), "Buzz:b=120:");
-  for (int i = 0; i < pairs && n < (int)sizeof(_bot_buzz_buf) - 7; i++)
-    n += snprintf(_bot_buzz_buf + n, sizeof(_bot_buzz_buf) - n, "8c,8p,");
-  buzzer.playForced(_bot_buzz_buf);
+  soundctl::botBuzz(buzzer, _bot_buzz_buf, sizeof(_bot_buzz_buf), seconds);
 #endif
 }
 
