@@ -912,6 +912,27 @@ static bool repeaterScopes(NodePrefs* p, const char* cmd, char* reply, int n) {
   return true;
 }
 
+// A key "keys" lists: one this board has.
+static bool listed(UiCore& core, const Key& k) {
+  return (k.offset == XKEY || row(k) >= 0) && hereKey(core, k);
+}
+
+// "opts" of key k (listed): "> page/SECTION|label|value|choice|choice...",
+// "on|off" for a switch.
+static void opts(NodePrefs* p, const Key& k, char* reply, int n) {
+  if (k.offset == XKEY) { xOpts(p, k.bit, reply, n); return; }
+  const settings::Setting& st = settings::ALL[row(k)];
+  char buf[24];
+  int o = snprintf(reply, n, "> %s/%s|%s|%s", settings::pageTitle(settings::sectionPage(st.section)),
+                   settings::sectionTitle(st.section), st.label, settings::text(*p, st, buf, sizeof(buf), "on", "off"));
+  if (!st.option) { snprintf(reply + o, n - o, "|on|off"); return; }
+  for (int v = 0; v < st.count && o < n - 1; v++) {
+    st.option((uint8_t)v, buf, sizeof(buf), *p);
+    if (o + 1 + (int)strlen(buf) >= n - 5) { snprintf(reply + o, n - o, "|..."); break; }   // room for "|..." too
+    o += snprintf(reply + o, n - o, "|%s", buf);
+  }
+}
+
 // True when the command was a settings one (reply set either way).
 static bool handle(UiCore& core, const char* cmd, char* reply, int n) {
   NodePrefs* p = core.prefs();
@@ -927,7 +948,7 @@ static bool handle(UiCore& core, const char* cmd, char* reply, int n) {
     bool more = false;
     reply[0] = 0;
     for (int k = 0; k < KEY_COUNT; k++) {
-      if ((KEYS[k].offset != XKEY && row(KEYS[k]) < 0) || !hereKey(core, KEYS[k])) continue;
+      if (!listed(core, KEYS[k])) continue;
       int len = (o ? 1 : 0) + (int)strlen(KEYS[k].key);   // as printed: a space before all but the first
       if (o + len > n - 20) {   // room left for " (more: keys N)"
         if (pg == page) { more = true; break; }
@@ -947,23 +968,24 @@ static bool handle(UiCore& core, const char* cmd, char* reply, int n) {
   if (!strncmp(cmd, "opts ", 5)) {
     for (int k = 0; k < KEY_COUNT; k++) {
       if (strcmp(KEYS[k].key, cmd + 5)) continue;
-      if (!hereKey(core, KEYS[k])) { snprintf(reply, n, "Error, not on this device"); return true; }
-      if (KEYS[k].offset == XKEY) { xOpts(p, KEYS[k].bit, reply, n); return true; }
-      int i = row(KEYS[k]);
-      if (i < 0) { snprintf(reply, n, "Error, not on this device"); return true; }
-      const settings::Setting& st = settings::ALL[i];
-      char buf[24];
-      int o = snprintf(reply, n, "> %s/%s|%s|%s", settings::pageTitle(settings::sectionPage(st.section)),
-                       settings::sectionTitle(st.section), st.label, settings::text(*p, st, buf, sizeof(buf), "on", "off"));
-      if (!st.option) { snprintf(reply + o, n - o, "|on|off"); return true; }
-      for (int v = 0; v < st.count && o < n - 1; v++) {
-        st.option((uint8_t)v, buf, sizeof(buf), *p);
-        if (o + 1 + (int)strlen(buf) >= n - 1) { snprintf(reply + o, n - o, "|..."); break; }
-        o += snprintf(reply + o, n - o, "|%s", buf);
-      }
+      if (!listed(core, KEYS[k])) { snprintf(reply, n, "Error, not on this device"); return true; }
+      opts(p, KEYS[k], reply, n);
       return true;
     }
     snprintf(reply, n, "Error, no key %s (see keys)", cmd + 5);
+    return true;
+  }
+  // "optsat <i>": key i of the table as "@key " and its opts, "-" when this
+  // board hasn't it; past the last, "No more keys". What "optsall"
+  // (MyMeshCli.h) streams, i from 0 up.
+  if (!strncmp(cmd, "optsat ", 7)) {
+    const int k = atoi(cmd + 7);
+    if (k < 0 || k >= KEY_COUNT) snprintf(reply, n, "No more keys");
+    else if (!listed(core, KEYS[k])) snprintf(reply, n, "-");
+    else {
+      int o = snprintf(reply, n, "@%s ", KEYS[k].key);
+      opts(p, KEYS[k], reply + o, n - o);
+    }
     return true;
   }
   bool set = !strncmp(cmd, "set ", 4);

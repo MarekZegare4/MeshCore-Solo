@@ -321,6 +321,44 @@ def opts(d, key):
     return {"where": f[0], "label": f[1], "value": f[2], "choices": [c for c in f[3:] if c != "..."]}
 
 
+@test("optsall")
+def t_optsall(d, out):
+    """"optsall" (2.4): every key's opts in one ask, the same as key by key."""
+    if not d.knows("optsat 0"):
+        raise Skip("no optsall in this firmware (before 2.4)")
+    t0 = time.time()
+    d.dev.send(bytes([config.CMD_RUN_CLI]) + b"optsall")   # untagged, as the configurator
+    got, vals, end = {}, {}, None
+    while end is None:
+        f = d.dev.read_frame()
+        check(f is not None, f"optsall stopped after {len(got)} keys")
+        if f[0] != config.RESP_CLI_REPLY:
+            continue
+        r = f[1:].decode(errors="replace")
+        k, _, rest = r.partition(" ")
+        if r.startswith("@"):
+            got[k[1:]] = rest
+        elif r.startswith("="):
+            vals[k[1:]] = rest
+        elif r.startswith("> end "):
+            end = int(r[6:])
+        else:
+            raise Fail(f"optsall: {r[:40]!r}")
+    ms = (time.time() - t0) * 1000
+    keys = config.list_keys(d.cli)
+    check(end == len(got), f"optsall: end says {end}, {len(got)} came")
+    check(list(got) == keys, f"optsall's keys aren't keys': {set(got) ^ set(keys)}")
+    for k in keys:
+        one = d.cli.run(f"opts {k}")
+        a, b = got[k].split("|"), one.split("|")
+        cut = a[-1] == "..."   # less room next to the key: fewer choices
+        check(a[:3] == b[:3] and (cut or a == b), f"{k}: optsall …{got[k][-40:]!r} ({len(got[k])} B), opts …{one[-40:]!r} ({len(one)} B)")
+        if a[2].startswith("#"):
+            check(k in vals, f"{k}: no value after it")
+            check("> " + vals[k] == d.cli.run(f"get {k}"), f"{k}: value {vals[k]!r} isn't get's")
+    return f"{len(got)} keys ({len(vals)} values) in {ms:.0f} ms"
+
+
 @test("settings")
 def t_settings(d, out):
     """Every setting set to another choice, read back and set back."""
@@ -333,8 +371,8 @@ def t_settings(d, out):
     try:
         for k in keys:
             o = opts(d, k)
-            if o is None:
-                continue   # not on this board
+            if o is None or o["value"].startswith("#"):
+                continue   # not on this board; a text, list or pick (2.4: no choice to flip)
             if k in SETTINGS_SKIP:
                 skipped.append(k)
                 continue

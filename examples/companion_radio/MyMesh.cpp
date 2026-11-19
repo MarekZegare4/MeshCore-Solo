@@ -2765,6 +2765,10 @@ void MyMesh::handleCmdFrame(size_t len) {
     char text[MAX_FRAME_SIZE + 1];
     memcpy(text, &cmd_frame[1], len - 1);
     text[len - 1] = 0;
+    if (!strcmp(text, "optsall") || (text[2] == '|' && !strcmp(text + 3, "optsall"))) {
+      cliStreamOpts(text[2] == '|' ? text : nullptr);   // many frames, not one
+      return;
+    }
     char* reply = (char*)&out_frame[1];
     const int n = MAX_FRAME_SIZE - 1;
     reply[0] = 0;

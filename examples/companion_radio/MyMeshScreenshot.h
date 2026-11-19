@@ -11,11 +11,12 @@ void MyMesh::handleScreenshotRequest() {
     // A colour UI renders the frame for it band by band (RGB565, display
     // type 2); the bands go out as they come, in the same frames
     // sendScreenshotResponse() would cut a whole buffer into.
-    struct Tx { MyMesh* m; int w, h; uint32_t total, done; uint16_t chunk, chunks; uint32_t fill; };
-    Tx tx = { this, 0, 0, 0, 0, 0, 0, 0 };
+    struct Tx { MyMesh* m; int w, h; uint32_t total, done; uint16_t chunk, chunks; uint32_t fill; bool cut; };
+    Tx tx = { this, 0, 0, 0, 0, 0, 0, 0, false };
     const bool ok = ui_task.captureBands(tx.w, tx.h, false, [](void* ctx, int y0, int rows, const uint16_t* px) {
         (void)y0;
         Tx& t = *(Tx*)ctx;
+        if (t.cut) return;   // a chunk didn't go: the host asks for the frame again
         const int HEADER_SIZE = 11;
         const uint32_t MAX_DATA = MAX_FRAME_SIZE - HEADER_SIZE;
         if (!t.total) {
@@ -37,7 +38,7 @@ void MyMesh::handleScreenshotRequest() {
                 o[5] = t.h & 0xFF; o[6] = t.h >> 8;
                 o[7] = t.chunk & 0xFF; o[8] = t.chunk >> 8;
                 o[9] = t.chunks & 0xFF; o[10] = t.chunks >> 8;
-                t.m->_serial->writeFrame(o, HEADER_SIZE + t.fill);
+                if (t.m->_serial->writeFrame(o, HEADER_SIZE + t.fill) < HEADER_SIZE + t.fill) { t.cut = true; return; }
                 t.chunk++;
                 t.fill = 0;
             }
@@ -103,7 +104,10 @@ void MyMesh::sendScreenshotResponse(uint8_t displayType, uint8_t rotation, uint1
         memcpy(&out_frame[i], buffer + offset, chunkSize);
         i += chunkSize;
 
-        _serial->writeFrame(out_frame, i);
+        // A chunk that didn't go (the host not reading: the write timed out)
+        // ends the frame -- the rest would each wait out the same timeout,
+        // the loop held up for seconds; the host asks for the frame again.
+        if (_serial->writeFrame(out_frame, i) < (size_t)i) break;
     }
 }
 #endif // ENABLE_SCREENSHOT

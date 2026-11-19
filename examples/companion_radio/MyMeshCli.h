@@ -337,3 +337,52 @@ bool MyMesh::cliRadioCommand(const char* command, char* reply, int n) {
   }
   return false;
 }
+
+// "optsall" (the configurator, Solo 2.4): every setting as "opts" gives it,
+// a frame each -- "@key > page/SECTION|label|value|choices" -- and after a
+// text's, list's or pick's ("#text", "#list", "#pick" as its value) its value
+// as "get" gives it: "=key value". Then "> end <keys>". The configurator's
+// whole Settings in one ask, not two hundred. A frame that doesn't go (the
+// host not reading) ends it with no "end": the host asks key by key. A tag
+// ("xx|optsall") comes back before each frame, as with any command.
+void MyMesh::cliStreamOpts(const char* tag) {
+  const int t = tag ? 3 : 0;
+  char* reply = (char*)&out_frame[1];
+  char* body = reply + t;   // after the tag
+  const int n = MAX_FRAME_SIZE - 1;
+  out_frame[0] = RESP_CODE_CLI_REPLY;
+  auto send = [&]() { return _serial->writeFrame(out_frame, 1 + strlen(reply)) > 0; };
+  char cmd[48];
+  int keys = 0;
+  for (int i = 0;; i++) {
+    snprintf(cmd, sizeof(cmd), "%.*soptsat %d", t, tag ? tag : "", i);
+    reply[0] = 0;
+    if (!handleCliCommand(cmd, reply, n)) {   // no settings keys here (no UI)
+      if (!i) { snprintf(body, n - t, "Unknown command"); send(); return; }
+      break;
+    }
+    if (body[0] == '-') continue;   // not on this board
+    if (body[0] != '@') break;      // "No more keys"
+    keys++;
+    // The key, and whether its value (the third field) is one "get" gives.
+    const char* sp = strchr(body, ' ');
+    if (!sp || sp - body - 1 >= 32) continue;
+    char key[32];
+    memcpy(key, body + 1, sp - body - 1);
+    key[sp - body - 1] = 0;
+    const char* v = strchr(sp, '|');
+    if (v) v = strchr(v + 1, '|');
+    const bool more = v && v[1] == '#';
+    if (!send()) return;
+    if (!more) continue;
+    snprintf(cmd, sizeof(cmd), "get %s", key);
+    int o = snprintf(body, n - t, "=%s ", key);
+    char* at = body + o;
+    at[0] = 0;
+    handleCliCommand(cmd, at, n - t - o);
+    if (at[0] == '>' && at[1] == ' ') memmove(at, at + 2, strlen(at + 2) + 1);
+    if (!send()) return;
+  }
+  snprintf(body, n - t, "> end %d", keys);
+  send();
+}

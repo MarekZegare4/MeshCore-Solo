@@ -240,8 +240,10 @@ Factory reset and the node's keys are not in the console.
 
 `opts <key>` shows where a setting is, its label, its value and every choice
 (`> Display & power/DISPLAY|Screen off after|30 s|Never|5 s|…`); the
-configurator builds its forms from it. And since Solo 2.3, what has no
-settings key:
+configurator builds its forms from it. `optsall` (Solo 2.4) sends that for
+every key at once, a reply each (`@key > …`, a text's value after it as
+`=key …`, then `> end <count>`): the configurator reads all the settings with
+it in one go. And since Solo 2.3, what has no settings key:
 
 | Command | Does |
 | --- | --- |

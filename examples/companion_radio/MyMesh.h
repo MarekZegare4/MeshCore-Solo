@@ -476,6 +476,8 @@ public:
 
   // Companion CLI (MyMeshCli.h): CMD_RUN_CLI_COMMAND's text in, the reply out.
   bool handleCliCommand(const char* command, char* reply, int n);
+  // "optsall" (MyMeshCli.h): every setting's opts, a frame each, straight out.
+  void cliStreamOpts(const char* tag);   // tag: "xx|" before each frame, or null
 
   // On-device "remote admin" (Tools > Admin): send a CLI command to a node
   // you're logged into with admin permission (see ClientACL::isAdmin()). The
