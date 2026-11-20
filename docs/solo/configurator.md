@@ -44,11 +44,11 @@ frame is, and sends nothing while the screen stays the same: a few frames
 a second while it changes. Anything else
 asked of the device goes first.
 
-Since Solo 2.4 the device can be used from it, as from its own keys: a
-joystick or buttons get a pad (and the keyboard's arrows, **Enter**, **Esc**;
-**Shift** or holding a button for a long press), one button gets its click,
-double, long and 2-second hold, and on the L2 you tap and drag on the screen
-itself. A locked screen stays locked: its PIN is asked as on the device.
+Since Solo 2.4 the device can be used from it with a pad of arrows, OK,
+Back, Home and Menu (and the keyboard's arrows, **Enter**, **Esc**; **Shift**
+or holding a button for a long press) -- a device with one button too: its
+screen works as with a CardKB while you do, and as before once its button
+is pressed again. On the L2 you tap and drag on the screen itself. A locked screen stays locked: its PIN is asked as on the device.
 
 ### Melodies
 

@@ -194,6 +194,7 @@ class UITask : public UITaskBase, public UiCoreHost {
   OneButton _one_btn;
   bool _ob_edit = false;   // a value row being edited: click +1, double -1, long done
   bool _ob_used = false;   // gestures came in (the sim; a one-button build always)
+  bool _remote_keys = false;   // "key" from the console since the button was last used (oneButtonUi())
   void oneButtonGesture(OneButton::Gesture g);
   void renderEditCue();
 
@@ -581,7 +582,9 @@ public:
   // (and all through the Back + 3x Enter sequence).
   // The UI is driven by one button: hints say "hold", "double-click".
   // Not with a CardKB plugged in: its arrows and Enter drive it, hints as for a joystick.
-  bool oneButtonUi() const { return (UI_ONE_BUTTON || _ob_used) && !hasCardKB(); }
+  // Keys from the console (the configurator's live view) make a one-button
+  // board's UI the keys' one, as a CardKB does, until its button is used.
+  bool oneButtonUi() const { return (UI_ONE_BUTTON || _ob_used) && !hasCardKB() && !_remote_keys; }
   bool oneButtonEditing() const { return _ob_edit; }
   bool hasKeyboard() const override { return !oneButtonUi(); }
   int frontValue(uint8_t k) override;   // Bluetooth, the sound's mode (SettingsCli)

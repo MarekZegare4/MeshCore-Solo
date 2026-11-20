@@ -2225,6 +2225,7 @@ char UITask::handleLongPress(char c) {
 void UITask::oneButtonGesture(OneButton::Gesture g) {
   if (g == OneButton::NONE) return;
   _ob_used = true;
+  if (_remote_keys) { _remote_keys = false; _next_refresh = 0; }   // the button again: its own UI
   if (g == OneButton::HOLD_SOS) { checkDisplayOn(0); onBackHeld(); return; }   // as Back held on a joystick board
   if (_locked && !_unlock_kb) {
     if (g == OneButton::VERY_LONG) {
@@ -2712,18 +2713,20 @@ bool UITask::cliCommand(const char* command, char* reply, int n) {
 // The device driven from the configurator's live view (or the console): the
 // same presses its own keys make, waking the screen as they do; a locked
 // screen stays locked, its PIN asked as on the device.
-//   input   "> keys" (a joystick or buttons) or "> button" (one button)
+//   input   "> keys": every board takes them -- a one-button board's UI turns
+//           into the keys' one with the first, as with a CardKB, and back when
+//           its button is used (oneButtonUi())
 //   key <up|down|left|right|enter|cancel|next|prev|select|home|menu> [long]
 //           a press of that key; "long" a held one (Enter held: the context menu)
 //   btn <click|double|long|hold>   the one button's gestures (a one-button UI
 //           only: on another, a gesture would turn it into one)
 bool UITask::remoteInput(const char* cmd, char* reply, int n) {
-  if (!strcmp(cmd, "input")) { snprintf(reply, n, "> %s", oneButtonUi() ? "button" : "keys"); return true; }
+  if (!strcmp(cmd, "input")) { snprintf(reply, n, "> keys"); return true; }
   if (!strncmp(cmd, "btn ", 4)) {
     static const struct { const char* name; OneButton::Gesture g; } G[] = {
       { "click", OneButton::CLICK }, { "double", OneButton::DOUBLE }, { "long", OneButton::LONG }, { "hold", OneButton::VERY_LONG },
     };
-    if (!oneButtonUi()) { snprintf(reply, n, "Error, not a one-button UI: key <name>"); return true; }
+    if (!(UI_ONE_BUTTON || _ob_used) || hasCardKB()) { snprintf(reply, n, "Error, not a one-button UI: key <name>"); return true; }   // keys sent before: back to its own
     for (const auto& e : G) {
       if (strcmp(cmd + 4, e.name)) continue;
       oneButtonGesture(e.g);
@@ -2746,6 +2749,7 @@ bool UITask::remoteInput(const char* cmd, char* reply, int n) {
     const bool hold = sp && !strcmp(sp + 1, "long");
     for (const auto& k : KEYS) {
       if ((int)strlen(k.name) != len || strncmp(k.name, a, len)) continue;
+      if (!_remote_keys && (UI_ONE_BUTTON || _ob_used)) { _remote_keys = true; _ob_edit = false; _next_refresh = 0; }
       enqueueKey(hold ? handleLongPress(k.key) : checkDisplayOn(k.key));
       snprintf(reply, n, "OK");
       return true;
