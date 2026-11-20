@@ -44,8 +44,17 @@ static const CurvePt BUILTIN[] = {
 };
 static const int BUILTIN_LEN = sizeof(BUILTIN) / sizeof(BUILTIN[0]);
 
+// A board can bring its own cell's curve instead (platformio.ini:
+// -D BATT_CURVE_DEFAULT=3400,3690,... -- 0, 10, ... 100 %, as the user's).
+#ifdef BATT_CURVE_DEFAULT
+static const uint16_t BOARD_CURVE[CURVE_PTS] = { BATT_CURVE_DEFAULT };
+#endif
+
 // The built-in curve's voltage at point i (i * 10 %): where the editor starts.
 inline int builtinMvAt(int i) {
+#ifdef BATT_CURVE_DEFAULT
+  return BOARD_CURVE[i];
+#endif
   const int pct = i * 10;
   if (pct <= BUILTIN[0].pct) return BUILTIN[0].mv;
   for (int k = 1; k < BUILTIN_LEN; k++)
@@ -64,6 +73,9 @@ inline int curveMvAt(int i) {
 // Voltage (mV) -> raw capacity (%) on the curve in use.
 inline int rawPercent(int v) {
   const uint16_t* c = curvePtr();
+#ifdef BATT_CURVE_DEFAULT
+  if (!validCurve(c)) c = BOARD_CURVE;
+#endif
   if (validCurve(c)) {
     if (v <= c[0]) return 0;
     if (v >= c[CURVE_PTS-1]) return 100;
