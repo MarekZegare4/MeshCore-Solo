@@ -557,6 +557,7 @@ private:
   void layoutNav();
   void refreshNavBar();
   void navFrameTarget();
+  void navFitView();
   void navSetTarget(uint8_t kind, const uint8_t* key, int32_t lat, int32_t lon, const char* name);
   lv_obj_t* navPopupPanel(const char* title, bool full, bool bottom = false);
   lv_obj_t* navTextEntry(const TextEntry& t);   // popup + one-line field + keyboard (NavMap.h)

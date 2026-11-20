@@ -1,6 +1,7 @@
 #pragma once
 // Included into UITask.cpp only (see the note on screen fragments there).
 // Home: the clock, favourites, status, Bluetooth ... pages, and the lock screen.
+#include "../ui-core/MapFrame.h"   // the mini map frames what the Trail map does
 
 // The time on a tall portrait panel (e-ink in portrait -- height > width): HH
 // and MM stacked on two lines in the splash's slanted lettering, as the wide
@@ -737,22 +738,29 @@ public:
       else { if (la < mnla) mnla = la; if (la > mxla) mxla = la;
              if (lo < mnlo) mnlo = lo; if (lo > mxlo) mxlo = lo; }
     };
+    // Framed as the Trail map is (its View, ui-core/MapFrame.h); what the
+    // view leaves out is drawn only where it falls inside.
     TrailStore& tr = _task->trail();
-    if (!tr.empty()) { int32_t a, b, c, d; tr.boundingBox(a, b, c, d); fold(a, b); fold(c, d); }
     LiveTrackStore& lt = _task->liveTrack();
     uint32_t now = rtc_clock.getCurrentTime();
-    for (int i = 0; i < LiveTrackStore::CAPACITY; i++)
+    WaypointStore& wp = _task->waypoints();
+    const NodePrefs* np = _task->getNodePrefs();
+    const mapframe::Fit f = mapframe::fit(np ? np->map_view : 0, !tr.empty(), wp.count() > 0, lt.active(now) > 0);
+    if (!tr.empty() && f.trail) { int32_t a, b, c, d; tr.boundingBox(a, b, c, d); fold(a, b); fold(c, d); }
+    for (int i = 0; f.people && i < LiveTrackStore::CAPACITY; i++)
       if (lt.isActive(i, now)) fold(lt.slotAt(i).lat_1e6, lt.slotAt(i).lon_1e6);
+    for (int i = 0; f.waypoints && i < wp.count(); i++) fold(wp.at(i).lat_1e6, wp.at(i).lon_1e6);
     int32_t mla, mlo;
     bool have_gps = _task->currentLocation(mla, mlo);
     if (have_gps) fold(mla, mlo);
+    else if (!tr.empty()) fold(tr.last().lat_1e6, tr.last().lon_1e6);
     int32_t tla, tlo;
     bool have_tgt = _task->activeTargetPos(tla, tlo);   // active Locator/Nav target
-    if (have_tgt) fold(tla, tlo);
+    if (have_tgt && f.target) fold(tla, tlo);
 #if FEAT_ROUTES
     const RouteGuide& guide = _task->core().guide;   // the route followed, whole, as on the Trail map
     const bool have_route = guide.active() && guide.overviewCount() > 0;
-    if (have_route) { const RouteInfo& ri = guide.info(); fold(ri.min_lat, ri.min_lon); fold(ri.max_lat, ri.max_lon); }
+    if (have_route && f.route) { const RouteInfo& ri = guide.info(); fold(ri.min_lat, ri.min_lon); fold(ri.max_lat, ri.max_lon); }
 #endif
     if (!init) return false;
 
@@ -763,15 +771,9 @@ public:
       miniIconDrawTop(display, ax + aw - ICON_MAP_NORTH.w * ns - 1, ay + 1, ICON_MAP_NORTH);
     }
 
-    int cx = ax + aw / 2, cy = ay + ah / 2;
-    // Degenerate: one coincident point — just centre the markers.
-    if (mnla == mxla && mnlo == mxlo) {
-      for (int i = 0; i < LiveTrackStore::CAPACITY; i++)
-        if (lt.isActive(i, now)) { miniIconDrawCentered(display, cx, cy, ICON_MAP_CONTACT); break; }
-      if (have_gps || !tr.empty()) miniIconDrawCentered(display, cx, cy, ICON_MAP_CURRENT);
-      if (have_tgt) miniIconDrawCentered(display, cx, cy, ICON_MAP_TARGET);   // highlight on top
-      return true;
-    }
+    // At least ~200 m across (as the Nodes map): you alone, or all in one spot.
+    if (mxla - mnla < 2000) { const int32_t c = (mnla + mxla) / 2; mnla = c - 1000; mxla = c + 1000; }
+    if (mxlo - mnlo < 2000) { const int32_t c = (mnlo + mxlo) / 2; mnlo = c - 1000; mxlo = c + 1000; }
     float avg_lat_rad = ((mnla + mxla) / 2.0e6f) * (float)M_PI / 180.0f;
     float lon_scale = cosf(avg_lat_rad); if (lon_scale < 0.05f) lon_scale = 0.05f;
     float lat_span = (float)(mxla - mnla);
@@ -787,21 +789,28 @@ public:
       px = off_x + (int)((float)(lo - mnlo) * lon_scale * scale);
       py = off_y + (int)((float)(mxla - la) * scale);
     };
+    const int clip[4] = { ax, ay, aw, ah };
+    auto inside = [&](int x, int y) { return x >= ax && y >= ay && x < ax + aw && y < ay + ah; };
     // Trail as a connected line, matching the full Trail map (shared helper —
     // see gfx::drawTrail); no break marker here, just a silent gap.
 #if FEAT_ROUTES
     int ex, ey;   // dashed under the trail; its end marked
-    if (have_route && gfx::drawRoute(display, guide, project, ex, ey)) miniIconDrawCentered(display, ex, ey, ICON_MAP_TARGET);
+    if (have_route && gfx::drawRoute(display, guide, project, ex, ey, clip) && inside(ex, ey)) miniIconDrawCentered(display, ex, ey, ICON_MAP_TARGET);
 #endif
-    gfx::drawTrail(display, tr, project, [](int, int, int, int) {});
+    gfx::drawTrail(display, tr, project, [](int, int, int, int) {}, clip);
+    for (int i = 0; f.waypoints && i < wp.count(); i++) {
+      int px, py; project(wp.at(i).lat_1e6, wp.at(i).lon_1e6, px, py);
+      if (inside(px, py)) miniIconDrawCentered(display, px, py, ICON_MAP_WAYPOINT);
+    }
     for (int i = 0; i < LiveTrackStore::CAPACITY; i++) {
       if (!lt.isActive(i, now)) continue;
       int px, py; project(lt.slotAt(i).lat_1e6, lt.slotAt(i).lon_1e6, px, py);
-      miniIconDrawCentered(display, px, py, ICON_MAP_CONTACT);
+      if (inside(px, py)) miniIconDrawCentered(display, px, py, ICON_MAP_CONTACT);
     }
     if (have_gps) { int px, py; project(mla, mlo, px, py); miniIconDrawCentered(display, px, py, ICON_MAP_CURRENT); }
+    else if (!tr.empty()) { int px, py; project(tr.last().lat_1e6, tr.last().lon_1e6, px, py); miniIconDrawCentered(display, px, py, ICON_MAP_CURRENT); }
     // Active target flag drawn last so it stays legible even atop a contact/own dot.
-    if (have_tgt) { int px, py; project(tla, tlo, px, py); miniIconDrawCentered(display, px, py, ICON_MAP_TARGET); }
+    if (have_tgt) { int px, py; project(tla, tlo, px, py); if (inside(px, py)) miniIconDrawCentered(display, px, py, ICON_MAP_TARGET); }
 
     // Bottom-left scale reference, always shown — distance to the active
     // target (or else the nearest live-tracked contact) now lives on the

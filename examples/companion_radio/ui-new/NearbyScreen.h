@@ -2,6 +2,7 @@
 #include "InfoKit.h"
 #include "../Features.h"
 #include "../GeoUtils.h"
+#include "../ui-core/MapFrame.h"   // the map's Manual scales
 #include "NavView.h"
 #include "TabBar.h"
 
@@ -347,7 +348,10 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
   // change being a refresh
   static const uint32_t FLOW_HERE_MS = Features::IS_EINK ? 15000 : 3000;
   uint32_t _flow_seen = 0;
-  int     _map_zoom = 0;    // 0: all of them in view; each step halves it, on the selected
+  // Map: a Manual scale (ui-core/MapFrame.h), Up / Down, centred on the
+  // selected node; -1: all of them fitted in.
+  int8_t  _map_scale = -1;
+  float   _map_fit_m = 0;   // the fitted map's width, in metres: where Up / Down step from
   navview::EtaTracker _nav_eta;  // closing-speed/ETA for the navigate view
   unsigned long _detail_refresh_ms;
   unsigned long _list_refresh_ms = 0;
@@ -814,7 +818,7 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
       case ACT_FLOW:     break;
       case ACT_SCAN:     enterScan();            break;
       case ACT_MAP: {
-        _map = true; _map_zoom = 0;
+        _map = true; _map_scale = -1;
         _detail_refresh_ms = millis();
         const Entry* e = selected();
         if (!e || (e->lat_e6 == 0 && e->lon_e6 == 0)) { int k = positioned(_sel, 1); if (k >= 0) _sel = k; }
@@ -990,7 +994,11 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
     const float fw = (float)(aw - 2 * mx), fh = (float)(ah - 2 * my);
     float scale = fh / span_la < fw / span_lo ? fh / span_la : fw / span_lo;
     float cla = (mnla + mxla) / 2.0f, clo = (mnlo + mxlo) / 2.0f;
-    if (_map_zoom > 0) { scale *= (float)(1 << _map_zoom); cla = sel.lat_e6; clo = sel.lon_e6; }
+    _map_fit_m = (float)aw * 0.11132f / scale;
+    if (_map_scale >= 0) {   // that many metres across the map, on the selected
+      scale = (float)aw * 0.11132f / mapframe::scaleM(_map_scale, _task->useImperial());
+      cla = sel.lat_e6; clo = sel.lon_e6;
+    }
     auto projectF = [&](int32_t la, int32_t lo, float& x, float& y) {   // unrounded, for far ends
       x = ax + aw / 2 + ((float)lo - clo) * kx * scale;
       y = ay + ah / 2 - ((float)la - cla) * scale;
@@ -1547,7 +1555,7 @@ public:
     if (i < 0) return false;
     _sel = i;
     _detail = false;   // the map is drawn from the list
-    _map = true; _map_zoom = 0;
+    _map = true; _map_scale = -1;
     _detail_refresh_ms = millis();
     return true;
   }
@@ -1635,8 +1643,12 @@ public:
       if (_count == 0) return true;
       if (keyIsPrev(c)) { int k = positioned(_sel - 1, -1); if (k >= 0) _sel = k; return true; }
       if (keyIsNext(c)) { int k = positioned(_sel + 1, 1);  if (k >= 0) _sel = k; return true; }
-      if (c == KEY_UP)   { if (_map_zoom < 8) _map_zoom++; return true; }
-      if (c == KEY_DOWN) { if (_map_zoom > 0) _map_zoom--; return true; }
+      if (c == KEY_UP || c == KEY_DOWN) {   // the Manual scales, as on the Trail map; past the widest, all fitted
+        const bool in = c == KEY_UP, imp = _task->useImperial();
+        if (_map_scale >= 0) _map_scale = (int8_t)(in ? mapframe::zoomIn(_map_scale) : mapframe::zoomOut(_map_scale));
+        else _map_scale = (int8_t)(in ? mapframe::zoomInFrom(_map_fit_m, imp) : mapframe::zoomOutFrom(_map_fit_m, imp));
+        return true;
+      }
       if (c == KEY_ENTER) { _detail = true; _detail_refresh_ms = millis(); return true; }
       return true;
     }

@@ -708,6 +708,36 @@ void UITask::navFrameTarget() {
   layoutMap();
 }
 
+// The map fitted to what Map tools > View takes in (ui-core/MapFrame.h), as
+// the L1's Trail map always is; no longer following you.
+void UITask::navFitView() {
+  const TrailStore& ts = _core->trail.store();
+  const WaypointModel& wp = _core->waypoints;
+  const LiveTrackStore& lt = _core->live_share.track();
+  const uint32_t now = rtc_clock.getCurrentTime();
+  const mapframe::Fit f = mapframe::fit(_prefs ? _prefs->map_view : 0, !ts.empty(), wp.count() > 0, lt.active(now) > 0);
+  bool any = false;
+  int32_t la0 = 0, la1 = 0, lo0 = 0, lo1 = 0;
+  auto fold = [&](int32_t la, int32_t lo) {
+    if (!any) { la0 = la1 = la; lo0 = lo1 = lo; any = true; return; }
+    la0 = min(la0, la); la1 = max(la1, la); lo0 = min(lo0, lo); lo1 = max(lo1, lo);
+  };
+  if (f.trail && !ts.empty()) { int32_t a, b, c, d; ts.boundingBox(a, b, c, d); fold(a, b); fold(c, d); }
+  for (int i = 0; f.waypoints && i < wp.count(); i++) fold(wp.at(i).lat_1e6, wp.at(i).lon_1e6);
+  for (int i = 0; f.people && i < LiveTrackStore::CAPACITY; i++)
+    if (lt.isActive(i, now)) fold(lt.slotAt(i).lat_1e6, lt.slotAt(i).lon_1e6);
+  if (f.route && _core->guide.slot() >= 0) { const RouteInfo& ri = _core->guide.info(); fold(ri.min_lat, ri.min_lon); fold(ri.max_lat, ri.max_lon); }
+  int32_t la, lo;
+  if (f.target && _core->locator.activeTargetPos(la, lo)) fold(la, lo);
+  if (_core->course.currentLocation(la, lo)) fold(la, lo);
+  else if (!ts.empty()) fold(ts.last().lat_1e6, ts.last().lon_1e6);
+  if (!any) { showToast("Nothing to show yet"); return; }
+  // At least ~200 m across: you alone, or all in one spot.
+  if (la1 - la0 < 2000) { const int32_t c = (la0 + la1) / 2; la0 = c - 1000; la1 = c + 1000; }
+  if (lo1 - lo0 < 2000) { const int32_t c = (lo0 + lo1) / 2; lo0 = c - 1000; lo1 = c + 1000; }
+  mapFit(la0, la1, lo0, lo1);
+}
+
 // Frame the whole trail (after loading one).
 void UITask::navFrameTrail() {
   const TrailStore& ts = _core->trail.store();
@@ -1050,6 +1080,7 @@ enum : uint8_t { TL_TRAIL_TOGGLE, TL_TRAIL_SAVE, TL_TRAIL_LOAD, TL_TRAIL_RESET, 
                  TL_ST_LOAD, TL_ST_GPX, TL_ST_DELETE, TL_ST_PROF,
                  TL_OPT_TRAIL, TL_OPT_SHARE, TL_OPT_ALERT };
 static const uint8_t TL_ROUTE_BASE = 100;   // RouteMap.h's actions from here: Routes, Stop
+static const uint8_t TL_VIEW_BASE = 90;     // Map tools > View: All, Trail, People, Waypoints (ui-core/MapFrame.h)
 
 // Live-share targets offered in the dropdown: channels, then favourite contacts.
 static const int SHARE_TARGETS = MAX_GROUP_CHANNELS + 16;
@@ -1218,6 +1249,13 @@ void UITask::navToolsPopup(bool back) {
   snprintf(vr, sizeof(vr), nv ? "%d on the card" : "None - packs go in /vmap", nv);
   listRow(g, "Vector regions", vr, onNavTool, (void*)(uintptr_t)navmap::TL_REGIONS);
 #endif
+
+  // What to fit the map to (the L1's Trail map fits to it all the time); kept
+  // as the setting map.view.
+  sectionTitle(list, "VIEW");
+  r = buttonBar(list);
+  for (int v = 0; v < mapframe::VIEW_COUNT; v++)
+    toolButton(r, mapframe::viewName(v), (uint8_t)(navmap::TL_VIEW_BASE + v), _prefs && _prefs->map_view == v);
 
   sectionTitle(list, "LIVE SHARE");
   _nav_share_lbl = noteLabel(list, "", THEME_FONT_SMALL, theme::TEXT);
@@ -1542,6 +1580,15 @@ void UITask::savedTrailAction(uint8_t act) {
 void UITask::navToolAction(uint8_t act) {
   crashlog::note("tool %u", (unsigned)act);
   if (act >= navmap::TL_ROUTE_BASE) { routeAction(act); return; }
+  if (act >= navmap::TL_VIEW_BASE && act < navmap::TL_VIEW_BASE + mapframe::VIEW_COUNT) {
+    if (_prefs && _prefs->map_view != act - navmap::TL_VIEW_BASE) {
+      _prefs->map_view = (uint8_t)(act - navmap::TL_VIEW_BASE);
+      prefsSave();
+    }
+    navClosePopup();
+    navFitView();
+    return;
+  }
   TrailEngine& tr = _core->trail;
   switch (act) {
     case navmap::TL_TRAIL_TOGGLE:

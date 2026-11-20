@@ -39,7 +39,8 @@ line may skip a hop. Nodes are dots
 (a diamond for a live share); the selected one is boxed, and the line under
 the map gives its name and distance, with **+n** when others sit on the same
 spot. **Left / Right** selects the next node, **Up / Down** zooms in on it and
-back out, **Enter** opens its details and **Hold Enter** its options.
+back out in the trail map's steps (zooming out past the widest fits them all
+again), **Enter** opens its details and **Hold Enter** its options.
 
 On e-ink the map also writes the nodes' names beside their dots (where they
 don't cover each other) and draws your trail, dotted, and your waypoints. On

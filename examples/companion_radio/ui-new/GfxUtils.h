@@ -91,15 +91,22 @@ static inline void drawCircleClipped(DisplayDriver& d, int cx, int cy, int r, in
 // break. `project(lat, lon, x, y)` fills the screen coords for one point;
 // `on_break(x_prev_end, y_prev_end, x_new_start, y_new_start)` runs at each
 // break instead of drawLine() — pass a no-op lambda for a silent gap.
+// `clip` (x, y, w, h), when given: only the lines' parts inside it (a map at a
+// fixed scale, the trail running off it).
+static inline void clipLine(DisplayDriver& d, int x0, int y0, int x1, int y1, const int* clip, Dash dash = DASH_SOLID) {
+  if (clip) drawLineClipped(d, (float)x0, (float)y0, (float)x1, (float)y1, clip[0], clip[1], clip[2], clip[3], dash);
+  else      drawLine(d, x0, y0, x1, y1, dash);
+}
+
 template <typename Project, typename OnBreak>
-static void drawTrail(DisplayDriver& d, TrailStore& tr, Project project, OnBreak on_break) {
+static void drawTrail(DisplayDriver& d, TrailStore& tr, Project project, OnBreak on_break, const int* clip = nullptr) {
   if (tr.count() == 0) return;
   int x0, y0; project(tr.at(0).lat_1e6, tr.at(0).lon_1e6, x0, y0);
   for (int i = 1; i < tr.count(); i++) {
     const TrailPoint& pt = tr.at(i);
     int x1, y1; project(pt.lat_1e6, pt.lon_1e6, x1, y1);
     if (pt.flags & TRAIL_FLAG_SEG_START) on_break(x0, y0, x1, y1);
-    else                                  drawLine(d, x0, y0, x1, y1);
+    else                                  clipLine(d, x0, y0, x1, y1, clip);
     x0 = x1; y0 = y1;
   }
   // The simplifier's pending point: the straight stretch walked since the
@@ -107,7 +114,7 @@ static void drawTrail(DisplayDriver& d, TrailStore& tr, Project project, OnBreak
   TrailPoint pend;
   if (tr.pendingPoint(pend)) {
     int x1, y1; project(pend.lat_1e6, pend.lon_1e6, x1, y1);
-    drawLine(d, x0, y0, x1, y1);
+    clipLine(d, x0, y0, x1, y1, clip);
   }
 }
 
@@ -116,7 +123,7 @@ static void drawTrail(DisplayDriver& d, TrailStore& tr, Project project, OnBreak
 // map and Home's mini-map; `ex, ey` get its end in the direction followed, for
 // the caller's marker. False with nothing to draw.
 template <typename Guide, typename Project>
-static bool drawRoute(DisplayDriver& d, const Guide& g, Project project, int& ex, int& ey) {
+static bool drawRoute(DisplayDriver& d, const Guide& g, Project project, int& ex, int& ey, const int* clip = nullptr) {
   const int n = g.overviewCount();
   if (n <= 0) return false;
   const Dash dash = { 0x3, 4 };
@@ -126,7 +133,7 @@ static bool drawRoute(DisplayDriver& d, const Guide& g, Project project, int& ex
     g.overviewPoint(i, la, lo);
     int x, y;
     project(la, lo, x, y);
-    if (i > 0) drawLine(d, px, py, x, y, dash);
+    if (i > 0) clipLine(d, px, py, x, y, clip, dash);
     px = x; py = y;
   }
   int32_t la, lo;

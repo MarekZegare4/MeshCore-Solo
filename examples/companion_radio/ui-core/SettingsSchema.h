@@ -19,6 +19,7 @@
 #include "../Trail.h"
 #include "SoundControl.h"
 #include "Telemetry.h"   // the dashboard's fields
+#include "MapFrame.h"    // Map view
 #include <helpers/sensors/LocationProvider.h>   // Time from GPS
 
 namespace settings {
@@ -198,6 +199,7 @@ static void optChSort(uint8_t v, char* b, int n, const NodePrefs&) {
   static const char* L[NodePrefs::CH_SORT_COUNT] = { "Slots", "Newest", "Name" };
   snprintf(b, n, "%s", L[v < NodePrefs::CH_SORT_COUNT ? v : 0]);
 }
+static void optMapView(uint8_t v, char* b, int n, const NodePrefs&) { snprintf(b, n, "%s", mapframe::viewName(v)); }
 static void optVolume(uint8_t v, char* b, int n, const NodePrefs&) {
   static const char* L[5] = { "Quietest", "Quiet", "Medium", "Loud", "Loudest" };
   snprintf(b, n, "%s", L[v < 5 ? v : 4]);
@@ -378,6 +380,7 @@ static const Setting ALL[] = {
       NodePrefs::LOCATOR_MODE_COUNT, optLocMode, rearmLocator),
   SW("Proximity beeper", "Ticks faster when closer", SEC_LOCATOR, locator_beeper, nullptr),
 
+  IDX("Map view", "What the map fits in", SEC_MAP_VIEW, map_view, mapframe::VIEW_COUNT, optMapView, nullptr),
   SW("Packet flow", "What the radio hears, node to node", SEC_MAP_VIEW, flow_show, nullptr),
 
   MAP("Auto-advert", "Your advert, on a timer", SEC_ADVERT, advert_auto_interval_sec, AUTO_ADVERT,

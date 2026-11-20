@@ -13,6 +13,18 @@ switches between the **Summary** (distance, time, speed or pace), the **Map**
 (your route, waypoints, people sharing their position, the target) and the
 point **List**.
 
+The map fits itself to its **View** (in the trail menu on the map, kept
+through a reboot): **All** (the trail, waypoints, people sharing, the route
+followed, the target, you), **Trail** (the trail and the route followed),
+**People** (the people sharing and the target) or **Waypoints** (the
+waypoints and the target); you are always in. A view with nothing of its own
+(People with nobody sharing) shows All. What's left out and off the map sits
+on its edge. **Up / Down** zooms in and out in fixed steps (100 m to 50 km
+across), centred on you; zooming out past the widest goes back to the view,
+as does View in the menu. The scale is in the bottom left corner, the view
+(when it isn't All) in the bottom right. On a one-button board the menu has
+**Zoom in / Zoom out** instead.
+
 **Hold Enter** for the trail menu: start / stop, mark a waypoint, the waypoint
 list, **Track back** (back along the trail to where it started, guided as a
 [planned route](#planned-routes) is: on any screen, with Off route), share
@@ -161,11 +173,14 @@ trail, people sharing their position and the target) and four lines beside
 it: GPS, the trail's distance, live shares, and the distance to the target
 (or the waypoint count when there is none). Following a route or Track back,
 the route is drawn and the last line is how much of it is left.
-**Enter** opens the trail map; **hold Enter** shares your position.
+It is framed by the trail map's View. **Enter** opens the trail map;
+**hold Enter** shares your position.
 
 > [!NOTE]
 > **Wio Tracker L2:** a real map with offline tiles on the SD card. Drag to
-> pan, +/− to zoom, the crosshair follows your GPS again.
+> pan, +/− to zoom, the crosshair follows your GPS again. **Map tools ›
+> View** (All, Trail, People, Waypoints, as above) fits the map to that and
+> keeps it as the trail map's view.
 >
 > - **Download**: frame an area on the map and download its tiles over WiFi.
 >   Downloaded areas can be renamed, refreshed or deleted.

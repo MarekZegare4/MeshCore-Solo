@@ -8,6 +8,7 @@
 #include "InfoKit.h"
 #include "../Trail.h"
 #include "../ui-core/TrailProfile.h"
+#include "../ui-core/MapFrame.h"   // what the map fits in, its Manual scales
 #include "../GeoUtils.h"
 #include "GfxUtils.h"
 #include "icons.h"     // scalable mini-icons (map markers, north arrow, grid dots)
@@ -65,6 +66,11 @@ class TrailScreen : public UIScreen {
   bool    _cfg_dirty      = false;
   bool    _map_grid       = true;   // show scale grid in map view (Enter to toggle)
   bool    _return_home    = false;  // entered via Home "Map" page → KEY_CANCEL returns to Home
+  // Map: a Manual scale (ui-core/MapFrame.h), Up / Down; -1 = fitted to the
+  // view in NodePrefs::map_view. Forgotten on leaving the screen.
+  int8_t  _map_scale      = -1;
+  float   _fit_width_m    = 0;      // the map's width last drawn, in metres
+  static constexpr float M_PER_1E6 = 0.11132f;   // metres per 1e-6 deg lat
 
   // Waypoint management UI (list / nav / add / mark / rename / delete / send)
   // lives in its own component; TrailScreen delegates to it while it's active.
@@ -79,7 +85,7 @@ class TrailScreen : public UIScreen {
   // the labels live in member buffers that get refreshed in openActionMenu()
   // and after every LEFT/RIGHT cycle.
   enum ActionId { ACT_MIN_DIST, ACT_UNITS, ACT_GRID, ACT_AUTOPAUSE, ACT_MARK_AVG, ACT_AUTOSAVE, ACT_TOGGLE, ACT_SAVE, ACT_LOAD, ACT_RESET, ACT_EXPORT, ACT_EXPORT_SAVED, ACT_MARK, ACT_WAYPOINTS, ACT_FILE, ACT_SETTINGS,
-                 ACT_SHARE_NOW, ACT_TRACKBACK, ACT_ROUTES, ACT_ROUTE_GUIDE };
+                 ACT_SHARE_NOW, ACT_TRACKBACK, ACT_ROUTES, ACT_ROUTE_GUIDE, ACT_VIEW, ACT_ZOOM_IN, ACT_ZOOM_OUT };
   // The action popup is multi-level: a short main menu, plus "Trail file…" and
   // "Settings…" submenus. _menu_level tracks which is open so input is routed
   // correctly (settings rows cycle with LEFT/RIGHT; everything else is Enter).
@@ -93,6 +99,7 @@ class TrailScreen : public UIScreen {
   char      _act_min_dist_label[24];
   char      _act_units_label[24];
   char      _act_grid_label[16];
+  char      _act_view_label[20];
   char      _act_autopause_label[24];
   char      _act_mark_avg_label[24];
   char      _act_autosave_label[24];
@@ -124,7 +131,7 @@ public:
   // Switch straight into the Map view (used by the Home "Map" page). Layered on
   // top of onShow()'s reset by gotoMapScreen(); remembers we came from Home so
   // KEY_CANCEL returns there, not to Tools.
-  void showMapView() { _view = V_MAP; _return_home = true; }
+  void showMapView() { _view = V_MAP; _return_home = true; _map_scale = -1; }
 
   // Forwarded to UITask's GPS duty-cycle hold — see WaypointsView::needsLiveGps().
   bool wpNeedsLiveGps() const { return _wp.needsLiveGps(); }
@@ -243,6 +250,7 @@ public:
           case ACT_MIN_DIST:
           case ACT_UNITS:
           case ACT_GRID:
+          case ACT_VIEW:
           case ACT_MARK_AVG:
           case ACT_AUTOSAVE:
           case ACT_AUTOPAUSE: return true;
@@ -261,6 +269,8 @@ public:
             handleToggle();
             break;
           case ACT_MARK:          _wp.markHere();      break;
+          case ACT_ZOOM_IN:       mapZoom(true);       break;
+          case ACT_ZOOM_OUT:      mapZoom(false);      break;
           case ACT_WAYPOINTS:     _wp.openList();      break;
 #if FEAT_ROUTES
           case ACT_TRACKBACK:
@@ -292,6 +302,7 @@ public:
     }
 
     if (c == KEY_CANCEL) {
+      _map_scale = -1;
       _task->savePrefsIfDirty(_cfg_dirty);
       if (_return_home) _task->gotoHomeScreen();
       else              _task->leaveTool();
@@ -309,6 +320,7 @@ public:
       _summary_scroll = (_summary_scroll < _summary_max_scroll) ? _summary_scroll + 1 : 0;
       return true;
     }
+    if (_view == V_MAP && (c == KEY_UP || c == KEY_DOWN)) { mapZoom(c == KEY_UP); return true; }
     if (_view == V_LIST && c == KEY_UP) {
       _list_scroll = (_list_scroll > 0) ? _list_scroll - 1 : _list_max_scroll;
       return true;
@@ -396,6 +408,8 @@ private:
               "Readout: %s",  (p && p->trail_show_pace) ? "Pace" : "Speed");
     snprintf(_act_grid_label,   sizeof(_act_grid_label),
               "Grid: %s",      _map_grid ? "ON" : "OFF");
+    snprintf(_act_view_label,   sizeof(_act_view_label),
+              "View: %s",      _map_scale >= 0 ? "Manual" : mapframe::viewName(p ? p->map_view : 0));
     snprintf(_act_autopause_label, sizeof(_act_autopause_label),
               "Auto-pause: %s", NodePrefs::trailAutoPauseLabel(p ? p->trail_autopause_idx : 0));
     snprintf(_act_mark_avg_label, sizeof(_act_mark_avg_label),
@@ -440,6 +454,10 @@ private:
     const bool tb = false;
 #endif
     pushAction(ACT_TOGGLE,    _act_toggle_label);
+    if (_view == V_MAP) {   // what it fits in; one button has no Up / Down for the scale
+      pushSetting(ACT_VIEW, _act_view_label);
+      if (_task->oneButtonUi()) { pushAction(ACT_ZOOM_IN, "Zoom in"); pushAction(ACT_ZOOM_OUT, "Zoom out"); }
+    }
     pushAction(ACT_MARK,      "Mark here");
     // "Waypoints" opens the nav list — always available; it hosts the list,
     // backtrack (Trail-start row) and the "+ Add by coords" entry.
@@ -510,6 +528,12 @@ private:
     if (act == ACT_MIN_DIST && p) { cycleMinDelta(p, dir); _cfg_dirty = true; refreshActionLabels(); return true; }
     if (act == ACT_UNITS    && p) { cycleUnits(p, dir);    _cfg_dirty = true; refreshActionLabels(); return true; }
     if (act == ACT_GRID)          { _map_grid = !_map_grid;                    refreshActionLabels(); return true; }
+    if (act == ACT_VIEW && p) {
+      if (_map_scale >= 0) _map_scale = -1;   // Manual: back to the view
+      else { p->map_view = (uint8_t)((p->map_view + mapframe::VIEW_COUNT + dir) % mapframe::VIEW_COUNT); _cfg_dirty = true; }
+      refreshActionLabels();
+      return true;
+    }
     if (act == ACT_AUTOPAUSE && p){ cycleAutoPause(p, dir); _cfg_dirty = true; refreshActionLabels(); return true; }
     if (act == ACT_MARK_AVG  && p){ cycleMarkAvg(p, dir);   _cfg_dirty = true; refreshActionLabels(); return true; }
     if (act == ACT_AUTOSAVE  && p){ p->trail_autosave_lowbatt = !p->trail_autosave_lowbatt; _cfg_dirty = true; refreshActionLabels(); return true; }
@@ -517,6 +541,17 @@ private:
   }
 
   static bool savedTrailExists() { return TrailEngine::savedExists(); }
+
+  // Up / Down on the map (or Zoom in / out): the next Manual scale, starting
+  // from the one nearest the fitted map; Down past the widest fits it again.
+  void mapZoom(bool in) {
+    const bool imp = useImperial();
+    if (_map_scale >= 0) _map_scale = (int8_t)(in ? mapframe::zoomIn(_map_scale) : mapframe::zoomOut(_map_scale));
+    else if (_fit_width_m > 0) _map_scale = (int8_t)(in ? mapframe::zoomInFrom(_fit_width_m, imp) : mapframe::zoomOutFrom(_fit_width_m, imp));
+    else if (in) _map_scale = 2;
+    // The scale shows bottom left; a fitted map again says to what.
+    if (_map_scale < 0) _task->showAlert(mapframe::viewName(_task->getNodePrefs() ? _task->getNodePrefs()->map_view : 0), 600);
+  }
 
   // GPS / unit helpers shared by the trail views and the map. (Waypoint list /
   // navigation / add / mark / rename / delete / send moved to WaypointsView.)
@@ -746,12 +781,16 @@ private:
     }
   };
 
-  // Fold the trail / waypoints / live position into a bounding box. With a trail,
-  // only the route + live position define the box (far waypoints clamp to the
-  // edge when drawn); without one, the waypoints do. Returns false if empty.
+  // Fold what the map's view takes in (ui-core/MapFrame.h: the trail, the
+  // waypoints, people sharing, the route, the target; you always) into a
+  // bounding box. What's left out and off the frame is clamped to its edge
+  // when drawn. Returns false if empty.
   bool computeBounds(bool have_trail, bool have_gps, int32_t my_lat, int32_t my_lon,
                      int32_t& min_lat, int32_t& min_lon,
                      int32_t& max_lat, int32_t& max_lon) const {
+    const NodePrefs* np = _task->getNodePrefs();
+    const mapframe::Fit f = mapframe::fit(np ? np->map_view : 0, have_trail, _task->waypoints().count() > 0,
+                                          _task->liveTrack().active(rtc_clock.getCurrentTime()) > 0);
     bool init = false;
     auto fold = [&](int32_t lat, int32_t lon) {
       if (!init) { min_lat = max_lat = lat; min_lon = max_lon = lon; init = true; }
@@ -760,29 +799,31 @@ private:
         if (lon < min_lon) min_lon = lon;  if (lon > max_lon) max_lon = lon;
       }
     };
-    if (have_trail) {
+    if (have_trail && f.trail) {
       int32_t a, b, c, d; _store->boundingBox(a, b, c, d);
       fold(a, b); fold(c, d);
-    } else {
+    }
+    if (f.waypoints) {
       WaypointStore& wp = _task->waypoints();
       for (int i = 0; i < wp.count(); i++) fold(wp.at(i).lat_1e6, wp.at(i).lon_1e6);
     }
     if (have_gps) fold(my_lat, my_lon);
-    // Fold in live-tracked contacts ([LOC] shares) so they stay in frame.
-    {
+    else if (have_trail) fold(_store->last().lat_1e6, _store->last().lon_1e6);   // where you were last
+    // Live-tracked contacts ([LOC] shares).
+    if (f.people) {
       LiveTrackStore& lt = _task->liveTrack();
       uint32_t now = rtc_clock.getCurrentTime();
       for (int i = 0; i < LiveTrackStore::CAPACITY; i++)
         if (lt.isActive(i, now)) fold(lt.slotAt(i).lat_1e6, lt.slotAt(i).lon_1e6);
     }
 #if FEAT_ROUTES
-    if (_task->core().guide.slot() >= 0) {   // the route followed, whole
+    if (f.route && _task->core().guide.slot() >= 0) {   // the route followed, whole
       const RouteInfo& ri = _task->core().guide.info();
       fold(ri.min_lat, ri.min_lon); fold(ri.max_lat, ri.max_lon);
     }
 #endif
-    // Fold in the active target too, so a destination you set never sits off-frame.
-    { int32_t tla, tlo; if (_task->activeTargetPos(tla, tlo)) fold(tla, tlo); }
+    // The active target, so a destination you set doesn't sit off-frame.
+    if (f.target) { int32_t tla, tlo; if (_task->activeTargetPos(tla, tlo)) fold(tla, tlo); }
     return init;
   }
 
@@ -876,28 +917,11 @@ private:
     const int area_h = bottom - top - 2;
     if (area_w < 6 || area_h < 6) return;
 
-    // Bounding box spans the trail, every waypoint, and the live position, so
-    // everything of interest stays in frame.
+    // The box the view takes in (computeBounds), fitted to the area; or, at a
+    // Manual scale, the area that many metres wide centred on you. A box of
+    // one point (just you) gets the 500 m scale.
     int32_t min_lat = 0, min_lon = 0, max_lat = 0, max_lon = 0;
     computeBounds(have_trail, have_gps, my_lat, my_lon, min_lat, min_lon, max_lat, max_lon);
-
-    // Degenerate: everything at one coordinate — just centre the markers.
-    if (min_lat == max_lat && min_lon == max_lon) {
-      int ccx = area_x + area_w / 2, ccy = area_y + area_h / 2;
-      // Only pin a waypoint to the centre in the genuine "lone waypoint, no
-      // trail" case. With a trail the centre is the trail's spot, and the
-      // waypoints (not folded into this box) belong elsewhere — don't draw
-      // them here, or they'd appear at the trail's location.
-      if (nwp > 0 && !have_trail) {
-        drawWaypointMarker(display, ccx, ccy);
-        const char* lbl = wp.at(0).label;        // single coincident spot — label it
-        char s[3] = { lbl[0], lbl[0] ? lbl[1] : (char)0, 0 };
-        drawWaypointLabel(display, s, ccx, ccy, area_x, area_y, area_w, area_h);
-      }
-      if (have_gps || have_trail) drawCurrentMarker(display, ccx, ccy);
-      { int32_t tla, tlo; if (_task->activeTargetPos(tla, tlo)) drawTargetMarker(display, ccx, ccy); }
-      return;
-    }
 
     float avg_lat_rad = ((min_lat + max_lat) / 2.0e6f) * (float)M_PI / 180.0f;
     float lon_scale_geo = cosf(avg_lat_rad);
@@ -906,40 +930,57 @@ private:
     float lat_span = (float)(max_lat - min_lat);
     float lon_span = (float)(max_lon - min_lon) * lon_scale_geo;
 
-    float scale_lat = (float)area_h / (lat_span > 0 ? lat_span : 1.0f);
-    float scale_lon = (float)area_w / (lon_span > 0 ? lon_span : 1.0f);
-    float scale     = (scale_lat < scale_lon) ? scale_lat : scale_lon;
-
-    int used_w = (int)(lon_span * scale);
-    int used_h = (int)(lat_span * scale);
-
     MapProjection proj;
-    proj.min_lat = min_lat;  proj.max_lat = max_lat;  proj.min_lon = min_lon;
-    proj.lon_scale_geo = lon_scale_geo;  proj.scale = scale;
-    proj.off_x  = area_x + (area_w - used_w) / 2;
-    proj.off_y  = area_y + (area_h - used_h) / 2;
+    proj.lon_scale_geo = lon_scale_geo;
     proj.area_x = area_x;  proj.area_y = area_y;
     proj.area_w = area_w;  proj.area_h = area_h;
+    const bool point = lat_span <= 0 && lon_span <= 0;
+    if (_map_scale >= 0 || point) {
+      const float width_m = mapframe::scaleM(_map_scale >= 0 ? _map_scale : 2, useImperial());
+      proj.scale = (float)area_w * M_PER_1E6 / width_m;
+      int32_t cla = (min_lat + max_lat) / 2, clo = (min_lon + max_lon) / 2;
+      if (_map_scale >= 0) {   // on you, else where the trail ends
+        if (have_gps) { cla = my_lat; clo = my_lon; }
+        else if (have_trail) { cla = _store->last().lat_1e6; clo = _store->last().lon_1e6; }
+      }
+      proj.min_lat = proj.max_lat = cla;  proj.min_lon = clo;
+      proj.off_x = area_x + area_w / 2;
+      proj.off_y = area_y + area_h / 2;
+    } else {
+      float scale_lat = (float)area_h / (lat_span > 0 ? lat_span : 1.0f);
+      float scale_lon = (float)area_w / (lon_span > 0 ? lon_span : 1.0f);
+      proj.scale = (scale_lat < scale_lon) ? scale_lat : scale_lon;
+      proj.min_lat = min_lat;  proj.max_lat = max_lat;  proj.min_lon = min_lon;
+      proj.off_x = area_x + (area_w - (int)(lon_span * proj.scale)) / 2;
+      proj.off_y = area_y + (area_h - (int)(lat_span * proj.scale)) / 2;
+    }
+    _fit_width_m = (float)area_w * M_PER_1E6 / proj.scale;   // where Up / Down step from
+    const int clip[4] = { area_x, area_y, area_w, area_h };
+    auto inside = [&](int x, int y) { return x >= area_x && y >= area_y && x < area_x + area_w && y < area_y + area_h; };
 
-    if (_map_grid) renderGrid(display, proj);
+    renderGrid(display, proj, _map_grid);   // its scale always, the dots with Grid on
 
 #if FEAT_ROUTES
     // The route being followed, dashed under the trail walked; its end marked.
     int ex, ey;
-    if (have_route && gfx::drawRoute(display, guide, [&](int32_t la, int32_t lo, int& x, int& y) { proj.project(la, lo, x, y); }, ex, ey))
+    if (have_route && gfx::drawRoute(display, guide, [&](int32_t la, int32_t lo, int& x, int& y) { proj.project(la, lo, x, y); }, ex, ey, clip)
+        && inside(ex, ey))
       drawTargetMarker(display, ex, ey);
 #endif
 
     if (have_trail) {
       int x0, y0;
       proj.project(_store->at(0).lat_1e6, _store->at(0).lon_1e6, x0, y0);
-      miniIconDrawCentered(display, x0, y0, ICON_MAP_DOT);
+      if (inside(x0, y0)) miniIconDrawCentered(display, x0, y0, ICON_MAP_DOT);
       gfx::drawTrail(display, *_store,
         [&](int32_t la, int32_t lo, int& x, int& y) { proj.project(la, lo, x, y); },
-        [&](int xa, int ya, int xb, int yb) { drawFilledDot(display, xa, ya); drawOpenDot(display, xb, yb); });
+        [&](int xa, int ya, int xb, int yb) {
+          if (inside(xa, ya)) drawFilledDot(display, xa, ya);
+          if (inside(xb, yb)) drawOpenDot(display, xb, yb);
+        }, clip);
       int sx, sy;
       proj.project(_store->first().lat_1e6, _store->first().lon_1e6, sx, sy);
-      drawStartMarker(display, sx, sy);
+      if (inside(sx, sy)) drawStartMarker(display, sx, sy);
     }
 
     drawMarkers(display, proj, have_gps, my_lat, my_lon, have_trail);
@@ -947,6 +988,15 @@ private:
     int nx, ny;
     northIconPos(display, area_x, area_w, area_y, nx, ny);
     miniIconDrawTop(display, nx, ny, ICON_MAP_NORTH);
+
+    // Bottom right: the view, when fitted to one that's not All (the scale is
+    // bottom left, renderGrid's).
+    const NodePrefs* np = _task->getNodePrefs();
+    if (_map_scale < 0 && np && np->map_view) {
+      const char* tag = mapframe::viewName(np->map_view);
+      display.setCursor(area_x + area_w - (int)display.getTextWidth(tag), area_y + area_h - display.getLineHeight());
+      display.print(tag);
+    }
   }
 
   // Top-left placement of the north marker — flush to the top-right corner of
@@ -959,7 +1009,7 @@ private:
     ny = area_y + 1;
   }
 
-  void renderGrid(DisplayDriver& display, const MapProjection& proj) {
+  void renderGrid(DisplayDriver& display, const MapProjection& proj, bool dots = true) {
     const int area_x = proj.area_x, area_y = proj.area_y;
     const int area_w = proj.area_w, area_h = proj.area_h;
     static constexpr float M_PER_1E6 = 0.11132f;  // metres per 1e-6 deg lat
@@ -1052,7 +1102,7 @@ private:
 
     // A single dot per intersection — cleaner and more legible on an OLED than
     // a 5-pixel cross (whose arms also clipped at the frame edges).
-    for (int i = 0; i <= cx; i++) {
+    for (int i = 0; dots && i <= cx; i++) {
       int px = x0 + (int)((float)i * cell + 0.5f);
       if (px > x_max) px = x_max;
       for (int j = 0; j <= cy; j++) {

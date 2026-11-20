@@ -1530,6 +1530,7 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   _prefs.low_batt_mv = 3400;  // auto-shutdown at 3.4V by default
   _prefs.batt_display_mode = 0; // icon by default
   _prefs.signal_show = 1;       // the status bar's signal bars
+  _prefs.map_view = 0;          // maps fit everything in
   //_prefs.rx_delay_base = 10.0f;  enable once new algo fixed
   _prefs.client_repeat = 0;
   // 0 dB is a real threshold, so "off" is its own sentinel.
