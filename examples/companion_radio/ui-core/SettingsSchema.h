@@ -20,6 +20,7 @@
 #include "SoundControl.h"
 #include "Telemetry.h"   // the dashboard's fields
 #include "MapFrame.h"    // Map view
+#include "BattLearn.h"   // BATT_LEARN: Learn battery
 #include <helpers/sensors/LocationProvider.h>   // Time from GPS
 
 namespace settings {
@@ -413,6 +414,9 @@ static const Setting ALL[] = {
 #endif
 
   MAP("Battery shutdown", "Power off below this voltage", SEC_POWER, low_batt_mv, LOW_BATT, optLowBatt, nullptr),
+#if BATT_LEARN
+  SW("Learn battery", "Curve from a run to shutdown", SEC_POWER, batt_learn, nullptr),
+#endif
 #if ENV_INCLUDE_GPS == 1
   MAP("GPS power saving", "Sleep between fixes", SEC_POWER, gps_interval, GPS_DUTY, optGpsDuty, applyGpsDuty),
 #endif
@@ -582,6 +586,10 @@ static const struct { uint16_t offset; const char* text; } SHORT_LABELS[] = {
   { NP_OFF(msg_wake), "Msg wake" },              { NP_OFF(auto_lock), "Auto lock" },
   { NP_OFF(msg_alert), "Msg alert" },
   { NP_OFF(batt_display_mode), "Batt disp" },    { NP_OFF(signal_show), "Signal" },    { NP_OFF(low_batt_mv), "Low batt" },
+#if BATT_LEARN
+  { NP_OFF(batt_learn), "Learn batt" },
+#endif
+ 
   { NP_OFF(gps_interval), "GPS pwr" },           { NP_OFF(clock_12h), "12h clock" },
   { NP_OFF(clock_hide_seconds), "Seconds" },     { NP_OFF(gps_time_off), "GPS time" },     { NP_OFF(units_imperial), "Imperial" },
   { NP_OFF(dm_resend_count), "Resend" },         { NP_OFF(contact_expiry_idx), "Expire" },

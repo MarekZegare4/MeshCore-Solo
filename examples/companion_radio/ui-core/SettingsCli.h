@@ -94,7 +94,11 @@ static const Key KEYS[] = {
   K("display.brightness", display_brightness), K("display.off", auto_off_secs), K("display.wake", msg_wake),
   K("display.alert", msg_alert), K("lock", auto_lock), K("lock.clock", lock_compact),
   K("display.text.size", ui_text_scale), K("display.icon.size", ui_icon_scale),
-  K("batt.display", batt_display_mode), K("display.signal", signal_show), K("batt.shutdown", low_batt_mv), K("gps.interval", gps_interval),
+  K("batt.display", batt_display_mode), K("display.signal", signal_show), K("batt.shutdown", low_batt_mv),
+#if BATT_LEARN
+  K("batt.learn", batt_learn),
+#endif
+  K("gps.interval", gps_interval),
   K("clock.12h", clock_12h), K("clock.summer", dst_rule), K("clock.seconds", clock_hide_seconds), K("clock.gps", gps_time_off), K("units.imperial", units_imperial),
   K("sound.volume", buzzer_volume), K("quiet", quiet_hours), K("quiet.from", quiet_from), K("quiet.until", quiet_to),
   K("melody.dm", notif_melody_dm), K("melody.channel", notif_melody_ch), K("melody.advert", notif_melody_ad),
@@ -831,8 +835,19 @@ static bool waypoints(UiCore& core, const char* cmd, char* reply, int n) {
 // The battery curve (Settings > Battery curve): "get batt.curve" is "> <mV at
 // 0 %>,<10 %>,...,<100 %>" (11 values) or "> builtin"; "set batt.curve" takes
 // the same list -- rising, 2500..4500 mV -- or "builtin". The whole curve in one
-// line: one measured on one device pasted into another.
+// line: one measured on one device pasted into another. A curve set so counts
+// as set by hand (learning leaves it), unless it's the one already in use (a
+// backup put back). "get batt.curve.src": "> builtin", "> manual" or
+// "> learned <runs>".
 static bool battCurve(NodePrefs* p, const char* cmd, char* reply, int n) {
+  if (!strcmp(cmd, "get batt.curve.src")) {
+    switch (battlearn::source(p->batt_curve_mv, p->batt_curve_src)) {
+      case battlearn::LEARNED: snprintf(reply, n, "> learned %u", p->batt_learn_runs); break;
+      case battlearn::MANUAL:  snprintf(reply, n, "> manual"); break;
+      default:                 snprintf(reply, n, "> builtin"); break;
+    }
+    return true;
+  }
   const bool set = !strncmp(cmd, "set batt.curve", 14);
   if (!set && strcmp(cmd, "get batt.curve")) return false;
   if (set && cmd[14] && cmd[14] != ' ') return false;
@@ -847,6 +862,7 @@ static bool battCurve(NodePrefs* p, const char* cmd, char* reply, int n) {
   uint16_t c[battery::CURVE_PTS] = {};
   if (!strcmp(a, "builtin")) {
     memset(p->batt_curve_mv, 0, sizeof(p->batt_curve_mv));
+    battlearn::markBuiltin(*p);
   } else {
     int k = 0;
     while (*a && k < battery::CURVE_PTS) {
@@ -864,6 +880,7 @@ static bool battCurve(NodePrefs* p, const char* cmd, char* reply, int n) {
                battery::CURVE_MIN_MV, battery::CURVE_MAX_MV);
       return true;
     }
+    if (memcmp(p->batt_curve_mv, c, sizeof(c))) battlearn::markManual(*p);
     memcpy(p->batt_curve_mv, c, sizeof(c));
   }
   the_mesh.savePrefs();

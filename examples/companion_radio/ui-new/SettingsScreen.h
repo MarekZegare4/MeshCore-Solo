@@ -11,6 +11,7 @@
 #include "PopupMenu.h"   // scope list management's per-row action menu
 #include "InfoKit.h"     // value / switch rows
 #include "../ui-core/Battery.h"   // the Battery curve row
+#include "../ui-core/BattLearn.h"
 #include "../GeoUtils.h"          // Position typed in
 
 class SettingsScreen : public UIScreen {
@@ -531,7 +532,8 @@ class SettingsScreen : public UIScreen {
     } else if (item == DEVICE_NAME) {
       val("Name", the_mesh.getNodeName());
     } else if (item == BATT_CURVE) {
-      val("Batt curve", p && battery::validCurve(p->batt_curve_mv) ? "Custom" : "LiPo");
+      static const char* SRC[] = { "Built in", "Manual", "Learned" };
+      val("Batt curve", p ? SRC[battlearn::source(p->batt_curve_mv, p->batt_curve_src)] : SRC[0]);
     } else if (item == REBOOT) {
       display.print("Reboot");   // action row: Enter reboots this device
     } else if (item == FACTORY_RESET) {

@@ -216,8 +216,12 @@ void UITask::buildSchemaSettings() {
       lv_obj_t* g = group(body, nullptr);
       schemaRow(g, SETTING(batt_display_mode));
       schemaRow(g, SETTING(low_batt_mv));
-      listRow(g, "Battery curve", _prefs && battery::validCurve(_prefs->batt_curve_mv) ? "Your own" : "LiPo (built in)",
+      static const char* SRC[] = { "Built in", "Set by hand", "Learned" };
+      listRow(g, "Battery curve", SRC[_prefs ? battlearn::source(_prefs->batt_curve_mv, _prefs->batt_curve_src) : 0],
               onBattCurve, NULL);
+#if BATT_LEARN
+      schemaRow(g, SETTING(batt_learn));
+#endif
       return;
     }
     case PG_TIME: {

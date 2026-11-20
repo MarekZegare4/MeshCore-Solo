@@ -40,6 +40,7 @@
 #include "RepeaterControl.h"
 #include "SosEngine.h"
 #include "CoverageRecorder.h"
+#include "BattLearn.h"
 #if FEAT_ROUTES
 #include "RouteGuide.h"
 #endif
@@ -174,6 +175,31 @@ public:
   CoverageRecorder coverage; // MatterMap recording, opt-in; begun only by a frontend that can upload (ui-lvgl)
 #if FEAT_ROUTES
   RouteGuide   guide;       // following a planned route (Tools > Trail > Routes)
+#endif
+#if BATT_LEARN
+  battlearn::Learner batt_learn; // the cell's curve from a run down to the shutdown (Battery curve)
+
+  // Learning: switched on, and the curve not one set by hand.
+  bool battLearning() const {
+    return _prefs && _prefs->batt_learn &&
+           battlearn::source(_prefs->batt_curve_mv, _prefs->batt_curve_src) != battlearn::MANUAL;
+  }
+  // At the low-battery shutdown, before the prefs are saved: the run's curve
+  // into them, when the run counts.
+  bool battLearnOnShutdown() {
+    if (!battLearning()) return false;
+    uint16_t old[battery::CURVE_PTS], out[battery::CURVE_PTS];
+    for (int k = 0; k < battery::CURVE_PTS; k++) old[k] = (uint16_t)battery::curveMvAt(k);
+    const bool learned = battlearn::source(_prefs->batt_curve_mv, _prefs->batt_curve_src) == battlearn::LEARNED;
+    const uint8_t runs = learned ? _prefs->batt_learn_runs : 0;
+    if (!batt_learn.finish(millis(), _prefs->low_batt_mv, old, runs, out)) return false;
+    memcpy(_prefs->batt_curve_mv, out, sizeof(out));
+    _prefs->batt_curve_src = battlearn::LEARNED;
+    _prefs->batt_learn_runs = runs < 250 ? runs + 1 : runs;
+    _prefs->batt_learn_date = rtc_clock.getCurrentTime();
+    _prefs->batt_learn_note = 1;
+    return true;
+  }
 #endif
 
   // Where you're headed, if anywhere: the next bend of the route followed (or

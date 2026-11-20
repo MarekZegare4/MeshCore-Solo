@@ -1529,6 +1529,7 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   _prefs.tz_offset_hours = 0;  // UTC by default
   _prefs.low_batt_mv = 3400;  // auto-shutdown at 3.4V by default
   _prefs.batt_display_mode = 0; // icon by default
+  _prefs.batt_learn = 1;        // learn the cell's curve from a run down to the shutdown (ui-core/BattLearn.h)
   _prefs.signal_show = 1;       // the status bar's signal bars
   _prefs.map_view = 0;          // maps fit everything in
   //_prefs.rx_delay_base = 10.0f;  enable once new algo fixed

@@ -699,6 +699,7 @@ void UITask::simRoute(int what) {
   }
   if (what == 6) { gotoCompassScreen(); _next_refresh = 0; return; }
   if (what == 8) { gotoLocatorScreen(); _next_refresh = 0; return; }
+  if (what == 9) { gotoBatteryCurve(); _next_refresh = 0; return; }   // Settings > System > Battery curve
   if (what == 7) { gotoHomeScreen(); static_cast<HomeScreen*>(home)->showMapPage(); _next_refresh = 0; return; }
   setCurrScreen(trail_screen);
   if (what == 3) ((TrailScreen*)trail_screen)->showMapView();
@@ -2040,7 +2041,19 @@ void UITask::loop() {
       _batt_mv = battEma(_batt_mv, raw);
 #endif
     }
+#if BATT_LEARN
+    _core->batt_learn.tick(millis(), _batt_mv, board.isExternalPowered(), _display && _display->isOn());
+    if (_node_prefs && _node_prefs->batt_learn_note) {   // the last run, down to the shutdown, learned the curve
+      _node_prefs->batt_learn_note = 0;
+      bool dirty = true;
+      savePrefsIfDirty(dirty);
+      showAlert("Battery curve learned", 3000);
+    }
+#endif
     if (lowBatteryShutdownDue(_batt_mv, _node_prefs)) {
+#if BATT_LEARN
+      _core->battLearnOnShutdown();   // saved with the prefs by shutdown()
+#endif
       if (_display != NULL) {
         _display->startFrame();
         _display->setTextSize(1);

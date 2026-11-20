@@ -54,8 +54,26 @@ A few notes:
   also 0 % on the battery indicator.
 - **Batt curve** sets the cell voltage at 0, 10 … 100 % for a battery that
   doesn't follow the usual LiPo curve: **Left / Right** move a point by
-  10 mV, **Reset** goes back to LiPo. The current voltage is shown, so a point
-  can be set against what the battery reads.
+  10 mV, **Reset** goes back to the built-in curve (LiPo, or the board's own
+  on the Wio Tracker L2). The current voltage is shown, so a point can be set
+  against what the battery reads. **Curve** says where the one in use came
+  from: built in, set by hand, or learned.
+- **Learn batt** (on by default; boards that can tell USB from battery: the
+  nRF52 ones and the Wio Tracker L2) learns the curve of your own cell. Charge
+  it, unplug it and use the device as usual until the low-battery shutdown,
+  without plugging it in on the way: at the shutdown the curve is worked out
+  from how the voltage fell over the run, and at the next start
+  **Battery curve learned** says so. A run counts when it lasted at least 6
+  hours and started at 3.9 V or more (a full charge, 4.1 V or more half an
+  hour after unplugging, gives the whole curve; a partial one the part below
+  where it started). Each later run is averaged in, so one unusual run doesn't
+  spoil it and an ageing cell still shows. **Learn** on the Battery curve
+  screen shows how the run is going: **Waiting** (on USB: it starts when
+  unplugged), **Starting** (the first half hour), the hours so far, or
+  **Charge** (it started too low). A curve you edit yourself is kept as it
+  is; **Reset** lets learning take over again. The device works the curve out
+  as if it drew the same current all the time, so the more evenly it is used
+  over a run, the closer the curve.
 - **Keep messages** (Wio Tracker L1, Watch13, Heltec V3 / V4, Cardputer ADV) saves messages on the flash, across a
   power-off and past what fits in memory (see
   [How much is kept](./messages.md#how-much-is-kept)): **Off**, 500, 1000 or
@@ -138,8 +156,9 @@ if your mesh agrees on it.
 >   saving and the **Fixed position**.
 > - **Device**: Display (including the lock, **Tap to wake**, the **Theme**,
 >   dark or light, which restarts the device, and the accent colour), Sound
->   (with the melody editor), Power (battery, and the **Battery curve** as a
->   chart whose points you drag), Time & units, Keyboard.
+>   (with the melody editor), Power (battery, the **Battery curve** as a
+>   chart whose points you drag, with how learning it goes under the chart,
+>   and **Learn battery**), Time & units, Keyboard.
 > - **Mesh & data**: Messages & contacts (adding contacts too; the node types
 >   show only with **By type**), Map (trail, live sharing and arrival alert
 >   options), Adverts & privacy (**Auto-advert** with the rest of what an
@@ -249,7 +268,9 @@ it in one go. And since Solo 2.3, what has no settings key:
 | --- | --- |
 | `msgs`, `get msg.3`, `set msg.3 …`, `set msg.3` | The quick messages, numbered from 1; the last empties one |
 | `get melody.1`, `set melody.1 120 292a2b` | A melody of the Ringtone editor: BPM and a hex byte a note |
-| `get batt.curve`, `set batt.curve 3400,3690,3720,3750,3780,3820,3860,3920,3990,4060,4170`, `set batt.curve builtin` | The battery curve: the voltage in mV at 0, 10, ... 100 %, rising, or `builtin` for the built-in LiPo curve -- a whole curve at once, e.g. one measured on another device |
+| `get batt.curve`, `set batt.curve 3400,3690,3720,3750,3780,3820,3860,3920,3990,4060,4170`, `set batt.curve builtin` | The battery curve: the voltage in mV at 0, 10, ... 100 %, rising, or `builtin` for the built-in curve -- a whole curve at once, e.g. one measured on another device. A curve set this way counts as set by hand (learning leaves it), unless it is the one already in use |
+| `get batt.curve.src` | Where the curve came from: `builtin`, `manual` or `learned <runs>` |
+| `get batt.learn`, `set batt.learn 0` | Learning the battery curve from a run down to the shutdown (1 = on) |
 | `wpts`, `get wpt.2`, `set wpt.2 50.061,19.937 Camp`, `set wpt.2` | The waypoints, numbered from 1 as the list shows them: `wpts` says how many there are and how many fit; `set` replaces one, or adds one with the number after the last; the last form deletes it, and the ones after move up |
 | `pages`, `set pages Clock, Messages, Status` | Home's pages in order; the ones left out are hidden (not on the L2) |
 | `input`; `key down`, `key enter long`; `btn click`; `tap 160 120`, `swipe 300 120 20 120` | The device used from the console as from its own keys (Solo 2.4; the configurator's Live view): `input` says how -- `keys`, `button` (one button: `click`, `double`, `long`, `hold`) or `touch` (the L2: x, y on the 320x240 screen, and the ms held or dragged at the end) |

@@ -193,6 +193,15 @@ struct NodePrefsFields {
   // Battery curve edits it; anything not rising point to point reads as unset.
   static const uint8_t BATT_CURVE_PTS = 11;
   uint16_t batt_curve_mv[BATT_CURVE_PTS];
+  // Where that curve came from (ui-core/BattLearn.h battlearn::Src: 0 built-in,
+  // 1 set by hand, 2 learned), learning it from a run down to the shutdown
+  // (1 = on), the runs learned so far, when the last one was (epoch secs), and
+  // "tell the user" after the shutdown that learned it.
+  uint8_t  batt_curve_src;
+  uint8_t  batt_learn;
+  uint8_t  batt_learn_runs;
+  uint32_t batt_learn_date;
+  uint8_t  batt_learn_note;
 
   // ── Display & keyboard ────────────────────────────────────────────────
   uint8_t display_brightness;   // 0=min..4=max, default 2 (medium)
@@ -934,6 +943,9 @@ class NodePrefs : public NodePrefsFields, public ConfigSerializer {
     s.def("ble_off", ble_off);
     s.def("low_mv", low_batt_mv); s.def("batt_disp", batt_display_mode);
     s.hex("curve", batt_curve_mv);
+    s.def("curve_src", batt_curve_src); s.def("learn", batt_learn);
+    s.def("learn_runs", batt_learn_runs); s.def("learn_date", batt_learn_date);
+    s.def("learn_note", batt_learn_note);
   }
   void displaySolo(Section& s) {
     s.def("bright", display_brightness); s.def("bright_pct", display_brightness_pct);

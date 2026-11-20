@@ -87,6 +87,7 @@ static bool step(int dir) {
   const int mv = constrain((int)c[s_sel] + dir * 10, lo, hi);
   if (mv == c[s_sel]) return false;
   c[s_sel] = (uint16_t)mv;
+  battlearn::markManual(*np);   // learning leaves it now
   return true;
 }
 
@@ -200,7 +201,7 @@ static void onTouch(lv_event_t* e) {
         const int lo = s_sel > 0 ? c[s_sel - 1] + 10 : battery::CURVE_MIN_MV;
         const int hi = s_sel < PTS - 1 ? c[s_sel + 1] - 10 : battery::CURVE_MAX_MV;
         const int mv = constrain((yMv(a, p.y) + 5) / 10 * 10, lo, hi);
-        if (mv != c[s_sel]) { c[s_sel] = (uint16_t)mv; changed = true; }
+        if (mv != c[s_sel]) { c[s_sel] = (uint16_t)mv; battlearn::markManual(*np); changed = true; }
       }
     }
   }
@@ -219,6 +220,7 @@ static void onReset(lv_event_t* e) {
   NodePrefs* np = s_ui->prefsMut();
   if (!np || !battery::validCurve(np->batt_curve_mv)) return;
   memset(np->batt_curve_mv, 0, sizeof(np->batt_curve_mv));
+  battlearn::markBuiltin(*np);
   prefsSave();
   if (s_chart) lv_obj_invalidate(s_chart);
   s_ui->refreshBattCurve();
@@ -253,9 +255,18 @@ void UITask::refreshBattCurve() {
   if (_screen != SCR_BATT || !s_now) return;
   const int mv = battMv();
   const bool custom = _prefs && battery::validCurve(_prefs->batt_curve_mv);
-  char t[64];
-  if (mv > 0) snprintf(t, sizeof(t), "Now %d mV  -  %d %%  -  %s curve", mv, battery::rawPercent(mv), custom ? "your" : "LiPo");
-  else snprintf(t, sizeof(t), "%s curve  -  tap a point, then its arrows", custom ? "Your" : "LiPo");
+  char src[24], learn[64] = "", t[128];
+  battlearn::sourceText(_prefs ? _prefs->batt_curve_mv : nullptr, _prefs ? _prefs->batt_curve_src : 0,
+                        _prefs ? _prefs->batt_learn_runs : 0, src, sizeof(src));
+#if BATT_LEARN
+  if (_prefs && _prefs->batt_learn) {
+    if (_core->battLearning()) _core->batt_learn.longText(millis(), learn, sizeof(learn));
+    else snprintf(learn, sizeof(learn), "Not learning: set by hand (Reset to learn)");
+  }
+#endif
+  if (mv > 0) snprintf(t, sizeof(t), "Now %d mV  -  %d %%  -  %s", mv, battery::rawPercent(mv), src);
+  else snprintf(t, sizeof(t), "%s  -  tap a point, then its arrows", src);
+  if (learn[0]) { strncat(t, "\n", sizeof(t) - strlen(t) - 1); strncat(t, learn, sizeof(t) - strlen(t) - 1); }
   setText(s_now, t);
   const lv_opa_t ro = custom ? LV_OPA_COVER : LV_OPA_40;
   if (s_reset && lv_obj_get_style_text_opa(s_reset, LV_PART_MAIN) != ro) lv_obj_set_style_text_opa(s_reset, ro, 0);

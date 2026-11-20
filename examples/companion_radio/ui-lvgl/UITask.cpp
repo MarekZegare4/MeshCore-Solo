@@ -507,7 +507,18 @@ void UITask::checkLowBattery() {
   _next_batt_ms = millis() + 8000;
   uint16_t raw = getBattMilliVolts();
   if (raw > 0) _batt_mv = battEma(_batt_mv, raw);
+#if BATT_LEARN
+  _core->batt_learn.tick(millis(), _batt_mv, _board->isExternalPowered(), !_asleep);
+  if (_prefs && _prefs->batt_learn_note) {   // the last run, down to the shutdown, learned the curve
+    _prefs->batt_learn_note = 0;
+    prefsSave();
+    showToast("Battery curve learned", 3000);
+  }
+#endif
   if (!lowBatteryShutdownDue(_batt_mv, _prefs)) return;
+#if BATT_LEARN
+  _core->battLearnOnShutdown();   // saved with the prefs by shutdown()
+#endif
   wake();
   showToast("Low battery - shutting down", 3000);
   lv_timer_handler();
