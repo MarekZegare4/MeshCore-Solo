@@ -696,7 +696,7 @@ private:
   void handleRouteCommand(const uint8_t* frame, size_t len);   // MyMeshRoutes.h
 #endif
 #ifdef ENABLE_SCREENSHOT
-  void handleScreenshotRequest();
+  void handleScreenshotRequest(bool rle, bool may_skip);
   void sendScreenshotResponse(uint8_t displayType, uint8_t rotation, uint16_t width, uint16_t height,
                               const uint8_t* buffer, uint32_t bufferSize);
 #endif

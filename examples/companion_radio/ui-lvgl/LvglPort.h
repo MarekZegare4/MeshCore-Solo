@@ -95,7 +95,17 @@ static void deleteDue() {
 // what they send to the panel inside it there.
 static uint16_t* s_shot = nullptr;
 static int32_t s_shot_y0 = 0, s_shot_h = 0;
+// The configurator's live view asks again and again; a frame costs the loop
+// ~90 ms (every band drawn again). Asked not to when nothing would come of
+// it (MyMeshScreenshot.h): nothing sent to the panel since the last
+// screenshot but that screenshot's own bands, or a finger on the screen
+// (a gesture read while the loop is held up comes out wrong).
+static bool s_drawn = true;      // the panel got something a screenshot didn't take
+static uint32_t s_touch_ms = 0;  // when a touch was last read pressed
+static void touchSeen() { s_touch_ms = millis(); }
+static bool shotWorthIt() { return s_drawn && millis() - s_touch_ms > 250; }
 static void shotCopy(const lv_area_t* a, const uint8_t* px) {
+  if (!s_shot || a->y1 < s_shot_y0 || a->y2 >= s_shot_y0 + s_shot_h) s_drawn = true;   // past the band: not in the screenshot
   if (!s_shot) return;
   const int32_t W = lv_display_get_horizontal_resolution(NULL);
   const int32_t w = a->x2 - a->x1 + 1;
@@ -278,6 +288,7 @@ static void touchCb(lv_indev_t* indev, lv_indev_data_t* data) {
       return;
     }
     cpuSlow(false);
+    touchSeen();
     data->state = LV_INDEV_STATE_PRESSED;
     data->point.x = s_fake.x0 + (int32_t)(s_fake.x1 - s_fake.x0) * (int32_t)t / (int32_t)s_fake.ms;
     data->point.y = s_fake.y0 + (int32_t)(s_fake.y1 - s_fake.y0) * (int32_t)t / (int32_t)s_fake.ms;
@@ -301,6 +312,7 @@ static void touchCb(lv_indev_t* indev, lv_indev_data_t* data) {
     cpuSlow(false);   // the frame this touch causes: at the full clock
     if (s_touch_id < 0) crashlog::note("tap %d,%d", (int)tp.x, (int)tp.y);
     s_touch_id = tp.id;
+    touchSeen();
     data->state = LV_INDEV_STATE_PRESSED;
     data->point.x = tp.x;
     data->point.y = tp.y;
@@ -1068,6 +1080,7 @@ static void touchCb(lv_indev_t* indev, lv_indev_data_t* data) {
     data->state = LV_INDEV_STATE_RELEASED;
     return;
   }
+  if (t.down) touchSeen();
   data->state = t.down ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
   data->point.x = t.x;
   data->point.y = t.y;

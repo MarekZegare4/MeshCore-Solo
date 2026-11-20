@@ -69,6 +69,7 @@ public:
   // display type 2).
   typedef void (*ShotBand)(void* ctx, int y0, int rows, const uint16_t* px);
   bool captureBands(int& w, int& h, bool bottom_up, ShotBand band, void* ctx);
+  bool shotWorthIt() const;   // anything new on the panel since the last, no finger on it
 #define UI_SCREENSHOT_RGB565 1
 
   // UiCoreHost

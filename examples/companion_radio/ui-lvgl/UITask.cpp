@@ -1108,8 +1108,11 @@ bool UITask::captureBands(int& w, int& h, bool bottom_up, ShotBand band, void* c
     band(ctx, y0, n, px);
   }
   free(px);
+  lvport::s_drawn = false;   // what's on the panel is in this screenshot
   return true;
 }
+
+bool UITask::shotWorthIt() const { return lvport::shotWorthIt(); }
 
 // The screen, written to the card as a 24-bit BMP: /sdcard/screenshots/scr_NNNN.bmp.
 void UITask::takeScreenshot() {

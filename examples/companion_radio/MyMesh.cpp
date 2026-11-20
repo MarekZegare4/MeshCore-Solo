@@ -121,6 +121,8 @@
 #ifdef ENABLE_SCREENSHOT
 #define RESP_CODE_SCREENSHOT          0x7E  // reply to CMD_GET_SCREENSHOT (Solo; 29 is upstream's CLI reply)
 #define SCREENSHOT_TYPE_RGB565          2   // display_type of a colour screen's frame
+#define SCREENSHOT_TYPE_RGB565_RLE      3   // the same, run-length coded (MyMeshScreenshot.h)
+#define SCREENSHOT_UNCHANGED         0xFF   // no frame: nothing new since the last (asked for with bit 1)
 #endif
 
 #define MAX_CHANNEL_DATA_LENGTH       (MAX_FRAME_SIZE - 9)
@@ -2798,7 +2800,8 @@ void MyMesh::handleCmdFrame(size_t len) {
 #endif
 #ifdef ENABLE_SCREENSHOT
   } else if (cmd_frame[0] == CMD_GET_SCREENSHOT) {
-    handleScreenshotRequest();
+    // bit 0: the host takes RLE; bit 1: "unchanged" too (it has a frame)
+    handleScreenshotRequest(len > 1 && (cmd_frame[1] & 1), len > 1 && (cmd_frame[1] & 2));
 #endif
   } else {
     writeErrFrame(ERR_CODE_UNSUPPORTED_CMD);

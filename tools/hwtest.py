@@ -541,11 +541,13 @@ def t_routes(d, out):
     return f"{len(pts)} points, {want:.0f} m, slot {slot}"
 
 
-def shot(d, out, name):
-    """The screen as a PNG in `out` (the image), or None without screenshots.
-    Read through the companion reader, which passes over anything else on the line."""
-    d.dev.send(bytes([screenshot.CMD_GET_SCREENSHOT]))
-    buf, total, got, w = bytearray(), None, 0, None
+def shot_raw(d, rle=False):
+    """(type, rotation, w, h, bytes) of the screen, or None without screenshots.
+    Read through the companion reader, which passes over anything else on the
+    line. rle: asked for RLE (2.4), which a colour screen answers as type 3 --
+    returned decoded, as type 2."""
+    d.dev.send(bytes([screenshot.CMD_GET_SCREENSHOT, 1] if rle else [screenshot.CMD_GET_SCREENSHOT]))
+    parts, total, w = {}, None, None
     end = time.time() + 6
     while time.time() < end:
         f = d.dev.read_frame(end - time.time())
@@ -558,16 +560,44 @@ def shot(d, out, name):
         kind, rot = f[1], f[2]
         fw, fh, idx, n = struct.unpack_from("<HHHH", f, 3)
         if idx == 0:
-            buf, total, got, w, h, k, r = bytearray(), n, 0, fw, fh, kind, rot
+            parts, total, w, h, k, r = {}, None, fw, fh, kind, rot
         if w is None:
             continue
-        buf += f[screenshot.HEADER_SIZE:]
-        got += 1
-        if got >= total:
-            img = screenshot.buffer_to_image(bytes(buf), w, h, k, rotation=r, scale=1 if w >= 240 else 3)
-            img.save(out / name)
-            return img
+        parts[idx] = f[screenshot.HEADER_SIZE:]
+        if n != 0xFFFF:
+            total = n   # RLE: only the last chunk says how many
+        if total is not None and len(parts) >= total:
+            buf = b"".join(parts[i] for i in sorted(parts))
+            if k == 3:
+                buf, k = un_rle(buf), 2
+            return k, r, w, h, buf
     return None
+
+
+def un_rle(d):
+    """MyMeshScreenshot.h's RLE: a byte c, then c + 1 pixels (c < 128) or one pixel c - 127 times."""
+    o, i = bytearray(), 0
+    while i < len(d):
+        c = d[i]
+        i += 1
+        if c >= 128:
+            o += d[i:i + 2] * (c - 127)
+            i += 2
+        else:
+            o += d[i:i + 2 * (c + 1)]
+            i += 2 * (c + 1)
+    return bytes(o)
+
+
+def shot(d, out, name):
+    """The screen as a PNG in `out` (the image), or None without screenshots."""
+    s = shot_raw(d)
+    if s is None:
+        return None
+    k, r, w, h, buf = s
+    img = screenshot.buffer_to_image(buf, w, h, k, rotation=r, scale=1 if w >= 240 else 3)
+    img.save(out / name)
+    return img
 
 
 @test("screenshot")
@@ -577,7 +607,18 @@ def t_screenshot(d, out):
     if img is None:
         raise Skip("no screenshot (old firmware, or the phone app holds it)")
     check(img.getextrema() != ((0, 0), (0, 0), (0, 0)), "the screen is all black")
-    return f"{img.width}x{img.height}, {out / 'screen.png'}"
+    note = ""
+    if shot_raw(d)[0] == 2:
+        # A colour screen asked for RLE: the same picture as without, while
+        # the screen stays put (a clock may tick between two: a few goes).
+        for _ in range(5):
+            a, z, b = shot_raw(d), shot_raw(d, rle=True), shot_raw(d)
+            check(z is not None and len(z[4]) == len(a[4]), "the RLE frame is not a whole screen")
+            if a[4] == b[4]:
+                check(z[4] == a[4], "the RLE frame is not the screen")
+                note = ", RLE the same"
+                break
+    return f"{img.width}x{img.height}{note}, {out / 'screen.png'}"
 
 
 # ── With the test hooks (a --flash build) ──────────────────────────────────
