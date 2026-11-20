@@ -69,7 +69,10 @@ public:
   // display type 2).
   typedef void (*ShotBand)(void* ctx, int y0, int rows, const uint16_t* px);
   bool captureBands(int& w, int& h, bool bottom_up, ShotBand band, void* ctx);
-  bool shotWorthIt() const;   // anything new on the panel since the last, no finger on it
+  bool shotWorthIt() const;   // anything new on the panel since the last screenshot
+  // The panel as it is (w x h RGB565), kept up from then on; null without the
+  // memory. Let go after a minute unread (loop()).
+  const uint16_t* shotMirror(int& w, int& h);
 #define UI_SCREENSHOT_RGB565 1
 
   // UiCoreHost

@@ -36,11 +36,12 @@ a change goes to the device straight away.
 **Live view**, next to Connect, shows the device's screen in a window that
 stays over every tab: change a setting and see what it does. Drag it by its
 bar; 1x–3x sizes it, the arrow saves the frame to Screenshots. Up to 30
-frames a second on the L1. The L2 draws its whole screen again for each
-frame, which holds it up for a moment, so since Solo 2.4 it is given as
-long again to itself, sends nothing while its screen stays the same or a
-finger is on it, and codes the frame (150 KB) run-length, several times
-smaller: a few frames a second while the screen changes. Anything else
+frames a second on the L1. Since Solo 2.4 the L2 sends its frames from a
+copy of the screen it keeps while the view is open, a band at a time
+between its other work (a screen in motion may show a seam between two
+bands), codes them run-length, several times smaller than the 150 KB a
+frame is, and sends nothing while the screen stays the same: a few frames
+a second while it changes. Anything else
 asked of the device goes first.
 
 Since Solo 2.4 the device can be used from it, as from its own keys: a

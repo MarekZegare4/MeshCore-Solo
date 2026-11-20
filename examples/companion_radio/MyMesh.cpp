@@ -3043,6 +3043,9 @@ void MyMesh::checkSerialInterface() {
 
 void MyMesh::loop() {
   BaseChatMesh::loop();
+#if defined(ENABLE_SCREENSHOT) && defined(DISPLAY_CLASS) && defined(UI_SCREENSHOT_RGB565)
+  shotPump();
+#endif
 
   // APC: a tracked channel/flood send that no repeater echoed within the window is
   // treated as a lost confirmation → ramp power up (lets channel sends recover).

@@ -244,6 +244,10 @@ static constexpr uint32_t SOS_HOLD_MS = 5000;    // the top button held: the SOS
 
 
 void UITask::loop() {
+  if (lvport::s_mirror && millis() - lvport::s_mirror_ms > 60000) {   // the live view gone
+    free(lvport::s_mirror);
+    lvport::s_mirror = nullptr;
+  }
 #ifdef SOLO_TEST_HOOKS
   while (s_test_hang) { }   // stuck, as a hang would be: main.cpp's watchdog restarts it
 #endif
@@ -1114,6 +1118,31 @@ bool UITask::captureBands(int& w, int& h, bool bottom_up, ShotBand band, void* c
 }
 
 bool UITask::shotWorthIt() const { return lvport::shotWorthIt(); }
+
+// The first time, the whole screen drawn into it once (captureBands: the
+// flushes fill it); after that every flush keeps it up.
+const uint16_t* UITask::shotMirror(int& w, int& h) {
+  lv_display_t* d = lv_display_get_default();
+  w = lv_display_get_horizontal_resolution(d);
+  h = lv_display_get_vertical_resolution(d);
+  if (!lvport::s_mirror) {
+#ifdef ESP32
+    lvport::s_mirror = (uint16_t*)heap_caps_malloc((size_t)w * h * 2, MALLOC_CAP_SPIRAM);
+#else
+    lvport::s_mirror = (uint16_t*)malloc((size_t)w * h * 2);
+#endif
+    if (!lvport::s_mirror) return nullptr;
+    int bw, bh;
+    if (!captureBands(bw, bh, false, [](void*, int, int, const uint16_t*) {}, nullptr)) {
+      free(lvport::s_mirror);
+      lvport::s_mirror = nullptr;
+      return nullptr;
+    }
+  }
+  lvport::s_mirror_ms = millis();
+  lvport::s_drawn = false;   // what's on the panel is in this screenshot
+  return lvport::s_mirror;
+}
 
 // The screen, written to the card as a 24-bit BMP: /sdcard/screenshots/scr_NNNN.bmp.
 void UITask::takeScreenshot() {
