@@ -594,8 +594,9 @@ class HomeScreen : public UIScreen {
     // icon won't fit above the reserved area, every lower-priority icon after
     // it is dropped too (the list is ordered high→low).
     //
-    // Priority: power > BT > GPS fix > signal > alarm > mute > auto-advert > trail > live-share >
-    // repeater. Battery (drawn above) is always rightmost. The background modes
+    // Priority: power > signal > BT > GPS fix > alarm > mute > auto-advert > trail > live-share >
+    // repeater. Battery (drawn above) is always rightmost; power and signal
+    // next to it whatever else is up, the message count after them. The background modes
     // (advert / trail / live-share / repeater) stay outside any BT gate — they
     // keep running with Bluetooth off, so their cue must not vanish with it.
     LocationProvider* loc = _sensors ? _sensors->getLocationProvider() : nullptr;
@@ -613,11 +614,13 @@ class HomeScreen : public UIScreen {
     const SignalMeter::Reading sig = _task->core().signalNow();
     const bool sig_on = _node_prefs && _node_prefs->signal_show && sig.age != SignalMeter::NEVER;
     struct Sicon { bool active; const MiniIcon* icon; };
-    const Sicon icons[] = {
+    const Sicon lead[] = {
       { board.isExternalPowered(),                                 &ICON_CHARGE },   // USB power: next to the battery
+      { sig_on,                                                    ICON_SIGNAL[sig.level] },
+    };
+    const Sicon icons[] = {
       { _task->isBluetoothEnabled() && _task->isBLEConnected(),       &ICON_BLUETOOTH },
       { gps_on,                                                    gps_fix ? &ICON_GPS : &ICON_GPS_SEARCH },
-      { sig_on,                                                    ICON_SIGNAL[sig.level] },
       { _node_prefs && _node_prefs->alarm_on,                      &ICON_ALARM },
       { mute_on,                                                   &ICON_MUTE },
       { _node_prefs && _node_prefs->advert_auto_interval_sec > 0,  &ICON_ADVERT },
@@ -628,9 +631,19 @@ class HomeScreen : public UIScreen {
 
     int x = battLeftX;
     const int name_min = (reserve_left >= 0) ? reserve_left : display.getCharWidth() * 5;
+    bool room = true;
+    auto put = [&](const Sicon& s) {
+      if (!s.active || !room) return;
+      int ix = x - ind - ind_gap;
+      if (ix < name_min) { room = false; return; }   // out of room — drop this + all lower priority
+      if (STATUS_ICONS_SCALED) drawSlotIconScaled(display, ix, ind, ind_h, *s.icon, sis);
+      else                       drawSlotIcon(display, ix, ind, ind_h, *s.icon);
+      x = ix;
+    };
+    for (const Sicon& s : lead) put(s);
     // Settings > Message alert Compact: the envelope and its count, first by the
     // battery; its place is kept through the blink so nothing beside it jumps.
-    if (const int n = _task->msgBadgeCount()) {
+    if (const int n = room ? _task->msgBadgeCount() : 0) {
       const int ix = x - mailCountWidth(display, n) - ind_gap - 2 * miniIconScale(display);   // the icons' boxes pad theirs
       if (ix >= name_min) {
         if (_task->msgBadgeLit()) drawMailCount(display, ix, 0, ind_h, n);
@@ -638,14 +651,7 @@ class HomeScreen : public UIScreen {
         x = ix;
       }
     }
-    for (const Sicon& s : icons) {
-      if (!s.active) continue;
-      int ix = x - ind - ind_gap;
-      if (ix < name_min) break;                        // out of room — drop this + all lower priority
-      if (STATUS_ICONS_SCALED) drawSlotIconScaled(display, ix, ind, ind_h, *s.icon, sis);
-      else                       drawSlotIcon(display, ix, ind, ind_h, *s.icon);
-      x = ix;
-    }
+    for (const Sicon& s : icons) put(s);
     return x;
   }
 

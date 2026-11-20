@@ -948,7 +948,7 @@ void UITask::refreshStatusBar() {
     left_of = _status_chg;
   } else lv_obj_add_flag(_status_chg, LV_OBJ_FLAG_HIDDEN);
 
-  // Status icons, as the original's status bar (ui-new): Bluetooth (accent
+  // Status icons, as the original's status bar (ui-new): the signal, Bluetooth (accent
   // when the app is connected), WiFi (when switched on, accent connected), GPS (green with a fix), the alarm, mute, then
   // the modes that keep running in the background -- auto-advert, trail, live
   // share, repeater, arrival alert -- in the accent colour. Right to left in
@@ -956,6 +956,14 @@ void UITask::refreshStatusBar() {
   struct Icon { const char* sym; uint32_t col; };
   Icon icons[13];
   int n = 0;
+  // Signal (#60) first, next to the battery whatever else is up: bars for
+  // how well repeaters were heard, faded once the last was 10-30 min ago,
+  // empty after that; none before the first since boot. The colour only
+  // tells fresh (TEXT_MUTED) from old (anything else) here.
+  static const char* const SIG_SYM[5] = { "#s0", "#s1", "#s2", "#s3", "#s4" };   // bars drawn, not a glyph
+  const SignalMeter::Reading sr = _core->signalNow();
+  if (_prefs && _prefs->signal_show && sr.age != SignalMeter::NEVER)
+    icons[n++] = { SIG_SYM[sr.level], sr.age == SignalMeter::FRESH ? theme::TEXT_MUTED : theme::SURFACE_2 };
   static const char SOS_SYM[] = "SOS";   // text, not in the icon font
   const bool sos = !_core->sos.idle();
   const uint32_t sos_col = _core->sos.acked() ? theme::OK : theme::FAIL;   // green: someone has answered
@@ -972,13 +980,6 @@ void UITask::refreshStatusBar() {
     bool fix = _core->course.currentLocation(lat, lon);
     icons[n++] = { LV_SYMBOL_GPS, fix ? theme::OK : theme::TEXT_MUTED };
   }
-  // Signal (#60): bars for how well repeaters were heard, faded once the last
-  // was 10-30 min ago, empty after that; none before the first since boot.
-  // The colour only tells fresh (TEXT_MUTED) from old (anything else) here.
-  static const char* const SIG_SYM[5] = { "#s0", "#s1", "#s2", "#s3", "#s4" };   // bars drawn, not a glyph
-  const SignalMeter::Reading sr = _core->signalNow();
-  if (_prefs && _prefs->signal_show && sr.age != SignalMeter::NEVER)
-    icons[n++] = { SIG_SYM[sr.level], sr.age == SignalMeter::FRESH ? theme::TEXT_MUTED : theme::SURFACE_2 };
   if (_prefs && _prefs->alarm_on) icons[n++] = { LV_SYMBOL_BELL, theme::TEXT_MUTED };
 #ifdef PIN_BUZZER
   if (_buzzer.isQuiet()) icons[n++] = { UI_SYMBOL_MUTE, theme::TEXT_MUTED };
