@@ -611,9 +611,10 @@ class HomeScreen : public UIScreen {
     // Bluetooth page tells the rest), GPS as a broken reticle until a fix.
     const bool gps_fix = gps_on && loc->isValid();
     // Signal (#60): bars from the repeaters heard in the last half hour, empty
-    // ones once nothing has been for longer; none before the first since boot.
+    // ones once nothing has been for longer and before the first since boot
+    // (always there, so the icons beside it don't shift when one comes in).
     const SignalMeter::Reading sig = _task->core().signalNow();
-    const bool sig_on = _node_prefs && _node_prefs->signal_show && sig.age != SignalMeter::NEVER;
+    const bool sig_on = _node_prefs && _node_prefs->signal_show;
     struct Sicon { bool active; const MiniIcon* icon; };
     const Sicon lead[] = {
       { board.isExternalPowered(),                                 &ICON_CHARGE },   // USB power: next to the battery

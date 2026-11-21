@@ -973,11 +973,12 @@ void UITask::refreshStatusBar() {
   int n = 0;
   // Signal (#60) first, next to the battery whatever else is up: bars for
   // how well repeaters were heard, faded once the last was 10-30 min ago,
-  // empty after that; none before the first since boot. The colour only
-  // tells fresh (TEXT_MUTED) from old (anything else) here.
+  // empty after that and before the first since boot (always there, so its
+  // place doesn't come and go). The colour only tells fresh (TEXT_MUTED)
+  // from old (anything else) here.
   static const char* const SIG_SYM[5] = { "#s0", "#s1", "#s2", "#s3", "#s4" };   // bars drawn, not a glyph
   const SignalMeter::Reading sr = _core->signalNow();
-  if (_prefs && _prefs->signal_show && sr.age != SignalMeter::NEVER)
+  if (_prefs && _prefs->signal_show)
     icons[n++] = { SIG_SYM[sr.level], sr.age == SignalMeter::FRESH ? theme::TEXT_MUTED : theme::SURFACE_2 };
   static const char SOS_SYM[] = "SOS";   // text, not in the icon font
   const bool sos = !_core->sos.idle();

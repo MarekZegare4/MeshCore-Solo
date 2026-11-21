@@ -99,8 +99,8 @@ against what the spreading factor in use can still decode. It is what this
 device received, not whether they hear you back; for that, Ping or Discover
 a route. A quiet mesh sends little, so the bars don't drop at once: after ten
 minutes without a repeater they stay as they were (faded on the L2), after
-half an hour they show empty. Until the first repeater is heard after a
-start there are none. Status › Radio (Diag › Live on the L2) names the
+half an hour they show empty, as they do from a start until the first
+repeater is heard. Status › Radio (Diag › Live on the L2) names the
 repeater and its SNR.
 
 > [!NOTE]
