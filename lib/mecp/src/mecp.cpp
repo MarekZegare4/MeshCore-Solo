@@ -1,7 +1,8 @@
-// MECP decoder. See mecp.h.
+// MECP encoder and decoder. See mecp.h.
 
 #include "mecp.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -176,6 +177,34 @@ bool Message::decode(const char *s, Message &out) {
   const size_t freetext = kHeaderLen + out.code_count * (kCodeLen + 1);
   if (freetext <= len) findGps(&s[freetext], out.gps);
   return true;
+}
+
+size_t Message::encode(char *out, size_t n) const {
+  if (n == 0) return 0;
+  out[0] = '\0';
+  if (severity > Severity::Routine || code_count == 0 || code_count > kMaxCodes) return 0;
+  if (hasGPS() && !inRange(gps)) return 0;
+  for (size_t i = 0; i < code_count; i++) {
+    if (codes[i].category < 'A' || codes[i].category > 'Z' || codes[i].number > 99) return 0;
+  }
+
+  // snprintf() returns the length it needs, so `len` keeps counting past `n` and the check below
+  // catches it. None of these formats can fail, so the return is never negative.
+  size_t len = 0;
+  auto at = [&] { return len < n ? out + len : nullptr; };
+  auto room = [&] { return len < n ? n - len : 0; };
+  len += snprintf(at(), room(), "MECP/%d/", static_cast<int>(severity));
+  for (size_t i = 0; i < code_count; i++) {
+    len += snprintf(at(), room(), i ? " %c%02u" : "%c%02u", codes[i].category,
+                    static_cast<unsigned>(codes[i].number));
+  }
+  if (hasGPS()) len += snprintf(at(), room(), " %.5f,%.5f", gps.lat, gps.lon);
+
+  if (len >= n) {
+    out[0] = '\0';
+    return 0;
+  }
+  return len;
 }
 
 } // namespace mecp

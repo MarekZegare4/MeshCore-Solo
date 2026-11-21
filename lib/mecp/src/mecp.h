@@ -1,7 +1,7 @@
-// MECP (Mesh Emergency Communication Protocol) 1.4.0 decoder: severity, codes, and the GPS
-// coordinates convention in the freetext.
+// MECP (Mesh Emergency Communication Protocol) 1.4.0 encoder and decoder: severity, codes, and the
+// GPS coordinates convention in the freetext.
 //
-// The freetext's other conventions are not parsed.
+// The freetext's other conventions are neither encoded nor parsed.
 #pragma once
 
 #include <math.h>
@@ -51,6 +51,9 @@ struct Message {
   // Returns true if decoding is successful.
   // The contents of `out` are unspecified if false is returned.
   static bool decode(const char *s, Message &out);
+
+  // Returns its length, or 0 if the message is invalid or does not fit
+  size_t encode(char *out, size_t n) const;
 
   bool hasCode(Code code) const;
   // NaN is the only value that is not equal to itself. std::isnan() is not constexpr before C++23.
