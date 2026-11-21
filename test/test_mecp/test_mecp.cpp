@@ -3,6 +3,7 @@
 #include <string>
 
 #include <mecp.h>
+#include <mecp_text.h>
 
 using mecp::Beacon;
 using mecp::Code;
@@ -100,6 +101,40 @@ TEST(MecpDecode, AtMostMaxCodes) {
   ASSERT_TRUE(decode((s + " B03").c_str(), m));  // codes past kMaxCodes are dropped
   EXPECT_EQ(mecp::kMaxCodes, m.code_count);
   EXPECT_FALSE(m.hasCode({ 'B', 3 }));
+}
+
+TEST(MecpText, Readable) {
+  char o[200];
+  EXPECT_GT(mecp::readable("MECP/0/M01 M07 P05 2pax 48.65,20.13", o, sizeof(o)), 0u);
+  EXPECT_STREQ("MAYDAY: Injury, Fracture / immobile, At GPS coordinates - 2pax 48.65,20.13", o);
+  mecp::readable("MECP/3/L01 L06", o, sizeof(o));
+  EXPECT_STREQ("ROUTINE: Beer / drinks, Running late", o);
+  mecp::readable("MECP/2/B03", o, sizeof(o));
+  EXPECT_STREQ("SAFETY: Cancel beacon, I am OK", o);
+  mecp::readable("MECP/1/Q42 hello", o, sizeof(o));   // unknown code: as sent
+  EXPECT_STREQ("URGENT: Q42 - hello", o);
+  EXPECT_EQ(0u, mecp::readable("hello", o, sizeof(o)));
+  EXPECT_STREQ("", o);
+  char small[12];
+  mecp::readable("MECP/0/M01", small, sizeof(small));   // cut to fit
+  EXPECT_STREQ("MAYDAY: Inj", small);
+}
+
+TEST(MecpText, Shown) {
+  const char* plain = "just text";
+  EXPECT_EQ(plain, mecp::shown(plain));
+  const char* a = mecp::shown("MECP/3/L02");
+  const char* b = mecp::shown("MECP/3/L03");
+  EXPECT_STREQ("ROUTINE: Coffee", a);   // still there after the next one
+  EXPECT_STREQ("ROUTINE: Food ready", b);
+  EXPECT_STREQ("MECP/", mecp::shown("MECP/"));   // not one: as it is
+}
+
+TEST(MecpText, CodeTextAndFreeText) {
+  EXPECT_STREQ("Injury", mecp::codeText({ 'M', 1 }));
+  EXPECT_STREQ("Rendezvous at", mecp::codeText({ 'C', 8 }));
+  EXPECT_EQ(nullptr, mecp::codeText({ 'Q', 1 }));
+  EXPECT_STREQ("hi", mecp::freeText("MECP/0/B01 M01 hi", [] { mecp::Message m; mecp::Message::decode("MECP/0/B01 M01 hi", m); return m; }()));
 }
 
 int main(int argc, char** argv) {

@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <mecp_text.h>
 
 #ifndef M_PI
   #define M_PI 3.14159265358979323846
@@ -173,25 +174,55 @@ static inline void fmtLocShare(char* buf, int n, int32_t lat_1e6, int32_t lon_1e
 // sender's name in front), so a message that mentions one isn't taken for it.
 #define SOS_MSG_TAG "[SOS]"
 
+// MECP (lib/mecp, github.com/mecp-org/MECP), read next to Solo's own tags:
+// "MECP/<severity 0-3>/<codes> <freetext>", e.g. "MECP/0/B01 P05 50.06,19.93".
+// Where one starts in `text`: at its start, or after a channel's "name: ".
+static inline const char* mecpStart(const char* text) {
+  if (!text) return nullptr;
+  if (strncmp(text, "MECP/", 5) == 0) return text;
+  const char* s = strstr(text, ": ");
+  return s && strncmp(s + 2, "MECP/", 5) == 0 ? s + 2 : nullptr;
+}
+
+// An MECP message that is an SOS: a distress beacon (B01), or a MAYDAY that
+// isn't a drill or a test (D01, D02).
+static inline bool isMecpSos(const mecp::Message& m) {
+  if (m.beacon() == mecp::Beacon::Active) return true;
+  return m.severity == mecp::Severity::Mayday && !m.hasCode({ 'D', 1 }) && !m.hasCode({ 'D', 2 });
+}
+
+// `text` (without the sender's name in front) an SOS: "[SOS] ..." or an MECP one.
 static inline bool isSos(const char* text) {
-  return text && strncmp(text, SOS_MSG_TAG, strlen(SOS_MSG_TAG)) == 0;
+  if (!text) return false;
+  if (strncmp(text, SOS_MSG_TAG, strlen(SOS_MSG_TAG)) == 0) return true;
+  mecp::Message m;
+  return strncmp(text, "MECP/", 5) == 0 && mecp::Message::decode(text, m) && isMecpSos(m);
 }
 
 // An SOS with a position: its first coordinate (the sender's {loc}, which goes
-// first unless the text puts it elsewhere).
+// first unless the text puts it elsewhere; MECP: in the freetext).
 static inline bool parseSos(const char* text, int32_t& lat_1e6, int32_t& lon_1e6) {
-  return isSos(text) && parseLatLon(text + strlen(SOS_MSG_TAG), lat_1e6, lon_1e6);
+  if (!isSos(text)) return false;
+  if (text[0] == '[') return parseLatLon(text + strlen(SOS_MSG_TAG), lat_1e6, lon_1e6);
+  mecp::Message m;
+  mecp::Message::decode(text, m);
+  return parseLatLon(mecp::freeText(text, m), lat_1e6, lon_1e6);
 }
 
 // True if `text` carries a LOCATION_MSG_TAG share; fills lat/lon (1e6-scaled)
 // from the coordinate that follows it. Returns false for plain text, for a
 // bare coordinate, or for a [WAY] share — only an explicit [LOC] tag counts,
 // so ordinary messages that happen to contain digits don't move anyone's pin.
+// An MECP "at GPS coordinates" (P05) counts too, unless it's an SOS (that one
+// goes to parseSos): "MECP/3/P05 50.06143,19.93658".
 static inline bool parseLocShare(const char* text, int32_t& lat_1e6, int32_t& lon_1e6) {
   if (!text) return false;
   const char* tag = strstr(text, LOCATION_MSG_TAG);
-  if (!tag) return false;
-  return parseLatLon(tag + strlen(LOCATION_MSG_TAG), lat_1e6, lon_1e6);
+  if (tag) return parseLatLon(tag + strlen(LOCATION_MSG_TAG), lat_1e6, lon_1e6);
+  const char* s = mecpStart(text);
+  mecp::Message m;
+  if (!s || !mecp::Message::decode(s, m) || !m.hasCode({ 'P', 5 }) || isMecpSos(m)) return false;
+  return parseLatLon(mecp::freeText(s, m), lat_1e6, lon_1e6);
 }
 
 }  // namespace geo

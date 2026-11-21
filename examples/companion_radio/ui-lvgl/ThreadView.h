@@ -398,8 +398,13 @@ static lv_obj_t* bubble(lv_obj_t* list, const char* from, const char* text, bool
     if (meta_in_header) *age_out = label(hdr, meta, THEME_FONT_SMALL, muted);
   }
   bool mentions_me;
-  msgText(b, text, own, 238, &mentions_me);
-  if (mentions_me && !own) {   // someone answering us: the bubble outlined
+  mecp::Message mm;   // MECP: in words, a MAYDAY / URGENT outlined red
+  const bool alarm = !own && mecp::Message::decode(text, mm) && mm.severity <= mecp::Severity::Urgent;
+  msgText(b, mecp::shown(text), own, 238, &mentions_me);
+  if (alarm) {
+    lv_obj_set_style_border_width(b, 2, 0);
+    lv_obj_set_style_border_color(b, lv_color_hex(theme::FAIL), 0);
+  } else if (mentions_me && !own) {   // someone answering us: the bubble outlined
     lv_obj_set_style_border_width(b, 1, 0);
     lv_obj_set_style_border_color(b, lv_color_hex(theme::ACCENT), 0);
   }

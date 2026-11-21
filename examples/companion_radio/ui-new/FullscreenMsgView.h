@@ -3,6 +3,7 @@
 #include <helpers/ui/DisplayDriver.h>
 #include <Arduino.h>
 #include "icons.h"
+#include <mecp_text.h>
 
 static const int FS_CHARS_MAX = 80;  // max bytes per wrapped line
 
@@ -127,7 +128,7 @@ struct FullscreenMsgView {
 
     // "@[nick] " reply prefix → "To:" header + body (shared parser).
     char to_nick[32];
-    const char* body = msgReplyBody(text, to_nick, sizeof(to_nick));
+    const char* body = mecp::shown(msgReplyBody(text, to_nick, sizeof(to_nick)));   // MECP: in words
 
     const int cw       = display.getCharWidth();
     const int header_h = to_nick[0] ? (lineH * 2 + 4) : (lineH + 2);

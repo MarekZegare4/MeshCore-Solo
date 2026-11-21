@@ -103,6 +103,8 @@ SRCS=(
   lib/ed25519/sha512.c
   lib/ed25519/sign.c
   lib/ed25519/verify.c
+  lib/mecp/src/mecp.cpp
+  lib/mecp/src/mecp_text.cpp
   variants/sim/sim_main.cpp
   variants/sim/target.cpp
   variants/sim/thirdparty/crypto/AES128.cpp
@@ -133,6 +135,7 @@ INCLUDES=(
   -Ivariants/sim/thirdparty/arduinojson
   -Ivariants/sim/thirdparty/gfx
   -Ilib/ed25519
+  -Ilib/mecp/src
   -Isrc
   -Iexamples/companion_radio
   "-Iexamples/companion_radio/ui-$SIM_UI"

@@ -227,6 +227,36 @@ TEST(SosText, NoGpsIsRecognisedOnItsOwn) {
 }
 
 // A beacon moves an SOS that's on the table, and nothing else.
+TEST(SosText, AnMecpSos) {
+  int32_t lat, lon;
+  // A beacon, or a MAYDAY: an SOS, the position from the freetext.
+  ASSERT_TRUE(geo::parseSos("MECP/0/B01 M01 P05 48.65200,20.13050 @1430", lat, lon));
+  EXPECT_EQ(48652000, lat);
+  EXPECT_EQ(20130500, lon);
+  EXPECT_TRUE(geo::parseSos("MECP/0/M01 M07 P05 2pax 48.6520,20.1305", lat, lon));
+  EXPECT_TRUE(geo::parseSos("MECP/1/B01 -41.2865,174.7762", lat, lon));
+  EXPECT_TRUE(geo::isSos("MECP/0/M02"));                     // no position
+  EXPECT_FALSE(geo::parseSos("MECP/0/M02", lat, lon));
+  // Not one: a drill, a test, a lower severity without a beacon, an ack, a cancel.
+  EXPECT_FALSE(geo::isSos("MECP/0/D01 M01 P05 48.65,20.13"));
+  EXPECT_FALSE(geo::isSos("MECP/0/D02"));
+  EXPECT_FALSE(geo::isSos("MECP/1/M01 48.65,20.13"));
+  EXPECT_FALSE(geo::isSos("MECP/2/B02 R01"));
+  EXPECT_FALSE(geo::isSos("MECP/2/B03"));
+  EXPECT_FALSE(geo::isSos("see MECP/0/B01"));
+}
+
+TEST(GeoText, AnMecpPositionIsAShare) {
+  int32_t lat, lon;
+  ASSERT_TRUE(geo::parseLocShare("MECP/3/P05 50.06143,19.93658", lat, lon));
+  EXPECT_EQ(50061430, lat);
+  EXPECT_TRUE(geo::parseLocShare("Alice: MECP/3/L04 P05 49.17950,20.08810", lat, lon));   // a channel's
+  EXPECT_EQ(49179500, lat);
+  EXPECT_FALSE(geo::parseLocShare("MECP/3/L04 49.17950,20.08810", lat, lon));   // no P05
+  EXPECT_FALSE(geo::parseLocShare("MECP/0/B01 P05 48.65,20.13", lat, lon));     // an SOS: parseSos's
+  EXPECT_FALSE(geo::parseLocShare("MECP/3/P05", lat, lon));                     // no position
+}
+
 TEST(LiveTrack, AnAdvertMovesOnlyAnSos) {
   LiveTrackStore t;
   const uint8_t ann[6] = { 1, 2, 3, 4, 5, 6 }, bob[6] = { 9, 9, 9, 9, 9, 9 };

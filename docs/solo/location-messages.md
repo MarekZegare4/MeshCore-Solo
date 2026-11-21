@@ -85,5 +85,26 @@ It goes to the channels and contacts chosen beforehand, again every so often
 (12 sends at most) until someone replies with the agreed acknowledgement word
 or the sender stops it. A receiver keeps an SOS on its map for 24 hours.
 
+## MECP
+
+Solo also reads [MECP](https://github.com/mecp-org/MECP), the Mesh Emergency
+Communication Protocol several other mesh apps speak:
+`MECP/<severity>/<codes> <freetext>`, e.g. `MECP/0/M01 M07 P05 2pax 48.6520,20.1305`.
+Severity 0 MAYDAY, 1 URGENT, 2 SAFETY, 3 ROUTINE; each code a letter and two
+digits (M01 Injury, P05 At GPS coordinates, B01 Distress beacon ...).
+
+- **Shown** in words: "MAYDAY: Injury, Fracture / immobile, At GPS coordinates
+  - 2pax 48.6520,20.1305". A code not in Solo's table yet is shown as sent. On
+  the L2 a MAYDAY or URGENT bubble is outlined red.
+- **An SOS**: a distress beacon (B01) at any severity, or a MAYDAY that isn't a
+  drill or test (D01, D02). The first coordinate pair in the freetext is the
+  position, as for `[SOS]`.
+- **A position share**: any other with P05 (At GPS coordinates) and a coordinate
+  pair, as for `[LOC]`.
+
+Solo still sends its own tags; sending MECP is to come. The decoder is
+`lib/mecp` (`mecp.h`; the English texts in `mecp_text.h`, from MECP's
+`languages/en.json`, CC BY 4.0).
+
 The code: `examples/companion_radio/GeoUtils.h` (formats and parsing),
 `ui-core/LiveShareEngine.h` (Live share), `ui-core/SosEngine.h` (SOS).

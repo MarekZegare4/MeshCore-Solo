@@ -255,7 +255,8 @@ class MessagesScreen : public UIScreen {
 
   // Strip the "@[nick] " reply prefix for compact list display (body only).
   // Shares the one parser with the fullscreen view — see msgReplyBody().
-  static const char* skipReplyPrefix(const char* text) { return msgReplyBody(text); }
+  // An MECP message comes back in words (mecp::shown).
+  static const char* skipReplyPrefix(const char* text) { return mecp::shown(msgReplyBody(text)); }
 
   // Split a DM-history entry into the name to show as the author and the body to
   // show beneath it. Room servers carry many guests, so incoming room posts are

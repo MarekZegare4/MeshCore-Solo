@@ -1,6 +1,7 @@
 #include "MyMesh.h"
 #include "MsgExpand.h"
 #include "ui-core/BotCommands.h"
+#include <mecp_text.h>   // GeoUtils.h reads MECP; named in a .cpp so the library finder links lib/mecp
 #include "GeoUtils.h"
 #include "Features.h"
 
