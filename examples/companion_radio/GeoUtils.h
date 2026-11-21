@@ -191,6 +191,14 @@ static inline bool isMecpSos(const mecp::Message& m) {
   return m.severity == mecp::Severity::Mayday && !m.hasCode({ 'D', 1 }) && !m.hasCode({ 'D', 2 });
 }
 
+// An MECP message's position (the decoder's GPS coordinates convention).
+static inline bool mecpLatLon(const mecp::Message& m, int32_t& lat_1e6, int32_t& lon_1e6) {
+  if (!m.hasGPS()) return false;
+  lat_1e6 = (int32_t)(m.gps.lat * 1e6 + (m.gps.lat < 0 ? -0.5 : 0.5));
+  lon_1e6 = (int32_t)(m.gps.lon * 1e6 + (m.gps.lon < 0 ? -0.5 : 0.5));
+  return true;
+}
+
 // `text` (without the sender's name in front) an SOS: "[SOS] ..." or an MECP one.
 static inline bool isSos(const char* text) {
   if (!text) return false;
@@ -206,7 +214,7 @@ static inline bool parseSos(const char* text, int32_t& lat_1e6, int32_t& lon_1e6
   if (text[0] == '[') return parseLatLon(text + strlen(SOS_MSG_TAG), lat_1e6, lon_1e6);
   mecp::Message m;
   mecp::Message::decode(text, m);
-  return parseLatLon(mecp::freeText(text, m), lat_1e6, lon_1e6);
+  return mecpLatLon(m, lat_1e6, lon_1e6);
 }
 
 // True if `text` carries a LOCATION_MSG_TAG share; fills lat/lon (1e6-scaled)
@@ -222,7 +230,7 @@ static inline bool parseLocShare(const char* text, int32_t& lat_1e6, int32_t& lo
   const char* s = mecpStart(text);
   mecp::Message m;
   if (!s || !mecp::Message::decode(s, m) || !m.hasCode({ 'P', 5 }) || isMecpSos(m)) return false;
-  return parseLatLon(mecp::freeText(s, m), lat_1e6, lon_1e6);
+  return mecpLatLon(m, lat_1e6, lon_1e6);
 }
 
 }  // namespace geo

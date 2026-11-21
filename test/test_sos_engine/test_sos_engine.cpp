@@ -255,6 +255,11 @@ TEST(GeoText, AnMecpPositionIsAShare) {
   EXPECT_FALSE(geo::parseLocShare("MECP/3/L04 49.17950,20.08810", lat, lon));   // no P05
   EXPECT_FALSE(geo::parseLocShare("MECP/0/B01 P05 48.65,20.13", lat, lon));     // an SOS: parseSos's
   EXPECT_FALSE(geo::parseLocShare("MECP/3/P05", lat, lon));                     // no position
+  // The decoder's GPS convention: not after a letter; out of range skipped.
+  EXPECT_FALSE(geo::parseLocShare("MECP/3/P05 x48.65,20.13", lat, lon));
+  ASSERT_TRUE(geo::parseLocShare("MECP/3/P05 95.0,200.0 47.3,8.5", lat, lon));
+  EXPECT_EQ(47300000, lat);
+  EXPECT_EQ(8500000, lon);
 }
 
 TEST(LiveTrack, AnAdvertMovesOnlyAnSos) {
