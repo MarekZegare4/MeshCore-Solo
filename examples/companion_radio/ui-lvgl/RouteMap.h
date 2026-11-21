@@ -324,3 +324,16 @@ void UITask::refreshRouteTools() {
   g.label(l, sizeof(l), _prefs && _prefs->units_imperial);
   setTextFmt(_nav_route_lbl, "%s  -  %s", g.name(), l);
 }
+
+// The map's layers and popup labels kept in statics (NavMap.h, here) go with
+// its screen: newScreen() forgets them, or a later popup anywhere (a message's
+// menu: navPopupPanel -> mapPreviewEnd) would draw into a freed object.
+static void mapObjsForget() {
+  navmap::s_trail = navmap::s_target_line = navmap::s_target_ring = navmap::s_target_dot = nullptr;
+  navmap::pv::s_line = nullptr;
+  navmap::s_dial = nullptr;
+  navmap::s_st_del_lbl = nullptr;
+  navmap::s_tools_list = navmap::s_tools_chart = nullptr;
+  routemap::s_line = nullptr;
+  routemap::s_del_lbl = nullptr;
+}

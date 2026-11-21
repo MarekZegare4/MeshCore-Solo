@@ -1317,6 +1317,7 @@ int UITask::fillPending() const {
 }
 
 #include "NodeViz.h"   // the node detail's rose and path (newScreen() drops its card)
+static void mapObjsForget();   // RouteMap.h: the map's own objects, gone with its screen
 
 lv_obj_t* UITask::newScreen(const char* title, bool with_back) {
   quickPanelClose(false);
@@ -1332,6 +1333,7 @@ lv_obj_t* UITask::newScreen(const char* title, bool with_back) {
   nodeviz::s_card = nullptr;
   _scan_overlay = _scan_list = _scan_status = nullptr;   // the popup went with the old screen
   _map_area = _map_marks = _map_me = _map_zoom_lbl = _map_hint = _map_dl_pill = _map_center_btn = nullptr;
+  mapObjsForget();
   _dl_overlay = _dl_info = _dl_sub = _dl_start_lbl = _dl_job_row = _dl_job_lbl = nullptr;
   _nav_bar = _nav_title = _nav_info = _nav_clear = nullptr;
   _nav_overlay = _nav_ta = _nav_kb = _nav_del_lbl = _nav_rec = _nav_avg_pill = nullptr;
