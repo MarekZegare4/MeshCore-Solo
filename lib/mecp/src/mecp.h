@@ -1,8 +1,10 @@
-// MECP (Mesh Emergency Communication Protocol) 1.4.0 decoder: severity and codes only.
+// MECP (Mesh Emergency Communication Protocol) 1.4.0 decoder: severity, codes, and the GPS
+// coordinates convention in the freetext.
 //
-// Freetext after the codes is neither checked nor parsed.
+// The freetext's other conventions are not parsed.
 #pragma once
 
+#include <math.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -26,6 +28,13 @@ enum class Beacon : uint8_t {
   Cancel,
 };
 
+// A position from the freetext's GPS coordinates convention, such as "48.6520,20.1305".
+// NaN/NaN when the message has none.
+struct Gps {
+  double lat = NAN;  // -90 to 90
+  double lon = NAN;  // -180 to 180
+};
+
 static constexpr size_t kMaxTextLen = 160;                      // MeshCore's MAX_TEXT_LEN
 static constexpr size_t kHeaderLen = sizeof("MECP/0/") - 1;
 static constexpr size_t kCodeLen = sizeof("B01") - 1;
@@ -36,6 +45,7 @@ struct Message {
   Severity severity = Severity::Mayday;
   Code codes[kMaxCodes];  // only the first code_count are set
   uint8_t code_count = 0;
+  Gps gps;
 
   // s must be null terminated, and have the channel prefix ("name: ") stripped.
   // Returns true if decoding is successful.
@@ -43,6 +53,8 @@ struct Message {
   static bool decode(const char *s, Message &out);
 
   bool hasCode(Code code) const;
+  // NaN is the only value that is not equal to itself. std::isnan() is not constexpr before C++23.
+  constexpr bool hasGPS() const { return gps.lat == gps.lat && gps.lon == gps.lon; }
   Beacon beacon() const;
 };
 

@@ -137,6 +137,74 @@ TEST(MecpText, CodeTextAndFreeText) {
   EXPECT_STREQ("hi", mecp::freeText("MECP/0/B01 M01 hi", [] { mecp::Message m; mecp::Message::decode("MECP/0/B01 M01 hi", m); return m; }()));
 }
 
+// ---------- GPS coordinates convention ----------
+
+static_assert(!Message().hasGPS(), "a new Message has no position");
+
+struct GpsCase {
+  const char* id;  // from MECP-polyglot's conformance/vectors/decode-1.4.0.json, or "solo.*"
+  const char* input;
+  bool has_gps;
+  double lat, lon;
+};
+
+static const GpsCase kGpsCases[] = {
+  { "env.readme", "MECP/0/M01 M07 2pax P05 48.6520,20.1305", true, 48.652, 20.1305 },
+  { "b.arabic-comma", "MECP/0/M01 48.65,20.13\xD8\x8C", true, 48.65, 20.13 },
+  { "gps.canonical", "MECP/0/M04 P05 -41.2865,174.7762", true, -41.2865, 174.7762 },
+  { "gps.plus-and-space", "MECP/0/M04 +48.8566, 2.3522", true, 48.8566, 2.3522 },
+  { "gps.high-precision", "MECP/0/M04 48.85661234,2.35221234", true, 48.85661234, 2.35221234 },
+  { "gps.limits", "MECP/0/M04 90.0,180.0", true, 90.0, 180.0 },
+  { "gps.neg-limits", "MECP/0/M04 -90.0,-180.0", true, -90.0, -180.0 },
+  { "gps.lat-out-of-range", "MECP/0/M04 90.0001,0.0", false, 0, 0 },
+  { "gps.resume-after-invalid", "MECP/3/L06 95.0,200.0 47.3,8.5", true, 47.3, 8.5 },
+  { "gps.integers", "MECP/0/M04 48,20", false, 0, 0 },
+  { "gps.zero-zero", "MECP/0/M04 0,0", false, 0, 0 },
+  { "gps.decimal-comma", "MECP/3/L02 2,5 km", false, 0, 0 },
+  { "gps.colon-left", "MECP/0/M01 at:48.65,20.13", true, 48.65, 20.13 },
+  { "gps.trailing-period", "MECP/0/M01 48.65,20.13.", true, 48.65, 20.13 },
+  { "gps.letter-left", "MECP/0/M01 x48.65,20.13", false, 0, 0 },
+  { "gps.space-before-comma", "MECP/0/M01 48.65 ,20.13", false, 0, 0 },
+  { "gps.altitude-suffix", "MECP/0/M01 48.65,20.13,1200", true, 48.65, 20.13 },
+  { "gps.two-spaces-after-comma", "MECP/0/M01 48.65,  20.13", false, 0, 0 },
+  { "gps.after-codes-later", "MECP/0/M01 M07 2pax P05 48.65,20.13 @1430", true, 48.65, 20.13 },
+  { "dur.with-codes-before", "MECP/2/C01 R03 P05 47.3769,12.1048 45min", true, 47.3769, 12.1048 },
+  { "dur.bare-latitude", "MECP/2/R03 47.3769,12.1048", true, 47.3769, 12.1048 },
+  { "mix.everything", "MECP/0/M01 M07 R03 3pax 48.8566,2.3522 @1430 @en ~OK1ABC #base 20min", true, 48.8566,
+    2.3522 },
+  { "mix.beacon", "MECP/0/B01 M01 P05 48.65,20.13 @1430", true, 48.65, 20.13 },
+  { "mix.drill", "MECP/0/D01 M01 M07 2pax P05 48.65,20.13", true, 48.65, 20.13 },
+  { "env.codes-only", "MECP/2/B03", false, 0, 0 },
+  // Boundaries that take more than one byte of UTF-8.
+  { "solo.nbsp-left", "MECP/0/M01 at\xC2\xA0" "48.65,20.13", true, 48.65, 20.13 },
+  { "solo.corner-brackets", "MECP/0/M01 \xE3\x80\x8C" "48.65,20.13\xE3\x80\x8D", true, 48.65, 20.13 },
+  { "solo.cjk-letter-left", "MECP/0/M01 \xE5\xB1\xB1" "48.65,20.13", false, 0, 0 },
+  { "solo.cjk-letter-right", "MECP/0/M01 48.65,20.13\xE5\xB1\xB1", false, 0, 0 },
+  { "solo.truncated-utf8-left", "MECP/0/M01 \xE3\x80" "48.65,20.13", false, 0, 0 },
+};
+
+TEST(MecpGps, ConformanceVectors) {
+  for (const GpsCase& c : kGpsCases) {
+    SCOPED_TRACE(c.id);
+    Message m;
+    ASSERT_TRUE(decode(c.input, m));
+    ASSERT_EQ(c.has_gps, m.hasGPS());
+    if (!c.has_gps) continue;
+    EXPECT_DOUBLE_EQ(c.lat, m.gps.lat);
+    EXPECT_DOUBLE_EQ(c.lon, m.gps.lon);
+  }
+}
+
+TEST(MecpGps, ResetsFromAPreviousDecode) {
+  Message m;
+  ASSERT_TRUE(decode("MECP/0/M01 P05 48.65,20.13", m));
+  ASSERT_TRUE(m.hasGPS());
+  ASSERT_TRUE(decode("MECP/0/M01", m));
+  EXPECT_FALSE(m.hasGPS());
+  EXPECT_TRUE(isnan(m.gps.lat));
+  EXPECT_TRUE(isnan(m.gps.lon));
+}
+
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
