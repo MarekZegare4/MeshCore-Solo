@@ -25,6 +25,7 @@ bool SharpMemDisplay::begin() {
   spi.begin(PIN_DISPLAY_SCLK, -1, PIN_DISPLAY_MOSI, -1);
 #endif
   if (!display.begin()) return false;   // allocates the 12 KB frame buffer
+  if (!_sent) _sent = (uint8_t*)malloc(SHARP_W * SHARP_H / 8);   // none: every frame whole
   display.setRotation(DISPLAY_ROTATION);
   display.clearDisplay();
   _written_at = millis();
@@ -57,7 +58,7 @@ void SharpMemDisplay::turnOn() {
 void SharpMemDisplay::turnOff() {
   if (_init && _isOn) {
     display.fillScreen(SHARP_WHITE);   // a white frame, written as any other
-    display.refresh();
+    writeLines(true);
     _written_at = millis();
   }
   _isOn = false;
@@ -68,7 +69,7 @@ void SharpMemDisplay::showPoweredOff() {
   startFrame(SHARP_WHITE);
   setTextSize(1);
   drawTextCentered(width() / 2, (height() - getLineHeight()) / 2, "Powered off");
-  display.refresh();
+  writeLines(true);
 }
 
 void SharpMemDisplay::clear() {
@@ -82,10 +83,44 @@ void SharpMemDisplay::setDisplayRotation(uint8_t rot) {
   updateLayout();
 }
 
+// The rows that differ from what the panel shows, in one write command (each
+// row: its address from 1, the pixels, a trailer byte; one more trailer at the
+// end) -- a turning picture that fills a quarter of the screen costs a
+// quarter of a frame. `all`: every row, whatever was sent before.
+void SharpMemDisplay::writeLines(bool all) {
+  const int bpl = SHARP_W / 8;
+  const uint8_t* buf = display.getBuffer();
+  if (!buf) return;
+  bool open = false;
+  for (int row = 0; row < SHARP_H; row++) {
+    const uint8_t* src = buf + row * bpl;
+    if (!all && _sent_ok && _sent && memcmp(src, _sent + row * bpl, bpl) == 0) continue;
+    if (!open) {
+      _vcom = !_vcom;
+      spi.beginTransaction(SPISettings(SHARP_SPI_HZ, LSBFIRST, SPI_MODE0));
+      digitalWrite(PIN_DISPLAY_CS, HIGH);
+      spi.transfer(0x01 | (_vcom ? 0x02 : 0x00));   // write, with VCOM
+      open = true;
+    }
+    uint8_t line[bpl + 2];
+    line[0] = (uint8_t)(row + 1);
+    memcpy(line + 1, src, bpl);
+    line[bpl + 1] = 0x00;
+    spi.transfer(line, bpl + 2);
+    if (_sent) memcpy(_sent + row * bpl, src, bpl);
+  }
+  if (open) {
+    spi.transfer(0x00);
+    digitalWrite(PIN_DISPLAY_CS, LOW);
+    spi.endTransaction();
+    _written_at = millis();
+  }
+  _sent_ok = _sent != nullptr;
+}
+
 void SharpMemDisplay::endFrame() {
   if (!frameChanged()) return;
-  display.refresh();   // the whole buffer; flips VCOM as it goes
-  _written_at = millis();
+  writeLines(false);
 }
 
 void SharpMemDisplay::idle() {

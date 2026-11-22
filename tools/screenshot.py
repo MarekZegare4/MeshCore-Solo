@@ -35,6 +35,7 @@ RESP_CODE_ERR = 1
 DISPLAY_TYPE_OLED = 0   # page-based, column-major (SH1106/SSD1306)
 DISPLAY_TYPE_EINK = 1   # row-major, MSB-first, 1=white/0=black (GxEPD2)
 DISPLAY_TYPE_RGB565 = 2 # row-major, 16-bit little-endian (colour screens, e.g. Wio Tracker L2)
+DISPLAY_TYPE_SHARP = 3  # row-major, LSB-first, 1=white (Adafruit_SharpMem's buffer)
 
 # No panel-specific constants needed — the firmware now sends GxEPD2's own reported
 # dimensions (which use WIDTH_VISIBLE, not the full physical WIDTH), so the header
@@ -121,6 +122,8 @@ def _expected_buffer_size(width, height, display_type):
     """Bytes the firmware should send for given dims+type."""
     if display_type == DISPLAY_TYPE_RGB565:
         return width * height * 2
+    if display_type == DISPLAY_TYPE_SHARP:
+        return width * height // 8
     if display_type == DISPLAY_TYPE_EINK:
         # GxEPD2 buffer is in physical panel coordinates: row-major,
         # stride = ceil(WIDTH_VISIBLE / 8) bytes, HEIGHT rows.
@@ -292,6 +295,21 @@ def eink_buffer_to_image(buffer, log_width, log_height, rotation):
     return image
 
 
+def sharp_buffer_to_image(buffer, width, height, rotation):
+    """Adafruit_SharpMem's buffer: rows of `width` pixels, LSB first, 1 = white;
+    the panel's own orientation, turned by `rotation` (GFX: 90 degrees each)."""
+    image = Image.new("1", (width, height), 0)
+    px = image.load()
+    stride = width // 8
+    for y in range(height):
+        row = buffer[y * stride:(y + 1) * stride]
+        for x in range(width):
+            px[x, y] = 1 if row[x >> 3] & (1 << (x & 7)) else 0
+    if rotation:
+        image = image.rotate(-90 * rotation, expand=True)
+    return image.convert("RGB")
+
+
 def rgb565_buffer_to_image(buffer, width, height):
     """Colour screen: RGB565 little-endian, row-major."""
     return Image.frombuffer("RGB", (width, height), bytes(buffer), "raw", "BGR;16", 0, 1)
@@ -303,6 +321,8 @@ def buffer_to_image(buffer, width, height, display_type, rotation=0, scale=1):
         image_rgb = rgb565_buffer_to_image(buffer, width, height)
     elif display_type == DISPLAY_TYPE_EINK:
         image_rgb = eink_buffer_to_image(buffer, width, height, rotation)
+    elif display_type == DISPLAY_TYPE_SHARP:
+        image_rgb = sharp_buffer_to_image(buffer, width, height, rotation)
     else:
         image_rgb = oled_buffer_to_image(buffer, width, height)
 
@@ -376,7 +396,7 @@ def main():
                     result = receive_screenshot(ser, code=RESP_CODE_SCREENSHOT_OLD)
                 if result:
                     buffer_data, width, height, display_type, disp_rotation = result
-                    type_str = {DISPLAY_TYPE_EINK: "e-ink", DISPLAY_TYPE_RGB565: "colour"}.get(display_type, "OLED")
+                    type_str = {DISPLAY_TYPE_EINK: "e-ink", DISPLAY_TYPE_RGB565: "colour", DISPLAY_TYPE_SHARP: "Sharp"}.get(display_type, "OLED")
                     print(
                         f"Received framebuffer: {width}x{height} {type_str} rot={disp_rotation}, {len(buffer_data)} bytes"
                     )
