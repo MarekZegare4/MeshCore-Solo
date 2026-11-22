@@ -24,6 +24,7 @@
 #include <math.h>
 #include <stdint.h>
 #include <string.h>
+#include <algorithm>
 
 namespace magcal {
 
@@ -126,9 +127,56 @@ public:
   bool ready() const { return _n >= MIN_POINTS && coverage() >= MIN_CELLS; }
 
   // The fit, into `out`; `rms` (optional): how far the corrected readings stray
-  // from the sphere, as a share of its radius (0.02: 2 %). False when it
-  // isn't an ellipsoid (too few or too flat readings).
-  bool fit(Cal& out, float* rms = nullptr) const {
+  // from the sphere, as a share of its radius (0.02: 2 %). Fitted twice: the
+  // tenth straying most from the first fit (a phone or a watch passing by,
+  // a cable swinging) is left out of the second, and of its rms. False when
+  // it isn't an ellipsoid (too few or too flat readings). `once`: the first
+  // fit only, over every reading (as an offline fit would be).
+  bool fit(Cal& out, float* rms = nullptr, bool once = false) const {
+    if (!fitSome(out, nullptr)) return false;
+    uint8_t keep[N];
+    memset(keep, 1, sizeof(keep));
+    if (!once) trimmedRefit(out, keep);
+    if (rms) {
+      double sum = 0;
+      int k = 0;
+      for (int i = 0; i < _n; i++) {
+        if (!keep[i]) continue;
+        const double d = stray(out, _p[i]);
+        sum += d * d;
+        k++;
+      }
+      *rms = k ? (float)sqrt(sum / k) : 1;
+    }
+    return true;
+  }
+
+private:
+  Vec _p[N];
+  int _n = 0;
+  Vec _lo = { 0, 0, 0 }, _hi = { 0, 0, 0 };
+
+  // The tenth straying most from `out` left out (`keep`), and `out` fitted
+  // again without them.
+  void trimmedRefit(Cal& out, uint8_t* keep) const {
+    float e[N], sorted[N];
+    for (int i = 0; i < _n; i++) sorted[i] = e[i] = fabsf((float)stray(out, _p[i]));
+    std::nth_element(sorted, sorted + (_n * 9) / 10, sorted + _n);
+    const float cut = sorted[(_n * 9) / 10];
+    for (int i = 0; i < _n; i++) keep[i] = e[i] <= cut;
+    Cal second;
+    if (fitSome(second, keep)) out = second;
+    else memset(keep, 1, N);
+  }
+
+  // A reading's distance from the fitted sphere, as a share of its radius.
+  static double stray(const Cal& c, Vec p) {
+    const Vec q = c.apply(p);
+    return sqrt((double)q.x * q.x + (double)q.y * q.y + (double)q.z * q.z) / c.field - 1;
+  }
+
+  // The fit of the readings `keep` marks (nullptr: all).
+  bool fitSome(Cal& out, const uint8_t* keep) const {
     if (_n < 10) return false;
     const Vec c0 = roughCentre();
     double s = fmax(fmax(_hi.x - _lo.x, _hi.y - _lo.y), _hi.z - _lo.z) / 2;
@@ -136,6 +184,7 @@ public:
     // a x2 + b y2 + c z2 + 2d yz + 2e xz + 2f xy + 2g x + 2h y + 2i z = 1
     double NM[9][10] = {};
     for (int k = 0; k < _n; k++) {
+      if (keep && !keep[k]) continue;
       const double x = (_p[k].x - c0.x) / s, y = (_p[k].y - c0.y) / s, z = (_p[k].z - c0.z) / s;
       const double r[9] = { x * x, y * y, z * z, 2 * y * z, 2 * x * z, 2 * x * y, 2 * x, 2 * y, 2 * z };
       for (int i = 0; i < 9; i++) {
@@ -172,22 +221,8 @@ public:
     out.b[1] = (float)(c0.y + s * bu[1]);
     out.b[2] = (float)(c0.z + s * bu[2]);
     out.field = (float)r;
-    if (rms) {
-      double e = 0;
-      for (int i = 0; i < _n; i++) {
-        const Vec q = out.apply(_p[i]);
-        const double d = sqrt((double)q.x * q.x + (double)q.y * q.y + (double)q.z * q.z) / r - 1;
-        e += d * d;
-      }
-      *rms = (float)sqrt(e / _n);
-    }
     return true;
   }
-
-private:
-  Vec _p[N];
-  int _n = 0;
-  Vec _lo = { 0, 0, 0 }, _hi = { 0, 0, 0 };
 
   static Vec dir(Vec p, Vec c) {
     const float x = p.x - c.x, y = p.y - c.y, z = p.z - c.z;

@@ -105,7 +105,7 @@ TEST(MagCal, TheTrackersReadingsMatchItsMatlabFit) {
   for (const auto& p : TRACKER_ACC) c.add({ p[0], p[1], p[2] });
   magcal::Cal cal;
   float rms = 1;
-  ASSERT_TRUE(c.fit(cal, &rms));
+  ASSERT_TRUE(c.fit(cal, &rms, true));   // one fit over all, as MATLAB's
   const float b_acc[3] = { -0.0173f, 0.0734f, 0.3066f };
   const float A_acc[3][3] = { { 0.9920f, 0.0036f, 0.0066f }, { 0.0036f, 0.9954f, 0.0017f }, { 0.0066f, 0.0017f, 0.9983f } };
   for (int i = 0; i < 3; i++) EXPECT_NEAR(b_acc[i], cal.b[i], 0.005f) << "b[" << i << "]";
@@ -133,6 +133,27 @@ TEST(MagHeading, LevelAndTilted) {
   const float q = 40 * 0.0174533f;
   EXPECT_NEAR(90, magcal::heading(m, up, { 0, cosf(q), sinf(q) }), 0.1f);
   EXPECT_LT(magcal::heading(m, { 0, 0, 0 }, { 1, 0, 0 }), 0);   // no gravity: undefined
+}
+
+// A tenth of the readings thrown off (a phone passing by): the second fit,
+// without them, finds the field the rest lie on.
+TEST(MagCal, OutliersAreLeftOut) {
+  magcal::Collector c;
+  Rng r;
+  int i = 0;
+  while (c.count() < magcal::Collector::N && i < 4000) {
+    const Vec d = randomDir(r);
+    Vec v = distorted({ d.x * 50, d.y * 50, d.z * 50 }, r, 0.3f);
+    if (i++ % 10 == 0) { v.x += 15; v.y -= 10; }
+    c.add(v);
+  }
+  magcal::Cal once, twice;
+  float rms_once, rms_twice;
+  ASSERT_TRUE(c.fit(once, &rms_once, true));
+  ASSERT_TRUE(c.fit(twice, &rms_twice));
+  EXPECT_LT(rms_twice, rms_once / 2);
+  EXPECT_LT(rms_twice, 0.02f);
+  for (int k = 0; k < 3; k++) EXPECT_NEAR(H[k], twice.b[k], 1.0f) << "b[" << k << "]";
 }
 
 }  // namespace

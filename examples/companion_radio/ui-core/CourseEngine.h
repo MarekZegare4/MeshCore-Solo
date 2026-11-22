@@ -7,12 +7,16 @@
 // the newest fix from the latest one at least MIN_MOVE_M behind it, within the
 // last RING seconds: a bike's is a couple of seconds old, a slow walk's (3 km/h,
 // under a metre a second) fifteen. Gross GPS jumps are rejected on insert.
+// A calibrated compass (Compass.h), where the board has one, comes first:
+// it knows which way the device faces, standing still too.
 
 #include "../GeoUtils.h"
+#include "Compass.h"
 
 class CourseEngine {
 public:
   void begin(SensorManager* sensors) { _sensors = sensors; }
+  void setCompass(const Compass* c) { _compass = c; }
 
   void loop() {
     if ((int32_t)(millis() - _next_sample_ms) < 0) return;
@@ -57,6 +61,7 @@ public:
   // recent movement to derive a stable heading. Holds the last good heading
   // while standing still.
   bool currentCourse(int& deg_out) const {
+    if (_compass && _compass->heading(deg_out)) return true;
     // GPS noise is a few metres: over 12 m it turns the heading by ~15° at most.
     static const float MIN_MOVE_M = 12.0f;
     if (_count >= 2) {
@@ -88,6 +93,7 @@ private:
     return t >= 0.25f && t <= 0.75f;
   }
 
+  const Compass* _compass = nullptr;
   int32_t  _fix_lat = 0, _fix_lon = 0;
   uint32_t _fix_ms = 0;
   bool     _had_fix = false;

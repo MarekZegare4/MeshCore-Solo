@@ -655,6 +655,12 @@ struct NodePrefsFields {
   // Map options > "View": what a map fits in when not zoomed by hand
   // (ui-core/MapFrame.h): 0 = All (default), 1 Trail, 2 People, 3 Waypoints.
   uint8_t  map_view;
+  // The compass, on a board with a magnetometer (ui-core/Compass.h): its
+  // calibration (MagCal.h: A row by row, b, the field in uT; field 0 = not
+  // calibrated), and the magnetic declination in tenths of a degree, east
+  // positive, added to turn magnetic north into true (Poland: about +60).
+  float    compass_cal[13];
+  int16_t  compass_decl_x10;
 
   // Single source of truth for the live-share option tables (shared by the Map
   // UI labels and the auto-send engine in UITask).
@@ -1006,6 +1012,7 @@ class NodePrefs : public NodePrefsFields, public ConfigSerializer {
     s.def("rt_follow", route_follow); s.def("rt_seg", route_seg);
     s.def("avg", gps_avg_idx); s.def("trk_shared", track_shared_loc);
     s.def("adv_auto", advert_auto_interval_sec); s.def("adv_prec", advert_loc_prec);
+    s.hex("compass", compass_cal); s.def("decl", compass_decl_x10);
   }
   void shareSolo(Section& s) {
     s.def("en", loc_share_enabled); s.def("tgt", loc_share_target_type);

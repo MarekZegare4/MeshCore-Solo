@@ -55,6 +55,8 @@ public:
     ping.begin(prefs);
     route.begin(prefs, &ping);
     course.begin(sensors);
+    compass.begin(prefs);
+    course.setCompass(&compass);
     flow.begin(prefs, &course, sensors);
     live_share.begin(prefs, &course, &events);
     locator.begin(prefs, &course, &live_share, &events);
@@ -82,6 +84,7 @@ public:
     history_log.loop();
 #endif
     clock.loop();
+    compass.loop(millis());
     course.loop();
     live_share.loop();
     locator.loop();
@@ -162,6 +165,7 @@ public:
   ClockEngine clock;        // alarm / countdown / ring
   PingEngine  ping;         // single in-flight ping / trace + last result
   PathEditor  route;        // route to a node: edit, trace out and back, save
+  Compass     compass;      // which way the device faces, on a board with a magnetometer
   CourseEngine course;      // GPS position + course-over-ground ring
   PacketFlow  flow;         // packets heard, as lines between nodes for the map
   SignalMeter sig_meter;    // how well repeaters were heard lately (status bar bars)
@@ -551,8 +555,97 @@ public:
   // The companion CLI's settings keys: the frontend answers them from the
   // schema (ui-core/SettingsCli.h, included where the schema is).
   bool onCliCommand(const char* command, char* reply, int n) override {
+#if HAS_COMPASS
+    if (compassCli(command, reply, n)) return true;
+#endif
     return _host->cliCommand(command, reply, n);
   }
+#if HAS_COMPASS
+  // The compass's console (until its screen; ui-core/Compass.h):
+  //   compass                 heading, calibration, the latest readings
+  //   compass.cal start       collect: turn the device every way
+  //   compass.cal             how far it's got (readings, cells of the sphere)
+  //   compass.cal done        fit, and keep it when it's good
+  //   compass.cal cancel | forget
+  //   get / set compass.decl  the declination, degrees east (Poland ~6.5)
+  //   compass.align <deg>     the device points this way now: the correction
+  //                           (compass.decl) set to make it so
+  bool compassCli(const char* c, char* r, int n) {
+    if (!strcmp(c, "compass")) {
+      int h;
+      const bool hv = compass.heading(h);
+      const magcal::Vec m = compass.raw(), f = compass.field(), a = compass.accel();
+      int o = snprintf(r, n, "%s, heading %s", !compass.present() ? "no IMU" : compass.calibrated() ? "calibrated" : "not calibrated",
+                       hv ? "" : "-");
+      if (hv && o < n) o += snprintf(r + o, n - o, "%d", h);
+      if (o < n) o += snprintf(r + o, n - o, ", raw %.1f %.1f %.1f", m.x, m.y, m.z);
+      if (compass.calibrated() && o < n)
+        o += snprintf(r + o, n - o, ", field %.1f %.1f %.1f |%.1f| of %.1f uT", f.x, f.y, f.z,
+                      sqrtf(f.x * f.x + f.y * f.y + f.z * f.z), compass.cal().field);
+      if (o < n) snprintf(r + o, n - o, ", acc %.2f %.2f %.2f", a.x, a.y, a.z);
+      return true;
+    }
+    if (!strcmp(c, "compass.cal start") || !strcmp(c, "compass.cal auto")) {
+      const bool a = c[12] == 'a';
+      snprintf(r, n, compass.start(a, [] { the_mesh.savePrefs(); }) ? (a ? "OK, turn it every way; it ends by itself"
+                                                                        : "OK, turn it every way, then compass.cal done")
+                                                                  : "Error, no memory");
+      return true;
+    }
+    if (!strcmp(c, "compass.cal")) {
+      const magcal::Collector* col = compass.collector();
+      if (!col) {
+        static const char* const R[] = { "", "not enough", "no fit", "poor fit", "saved" };
+        if (compass.autoResult() != Compass::NONE)
+          snprintf(r, n, "Done by itself: %s (%.1f %%)", R[compass.autoResult()], compass.autoRms() * 100);
+        else snprintf(r, n, "Not collecting: compass.cal start | auto");
+        return true;
+      }
+      snprintf(r, n, "%d readings, %d/%d cells%s", col->count(), col->coverage(), magcal::Collector::CELLS,
+               col->ready() ? ", ready" : "");
+      return true;
+    }
+    if (!strcmp(c, "compass.cal done")) {
+      float rms;
+      switch (compass.finish(rms)) {
+        case Compass::NONE:
+        case Compass::NOT_ENOUGH: snprintf(r, n, "Error, not enough yet (compass.cal)"); break;
+        case Compass::NO_FIT:     snprintf(r, n, "Error, no fit: turn it more ways"); break;
+        case Compass::POOR:       snprintf(r, n, "Error, poor fit (%.1f %%): again, away from metal", rms * 100); break;
+        case Compass::SAVED: {
+          const magcal::Cal& k = compass.cal();
+          snprintf(r, n, "OK, %.1f %% off the sphere, field %.1f uT, b %.1f %.1f %.1f", rms * 100, k.field, k.b[0], k.b[1], k.b[2]);
+          the_mesh.savePrefs();
+          break;
+        }
+      }
+      return true;
+    }
+    if (!strcmp(c, "compass.cal cancel")) { compass.cancel(); snprintf(r, n, "OK"); return true; }
+    if (!strcmp(c, "compass.cal forget")) { compass.forget(); the_mesh.savePrefs(); snprintf(r, n, "OK"); return true; }
+    if (!strncmp(c, "compass.align ", 14)) {   // the device points this way (degrees from true north): the rest follows
+      int h;
+      if (!compass.heading(h)) { snprintf(r, n, "Error, no heading (calibrated?)"); return true; }
+      int d = _prefs->compass_decl_x10 + (atoi(c + 14) - h) * 10;
+      while (d > 1800) d -= 3600;
+      while (d < -1800) d += 3600;
+      _prefs->compass_decl_x10 = (int16_t)d;
+      the_mesh.savePrefs();
+      snprintf(r, n, "OK, correction now %.1f", d / 10.0f);
+      return true;
+    }
+    if (!strcmp(c, "get compass.decl")) { snprintf(r, n, "> %.1f", _prefs->compass_decl_x10 / 10.0f); return true; }
+    if (!strncmp(c, "set compass.decl ", 17)) {
+      const float d = atof(c + 17);
+      if (d < -180 || d > 180) { snprintf(r, n, "Error, -180 to 180"); return true; }
+      _prefs->compass_decl_x10 = (int16_t)lroundf(d * 10);
+      the_mesh.savePrefs();
+      snprintf(r, n, "OK");
+      return true;
+    }
+    return false;
+  }
+#endif
   void onAdminReply(const uint8_t* pub_key, const char* text) override {
     admin.onReply(pub_key, text);
     _host->onAdminStateChanged();

@@ -14,12 +14,25 @@
 // With somewhere to go (the next bend of a route followed or of Track back, else
 // the Locator target) its flag sits under the tape at its bearing, or at the
 // edge it lies past; standing still, its bearing is spelled out instead.
+//
+// On a board with a magnetometer (HAS_COMPASS) the heading is the compass's
+// (ui-core/Compass.h) once it is calibrated, GPS or not; Enter calibrates it
+// (CompassCalView.h).
 
 #include "../GeoUtils.h"
 #include "icons.h"   // miniIconScale() — keeps the tape ticks/pointer legible on e-ink
+#if HAS_COMPASS
+  #include "CompassCalView.h"
+#endif
 
 class CompassScreen : public UIScreen {
   UITask* _task;
+#if HAS_COMPASS
+  CompassCalView _cal;
+  bool _calibrating = false;
+  static void savePrefs() { the_mesh.savePrefs(); }
+  Compass& compass() { return _task->core().compass; }
+#endif
 
   bool gpsValid() const { int32_t lat, lon; return _task->currentLocation(lat, lon); }
 
@@ -44,6 +57,12 @@ public:
   int render(DisplayDriver& display) override {
     display.setTextSize(1);
     display.setColor(UIColor::primary_txt);
+#if HAS_COMPASS
+    if (_calibrating) {
+      drawScreenHeader(display, "Calibrate compass");
+      return _cal.render(display);
+    }
+#endif
     drawScreenHeader(display, "Compass");
 
     const int cx  = display.width() / 2;
@@ -57,7 +76,17 @@ public:
     const int readout_y = display.height() - bigH - 1;   // size-2 readout baseline
     const int mid      = (top + readout_y) / 2;
 
-    if (!gpsValid()) {
+#if HAS_COMPASS
+    if (compass().present() && !compass().calibrated()) {
+      display.drawTextCentered(cx, mid - ch, "Not calibrated:");
+      display.drawTextCentered(cx, mid, "Enter to calibrate");
+      return 1000;
+    }
+    const bool own_heading = compass().calibrated();
+#else
+    const bool own_heading = false;
+#endif
+    if (!own_heading && !gpsValid()) {
       display.drawTextCentered(cx, mid - ch / 2, "No GPS fix");
       return 1000;
     }
@@ -146,10 +175,22 @@ public:
     display.setTextSize(2);
     display.drawTextCentered(cx, readout_y, buf);
     display.setTextSize(1);
-    return 1000;
+    return own_heading ? 150 : 1000;   // a compass turns with the hand
   }
 
   bool handleInput(char c) override {
+#if HAS_COMPASS
+    if (_calibrating) {
+      if (c == KEY_CANCEL) { _cal.end(); _calibrating = false; return true; }
+      if (c == KEY_ENTER && _cal.done()) { _cal.restart(savePrefs); return true; }
+      return true;
+    }
+    if (c == KEY_ENTER && compass().present()) {
+      _cal.begin(compass(), savePrefs);
+      _calibrating = true;
+      return true;
+    }
+#endif
     if (c == KEY_CANCEL) { _task->leaveTool(); return true; }
     return true;
   }

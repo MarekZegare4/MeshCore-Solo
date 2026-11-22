@@ -3,6 +3,7 @@
 #include <SD.h>
 #include <Wire.h>
 #include "target.h"
+#include "../../examples/companion_radio/ui-core/MagCal.h"
 
 FireBeetle2C6Board board;
 
@@ -14,6 +15,7 @@ WRAPPER_CLASS radio_driver(radio, board);
 ESP32RTCClock fallback_clock;
 AutoDiscoverRTCClock rtc_clock(fallback_clock);
 SensorManager sensors;
+Lsm6Lis3Imu imu;
 
 #ifdef DISPLAY_CLASS
   DISPLAY_CLASS display;
@@ -101,6 +103,7 @@ bool radio_init() {
   }
   digitalWrite(PIN_SD_CS, HIGH);
 #endif
+  imu.begin(Wire);
   return ok;
 }
 
@@ -109,7 +112,7 @@ mesh::LocalIdentity radio_new_identity() {
   return mesh::LocalIdentity(&rng);
 }
 
-void board_hw_report(char* reply, int n) {
+static void board_hw_report(char* reply, int n) {
   int o = snprintf(reply, n, "radio %s", s_radio_status == 0 ? "OK" : "FAIL");
   static const char* const T[] = { "none", "MMC", "SD", "SDHC", "?" };
   if (o < n) o += s_sd_ok ? snprintf(reply + o, n - o, ", SD %s %lu MB", T[s_sd_type <= 3 ? s_sd_type : 4], (unsigned long)s_sd_mb)
@@ -132,4 +135,29 @@ void board_hw_report(char* reply, int n) {
   if (!found && o < n) o += snprintf(reply + o, n - o, " none");
   if (o < n) o += snprintf(reply + o, n - o, " (%lu ms)", (unsigned long)(millis() - t0));
   if (o < n) snprintf(reply + o, n - o, ", batt %u mV", board.getBattMilliVolts());
+}
+
+// The compass's readings (ui-core/Compass.h) in the device's frame: x to the
+// top of the screen, y to its right, z into it. On the breadboard the IMU
+// lies face up with its y to the screen's top and its x to the right; its z
+// points out of the screen. Both chips the same way, as on Adafruit's 9-DOF
+// boards. (A change here wants the compass calibrated again: the fit is in
+// this frame.)
+bool board_compass_read(magcal::Vec& acc, magcal::Vec& mag) {
+  Lsm6Lis3Imu::Raw r;
+  if (!imu.read(r)) return false;
+  acc = { r.ay, r.ax, -r.az };
+  mag = { r.my, r.mx, -r.mz };
+  return true;
+}
+
+bool board_cli(const char* cmd, char* reply, int n) {
+  if (!strcmp(cmd, "hw")) { board_hw_report(reply, n); return true; }
+  if (!strcmp(cmd, "imu")) {
+    Lsm6Lis3Imu::Raw r;
+    if (!imu.read(r)) { snprintf(reply, n, "Error, no IMU (acc %02X, mag %02X)", imu.accAddr(), imu.magAddr()); return true; }
+    snprintf(reply, n, "acc %.2f %.2f %.2f  mag %.1f %.1f %.1f", r.ax, r.ay, r.az, r.mx, r.my, r.mz);
+    return true;
+  }
+  return false;
 }
