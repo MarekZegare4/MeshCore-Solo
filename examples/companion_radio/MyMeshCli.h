@@ -107,6 +107,9 @@ bool MyMesh::handleCliCommand(const char* command, char* reply, int n) {
     return true;
   }
   if (strcmp(command, "board") == 0) { snprintf(reply, n, "%s", board.getManufacturerName()); return true; }
+#ifdef BOARD_HW_REPORT
+  if (strcmp(command, "hw") == 0) { board_hw_report(reply, n); return true; }   // the variant's target.h
+#endif
   if (strcmp(command, "ver") == 0) {
 #ifdef SOLO_TEST_HOOKS
     snprintf(reply, n, "%s+test (Build: %s)", FIRMWARE_VERSION, FIRMWARE_BUILD_DATE);   // ui-core/TestHooks.h

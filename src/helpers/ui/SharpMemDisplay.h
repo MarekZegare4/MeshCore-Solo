@@ -31,10 +31,19 @@
 #define SHARP_DISP_W ((DISPLAY_ROTATION & 1) ? SHARP_H : SHARP_W)
 #define SHARP_DISP_H ((DISPLAY_ROTATION & 1) ? SHARP_W : SHARP_H)
 
+// The SPI bus: a classic ESP32's VSPI of its own, or with PIN_SHARED_SPI_MISO set the
+// one bus the board shares with its radio and SD card (an ESP32-C6 has only
+// the one): the Arduino SPI, begun with all three pins by whoever comes first.
 struct SharpPanel {
+#ifdef PIN_SHARED_SPI_MISO
+  SPIClass& spi;
+  Adafruit_SharpMem display;
+  SharpPanel() : spi(SPI), display(&spi, PIN_DISPLAY_CS, SHARP_W, SHARP_H, SHARP_SPI_HZ) {}
+#else
   SPIClass spi;
   Adafruit_SharpMem display;
   SharpPanel() : spi(VSPI), display(&spi, PIN_DISPLAY_CS, SHARP_W, SHARP_H, SHARP_SPI_HZ) {}
+#endif
 };
 
 class SharpMemDisplay : private SharpPanel, public EinkGfxDisplay {

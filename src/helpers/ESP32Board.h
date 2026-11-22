@@ -35,7 +35,9 @@ public:
   #ifdef PIN_VBAT_READ
     // battery read support
     pinMode(PIN_VBAT_READ, INPUT);
-    adcAttachPin(PIN_VBAT_READ);
+    #if !defined(ESP_ARDUINO_VERSION_MAJOR) || ESP_ARDUINO_VERSION_MAJOR < 3
+    adcAttachPin(PIN_VBAT_READ);   // gone in core 3.x: analogRead* attaches the pin itself
+    #endif
   #endif
 
   #ifdef P_LORA_TX_LED

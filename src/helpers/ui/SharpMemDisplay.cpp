@@ -19,7 +19,11 @@ ColorVal UIColor::popup_txt = SHARP_BLACK;
 ColorVal UIColor::corp_blue = SHARP_BLACK;
 
 bool SharpMemDisplay::begin() {
+#ifdef PIN_SHARED_SPI_MISO
+  spi.begin(PIN_DISPLAY_SCLK, PIN_SHARED_SPI_MISO, PIN_DISPLAY_MOSI, -1);   // shared: MISO too, for the others on it
+#else
   spi.begin(PIN_DISPLAY_SCLK, -1, PIN_DISPLAY_MOSI, -1);
+#endif
   if (!display.begin()) return false;   // allocates the 12 KB frame buffer
   display.setRotation(DISPLAY_ROTATION);
   display.clearDisplay();
