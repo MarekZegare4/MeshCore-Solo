@@ -51,10 +51,21 @@ class Companion:
             sys.exit("No device found. Plug it in, or name the port with --port.")
         self.port = port
         self.timeout = timeout
-        self.ser = serial.Serial(port, baud, timeout=0.2)
-        self.ser.dtr = True
-        self.ser.rts = True
-        time.sleep(0.2)
+        # An Espressif chip's own USB-Serial-JTAG (303A:1001: the C3/C6, an S3
+        # without TinyUSB) takes RTS without DTR as "reset the chip": the
+        # device would restart on every connect and miss the question. Both
+        # lines stay low there, set before the port opens; elsewhere DTR (and
+        # RTS) up as before (TinyUSB's CDC wants DTR to send).
+        jtag = any(p.device == port and p.vid == 0x303A and p.pid == 0x1001
+                   for p in serial.tools.list_ports.comports())
+        self.ser = serial.Serial(None, baud, timeout=0.2)
+        self.ser.port = port
+        self.ser.dtr = not jtag
+        self.ser.rts = not jtag
+        self.ser.open()
+        # ... though opening it still restarts the chip on macOS (the lines
+        # blip before pyserial sets them): give the firmware its start.
+        time.sleep(3.0 if jtag else 0.2)
         self.ser.reset_input_buffer()
         self._rx = bytearray()
 
