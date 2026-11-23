@@ -35,7 +35,7 @@ RESP_CODE_ERR = 1
 DISPLAY_TYPE_OLED = 0   # page-based, column-major (SH1106/SSD1306)
 DISPLAY_TYPE_EINK = 1   # row-major, MSB-first, 1=white/0=black (GxEPD2)
 DISPLAY_TYPE_RGB565 = 2 # row-major, 16-bit little-endian (colour screens, e.g. Wio Tracker L2)
-DISPLAY_TYPE_SHARP = 3  # row-major, LSB-first, 1=white (Adafruit_SharpMem's buffer)
+DISPLAY_TYPE_SHARP = 4  # (3 is RGB565 RLE, the live view's) row-major, LSB-first, 1=white (Adafruit_SharpMem's buffer)
 
 # No panel-specific constants needed — the firmware now sends GxEPD2's own reported
 # dimensions (which use WIDTH_VISIBLE, not the full physical WIDTH), so the header
@@ -306,7 +306,7 @@ def sharp_buffer_to_image(buffer, width, height, rotation):
         for x in range(width):
             px[x, y] = 1 if row[x >> 3] & (1 << (x & 7)) else 0
     if rotation:
-        image = image.rotate(-90 * rotation, expand=True)
+        image = image.rotate(90 * rotation, expand=True)   # GFX's rotation 1: the panel's right edge on top
     return image.convert("RGB")
 
 

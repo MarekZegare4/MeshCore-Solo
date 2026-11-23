@@ -154,8 +154,10 @@ void MyMesh::sendScreenshotResponse(uint8_t displayType, uint8_t rotation, uint1
     // Frame format (11-byte header, little-endian multi-byte fields):
     //   [0]    resp_code = RESP_CODE_SCREENSHOT
     //   [1]    display_type (0=OLED page-based, 1=e-ink row-major MSB-first 1=white,
-    //                        2=RGB565 little-endian, row-major -- colour screens)
-    //   [2]    rotation     (0-3, GxEPD2/Adafruit_GFX value; only meaningful for e-ink)
+    //                        2=RGB565 little-endian, row-major -- colour screens,
+    //                        3=RGB565 RLE (above), 4=Sharp row-major LSB-first 1=white,
+    //                        in the panel's own orientation, turned by `rotation`)
+    //   [2]    rotation     (0-3, GxEPD2/Adafruit_GFX value; only meaningful for e-ink, Sharp)
     //   [3..4] width  (uint16 LE — GxEPD2-reported visible width)
     //   [5..6] height (uint16 LE — GxEPD2-reported visible height)
     //   [7..8] chunk_idx    (uint16 LE)

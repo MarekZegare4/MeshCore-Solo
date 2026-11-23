@@ -72,10 +72,10 @@ public:
   void idle() override;
 #ifdef ENABLE_SCREENSHOT
   // Adafruit_SharpMem's buffer as it is: rows of SHARP_W pixels, LSB first,
-  // 1 = white (tools/screenshot.py's type 3), in the panel's own orientation.
+  // 1 = white (display type 4; 3 is the colour screens' RLE), in the panel's own orientation.
   const uint8_t* getBuffer() override { return display.getBuffer(); }
   uint16_t getBufferSize() override { return SHARP_W * SHARP_H / 8; }
-  uint8_t getDisplayType() override { return 3; }
+  uint8_t getDisplayType() override { return 4; }
   int screenshotWidth() override { return SHARP_W; }
   int screenshotHeight() override { return SHARP_H; }
   uint8_t screenshotRotation() override { return DISPLAY_ROTATION; }
