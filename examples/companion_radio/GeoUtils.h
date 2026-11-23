@@ -105,6 +105,27 @@ static inline void fmtAgeShort(char* buf, int n, uint32_t now, uint32_t lastmod)
   else                  snprintf(buf, n, "%ud", (unsigned)(age / 86400));
 }
 
+// MECP (lib/mecp, github.com/mecp-org/MECP), read next to Solo's own tags:
+// "MECP/<severity 0-3>/<codes> <freetext>", e.g. "MECP/0/B01 P05 50.06,19.93".
+// Where one starts in `text`: at its start, or after a channel's "name: ".
+static inline const char* mecpStart(const char* text) {
+  if (!text) return nullptr;
+  if (strncmp(text, "MECP/", 5) == 0) return text;
+  const char* s = strstr(text, ": ");
+  return s && strncmp(s + 2, "MECP/", 5) == 0 ? s + 2 : nullptr;
+}
+
+// An MECP message of one code at a position (the GPS coordinates convention:
+// "lat,lon" after the codes), for Message::encode().
+static inline mecp::Message mecpAt(mecp::Severity sev, mecp::Code code, int32_t lat_1e6, int32_t lon_1e6) {
+  mecp::Message m;
+  m.severity = sev;
+  m.codes[m.code_count++] = code;
+  m.gps.lat = lat_1e6 / 1e6;
+  m.gps.lon = lon_1e6 / 1e6;
+  return m;
+}
+
 // Tag marking a shared waypoint inside a message: "[WAY]<lat>,<lon> <label>".
 // A plain {loc} expansion ("<lat>,<lon>") parses too — the tag just adds intent
 // and a label, and keeps the text readable on apps/firmware that don't know it.
@@ -112,7 +133,7 @@ static inline void fmtAgeShort(char* buf, int n, uint32_t now, uint32_t lastmod)
 
 // Scan a message for an embedded "lat,lon" location (decimal degrees, the same
 // text {loc} emits). If a WAYPOINT_MSG_TAG precedes it, the trailing text is
-// taken as the label. Returns true and fills lat/lon (1e6-scaled) on a valid,
+// taken as the label; so in an MECP "Rendezvous at" (C08), "MECP/3/C08 lat,lon label". Returns true and fills lat/lon (1e6-scaled) on a valid,
 // in-range coordinate; label (optional) gets the trimmed tag suffix or "".
 static inline bool parseLatLon(const char* text, int32_t& lat_1e6, int32_t& lon_1e6,
                                char* label = nullptr, int label_n = 0) {
@@ -121,6 +142,11 @@ static inline bool parseLatLon(const char* text, int32_t& lat_1e6, int32_t& lon_
 
   const char* tag  = strstr(text, WAYPOINT_MSG_TAG);
   const char* scan = tag ? tag + strlen(WAYPOINT_MSG_TAG) : text;
+  if (!tag) {
+    const char* s = mecpStart(text);
+    mecp::Message m;
+    if (s && mecp::Message::decode(s, m) && m.hasCode({ 'C', 8 })) tag = scan = s;   // the header and codes hold no "x.y,"
+  }
 
   for (const char* p = scan; *p; p++) {
     if (*p != '-' && *p != '+' && *p != '.' && !isdigit((unsigned char)*p)) continue;
@@ -153,6 +179,21 @@ static inline bool parseLatLon(const char* text, int32_t& lat_1e6, int32_t& lon_
   return false;
 }
 
+// A waypoint for a message, as MECP's "Rendezvous at" (C08), which other apps
+// read too: "MECP/3/C08 lat,lon label". ("[WAY]lat,lon label", Solo's own
+// before, is still read, and is the fallback for a buffer too small.)
+static inline void fmtWaypointShare(char* buf, int n, int32_t lat_1e6, int32_t lon_1e6, const char* label) {
+  if (n <= 0) return;
+  buf[0] = '\0';
+  int o = (int)mecpAt(mecp::Severity::Routine, { 'C', 8 }, lat_1e6, lon_1e6).encode(buf, n);
+  if (!o) {
+    o = snprintf(buf, n, WAYPOINT_MSG_TAG);
+    if (o < 0 || o >= n) return;
+    fmtLatLon(buf + o, n - o, lat_1e6, lon_1e6);
+  }
+  if (label && label[0]) { size_t l = strlen(buf); snprintf(buf + l, n - l, " %s", label); }
+}
+
 // Tag marking a live position share inside a message: "[LOC]<lat>,<lon>".
 // Distinct from WAYPOINT_MSG_TAG: a waypoint is a static point-of-interest to
 // save, whereas this announces the *sender's own* current position so the
@@ -169,20 +210,20 @@ static inline void fmtLocShare(char* buf, int n, int32_t lat_1e6, int32_t lon_1e
   if (name && name[0]) { size_t l = strlen(buf); snprintf(buf + l, n - l, " %s", name); }
 }
 
+// Your position once, to a conversation picked, as MECP's "At GPS
+// coordinates" (P05): "MECP/3/P05 lat,lon". A live share stays [LOC]
+// (fmtLocShare): sent every few minutes, it would be a message each time in an
+// MECP app.
+static inline void fmtPositionOnce(char* buf, int n, int32_t lat_1e6, int32_t lon_1e6) {
+  if (n <= 0) return;
+  if (mecpAt(mecp::Severity::Routine, { 'P', 5 }, lat_1e6, lon_1e6).encode(buf, n)) return;
+  fmtLocShare(buf, n, lat_1e6, lon_1e6);
+}
+
 // Tag starting an SOS: "[SOS] <the sender's own text, built from placeholders>"
 // (ui-core/SosEngine.h). Only at the very start of `text` (without the
 // sender's name in front), so a message that mentions one isn't taken for it.
 #define SOS_MSG_TAG "[SOS]"
-
-// MECP (lib/mecp, github.com/mecp-org/MECP), read next to Solo's own tags:
-// "MECP/<severity 0-3>/<codes> <freetext>", e.g. "MECP/0/B01 P05 50.06,19.93".
-// Where one starts in `text`: at its start, or after a channel's "name: ".
-static inline const char* mecpStart(const char* text) {
-  if (!text) return nullptr;
-  if (strncmp(text, "MECP/", 5) == 0) return text;
-  const char* s = strstr(text, ": ");
-  return s && strncmp(s + 2, "MECP/", 5) == 0 ? s + 2 : nullptr;
-}
 
 // An MECP message that is an SOS: a distress beacon (B01), or a MAYDAY that
 // isn't a drill or a test (D01, D02).
@@ -205,6 +246,14 @@ static inline bool isSos(const char* text) {
   if (strncmp(text, SOS_MSG_TAG, strlen(SOS_MSG_TAG)) == 0) return true;
   mecp::Message m;
   return strncmp(text, "MECP/", 5) == 0 && mecp::Message::decode(text, m) && isMecpSos(m);
+}
+
+// An MECP beacon's state in `text` (without the sender's name in front): B02 an
+// SOS acknowledged, B03 one called off. Beacon::None for anything else.
+static inline mecp::Beacon mecpBeacon(const char* text) {
+  mecp::Message m;
+  if (!text || strncmp(text, "MECP/", 5) != 0 || !mecp::Message::decode(text, m)) return mecp::Beacon::None;
+  return m.beacon();
 }
 
 // An SOS with a position: its first coordinate (the sender's {loc}, which goes

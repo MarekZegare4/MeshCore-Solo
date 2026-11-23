@@ -143,26 +143,26 @@ TEST(SosText, Compose) {
   int16_t alt = 212;
   const char* def = "{loc} {alt} {time}";
   SosEngine::compose(t, sizeof(t), def, SosEngine::FIX, 50061430, 19936580, &alt, -1, "14:32", -1);
-  EXPECT_STREQ(t, "[SOS] 50.06143,19.93658 212m 14:32");
+  EXPECT_STREQ(t, "MECP/0/B01 P05 50.06143,19.93658 212m @1432");
   SosEngine::compose(t, sizeof(t), def, SosEngine::FIX, -33868800, 151209300, nullptr, -1, "", -1);
-  EXPECT_STREQ(t, "[SOS] -33.86880,151.20930");   // what has nothing to give takes its space
+  EXPECT_STREQ(t, "MECP/0/B01 P05 -33.86880,151.20930");   // what has nothing to give takes its space
   SosEngine::compose(t, sizeof(t), def, SosEngine::LAST_KNOWN, 50061430, 19936580, &alt, 12, "14:32", -1);
-  EXPECT_STREQ(t, "[SOS] last 50.06143,19.93658 12min ago 14:32");
+  EXPECT_STREQ(t, "MECP/0/B01 P05 50.06143,19.93658 last fix 12min ago @1432");
   SosEngine::compose(t, sizeof(t), def, SosEngine::LAST_KNOWN, 50061430, 19936580, nullptr, -1, "14:32", -1);
-  EXPECT_STREQ(t, "[SOS] last 50.06143,19.93658 14:32");
+  EXPECT_STREQ(t, "MECP/0/B01 P05 50.06143,19.93658 last fix @1432");
   SosEngine::compose(t, sizeof(t), def, SosEngine::NOWHERE, 0, 0, nullptr, -1, "14:32", -1);
-  EXPECT_STREQ(t, "[SOS] no GPS 14:32");
+  EXPECT_STREQ(t, "MECP/0/B01 no GPS @1432");
   SosEngine::compose(t, sizeof(t), "Help! {loc}, batt {batt} {x}", SosEngine::FIX, 50061430, 19936580, &alt, -1, "", 18);
-  EXPECT_STREQ(t, "[SOS] Help! 50.06143,19.93658, batt 18% {x}");
+  EXPECT_STREQ(t, "MECP/0/B01 P05 50.06143,19.93658 Help!, batt 18% {x}");   // {loc} in the header: no " ," left
 }
 
 // Taking {loc} out doesn't take the position out.
 TEST(SosText, PositionAlwaysGoes) {
   char t[128];
   SosEngine::compose(t, sizeof(t), "broken leg", SosEngine::FIX, 50061430, 19936580, nullptr, -1, "", -1);
-  EXPECT_STREQ(t, "[SOS] 50.06143,19.93658 broken leg");
+  EXPECT_STREQ(t, "MECP/0/B01 P05 50.06143,19.93658 broken leg");
   SosEngine::compose(t, sizeof(t), "", SosEngine::NOWHERE, 0, 0, nullptr, -1, "14:32", -1);
-  EXPECT_STREQ(t, "[SOS] no GPS");
+  EXPECT_STREQ(t, "MECP/0/B01 no GPS");
 }
 
 // What a receiver's Navigate reads out of it, on a channel with the sender in front.
@@ -175,6 +175,31 @@ TEST(SosText, PositionCanBeReadBack) {
   ASSERT_TRUE(geo::parseLatLon(msg, lat, lon));
   EXPECT_EQ(lat, 50061430);
   EXPECT_EQ(lon, -19936580);
+}
+
+// What goes out is what a receiver takes for an SOS, at that position.
+TEST(SosText, ComposedIsReadBackAsAnSos) {
+  char t[128];
+  int16_t alt = 212;
+  int32_t lat = 0, lon = 0;
+  SosEngine::compose(t, sizeof(t), "{loc} {alt} {time}", SosEngine::FIX, 50061430, -19936580, &alt, -1, "14:32", -1);
+  ASSERT_TRUE(geo::parseSos(t, lat, lon));
+  EXPECT_EQ(lat, 50061430);
+  EXPECT_EQ(lon, -19936580);
+  SosEngine::compose(t, sizeof(t), "{loc}", SosEngine::LAST_KNOWN, 50061430, 19936580, nullptr, 3, "", -1);
+  ASSERT_TRUE(geo::parseSos(t, lat, lon));   // a last fix is still where to look
+  EXPECT_EQ(lon, 19936580);
+}
+
+// Stopping one says so: MECP's cancel beacon, which ends it at the receiver's.
+TEST(SosText, TheEndIsAnMecpCancel) {
+  char t[16];
+  SosEngine::endText(t, sizeof(t));
+  EXPECT_STREQ(t, "MECP/3/B03");
+  EXPECT_EQ(geo::mecpBeacon(t), mecp::Beacon::Cancel);
+  EXPECT_FALSE(geo::isSos(t));
+  EXPECT_EQ(geo::mecpBeacon("MECP/2/B02 on our way"), mecp::Beacon::Ack);
+  EXPECT_EQ(geo::mecpBeacon("B03"), mecp::Beacon::None);
 }
 
 TEST(SosText, OnlyAnSosWithAPositionIsTakenForOne) {
@@ -204,6 +229,36 @@ TEST(GeoText, LocationShareRoundTrips) {
   EXPECT_STREQ(t, "50.06143, 19.93658");
   ASSERT_TRUE(geo::parseLatLon(t, lat, lon));   // an edited value reads back
   EXPECT_EQ(lon, 19936580);
+}
+
+// A waypoint goes as MECP's Rendezvous at (C08); its label comes back, as from [WAY].
+TEST(GeoText, AWaypointGoesAsMecpC08) {
+  char t[80], label[24];
+  int32_t lat = 0, lon = 0;
+  geo::fmtWaypointShare(t, sizeof(t), 50061430, -19936580, "Hut 2");
+  EXPECT_STREQ(t, "MECP/3/C08 50.06143,-19.93658 Hut 2");
+  char msg[100];
+  snprintf(msg, sizeof(msg), "Ann: %s", t);   // on a channel
+  ASSERT_TRUE(geo::parseLatLon(msg, lat, lon, label, sizeof(label)));
+  EXPECT_EQ(lat, 50061430);
+  EXPECT_EQ(lon, -19936580);
+  EXPECT_STREQ(label, "Hut 2");
+  ASSERT_TRUE(geo::parseLatLon("[WAY]50.06143,19.93658 Old hut", lat, lon, label, sizeof(label)));
+  EXPECT_STREQ(label, "Old hut");
+  ASSERT_TRUE(geo::parseLatLon("MECP/3/P05 50.06143,19.93658 me", lat, lon, label, sizeof(label)));
+  EXPECT_STREQ(label, "");   // a position, not a waypoint
+  EXPECT_FALSE(geo::parseLocShare(t, lat, lon));
+}
+
+// Your position once goes as MECP's At GPS coordinates (P05): a share to the receiver.
+TEST(GeoText, APositionOnceGoesAsMecpP05) {
+  char t[40];
+  int32_t lat = 0, lon = 0;
+  geo::fmtPositionOnce(t, sizeof(t), 50061430, -19936580);
+  EXPECT_STREQ(t, "MECP/3/P05 50.06143,-19.93658");
+  ASSERT_TRUE(geo::parseLocShare(t, lat, lon));
+  EXPECT_EQ(lon, -19936580);
+  EXPECT_FALSE(geo::isSos(t));
 }
 
 TEST(GeoText, TurnIsTheShortWayRound) {
@@ -278,6 +333,22 @@ TEST(LiveTrack, AnAdvertMovesOnlyAnSos) {
   EXPECT_FALSE(t.followSos(bob, "Ann", 70, 80, 2000));   // a DM's SOS goes by key, not name
 }
 
+// An SOS called off (B03) by whoever sent it: theirs goes, nothing else.
+TEST(LiveTrack, AnSosEndsOnlyForItsSender) {
+  LiveTrackStore t;
+  const uint8_t ann[6] = { 1, 2, 3, 4, 5, 6 }, bob[6] = { 9, 9, 9, 9, 9, 9 };
+  t.update(ann, "SOS Ann", 1, 2, 1000, true, true);     // a DM's
+  t.update(nullptr, "SOS Cy", 1, 2, 1000, false, true);  // a channel's
+  t.update(bob, "Bob", 1, 2, 1000, true);                // a live share
+  EXPECT_FALSE(t.endSos(bob, "Bob"));                    // not an SOS
+  EXPECT_FALSE(t.endSos(nullptr, "Ann"));                // a DM's goes by key
+  EXPECT_TRUE(t.endSos(ann, "Ann"));
+  EXPECT_FALSE(t.slotAt(0).used);
+  EXPECT_TRUE(t.endSos(nullptr, "Cy"));
+  EXPECT_FALSE(t.slotAt(1).used);
+  EXPECT_TRUE(t.slotAt(2).used);
+}
+
 TEST(LiveTrack, SosOutlivesAShareAndIsEvictedLast) {
   LiveTrackStore t;
   t.update(nullptr, "SOS Ann", 1, 2, 1000, false, true);
@@ -301,9 +372,9 @@ TEST(SosText, ComposeNeverOverruns) {
 }
 
 TEST(SosText, ComposeCutsOnACharacter) {
-  char t[17];   // "[SOS] no GPS " + "zżż" cut inside the second "ż"
+  char t[23];   // "MECP/0/B01 no GPS " + "zżż" cut inside the second "ż"
   SosEngine::compose(t, sizeof(t), "z\xC5\xBC\xC5\xBC", SosEngine::NOWHERE, 0, 0, nullptr, -1, "", -1);
-  EXPECT_STREQ(t, "[SOS] no GPS z\xC5\xBC");
+  EXPECT_STREQ(t, "MECP/0/B01 no GPS z\xC5\xBC");
 }
 
 TEST(SosTargets, ChannelsAndContacts) {
@@ -356,6 +427,15 @@ TEST_F(Sos, FirstFixPastTheLastSendStillGoesOut) {
   EXPECT_TRUE(sos.loop(now, true));
   sos.markSent(now, true, true);
   EXPECT_FALSE(sos.loop(now + 60000, true));
+}
+
+// An MECP app answers with B02, not the ACK word.
+TEST_F(Sos, AnMecpAckIsAnAnswer) {
+  activate();
+  EXPECT_TRUE(sos.onReply("Ann", "MECP/2/B02 on our way", now));
+  EXPECT_TRUE(sos.acked());
+  EXPECT_STREQ(sos.responder(0).text, "MECP/2/B02 on our way");
+  EXPECT_FALSE(sos.onReply("Bob", "MECP/3/P05 50.1,19.9", now));   // not an answer
 }
 
 TEST_F(Sos, AnswerKeepsWhoAndWhat) {

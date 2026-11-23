@@ -91,13 +91,12 @@ public:
     save();
   }
 
-  // "[WAY]lat,lon label" -- the message form other Solo nodes turn back into a waypoint.
+  // "MECP/3/C08 lat,lon label" -- the message form other nodes turn back into a
+  // waypoint (geo::fmtWaypointShare).
   void shareText(int i, char* out, size_t n) const {
     if (i < 0 || i >= _store.count()) { out[0] = '\0'; return; }
     const Waypoint& w = _store.at(i);
-    int o = snprintf(out, n, WAYPOINT_MSG_TAG);
-    geo::fmtLatLon(out + o, (int)n - o, w.lat_1e6, w.lon_1e6);
-    if (w.label[0]) { size_t l = strlen(out); snprintf(out + l, n - l, " %s", w.label); }
+    geo::fmtWaypointShare(out, (int)n, w.lat_1e6, w.lon_1e6, w.label);
   }
 
 private:

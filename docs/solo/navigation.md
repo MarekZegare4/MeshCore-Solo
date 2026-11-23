@@ -146,8 +146,9 @@ Locator target) is a flag on the tape: turn until it's in the middle.
 With **Track loc** on in Live Share, other people's shares show on the map
 and in Nodes, with live distance and bearing.
 
-Locations travel as ordinary text (`[LOC]lat,lon`, or `[WAY]lat,lon label`
-for a waypoint), readable in the phone app and on other firmware. On the
+Locations travel as ordinary text (`[LOC]lat,lon` for a live share,
+`MECP/3/P05 lat,lon` for a position sent once, `MECP/3/C08 lat,lon label` for
+a waypoint; see [location messages](./location-messages.md)), readable in the phone app and on other firmware. On the
 receiving side, **hold Enter** on the message to navigate to it, save it or
 set it as the target.
 

@@ -4,8 +4,8 @@
 // with the ACK word, the sends run out or the user stops it. Once more as soon
 // as the GPS gets a fix, if none has gone with one yet, even past the last
 // send. A beacon (a zero-hop advert with the position) and an optional beep
-// keep going until it's stopped. Only the timing and the
-// matching live here: no radio, no clock, so it's tested on the host
+// keep going until it's stopped, and stopping one that went out says so to
+// the same targets (MECP B03: endText). Only the timing and the matching live here: no radio, no clock, so it's tested on the host
 // (test/test_sos_engine). Not kept across a restart.
 
 #include <ctype.h>
@@ -128,8 +128,8 @@ public:
     _sent_at = now;
   }
 
-  // A message came in. True when it's an answer: one holding the ACK word, from
-  // anyone, or anything further from someone who has answered, who is the one
+  // A message came in. True when it's an answer: one holding the ACK word (or
+  // an MECP B02), from anyone, or anything further from someone who has answered, who is the one
   // talking to you now. Repeats stop at the first, and the screen says who
   // answered and what they said.
   bool onReply(const char* from, const char* text, uint32_t now = 0) {
@@ -138,7 +138,9 @@ public:
     int i = 0;
     while (i < _responders && strncmp(_resp[i].name, from, sizeof(_resp[i].name) - 1) != 0) i++;
     const bool known = i < _responders;
-    const bool word = hasWord(text, _prefs->sos_ack);
+    // The ACK word, or an MECP acknowledgement (B02) from an app that speaks it.
+    const bool mecp_ack = geo::mecpBeacon(text) == mecp::Beacon::Ack;
+    const bool word = mecp_ack || hasWord(text, _prefs->sos_ack);
     if (!known && !word) return false;
     _acked = true;
     if (!known) {
@@ -149,7 +151,7 @@ public:
     for (; i > 0; i--) _resp[i] = _resp[i - 1];   // to the front
     _resp[0] = r;
     snprintf(_resp[0].name, sizeof(_resp[0].name), "%s", from);
-    const bool bare = word && strlen(text) == strlen(_prefs->sos_ack);
+    const bool bare = word && !mecp_ack && strlen(text) == strlen(_prefs->sos_ack);
     if (!bare || !known) {   // the word alone adds nothing to what they said before
       snprintf(_resp[0].text, sizeof(_resp[0].text), "%s", bare ? "" : text);
       _resp[0].text[mesh::validUtf8PrefixLength(_resp[0].text, sizeof(_resp[0].text) - 1)] = '\0';   // cut off mid-character
@@ -179,37 +181,50 @@ public:
     return PH[i];
   }
 
-  // "[SOS] 50.06143,19.93658 212m 14:32": the tag (geo::SOS_MSG_TAG), then
-  // `tmpl` with its placeholders filled. The position goes first when `tmpl`
-  // has no {loc}: an SOS never goes without it, and it's what a receiver's
-  // Navigate and map read (geo::parseSos).
-  //   {loc}  "50.06143,19.93658", "last 50.06143,19.93658 12min ago", "no GPS"
-  //   {alt}  "212m", with a fix only     {time} "14:32"     {batt} "18%"
-  // One that has nothing to give takes a space with it. alt: nullptr without
-  // one, age_min: how old a LAST_KNOWN is, -1 not given, time: "" when the
-  // clock isn't set, batt_pct: -1 unknown. An unknown {x} stays as written.
+  // As MECP (lib/mecp), which other apps read too: a MAYDAY distress beacon
+  // (B01), at GPS coordinates (P05) when there's a position, then `tmpl` with
+  // its placeholders filled as the freetext:
+  //   "MECP/0/B01 P05 50.06143,19.93658 212m @1432"
+  // The position is in the header -- it's what a receiver's Navigate and map
+  // read (geo::parseSos) -- so {loc} says only what isn't a fix:
+  //   {loc}  "" (a fix), "last fix 12min ago", "no GPS"
+  //   {alt}  "212m", with a fix only     {time} "@1432"     {batt} "18%"
+  // Without {loc} in `tmpl` what it says goes first. One that has nothing to
+  // give takes a space with it. alt: nullptr without one, age_min: how old a
+  // LAST_KNOWN is, -1 not given, time: "14:32", "" when the clock isn't set,
+  // batt_pct: -1 unknown. An unknown {x} stays as written. ("[SOS] ...", Solo's
+  // own tag before, is still read: geo::isSos.)
   static void compose(char* out, int n, const char* tmpl, Where where, int32_t lat, int32_t lon,
                       const int16_t* alt, int age_min, const char* time, int batt_pct) {
     if (n <= 0) return;
-    char loc[48];
-    if (where == NOWHERE) snprintf(loc, sizeof(loc), "no GPS");
-    else {
-      int l = snprintf(loc, sizeof(loc), "%s%.5f,%.5f", where == LAST_KNOWN ? "last " : "", lat / 1e6, lon / 1e6);
-      if (where == LAST_KNOWN && age_min >= 0) snprintf(loc + l, sizeof(loc) - l, " %dmin ago", age_min);
+    mecp::Message m;
+    m.severity = mecp::Severity::Mayday;
+    m.codes[m.code_count++] = { 'B', 1 };
+    if (where != NOWHERE) {
+      m.codes[m.code_count++] = { 'P', 5 };
+      m.gps.lat = lat / 1e6;
+      m.gps.lon = lon / 1e6;
     }
-    char alt_s[8] = "", batt_s[8] = "";
+    char head[48];
+    if (!m.encode(head, sizeof(head))) snprintf(head, sizeof(head), "MECP/0/B01");   // a position out of range
+    char loc[32] = "";
+    if (where == NOWHERE) snprintf(loc, sizeof(loc), "no GPS");
+    else if (where == LAST_KNOWN && age_min >= 0) snprintf(loc, sizeof(loc), "last fix %dmin ago", age_min);
+    else if (where == LAST_KNOWN) snprintf(loc, sizeof(loc), "last fix");
+    char alt_s[8] = "", batt_s[8] = "", time_s[8] = "";
     if (alt && where == FIX) snprintf(alt_s, sizeof(alt_s), "%dm", (int)*alt);
     if (batt_pct >= 0) snprintf(batt_s, sizeof(batt_s), "%d%%", batt_pct);
-    if (!time) time = "";
+    if (time && strlen(time) == 5 && time[2] == ':') snprintf(time_s, sizeof(time_s), "@%c%c%c%c", time[0], time[1], time[3], time[4]);
+    time = time_s;
     if (!tmpl) tmpl = "";
 
     int o = 0;
     auto put = [&](const char* s, int len) {
       while (len-- > 0 && o < n - 1) out[o++] = *s++;
     };
-    put(SOS_MSG_TAG, (int)strlen(SOS_MSG_TAG));
+    put(head, (int)strlen(head));
     put(" ", 1);
-    if (!strstr(tmpl, "{loc}")) { put(loc, (int)strlen(loc)); put(" ", 1); }
+    if (!strstr(tmpl, "{loc}") && loc[0]) { put(loc, (int)strlen(loc)); put(" ", 1); }
     for (const char* p = tmpl; *p; ) {
       const char* val = nullptr;
       int skip = 0;
@@ -222,12 +237,24 @@ public:
       if (!val) { put(p++, 1); continue; }
       p += skip;
       if (val[0]) put(val, (int)strlen(val));
-      else while (*p == ' ') p++;
+      else {
+        while (*p == ' ') p++;
+        if (*p && ispunct((uint8_t)*p) && *p != '{' && o > 0 && out[o - 1] == ' ') o--;   // "Help! {loc}, ..." without one: "Help!, ..."
+      }
     }
     out[o] = '\0';
     o = mesh::validUtf8PrefixLength(out, o);   // too long: cut on a character
     while (o > 0 && out[o - 1] == ' ') o--;
     out[o] = '\0';
+  }
+
+  // An SOS called off, once it has gone out: MECP's "cancel beacon -- the
+  // sender reports they are OK" (B03), as routine.
+  static void endText(char* out, int n) {
+    mecp::Message m;
+    m.severity = mecp::Severity::Routine;
+    m.codes[m.code_count++] = { 'B', 3 };
+    m.encode(out, n);
   }
 
   // Anywhere to send to. A channel or a contact that has gone clears its own

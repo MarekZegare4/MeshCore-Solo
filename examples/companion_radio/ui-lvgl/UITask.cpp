@@ -596,6 +596,12 @@ void UITask::drainCoreEvents() {
       showToast(text, 5000);
       break;
     }
+    case UiEventType::SosEnded: {
+      char text[48];
+      snprintf(text, sizeof(text), "SOS over: %s", ev.text);
+      showToast(text, 4000);
+      break;
+    }
     case UiEventType::ClockAlert:
       showRing(ev.text);
       playMelody(soundctl::MEL_ALARM);

@@ -66,7 +66,7 @@ history on the SD card and updates over WiFi.
 - [Configurator](./configurator.md): settings, Home's pages, quick messages, melodies, routes and a backup, from a computer over USB
 - [Coverage map](./coverage-map.md): help draw MatterMap, a map of where the mesh is heard (Wio Tracker L2, voluntary)
 
-For developers: [UI Core](./developer/ui-core.md), [UI framework](./developer/ui-framework.md), [build flags](./developer/build-flags.md), [feature matrix](./developer/feature-matrix.md), [RX power save](./developer/rx-power-save.md), [location messages](./location-messages.md) (the `[WAY]` / `[LOC]` / `[SOS]` text formats, for other firmware).
+For developers: [UI Core](./developer/ui-core.md), [UI framework](./developer/ui-framework.md), [build flags](./developer/build-flags.md), [feature matrix](./developer/feature-matrix.md), [RX power save](./developer/rx-power-save.md), [location messages](./location-messages.md) (MECP and the `[LOC]` text formats, for other firmware).
 
 ## Contributors
 

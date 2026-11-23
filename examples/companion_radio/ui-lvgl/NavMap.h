@@ -1680,7 +1680,7 @@ void UITask::navToolAction(uint8_t act) {
       // With a session on, straight to its target; otherwise pick a conversation.
       if (_prefs->loc_share_enabled && _core->live_share.send(lat, lon)) { showToast("Position sent"); break; }
       char text[40];
-      geo::fmtLocShare(text, sizeof(text), lat, lon);
+      geo::fmtPositionOnce(text, sizeof(text), lat, lon);
       navClosePopup();
       shareToMessage(text);
       return;

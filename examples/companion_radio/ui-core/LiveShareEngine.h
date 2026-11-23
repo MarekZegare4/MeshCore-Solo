@@ -147,6 +147,11 @@ public:
     _track.update(pub_key, label, lat_1e6, lon_1e6, (uint32_t)rtc_clock.getCurrentTime(), verified, true);
   }
 
+  // Their SOS called off by them (MECP B03): its pin goes.
+  void onSosEnded(const uint8_t* pub_key, const char* name, bool verified) {
+    _track.endSos(verified ? pub_key : nullptr, name);
+  }
+
   // An advert with a position: moves that node's SOS, if one is on the table.
   void onAdvertPosition(const uint8_t* pub_key, const char* name, int32_t lat_1e6, int32_t lon_1e6) {
     _track.followSos(pub_key, name, lat_1e6, lon_1e6, (uint32_t)rtc_clock.getCurrentTime());

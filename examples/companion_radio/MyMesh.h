@@ -184,6 +184,8 @@ public:
       virtual void onSosPosition(const uint8_t* pub_key, const char* name,
                                  int32_t lat_1e6, int32_t lon_1e6, bool verified) {}
       virtual void onSosNoPosition(const char* name) {}
+      // Someone's SOS called off by them (MECP B03): its pin goes (name as above).
+      virtual void onSosEnded(const uint8_t* pub_key, const char* name, bool verified) {}
       // A fresh advert that carries a position (an SOS beacon among them).
       virtual void onAdvertPosition(const uint8_t* pub_key, const char* name, int32_t lat_1e6, int32_t lon_1e6) {}
       // A contact / channel slot is gone -- drop references to it.

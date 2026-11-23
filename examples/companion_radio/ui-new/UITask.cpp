@@ -520,6 +520,13 @@ void UITask::drainCoreEvents() {
       _next_refresh = 0;
       break;
     }
+    case UiEventType::SosEnded: {
+      char text[48];
+      snprintf(text, sizeof(text), "SOS over: %s", ev.text);
+      showAlert(text, 4000);
+      _next_refresh = 0;
+      break;
+    }
     case UiEventType::SosAcked:
       openSosView(SOS_VIEW_MS);
       playMelody(ev.flag ? soundctl::MEL_ALARM : soundctl::MEL_ARRIVE);
@@ -2157,7 +2164,7 @@ LiveTrackStore& UITask::liveTrack()   { return _core->live_share.track(); }
 
 // One-shot "share my position" from the home Map page (Hold Enter). When live
 // sharing is already on, push an immediate [LOC] to the same target; otherwise
-// hand a [LOC] message to the recipient picker so the user chooses where it
+// hand an MECP P05 message to the recipient picker so the user chooses where it
 // goes (no accidental broadcast to a default channel).
 void UITask::quickShareMyLocation() {
   int32_t lat, lon;
@@ -2167,7 +2174,7 @@ void UITask::quickShareMyLocation() {
     return;
   }
   char text[40];
-  geo::fmtLocShare(text, sizeof(text), lat, lon);
+  geo::fmtPositionOnce(text, sizeof(text), lat, lon);
   shareToMessage(text);
 }
 

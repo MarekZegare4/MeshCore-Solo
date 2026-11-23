@@ -704,6 +704,7 @@ void MyMesh::noteSos(const uint8_t* pub_key, const char* name, const char* body,
   if (!_listener) return;
   if (geo::parseSos(body, lat, lon)) _listener->onSosPosition(pub_key, name, lat, lon, verified);
   else if (geo::isSos(body)) _listener->onSosNoPosition(name);
+  else if (geo::mecpBeacon(body) == mecp::Beacon::Cancel) _listener->onSosEnded(pub_key, name, verified);
 }
 
 void MyMesh::onMessageRecv(const ContactInfo &from, mesh::Packet *pkt, uint32_t sender_timestamp,

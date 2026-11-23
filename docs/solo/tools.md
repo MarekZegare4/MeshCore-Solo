@@ -53,7 +53,7 @@ and without opening a menu. Set it up before you need it:
 | **Countdown** | 5, 10, 15 or 30 seconds to cancel in; 30 by default, time to stop one started in a pocket |
 | **Channels** | Which channels it goes to; **Enter** switches each one |
 | **Contact 1-3** | Up to three direct contacts. **Enter** picks one, **Left / Right** empties the row |
-| **Message** | What follows `[SOS]`, with placeholders, see below |
+| **Message** | The text after the position, with placeholders, see below |
 | **Repeat** | How often it's sent again: every 1, 2, 5 or 10 minutes, or **Off** for once |
 | **Advert** | The beacon, see below: **0-hop** (default), **Flood** or **Off** |
 | **Beep** | Off, or every 30 seconds, 1 or 5 minutes: `... --- ...` on the buzzer at full volume, so someone nearby can find you if you can't answer |
@@ -68,24 +68,26 @@ locked device, and needs no PIN. The device beeps every second at full volume,
 even with the buzzer off, and the screen blinks, faster as it nears the end (on
 e-ink once a second). **Any key** cancels.
 
-**The message** starts with `[SOS]`, like the other special messages (`[LOC]`,
-`[WAY]`), so a receiver knows it for an SOS whatever follows. What follows is
-the **Message** row, `{loc} {alt} {time}` by default:
+**The message** goes as [MECP](./location-messages.md#mecp), which other mesh
+apps read too: a MAYDAY distress beacon (`B01`) at GPS coordinates (`P05`), the
+position, then the **Message** row, `{loc} {alt} {time}` by default:
 
 ```
-[SOS] 50.06143,19.93658 212m 14:32
+MECP/0/B01 P05 50.06143,19.93658 212m @1432
 ```
 
 | Placeholder | Gives |
 | ----------- | ----- |
-| `{loc}` | The position, `last 50.06143,19.93658 12min ago`, or `no GPS` |
+| `{loc}` | Nothing with a fix (the position is already there), `last fix 12min ago`, or `no GPS` |
 | `{alt}` | The altitude from the GPS, with a fix only |
-| `{time}` | When it was sent, if the clock is set |
+| `{time}` | When it was sent, if the clock is set: `@1432` |
 | `{batt}` | The battery, as a percentage: how long the device will last |
 
-Anything else is sent as written, for example `{loc} {batt} blood group 0+`,
-or in your own language. The position always goes: without `{loc}` it comes
-straight after `[SOS]`. A placeholder with nothing to give leaves no gap.
+Anything else is sent as written, for example `{batt} blood group 0+`, or in
+your own language. The position always goes, whatever the row says. A
+placeholder with nothing to give leaves no gap. Ending an SOS that went out
+sends `MECP/3/B03` (the sender is OK) to the same places, and Solo devices
+take it off their maps.
 There's no accuracy (`±3m`): with few satellites the GPS can't estimate it
 well, and a wrong figure would mislead a search more than none.
 
@@ -153,7 +155,8 @@ this each time it wakes.
 ### The message is open for discussion
 
 SOS is experimental, so the format can still change. For receivers only the
-start is fixed: `[SOS]`, and the first position after it. That's what the map
+start is fixed: `MECP/0/B01 P05` and the position after it (Solo's earlier
+`[SOS]` is still read). That's what the map
 and the banner read; everything else is for people to read and is yours to set.
 
 Open questions, for [issue #56](https://github.com/MarekZegare4/MeshCore-Solo/issues/56):

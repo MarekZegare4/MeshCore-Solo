@@ -290,6 +290,11 @@ public:
   }
   void stopSos() {
     if (sos.idle()) return;
+    if (sos.sent()) {   // they were told: now that it's over (MECP B03)
+      char text[16];
+      SosEngine::endText(text, sizeof(text));
+      sosSendAll(text);
+    }
     sos.stop();
     if (_sos_gps_on) setGpsEnabled(false, false);
     _sos_gps_on = false;
@@ -542,6 +547,10 @@ public:
     events.push(UiEventType::SosHeard, name);
   }
   void onSosNoPosition(const char* name) override { events.push(UiEventType::SosHeard, name); }
+  void onSosEnded(const uint8_t* pub_key, const char* name, bool verified) override {
+    live_share.onSosEnded(pub_key, name, verified);
+    events.push(UiEventType::SosEnded, name);
+  }
 
   // Login answers go to the admin session when it's the one waiting, else to
   // the room sessions (logins from the messages screen), then the frontend.
@@ -717,6 +726,19 @@ private:
     sos.markBeacon(millis());
   }
 
+  // `text` to every SOS target, its channels and contacts; true when one went.
+  bool sosSendAll(const char* text) {
+    bool ok = false;
+    for (int i = 0; i < MAX_GROUP_CHANNELS; i++)
+      if ((_prefs->sos_ch_mask & (1ULL << i)) && sendChannelText((uint8_t)i, text)) ok = true;
+    for (int i = 0; i < NodePrefs::SOS_DM_MAX; i++) {
+      if (!SosEngine::hasDm(_prefs, i)) continue;
+      ContactInfo* c = the_mesh.lookupContactByPubKey(_prefs->sos_dm[i], NodePrefs::FAVOURITE_PREFIX_LEN);
+      if (c && sendDirectText(*c, text)) ok = true;
+    }
+    return ok;
+  }
+
   // One round: every target, with the position as of now, and the beacon.
   void sendSos() {
     const uint32_t now = rtc_clock.getCurrentTime();
@@ -733,14 +755,7 @@ private:
     SosEngine::compose(text, sizeof(text), _prefs->sos_msg, where, lat, lon, has_alt ? &alt : nullptr,
                        age_min, hhmm, _host->battPercent());
 
-    bool ok = false;
-    for (int i = 0; i < MAX_GROUP_CHANNELS; i++)
-      if ((_prefs->sos_ch_mask & (1ULL << i)) && sendChannelText((uint8_t)i, text)) ok = true;
-    for (int i = 0; i < NodePrefs::SOS_DM_MAX; i++) {
-      if (!SosEngine::hasDm(_prefs, i)) continue;
-      ContactInfo* c = the_mesh.lookupContactByPubKey(_prefs->sos_dm[i], NodePrefs::FAVOURITE_PREFIX_LEN);
-      if (c && sendDirectText(*c, text)) ok = true;
-    }
+    const bool ok = sosSendAll(text);
     const bool first = ok && sos.sent() == 0;
     sos.markSent(millis(), fix, ok);
     sosBeacon(where, lat, lon);

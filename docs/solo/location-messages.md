@@ -21,20 +21,30 @@ Decimal degrees, latitude then longitude, a comma between them, no space:
 
 ## The types
 
-| Tag | Meaning | Sent as | Where the tag may be |
-| --- | --- | --- | --- |
-| `[WAY]` | A place to save: a waypoint shared from one device to another | `[WAY]50.06143,19.93658 Hut` | anywhere in the text |
-| `[LOC]` | The sender's own position now, for following them on a map | `[LOC]50.06143,19.93658` | anywhere in the text |
-| `[SOS]` | A call for help with the sender's position | `[SOS] 50.06143,19.93658 212m 14:32` | at the very start only |
+What can go as [MECP](#mecp), the format other mesh apps speak too, goes as
+MECP; only the live position keeps Solo's own tag, as it goes every few minutes
+and in an MECP app each would be a message. Solo's earlier tags are still read.
+
+| Meaning | Sent as | Also read |
+| --- | --- | --- |
+| A place to save: a waypoint shared from one device to another | `MECP/3/C08 50.06143,19.93658 Hut` | `[WAY]50.06143,19.93658 Hut` |
+| The sender's own position now, for following them on a map (Live share) | `[LOC]50.06143,19.93658` | `MECP/3/P05 50.06143,19.93658` |
+| The sender's position once, to a conversation picked | `MECP/3/P05 50.06143,19.93658` | `[LOC]...` |
+| A call for help with the sender's position | `MECP/0/B01 P05 50.06143,19.93658 212m @1432` | `[SOS] 50.06143,19.93658 212m 14:32` |
+| That call for help is over: the sender is OK | `MECP/3/B03` | |
+
+`[WAY]` and `[LOC]` may be anywhere in the text; `[SOS]` and `MECP/` only at
+its start (after the sender's name in a channel post).
 
 A coordinate pair with no tag (as the `{loc}` placeholder writes it into any
 message) works too: on the receiving device the message's menu offers Save
 waypoint and Navigate, as for `[WAY]`, only without a label.
 
-### `[WAY]` — a waypoint
+### A waypoint
 
 ```
-[WAY]<lat>,<lon> <label>
+MECP/3/C08 <lat>,<lon> <label>      sent (C08: Rendezvous at)
+[WAY]<lat>,<lon> <label>            read too
 ```
 
 The label is the rest of the text after the coordinates, trailing spaces
@@ -68,22 +78,29 @@ What Solo does with them:
   its key) counts as verified; one read from a channel post is matched by the
   name in front of it only.
 
-### `[SOS]` — a call for help
+### A call for help (SOS)
 
 ```
-[SOS] <the sender's text, its placeholders filled>
+MECP/0/B01 P05 <lat>,<lon> <the sender's text, its placeholders filled>
+MECP/0/B01 <the sender's text>                  without a position
 ```
 
-The text after the tag is the sender's own, set in its settings; Solo's
-placeholders are `{loc}` (the position, "last 50.06143,19.93658 12min ago"
-for an old fix, "no GPS" without one), `{alt}` ("212m"), `{time}` ("14:32")
-and `{batt}` ("18%"). When the text has no `{loc}`, the position goes first,
-right after the tag: an SOS is never sent without one when there is a fix.
-The receiver takes the first coordinate pair after the tag as the position.
+A MAYDAY distress beacon (B01) at GPS coordinates (P05). The position is in
+the header, so a receiver needs nothing else; the text after it is the
+sender's own, set in its settings. Solo's placeholders are `{loc}` (nothing
+for a fix, as the position is already there; "last fix 12min ago" for an old
+one, "no GPS" without one), `{alt}` ("212m"), `{time}` ("@1432", MECP's time)
+and `{batt}` ("18%").
 
 It goes to the channels and contacts chosen beforehand, again every so often
-(12 sends at most) until someone replies with the agreed acknowledgement word
-or the sender stops it. A receiver keeps an SOS on its map for 24 hours.
+(12 sends at most) until someone replies with the agreed acknowledgement word,
+or an MECP acknowledgement (B02), or the sender stops it. Stopping one that
+went out sends `MECP/3/B03` (cancel beacon: the sender is OK) to the same
+places; a receiver then takes that SOS off its map. Otherwise a receiver keeps
+an SOS on its map for 24 hours.
+
+Read too: Solo's earlier `[SOS] <text>`, the first coordinate pair after the
+tag being the position.
 
 ## MECP
 
@@ -97,12 +114,18 @@ digits (M01 Injury, P05 At GPS coordinates, B01 Distress beacon ...).
   - 2pax 48.6520,20.1305". A code not in Solo's table yet is shown as sent. On
   the L2 a MAYDAY or URGENT bubble is outlined red.
 - **An SOS**: a distress beacon (B01) at any severity, or a MAYDAY that isn't a
-  drill or test (D01, D02). The first coordinate pair in the freetext is the
-  position, as for `[SOS]`.
+  drill or test (D01, D02). The coordinate pair after the codes is the position.
+- **An SOS acknowledged** (B02): an answer to Solo's own SOS, as the ACK word.
+- **An SOS called off** (B03): the sender's SOS leaves the map. As MECP says
+  (ADR 0005), it's only a claim: on a channel anyone can send one, so it ends
+  only an SOS from the same sender (the same key in a direct message, the same
+  name in a channel).
+- **A waypoint**: C08 (Rendezvous at) with a coordinate pair; the rest of the
+  text is its label.
 - **A position share**: any other with P05 (At GPS coordinates) and a coordinate
   pair, as for `[LOC]`.
 
-Solo still sends its own tags; sending MECP is to come. The decoder is
+What Solo sends is in [the types](#the-types). The coder and decoder are
 `lib/mecp` (`mecp.h`; the English texts in `mecp_text.h`, from MECP's
 `languages/en.json`, CC BY 4.0).
 

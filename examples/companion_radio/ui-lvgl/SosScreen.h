@@ -330,7 +330,7 @@ void UITask::buildSos() {
     snprintf(name, sizeof(name), "Contact %d", i + 1);
     sosValueRow(g, name, nullptr, c ? c->name : "-", R_DM1 + i);
   }
-  sosValueRow(g, "Message", "After [SOS]; the position always goes", p->sos_msg[0] ? p->sos_msg : "-", R_MSG);
+  sosValueRow(g, "Message", "After the position, which always goes", p->sos_msg[0] ? p->sos_msg : "-", R_MSG);
 
   g = group(list, "WHILE IT RUNS");   // until someone answers, and after
   seg = segmented(settingRow(g, "Repeat", nullptr), REPEATS, p->sos_repeat_idx, 200, 32);

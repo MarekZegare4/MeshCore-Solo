@@ -74,6 +74,22 @@ public:
     return moved;
   }
 
+  // Their SOS called off by them: its entry goes, matched as followSos() does
+  // (`key` null: a channel's, by "SOS <name>"). False when there was none.
+  bool endSos(const uint8_t* key, const char* name) {
+    char label[NAME_LEN];
+    snprintf(label, sizeof(label), "SOS %s", name ? name : "");
+    bool gone = false;
+    for (int i = 0; i < CAPACITY; i++) {
+      Entry& e = _e[i];
+      if (!e.used || !e.sos) continue;
+      if (e.verified ? !(key && memcmp(e.key, key, KEY_LEN) == 0) : strcmp(e.name, label) != 0) continue;
+      e.used = false;
+      gone = true;
+    }
+    return gone;
+  }
+
   // Drop entries not refreshed within EXPIRY_SECS. `now` is RTC epoch seconds.
   void expire(uint32_t now) {
     for (int i = 0; i < CAPACITY; i++)
