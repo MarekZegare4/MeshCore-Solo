@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <initializer_list>
 #include <string>
 
 #include <mecp.h>
@@ -203,6 +204,75 @@ TEST(MecpGps, ResetsFromAPreviousDecode) {
   EXPECT_FALSE(m.hasGPS());
   EXPECT_TRUE(isnan(m.gps.lat));
   EXPECT_TRUE(isnan(m.gps.lon));
+}
+
+// ---------- Encode ----------
+
+static Message msg(Severity severity, std::initializer_list<Code> codes) {
+  Message m;
+  m.severity = severity;
+  for (Code c : codes)
+    m.codes[m.code_count++] = c;
+  return m;
+}
+
+TEST(MecpEncode, SeverityAndCodes) {
+  char o[mecp::kMaxTextLen + 1];
+  EXPECT_EQ(10u, msg(Severity::Safety, { { 'B', 3 } }).encode(o, sizeof(o)));
+  EXPECT_STREQ("MECP/2/B03", o);
+  msg(Severity::Mayday, { { 'B', 1 }, { 'M', 1 }, { 'P', 5 } }).encode(o, sizeof(o));
+  EXPECT_STREQ("MECP/0/B01 M01 P05", o);
+}
+
+TEST(MecpEncode, Gps) {
+  char o[mecp::kMaxTextLen + 1];
+  Message m = msg(Severity::Routine, { { 'P', 5 } });
+  m.gps = { -41.2865, 174.7762 };
+  m.encode(o, sizeof(o));
+  EXPECT_STREQ("MECP/3/P05 -41.28650,174.77620", o);
+  m.gps = { 0.000001, -0.000001 };
+  m.encode(o, sizeof(o));
+  EXPECT_STREQ("MECP/3/P05 0.00000,-0.00000", o);
+}
+
+TEST(MecpEncode, RoundTrip) {
+  char o[mecp::kMaxTextLen + 1];
+  Message m = msg(Severity::Mayday, { { 'B', 1 }, { 'M', 1 } });
+  m.gps = { 50.06143, 19.93658 };
+  ASSERT_GT(m.encode(o, sizeof(o)), 0u);
+  Message d;
+  ASSERT_TRUE(decode(o, d));
+  EXPECT_EQ(Severity::Mayday, d.severity);
+  ASSERT_EQ(2u, d.code_count);
+  EXPECT_EQ(Code('B', 1), d.codes[0]);
+  EXPECT_EQ(Code('M', 1), d.codes[1]);
+  EXPECT_DOUBLE_EQ(50.06143, d.gps.lat);
+  EXPECT_DOUBLE_EQ(19.93658, d.gps.lon);
+}
+
+TEST(MecpEncode, Rejects) {
+  char o[mecp::kMaxTextLen + 1];
+  EXPECT_EQ(0u, Message().encode(o, sizeof(o))); // no codes
+  EXPECT_STREQ("", o);
+  Message m = msg(Severity::Mayday, { { 'b', 1 } });
+  EXPECT_EQ(0u, m.encode(o, sizeof(o)));
+  m = msg(Severity::Mayday, { { 'B', 100 } });
+  EXPECT_EQ(0u, m.encode(o, sizeof(o)));
+  m = msg(static_cast<Severity>(4), { { 'B', 1 } });
+  EXPECT_EQ(0u, m.encode(o, sizeof(o)));
+  m = msg(Severity::Mayday, { { 'B', 1 } });
+  m.gps = { 90.0001, 0.0 };
+  EXPECT_EQ(0u, m.encode(o, sizeof(o)));
+  EXPECT_STREQ("", o);
+}
+
+TEST(MecpEncode, MustFit) {
+  Message m = msg(Severity::Safety, { { 'B', 3 } });
+  char o[11];
+  EXPECT_EQ(10u, m.encode(o, sizeof(o)));
+  EXPECT_EQ(0u, m.encode(o, 10)); // no room for the NUL
+  EXPECT_STREQ("", o);
+  EXPECT_EQ(0u, m.encode(o, 0));
 }
 
 int main(int argc, char** argv) {
