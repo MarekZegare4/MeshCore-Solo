@@ -808,7 +808,7 @@ public:
       int px, py; project(lt.slotAt(i).lat_1e6, lt.slotAt(i).lon_1e6, px, py);
       if (inside(px, py)) miniIconDrawCentered(display, px, py, ICON_MAP_CONTACT);
     }
-    if (have_gps) { int px, py; project(mla, mlo, px, py); miniIconDrawCentered(display, px, py, ICON_MAP_CURRENT); }
+    if (have_gps) { int px, py; project(mla, mlo, px, py); drawOwnMarker(display, px, py, _task->ownHeading()); }
     else if (!tr.empty()) { int px, py; project(tr.last().lat_1e6, tr.last().lon_1e6, px, py); miniIconDrawCentered(display, px, py, ICON_MAP_CURRENT); }
     // Active target flag drawn last so it stays legible even atop a contact/own dot.
     if (have_tgt) { int px, py; project(tla, tlo, px, py); if (inside(px, py)) miniIconDrawCentered(display, px, py, ICON_MAP_TARGET); }

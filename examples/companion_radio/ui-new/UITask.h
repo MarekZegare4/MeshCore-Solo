@@ -523,6 +523,8 @@ public:
   // Position / course over ground (ui-core/CourseEngine.h) — shared by the nav
   // / compass / map screens. Course is independent of trail logging.
   bool currentCourse(int& deg_out) const;
+  // The way you face for your marker on the maps (drawOwnMarker): -1 none.
+  int ownHeading() const { int h; return currentCourse(h) ? h : -1; }
   bool currentLocation(int32_t& lat, int32_t& lon) const;
   void playMelody(const char* melody);
   void stopMelody();

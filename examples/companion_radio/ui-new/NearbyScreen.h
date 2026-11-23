@@ -1074,7 +1074,7 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
         gfx::drawLineClipped(d, px[k - 1] - ox, py[k - 1] - oy, px[k] - ox, py[k] - oy, ax, ay, aw, ah, dash);
       }
     }
-    if (me)     { int x, y; project(mla, mlo, x, y);   if (inside(x, y)) miniIconDrawCentered(d, x, y, ICON_MAP_CURRENT); }
+    if (me)     { int x, y; project(mla, mlo, x, y);   if (inside(x, y)) drawOwnMarker(d, x, y, _task->ownHeading()); }
     if (target) { int x, y; project(tla, tlo, x, y);   if (inside(x, y)) miniIconDrawCentered(d, x, y, ICON_MAP_TARGET); }
     const int r = 4 * s;
     d.drawRect(sx - r, sy - r, 2 * r + 1, 2 * r + 1);

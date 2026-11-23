@@ -1816,3 +1816,46 @@ inline int drawButton(DisplayDriver& d, int x, int y, const char* label, bool se
   d.setColor(UIColor::primary_txt);
   return w;
 }
+
+// ── Own position on a map ────────────────────────────────────────────────────
+// A filled triangle, row by row (DisplayDriver has no polygons).
+inline void fillTriangleRows(DisplayDriver& d, float x0, float y0, float x1, float y1, float x2, float y2) {
+  if (y1 < y0) { float t = x0; x0 = x1; x1 = t; t = y0; y0 = y1; y1 = t; }
+  if (y2 < y0) { float t = x0; x0 = x2; x2 = t; t = y0; y0 = y2; y2 = t; }
+  if (y2 < y1) { float t = x1; x1 = x2; x2 = t; t = y1; y1 = y2; y2 = t; }
+  const int ya = (int)ceilf(y0 - 0.5f), yb = (int)floorf(y2 - 0.5f);
+  for (int y = ya; y <= yb; y++) {
+    const float py = y + 0.5f;
+    float xl = x0 + (x2 - x0) * (py - y0) / (y2 - y0 > 1e-3f ? y2 - y0 : 1e-3f);   // the long edge
+    float xr = py < y1 ? x0 + (x1 - x0) * (py - y0) / (y1 - y0 > 1e-3f ? y1 - y0 : 1e-3f)
+                       : x1 + (x2 - x1) * (py - y1) / (y2 - y1 > 1e-3f ? y2 - y1 : 1e-3f);
+    if (xr < xl) { float t = xl; xl = xr; xr = t; }
+    const int a = (int)ceilf(xl - 0.5f), b = (int)floorf(xr - 0.5f);
+    if (b >= a) d.fillRect(a, y, b - a + 1, 1);
+  }
+}
+
+// Where you are: an arrow pointing the way you face (`heading`, degrees from
+// north, the maps being north up) -- the compass, else the course walked --
+// or, with none (-1), the cross. Ringed in the background colour so it reads
+// over the trail and the map's lines.
+inline void drawOwnMarker(DisplayDriver& d, int cx, int cy, int heading) {
+  if (heading < 0) { miniIconDrawCentered(d, cx, cy, ICON_MAP_CURRENT); return; }
+  const int s = miniIconScale(d);
+  const float L = (MINI_ICONS_LARGE == 2 ? 9.0f : 6.0f) * s;   // centre to tip
+  const float r = heading * 0.0174533f, fx = sinf(r), fy = -cosf(r);   // forward, on the screen
+  auto arrow = [&](float k) {
+    // The tip ahead, the barbs behind to the sides, the notch between them.
+    const float tx = cx + fx * L * k, ty = cy + fy * L * k;
+    const float bx = cx - fx * L * 0.8f * k, by = cy - fy * L * 0.8f * k;
+    const float w = L * 0.75f * k;
+    const float lx = bx + fy * w, ly = by - fx * w, rx = bx - fy * w, ry = by + fx * w;
+    const float nx = cx - fx * L * 0.3f * k, ny = cy - fy * L * 0.3f * k;
+    fillTriangleRows(d, tx, ty, lx, ly, nx, ny);
+    fillTriangleRows(d, tx, ty, nx, ny, rx, ry);
+  };
+  d.setColor(UIColor::window_bkg);
+  arrow(1.0f + 2.0f * s / L);
+  d.setColor(UIColor::primary_txt);
+  arrow(1.0f);
+}

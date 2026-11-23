@@ -866,7 +866,7 @@ private:
 
     if (have_gps) {
       int mx, my; proj.project(my_lat, my_lon, mx, my);
-      drawCurrentMarker(display, mx, my);
+      drawOwnMarker(display, mx, my, _task->ownHeading());
     } else if (have_trail) {
       int ex, ey; proj.project(_store->last().lat_1e6, _store->last().lon_1e6, ex, ey);
       drawCurrentMarker(display, ex, ey);
