@@ -1,3 +1,41 @@
+## Solo v2.4.0
+
+**New**
+- **MECP (#63).** Solo now speaks [MECP](https://github.com/mecp-org/MECP), an open format for short emergency and coordination messages that other mesh clients use too:
+  - An **SOS** goes as `MECP/0/B01 P05 lat,lon …` (your text after it, the time as `@HHMM`). **Stop** sends `MECP/3/B03`, and the SOS pin goes away on the devices that got it.
+  - A **shared waypoint** goes as `MECP/3/C08 lat,lon name`, a **one-off position** as `MECP/3/P05 lat,lon`. Live position sharing stays on `[LOC]`, as it's sent every few minutes.
+  - MECP messages from anyone are **shown in words**, e.g. "MAYDAY: Injury, At GPS coordinates". A distress beacon or a MAYDAY counts as an SOS (alert, pin on the map, Navigate), a position as a position. A received `B02` acknowledges your SOS.
+  - Solo's own `[SOS]`, `[WAY]` and `[LOC]` are still read, so older devices' messages work as before. See [Location messages](https://github.com/MarekZegare4/MeshCore-Solo/blob/main/docs/solo/location-messages.md#mecp).
+  - The decoder and encoder are by Blake Latchford (#64, #65, #66).
+- **Signal bars (#60)** in the status bar: how well repeaters near you were heard in the last 10 minutes. Empty until the first repeater is heard, then grey (on the L2) when the last one is older. Status > Radio (L2: Diag > Live) names the repeater and its SNR. Nothing is sent for it. Settings > Display > **Signal bars**.
+- **Map views and zoom** on every map (Trail, Nodes, Home's mini map, L2 Map tools):
+  - **View: All / Trail / People / Waypoints** chooses what the map fits in, and it's kept. **All** now always includes your waypoints.
+  - **Up / Down** zoom in steps down to a set scale (100 m to 50 km across). On one-button boards: Zoom in / Zoom out in the menu.
+- **Your marker is an arrow** on the maps, pointing the way you're heading (from the course you walk). A cross when there's no heading yet.
+- **The battery curve learnt from your own cell** (L1, L2 and the other nRF52 boards): let the device run down from full to the low-battery shutdown in one go, without USB, and it learns how your battery empties. The time left then follows your cell, and gets better with each run. On by default: Settings > Power > **Learn battery**. On the L2 the points of the curve can also be set by hand in 0.01 V steps.
+- **Configurator:**
+  - **Live view**: the device's screen in the browser, and you can use it from there: the keys, the button, or the L2's touch.
+  - **Every setting** is now in it and in `tools/console.py`: SOS, the bot, alarm, coverage map, GPIO, repeater, screen, keyboard, chat list, power saving, sounds per chat, Home's fields and favourites, radio presets, the lock PIN, WiFi (L2), and more. Settings a board has no use for are left out.
+  - Much faster: all settings read in one go; an L2 screenshot in about a third of the time.
+
+**L2**
+- **The Gallery shows a trail or route on the map** when you tap it, before Load or Follow: dashed, with the card at the bottom. The same from Map tools and after a GPX import.
+- **Time left on battery** was 2-4 times too long: the L2 now has its own cell's curve.
+- **`!buzz`** from the bot now buzzes on the L2 too (it only answered "Buzzing").
+
+**Fixes**
+- **L2 hang after a long time with the screen off.** Screens rebuilt while the screen was off (a message, the lock screen) were kept in memory until it came on again; a long enough spell ran the memory out and the device restarted. Diag > Live and the History chart now show the PSRAM, and crash reports include it.
+- **L2 crash** when holding a message after using the map with little memory left.
+- **`!buzz`** is no longer cut short by the message's own sound, and the reply says how long ("Buzzing 5 s").
+
+**Notes**
+- No settings are reset. New options start at their defaults: Signal bars On, map View All, Learn battery On.
+- **Solo 2.3 and older don't understand an MECP SOS:** they show it as a plain message, with no alert or pin. Update the devices in your group together.
+- The configurator needs Solo 2.4 on the device for the new settings and the live view's controls.
+- **ProMicro:** without a CardKB it runs on [one button](https://github.com/MarekZegare4/MeshCore-Solo/blob/main/docs/solo/one-button.md), a push button from P1.00 to GND (not tested on hardware).
+- **Not tested on hardware this time:** the GAT562 Watch13, the M5Stack Cardputer ADV, the T-Echo Lite + KeyShield and the Simpson. Reports are welcome.
+- L2 updates over WiFi from Settings > Firmware update once this release is published.
+
 ## Solo v2.3.0
 
 **New**

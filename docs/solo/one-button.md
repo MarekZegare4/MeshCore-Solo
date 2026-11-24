@@ -1,8 +1,10 @@
 # One button
 
 A board with nothing but its own button runs the whole interface from it: a
-bare Heltec V3 or V4 (the `_button` builds, which use the PRG button) and the
-GAT562 Watch13. The screens are the same as on a joystick device
+bare Heltec V3 or V4 (the `_button` builds, which use the PRG button), the
+GAT562 Watch13 and a ProMicro (a push button from P1.00 to GND; the pin's
+pull-up is on, nothing else is needed). On a ProMicro a CardKB, when plugged
+in, takes over as the keyboard. The screens are the same as on a joystick device
 ([Getting started](./getting-started.md)); only the way you move through
 them changes.
 

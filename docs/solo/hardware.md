@@ -10,7 +10,7 @@ same with nothing plugged in.
 | Wio Tracker L1 (OLED / e-ink) | Grove connector | built in |
 | GAT562 30S Mesh Kit | — | built in |
 | Heltec V3 / V4 | soldered (below) | soldered (below) |
-| ProMicro | on the main I2C bus (required: it has no buttons) | — |
+| ProMicro | on the main I2C bus (or [one button](./one-button.md) on P1.00) | — |
 | Cardputer ADV, T-Echo Lite + KeyShield, Simpson | built-in keyboard instead | — |
 
 ### CardKB

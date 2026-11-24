@@ -78,6 +78,7 @@ format and the rules.
 ## Credits
 
 MatterMap and its format are by Andrea Quartararo,
-[MatterMesh OS](https://mattermeshos.com). Solo's location messages
-([`[WAY]`, `[LOC]`, `[SOS]`](./location-messages.md)) are compatible with
-MatterMesh OS the other way round.
+[MatterMesh OS](https://mattermeshos.com). Solo reads MatterMesh OS's
+location tags ([`[WAY]`, `[LOC]`, `[SOS]`](./location-messages.md)). Since
+2.4 Solo sends an SOS, a waypoint and a one-off position as
+[MECP](./location-messages.md#mecp); live sharing still goes as `[LOC]`.
