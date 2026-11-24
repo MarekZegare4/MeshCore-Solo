@@ -226,9 +226,12 @@ static inline void fmtPositionOnce(char* buf, int n, int32_t lat_1e6, int32_t lo
 #define SOS_MSG_TAG "[SOS]"
 
 // An MECP message that is an SOS: a distress beacon (B01), or a MAYDAY that
-// isn't a drill or a test (D01, D02).
+// isn't a drill or a test (D01, D02). Never an acknowledgement (B02) or a
+// call-off (B03), whatever their severity: another app may send them at 0.
 static inline bool isMecpSos(const mecp::Message& m) {
-  if (m.beacon() == mecp::Beacon::Active) return true;
+  const mecp::Beacon b = m.beacon();
+  if (b == mecp::Beacon::Active) return true;
+  if (b == mecp::Beacon::Ack || b == mecp::Beacon::Cancel) return false;
   return m.severity == mecp::Severity::Mayday && !m.hasCode({ 'D', 1 }) && !m.hasCode({ 'D', 2 });
 }
 

@@ -344,9 +344,21 @@ TEST(LiveTrack, AnSosEndsOnlyForItsSender) {
   EXPECT_FALSE(t.endSos(nullptr, "Ann"));                // a DM's goes by key
   EXPECT_TRUE(t.endSos(ann, "Ann"));
   EXPECT_FALSE(t.slotAt(0).used);
+  EXPECT_FALSE(t.endSos(bob, "Cy"));                     // a channel's not by a DM of that name
+  EXPECT_TRUE(t.slotAt(1).used);
   EXPECT_TRUE(t.endSos(nullptr, "Cy"));
   EXPECT_FALSE(t.slotAt(1).used);
   EXPECT_TRUE(t.slotAt(2).used);
+}
+
+TEST(SosMecp, AnAckOrCallOffAtMaydayIsNoSos) {
+  int32_t lat, lon;
+  EXPECT_FALSE(geo::isSos("MECP/0/B03 50.06,19.93"));
+  EXPECT_FALSE(geo::parseSos("MECP/0/B03 50.06,19.93", lat, lon));
+  EXPECT_FALSE(geo::isSos("MECP/0/B02"));
+  EXPECT_EQ(geo::mecpBeacon("MECP/0/B03 50.06,19.93"), mecp::Beacon::Cancel);
+  EXPECT_TRUE(geo::isSos("MECP/0/B01 50.06,19.93"));
+  EXPECT_TRUE(geo::isSos("MECP/0/M01"));
 }
 
 TEST(LiveTrack, SosOutlivesAShareAndIsEvictedLast) {

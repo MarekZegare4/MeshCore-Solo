@@ -74,8 +74,10 @@ public:
     return moved;
   }
 
-  // Their SOS called off by them: its entry goes, matched as followSos() does
-  // (`key` null: a channel's, by "SOS <name>"). False when there was none.
+  // Their SOS called off by them: its entry goes. A DM's by its key; a
+  // channel's (`key` null) by "SOS <name>", and only by a call-off on a
+  // channel too -- a DM from someone else of that name doesn't end it. False
+  // when there was none.
   bool endSos(const uint8_t* key, const char* name) {
     char label[NAME_LEN];
     snprintf(label, sizeof(label), "SOS %s", name ? name : "");
@@ -83,7 +85,7 @@ public:
     for (int i = 0; i < CAPACITY; i++) {
       Entry& e = _e[i];
       if (!e.used || !e.sos) continue;
-      if (e.verified ? !(key && memcmp(e.key, key, KEY_LEN) == 0) : strcmp(e.name, label) != 0) continue;
+      if (e.verified ? !(key && memcmp(e.key, key, KEY_LEN) == 0) : (key || strcmp(e.name, label) != 0)) continue;
       e.used = false;
       gone = true;
     }
