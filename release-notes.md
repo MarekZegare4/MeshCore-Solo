@@ -30,7 +30,7 @@
 - **L2 did not start on its own** when plugged in after the battery had run down or after Power off: it needed the reset button. It now starts within 30 s of USB power coming.
 - **`!buzz`** is no longer cut short by the message's own sound, and the reply says how long ("Buzzing 5 s").
 - **`set dutycycle` did nothing** (#67): the console said OK and the airtime limit stayed as it was. Now it is set (e.g. 10 % for the EU 869.4–869.65 MHz band). Thanks to GHOSTEMANE.
-- **Location requests with GPS power saving** (#68): a contact allowed to ask for your location got none while the GPS slept between fixes. Now it gets the last fix, if it is younger than two sleep periods; never a typed position. Thanks to GHOSTEMANE.
+- **Location requests with GPS power saving** (#68): a contact allowed to ask for your location got none while the GPS slept between fixes. Now it gets the last fix from the GPS, if it is younger than two sleep periods plus two minutes; never a typed position. Thanks to GHOSTEMANE.
 
 **Notes**
 - No settings are reset. New options start at their defaults: Signal bars On, map View All, Learn battery On.

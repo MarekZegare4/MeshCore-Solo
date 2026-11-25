@@ -687,13 +687,15 @@ bool EnvironmentSensorManager::querySensors(uint8_t requester_permissions, Cayen
   // Always-on GPS: as before. With GPS power saving (gps_duty_sleep_sec > 0)
   // the receiver is off most of the time, so the last fix is given out while
   // it is recent, awake or asleep -- never a saved, typed or 0,0 position.
+  if (requester_permissions & TELEM_PERM_LOCATION) {
   #if ENV_INCLUDE_GPS
-  const bool loc_ok = gps_duty_sleep_sec > 0 ? gpsFixFresh() : gps_active;
-  #else
-  const bool loc_ok = gps_active;
+    if (gps_duty_sleep_sec > 0) {
+      if (gpsFixFresh()) telemetry.addGPS(TELEM_CHANNEL_SELF, _gps_fix_lat, _gps_fix_lon, _gps_fix_alt);
+    } else
   #endif
-  if ((requester_permissions & TELEM_PERM_LOCATION) && loc_ok) {
-    telemetry.addGPS(TELEM_CHANNEL_SELF, node_lat, node_lon, node_altitude);
+    if (gps_active) {
+      telemetry.addGPS(TELEM_CHANNEL_SELF, node_lat, node_lon, node_altitude);
+    }
   }
 
   if (requester_permissions & TELEM_PERM_ENVIRONMENT) {
@@ -764,15 +766,6 @@ bool EnvironmentSensorManager::setSettingValue(const char* name, const char* val
 }
 
 #if ENV_INCLUDE_GPS
-// A fix from the receiver, since boot, younger than two sleep windows, with
-// the GPS switched on by the user. Unsigned subtraction: right across a
-// millis() wrap.
-bool EnvironmentSensorManager::gpsFixFresh() const {
-  if (!gps_master_enabled || !_gps_fix_seen) return false;
-  if (node_lat == 0.0 && node_lon == 0.0) return false;
-  return (uint32_t)(millis() - _gps_last_fix_ms) < 2UL * gps_duty_sleep_sec * 1000UL;
-}
-
 void EnvironmentSensorManager::initBasicGPS() {
 
   Serial1.setPins(PIN_GPS_TX, PIN_GPS_RX);
@@ -934,6 +927,10 @@ bool EnvironmentSensorManager::gpsIsAwake(uint8_t ioPin){
 // disabled, or a live consumer is holding _gps_keep_awake, so all three of
 // those states behave exactly like today's always-on GPS.
 void EnvironmentSensorManager::gpsDutyCycleLoop() {
+  // forget a fix once it is too old to give out, so an old one can't look
+  // fresh again when millis() wraps (~49.7 days)
+  if (_gps_fix_seen && (uint32_t)(millis() - _gps_last_fix_ms) >= gpsFixWindowMs()) _gps_fix_seen = false;
+
   if (!gps_detected || !gps_master_enabled) return;
 
   if (gps_duty_sleep_sec == 0 || _gps_keep_awake) {
@@ -976,6 +973,20 @@ void EnvironmentSensorManager::gpsDutyCycleLoop() {
     stop_gps();
     _gps_duty_phase_until = now + gps_duty_sleep_sec * 1000UL;
   }
+}
+
+// A fix from the receiver, since boot, with the GPS switched on by the user,
+// young enough to give out: two sleep windows plus two acquire windows, so a
+// single wake that finds no fix leaves no gap. Unsigned subtraction: right
+// across a millis() wrap.
+uint32_t EnvironmentSensorManager::gpsFixWindowMs() const {
+  return 2UL * gps_duty_sleep_sec * 1000UL + 2UL * GPS_DUTY_ACQUIRE_TIMEOUT_MS;
+}
+
+bool EnvironmentSensorManager::gpsFixFresh() const {
+  if (!gps_master_enabled || !_gps_fix_seen) return false;
+  if (_gps_fix_lat == 0.0 && _gps_fix_lon == 0.0) return false;
+  return (uint32_t)(millis() - _gps_last_fix_ms) < gpsFixWindowMs();
 }
 
 void EnvironmentSensorManager::start_gps() {
@@ -1029,21 +1040,21 @@ void EnvironmentSensorManager::loop() {
     if(gps_active){
     #ifdef RAK_WISBLOCK_GPS
     if ((i2cGPSFlag || serialGPSFlag) && _location->isValid()) {
-      noteGpsFix();
       node_lat = ((double)_location->getLatitude())/1000000.;
       node_lon = ((double)_location->getLongitude())/1000000.;
       MESH_DEBUG_PRINTLN("lat %f lon %f", node_lat, node_lon);
       node_altitude = ((double)_location->getAltitude()) / 1000.0;
       MESH_DEBUG_PRINTLN("lat %f lon %f alt %f", node_lat, node_lon, node_altitude);
+      noteGpsFix();
     }
     #else
     if (_location->isValid()) {
-      noteGpsFix();
       node_lat = ((double)_location->getLatitude())/1000000.;
       node_lon = ((double)_location->getLongitude())/1000000.;
       MESH_DEBUG_PRINTLN("lat %f lon %f", node_lat, node_lon);
       node_altitude = ((double)_location->getAltitude()) / 1000.0;
       MESH_DEBUG_PRINTLN("lat %f lon %f alt %f", node_lat, node_lon, node_altitude);
+      noteGpsFix();
     }
     #endif
     }
