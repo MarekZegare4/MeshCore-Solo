@@ -1511,6 +1511,12 @@ void UITask::handleSimpsonKeypadKey(uint8_t key) {
 #include "PerfL1.h"
 
 void UITask::loop() {
+  if (_gps_search && !_core->gpsSearching()) {   // applyGpsState()'s search over
+    _gps_search = false;
+    if (hasGPS()) applyGpsState(true, true);
+    else showAlert("No GPS found", 2000);
+    _next_refresh = 0;
+  }
 #if defined(UI_PERF_L1) && defined(NRF52_PLATFORM)
   { static uint32_t start = millis();
     perfl1::disp = _display;
@@ -2341,6 +2347,11 @@ void UITask::toggleGPS(bool announce) {
 // Home-page manual toggle and the bot's !gps on/off command, which needs to
 // set a specific state rather than flip whatever it currently is.
 void UITask::applyGpsState(bool on, bool announce) {
+  if (on && !hasGPS()) {   // not heard at the start: listened for again, switched on if it answers (#72)
+    if (_core->searchGps(GPS_SEARCH_MS)) { _gps_search = true; showAlert("Looking for the GPS...", GPS_SEARCH_MS + 1500); }
+    else showAlert("No GPS on this device", 1500);
+    return;
+  }
   if (!_core->setGpsEnabled(on)) return;   // no GPS on this board
   notify(UIEventType::ack);
   if (announce) showAlert(on ? "GPS: Enabled" : "GPS: Disabled", 800);

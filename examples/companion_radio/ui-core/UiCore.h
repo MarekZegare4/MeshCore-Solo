@@ -307,6 +307,10 @@ public:
   // GPS power: the sensor manager's "gps" setting, persisted as
   // NodePrefs::gps_enabled (MyMesh::applyGpsPrefs() restores it at boot).
   bool gpsAvailable() const { return gpsSettingIndex() >= 0; }
+  // A GPS not found at the start, looked for again (issue #72): false when
+  // the board can have none; then gpsSearching() while it listens.
+  bool searchGps(uint32_t ms) { return _sensors && _sensors->searchGps(ms); }
+  bool gpsSearching() const { return _sensors && _sensors->gpsSearching(); }
   bool gpsEnabled() const {
     int i = gpsSettingIndex();
     return i >= 0 && strcmp(_sensors->getSettingValue(i), "1") == 0;

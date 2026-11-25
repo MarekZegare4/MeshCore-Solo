@@ -36,6 +36,14 @@ public:
   virtual bool isGpsDutySleeping() const { return false; }
   virtual int getAvailableLPPTypes(uint8_t* types, int max_count) const { return 0; }
   virtual bool isGPSDetected() const { return false; }
+  // A GPS not heard at the start (a module slow to talk, issue #72): listen
+  // for it again for `ms`, without blocking. False when the board can have
+  // none (nothing started). While gpsSearching(), loop() listens; after it,
+  // isGPSDetected() says whether one answered.
+  virtual bool searchGps(uint32_t ms) { return false; }
+  virtual bool gpsSearching() const { return false; }
+  // "gps diag" (issue #72): how the GPS was found, and the receiver's counters.
+  virtual void formatGpsDiag(char* out, int n) { snprintf(out, n, "no GPS support"); }
 
   // Helper functions to manage setting by keys (useful in many places ...)
   const char* getSettingByKey(const char* key) {

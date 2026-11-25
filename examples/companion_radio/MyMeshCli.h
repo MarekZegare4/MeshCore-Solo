@@ -245,6 +245,10 @@ bool MyMesh::cliRadioCommand(const char* command, char* reply, int n) {
     else { _prefs.airtime_factor = af; savePrefs(); snprintf(reply, n, "OK"); }
     return true;
   }
+  if (strcmp(command, "gps diag") == 0) {   // issue #72: how and when the GPS answered
+    sensors.formatGpsDiag(reply, n);
+    return true;
+  }
   if (strcmp(command, "get dutycycle") == 0) {
     float dc = 100.0f / (_prefs.airtime_factor + 1.0f);
     snprintf(reply, n, "> %d.%d%%", (int)dc, (int)((dc - (int)dc) * 10.0f + 0.5f));

@@ -619,6 +619,8 @@ public:
   int  getBuzzerMode(); // 0=ON, 1=OFF, 2=Auto
   bool getGPSState();
   bool hasGPS();   // true if this board exposes a toggleable GPS (distinct from GPS being off)
+  static const uint32_t GPS_SEARCH_MS = 5000;   // as long as the start gives it
+  bool _gps_search = false;                     // applyGpsState() is waiting for a GPS to answer
   void toggleGPS(bool announce = true);   // announce: the "GPS: Enabled" toast (off where a switch shows it)
   void applyGpsState(bool on, bool announce = true);   // shared by toggleGPS() and botSetGPS()
   void botSetGPS(bool on) override;

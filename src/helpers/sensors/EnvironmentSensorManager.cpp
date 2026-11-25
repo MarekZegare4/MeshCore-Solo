@@ -738,6 +738,16 @@ const char* EnvironmentSensorManager::getSettingValue(int i) const {
 
 bool EnvironmentSensorManager::setSettingValue(const char* name, const char* value) {
   #if ENV_INCLUDE_GPS
+  #ifndef RAK_WISBLOCK_GPS
+  if (!gps_detected && strcmp(name, "gps") == 0) {
+    // Saved as on, but the module said nothing in the 5 s at the start (#72:
+    // one that takes longer): listened for a while longer, and switched on
+    // when it answers, so it doesn't need switching on again after each start.
+    _gps_on_when_found = strcmp(value, "0") != 0;
+    if (_gps_on_when_found) searchGps(GPS_LATE_SEARCH_MS);
+    return false;
+  }
+  #endif
   if (gps_detected && strcmp(name, "gps") == 0) {
     gps_master_enabled = strcmp(value, "0") != 0;
     if (gps_master_enabled) {
@@ -766,6 +776,44 @@ bool EnvironmentSensorManager::setSettingValue(const char* name, const char* val
 }
 
 #if ENV_INCLUDE_GPS
+// A module that sent nothing in the 5 s at the start (issue #72: a Wio
+// Tracker L1 whose GPS stayed silent through restarts and power offs -- its
+// supply never goes -- until it was held off for a while and woken again):
+// held off for GPS_WAKE_LOW_MS (its enable / wake-up pin low, longer than the
+// half second a start gives it), then woken and listened to for `ms`, all
+// from loop(). Boards with a GPS found already: true at once.
+bool EnvironmentSensorManager::searchGps(uint32_t ms) {
+  if (gps_detected) return true;
+#ifdef RAK_WISBLOCK_GPS
+  return false;   // its socket probe is a boot-time affair
+#else
+  if (!_gps_search_until) {
+    _location->stop();
+    _gps_wake_at = (millis() + GPS_WAKE_LOW_MS) | 1;
+    _gps_search_at = 0;
+    _gps_search_heard = 0;
+  }
+  _gps_search_until = (millis() + (_gps_wake_at ? GPS_WAKE_LOW_MS : 0) + ms) | 1;
+  return true;
+#endif
+}
+
+// "> det:1 boot:5000ms@812 none search:@1640 3120ms on:1 | <provider counters>":
+// found or not; at the start, from when (ms since power-up) the 5 s of
+// listening ran and after how long the first byte came ("none"); the same for
+// the last search; whether the GPS is switched on.
+void EnvironmentSensorManager::formatGpsDiag(char* out, int n) {
+  char b[24], s[24];
+  if (_gps_boot_heard) snprintf(b, sizeof(b), "%lums", (unsigned long)_gps_boot_heard);
+  else snprintf(b, sizeof(b), "none");
+  if (!_gps_search_at) snprintf(s, sizeof(s), "-");
+  else if (_gps_search_heard) snprintf(s, sizeof(s), "%lums", (unsigned long)_gps_search_heard);
+  else snprintf(s, sizeof(s), _gps_search_until ? "listening" : "none");
+  int at = snprintf(out, n, "> det:%d boot:@%lu %s search:@%lu %s on:%d | ", gps_detected ? 1 : 0,
+                    (unsigned long)_gps_boot_at, b, (unsigned long)_gps_search_at, s, gps_master_enabled ? 1 : 0);
+  if (at > 0 && at < n) _location->formatDiagnostics(out + at, n - at);
+}
+
 void EnvironmentSensorManager::initBasicGPS() {
 
   Serial1.setPins(PIN_GPS_TX, PIN_GPS_RX);
@@ -792,10 +840,12 @@ void EnvironmentSensorManager::initBasicGPS() {
   gps_detected = true;
 #else
   gps_detected = false;
+  _gps_boot_at = millis();
   for (int i = 0; i < 20 && !gps_detected; i++) {
     delay(250);
     gps_detected = (Serial1.available() > 0);
   }
+  if (gps_detected) _gps_boot_heard = (millis() - _gps_boot_at) | 1;
 #endif
 
   if (gps_detected) {
@@ -1029,6 +1079,29 @@ void EnvironmentSensorManager::stop_gps() {
 void EnvironmentSensorManager::loop() {
 
   #if ENV_INCLUDE_GPS
+  #ifndef RAK_WISBLOCK_GPS
+  if (_gps_search_until) {   // searchGps(): held off, woken, then any byte from it is enough, as at the start
+    if (_gps_wake_at) {
+      if ((int32_t)(millis() - _gps_wake_at) >= 0) {
+        _gps_wake_at = 0;
+        while (Serial1.available() > 0) Serial1.read();   // nothing from before counts
+        _location->begin();
+        _location->reset();
+        _gps_search_at = millis() | 1;
+      }
+    } else if (Serial1.available() > 0) {
+      gps_detected = true;
+      _gps_search_heard = (millis() - _gps_search_at) | 1;
+      _gps_search_until = 0;
+      _location->stop();       // found, still off: the caller switches it on
+      if (_gps_on_when_found) { _gps_on_when_found = false; setSettingValue("gps", "1"); }   // saved as on
+    } else if ((int32_t)(millis() - _gps_search_until) >= 0) {
+      _gps_search_until = 0;
+      _gps_on_when_found = false;
+      _location->stop();
+    }
+  }
+  #endif
   gpsDutyCycleLoop();
 
   static unsigned long next_gps_update = 0;

@@ -31,6 +31,7 @@
 - **`!buzz`** is no longer cut short by the message's own sound, and the reply says how long ("Buzzing 5 s").
 - **`set dutycycle` did nothing** (#67): the console said OK and the airtime limit stayed as it was. Now it is set (e.g. 10 % for the EU 869.4–869.65 MHz band). Thanks to GHOSTEMANE.
 - **Location requests with GPS power saving** (#68): a contact allowed to ask for your location got none while the GPS slept between fixes. Now it gets the last fix from the GPS, if it is younger than two sleep periods plus two minutes; never a typed position. Thanks to GHOSTEMANE.
+- **A GPS that couldn't be switched on** (#72): when the GPS module said nothing in the first seconds after the start (one had got stuck silent, and a restart or power off didn't clear it, as its power stays on), switching the GPS on did nothing at all. Now the device holds it off for a second, wakes it and listens again ("Looking for the GPS..."), also by itself at the start when the GPS was left on; "No GPS found" if it still says nothing. `gps diag` in the console tells how the GPS answered.
 
 **Notes**
 - No settings are reset. New options start at their defaults: Signal bars On, map View All, Learn battery On.

@@ -36,6 +36,15 @@ protected:
   bool     _gps_keep_awake = false;
   uint32_t _gps_duty_phase_until = 0;
   bool     _gps_just_woke = false;       // one-shot; consumed by UITask to reset locator state
+  uint32_t _gps_search_until = 0;        // searchGps(): listening for a module not heard at the start (0: not)
+  bool     _gps_on_when_found = false;   // saved as on: switched on when the search hears it
+  uint32_t _gps_wake_at = 0;             // searchGps(): held off until then, then woken (0: woken)
+  static const uint32_t GPS_WAKE_LOW_MS = 1000;
+  // "gps diag" (#72): when (millis()) the start's listening began, after how
+  // long the first byte came (0: none in its 5 s), and the same for the last
+  // search (start 0: none yet).
+  uint32_t _gps_boot_at = 0, _gps_boot_heard = 0, _gps_search_at = 0, _gps_search_heard = 0;
+  static const uint32_t GPS_LATE_SEARCH_MS = 30000;   // after the start's 5 s, for a GPS saved as on
   // The last fix taken from the receiver, kept apart from node_lat/lon (which
   // the app, `set lat/lon` and the device can overwrite with a typed position):
   // lets telemetry give the position out while the GPS naps between
@@ -69,6 +78,9 @@ public:
     return gps_master_enabled && gps_duty_sleep_sec > 0 && !_gps_keep_awake && !gps_active;
   }
   bool isGPSDetected() const override { return gps_detected; }
+  bool searchGps(uint32_t ms) override;
+  bool gpsSearching() const override { return _gps_search_until != 0; }
+  void formatGpsDiag(char* out, int n) override;
   #else
   EnvironmentSensorManager(){};
   #endif
