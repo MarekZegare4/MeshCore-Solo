@@ -252,7 +252,10 @@ bool MyMesh::cliRadioCommand(const char* command, char* reply, int n) {
   }
   if (memcmp(command, "set dutycycle ", 14) == 0) {
     float dc = atof(&command[14]);
-    if (!(dc >= 1 && dc <= 100))   // written so "nan" fails too { snprintf(reply, n, "ERROR: dutycycle must be 1-100"); return true; }
+    if (!(dc >= 1 && dc <= 100)) {   // written so "nan" fails too
+      snprintf(reply, n, "ERROR: dutycycle must be 1-100");
+      return true;
+    }
     _prefs.airtime_factor = 100.0f / dc - 1.0f;
     savePrefs();
     float a = 100.0f / (_prefs.airtime_factor + 1.0f);
