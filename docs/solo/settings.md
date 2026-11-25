@@ -124,7 +124,9 @@ nodes aren't added until you make room.
   sensors is answered only where status is allowed too. Status also lets
   others find a route to you (**Discover** in
   [Path and trace](./contacts.md#path-and-trace), or the phone app's path
-  discovery).
+  discovery). With GPS power saving on, a location request while the GPS
+  sleeps gets the last fix, as long as it is younger than two sleep periods;
+  an older fix, or none since the start, is not sent.
 - **BT PIN**: the six-digit Bluetooth pairing PIN. Leave it empty for a new
   random one at each start, shown on screen. A new PIN is used from the next
   start; the phone pairs again after that.
