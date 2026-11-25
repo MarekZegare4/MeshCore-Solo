@@ -36,6 +36,13 @@ protected:
   bool     _gps_keep_awake = false;
   uint32_t _gps_duty_phase_until = 0;
   bool     _gps_just_woke = false;       // one-shot; consumed by UITask to reset locator state
+  // The last fix taken from the receiver (not a position typed in or loaded
+  // from the prefs): lets telemetry give the position out while the GPS naps
+  // between duty-cycle fixes -- see gpsFixFresh().
+  uint32_t _gps_last_fix_ms = 0;
+  bool     _gps_fix_seen = false;
+  void     noteGpsFix() { _gps_last_fix_ms = millis(); _gps_fix_seen = true; }
+  bool     gpsFixFresh() const;
   void gpsDutyCycleLoop();
   void start_gps();
   void stop_gps();

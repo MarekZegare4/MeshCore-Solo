@@ -684,7 +684,15 @@ bool EnvironmentSensorManager::begin() {
 bool EnvironmentSensorManager::querySensors(uint8_t requester_permissions, CayenneLPP& telemetry) {
   next_available_channel = TELEM_CHANNEL_SELF + 1;
 
-  if (requester_permissions & TELEM_PERM_LOCATION && gps_active) {
+  // Always-on GPS: as before. With GPS power saving (gps_duty_sleep_sec > 0)
+  // the receiver is off most of the time, so the last fix is given out while
+  // it is recent, awake or asleep -- never a saved, typed or 0,0 position.
+  #if ENV_INCLUDE_GPS
+  const bool loc_ok = gps_duty_sleep_sec > 0 ? gpsFixFresh() : gps_active;
+  #else
+  const bool loc_ok = gps_active;
+  #endif
+  if ((requester_permissions & TELEM_PERM_LOCATION) && loc_ok) {
     telemetry.addGPS(TELEM_CHANNEL_SELF, node_lat, node_lon, node_altitude);
   }
 
@@ -756,6 +764,15 @@ bool EnvironmentSensorManager::setSettingValue(const char* name, const char* val
 }
 
 #if ENV_INCLUDE_GPS
+// A fix from the receiver, since boot, younger than two sleep windows, with
+// the GPS switched on by the user. Unsigned subtraction: right across a
+// millis() wrap.
+bool EnvironmentSensorManager::gpsFixFresh() const {
+  if (!gps_master_enabled || !_gps_fix_seen) return false;
+  if (node_lat == 0.0 && node_lon == 0.0) return false;
+  return (uint32_t)(millis() - _gps_last_fix_ms) < 2UL * gps_duty_sleep_sec * 1000UL;
+}
+
 void EnvironmentSensorManager::initBasicGPS() {
 
   Serial1.setPins(PIN_GPS_TX, PIN_GPS_RX);
@@ -954,6 +971,7 @@ void EnvironmentSensorManager::gpsDutyCycleLoop() {
       node_lat = ((double)_location->getLatitude()) / 1000000.0;
       node_lon = ((double)_location->getLongitude()) / 1000000.0;
       node_altitude = ((double)_location->getAltitude()) / 1000.0;
+      noteGpsFix();
     }
     stop_gps();
     _gps_duty_phase_until = now + gps_duty_sleep_sec * 1000UL;
@@ -1011,6 +1029,7 @@ void EnvironmentSensorManager::loop() {
     if(gps_active){
     #ifdef RAK_WISBLOCK_GPS
     if ((i2cGPSFlag || serialGPSFlag) && _location->isValid()) {
+      noteGpsFix();
       node_lat = ((double)_location->getLatitude())/1000000.;
       node_lon = ((double)_location->getLongitude())/1000000.;
       MESH_DEBUG_PRINTLN("lat %f lon %f", node_lat, node_lon);
@@ -1019,6 +1038,7 @@ void EnvironmentSensorManager::loop() {
     }
     #else
     if (_location->isValid()) {
+      noteGpsFix();
       node_lat = ((double)_location->getLatitude())/1000000.;
       node_lon = ((double)_location->getLongitude())/1000000.;
       MESH_DEBUG_PRINTLN("lat %f lon %f", node_lat, node_lon);
