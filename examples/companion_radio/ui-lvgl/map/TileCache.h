@@ -87,6 +87,11 @@ public:
     } else if (keep) {
       Slot* s = &_slots[0];
       for (Slot& c : _slots) if (c.used < s->used) s = &c;
+      if (!s->px && !roomForAnother()) {   // short of PSRAM: one already holding a buffer, its pixels reused
+        Slot* r = nullptr;
+        for (Slot& c : _slots) if (c.px && (!r || c.used < r->used)) r = &c;
+        if (r) s = r;
+      }
       lv_image_cache_drop(&s->dsc);   // same descriptor, new pixels
       uint16_t* old = s->px;
       s->px = _spare;
@@ -157,6 +162,23 @@ public:
   }
 
 private:
+  // Another slot's buffer only while PSRAM keeps RESERVE free after it --
+  // what a screenshot, the live view's copy of the panel (150 KB at once),
+  // the Gallery and LVGL itself need. Measured on the L2 (2026-11-21): all 24
+  // slots + the vector data took PSRAM down to ~200 KB. MIN_SLOTS (the screen's
+  // tiles and their neighbours) are allocated whatever is left.
+  static const size_t RESERVE = 1024 * 1024;
+  static const int MIN_SLOTS = 10;
+  bool roomForAnother() const {
+    int n = 0;
+    for (const Slot& c : _slots) if (c.px) n++;
+    if (n < MIN_SLOTS) return true;
+#if defined(ESP32)
+    return heap_caps_get_free_size(MALLOC_CAP_SPIRAM) >= RESERVE + TILE_PX * TILE_PX * 2;
+#else
+    return true;
+#endif
+  }
   enum : uint8_t { JOB_IDLE, JOB_RUNNING, JOB_DONE };
   struct Job { TileProvider* src = nullptr; int16_t z = 0; int32_t x = 0, y = 0; bool present = false, overlay_missed = false; };
   Job _job;

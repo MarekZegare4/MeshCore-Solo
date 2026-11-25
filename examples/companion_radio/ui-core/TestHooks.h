@@ -75,6 +75,7 @@ public:
 
 inline FakeLocation& fake() { static FakeLocation f; return f; }
 
+#if ENV_INCLUDE_GPS
 // The sensor manager's provider pointer is protected: reached through a
 // member pointer named in a derived class, which C++ allows.
 struct SensorsPeek : EnvironmentSensorManager {
@@ -90,6 +91,9 @@ inline bool install(EnvironmentSensorManager& s) {
   p = &fake();
   return true;
 }
+#else
+inline bool install(SensorManager&) { return false; }   // a board with no GPS (the C6, the Sharp)
+#endif
 
 // The board's own provider, for code that needs its concrete type (the sky view).
 inline LocationProvider* real(LocationProvider* p) { return p == &fake() ? fake().real : p; }

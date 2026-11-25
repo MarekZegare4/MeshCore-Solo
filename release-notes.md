@@ -20,12 +20,14 @@
 
 **L2**
 - **The Gallery shows a trail or route on the map** when you tap it, before Load or Follow: dashed, with the card at the bottom. The same from Map tools and after a GPX import.
-- **Time left on battery** was 2-4 times too long: the L2 now has its own cell's curve.
+- **Time left on battery** was 2-4 times too long: the L2 now has its own cell's curve, learnt over two full runs.
 - **`!buzz`** from the bot now buzzes on the L2 too (it only answered "Buzzing").
 
 **Fixes**
 - **L2 hang after a long time with the screen off.** Screens rebuilt while the screen was off (a message, the lock screen) were kept in memory until it came on again; a long enough spell ran the memory out and the device restarted. Diag > Live and the History chart now show the PSRAM, and crash reports include it.
 - **L2 crash** when holding a message after using the map with little memory left.
+- **L2 memory after the map**: the map's tile cache now leaves about 1 MB of PSRAM free (it took all but ~200 KB).
+- **L2 did not start on its own** when plugged in after the battery had run down or after Power off: it needed the reset button. It now starts within 30 s of USB power coming.
 - **`!buzz`** is no longer cut short by the message's own sound, and the reply says how long ("Buzzing 5 s").
 
 **Notes**

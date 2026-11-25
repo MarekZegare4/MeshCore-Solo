@@ -99,6 +99,8 @@ private:
   int expReadInputs();   // 16-bit input register pair, -1 on error
   int expReadPort0();    // input port 0 alone (P00..P07), -1 on error
   int awRead(uint8_t reg);   // AW35615 register, -1 on error
+  void awInit();             // probe it, power its VBUS measure block (sets aw_ok)
+  void stayOffUnlessPlugged();
 
   // hardware reset pulse to the L76K GNSS (active HIGH on this board); the
   // module keeps almanac/ephemeris across it, so this is a warm restart

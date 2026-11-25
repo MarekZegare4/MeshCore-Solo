@@ -135,16 +135,38 @@ void WioTrackerL2Board::powerOff() {
   enterDeepSleep(OFF_POLL_SECS);
 }
 
+// AW35615 = FUSB302-style register map. VBUSOK (STATUS0 bit 7) only works
+// with the measure block powered: POWER (0x0B) resets to 0x01 (bandgap
+// only), which reads "no USB" forever. Add the receiver / current references
+// and the measure block (PWR[1..2]). Verified on hardware: device ID 0x91;
+// STATUS0 0x01 -> 0x80 on USB.
+void WioTrackerL2Board::awInit() {
+  Wire.beginTransmission(0x22);
+  aw_ok = Wire.endTransmission() == 0;
+  if (!aw_ok) return;
+  int pw = awRead(0x0B);
+  if (pw >= 0 && (pw & 0x07) != 0x07) {
+    Wire.beginTransmission(0x22);
+    Wire.write((uint8_t)0x0B);
+    Wire.write((uint8_t)(pw | 0x07));
+    Wire.endTransmission();
+    delay(2);   // the comparator settles before VBUSOK is read
+  }
+}
+
 // Off and woken by the timer (or a brown-out of the flat battery): back to
-// sleep unless USB power has come since the last look.
-static void stayOffUnlessPlugged(WioTrackerL2Board& b) {
+// sleep unless USB power has come since the last look. The USB-C controller
+// is probed here too: before begin() aw_ok was still false, so the look
+// always read "no USB" and a flat L2 never started on the charger.
+void WioTrackerL2Board::stayOffUnlessPlugged() {
   const esp_reset_reason_t r = esp_reset_reason();
   if (s_off_magic != OFF_MAGIC || (r != ESP_RST_DEEPSLEEP && r != ESP_RST_BROWNOUT)) {
     s_off_magic = 0;
     return;
   }
   Wire.begin(PIN_BOARD_SDA, PIN_BOARD_SCL);
-  const bool vbus = b.isExternalPowered();
+  awInit();
+  const bool vbus = isExternalPowered();
   if (vbus && !s_off_vbus) { s_off_magic = 0; return; }   // plugged in: start
   s_off_vbus = vbus;
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
@@ -153,7 +175,7 @@ static void stayOffUnlessPlugged(WioTrackerL2Board& b) {
 }
 
 void WioTrackerL2Board::begin() {
-  stayOffUnlessPlugged(*this);   // first: before the 3 s wait for a serial monitor below
+  stayOffUnlessPlugged();   // first: before the 3 s wait for a serial monitor below
 
   // GNSS UART: NMEA arrives at ~500 B/s and the main loop can stall for
   // hundreds of ms on SD tile decodes; the 256-byte default overflowed
@@ -174,22 +196,7 @@ void WioTrackerL2Board::begin() {
     Serial.println("ERROR: TCA9535 IO expander not found - peripherals unpowered!");
   }
 
-  Wire.beginTransmission(0x22);
-  aw_ok = Wire.endTransmission() == 0;
-  if (aw_ok) {
-    // AW35615 = FUSB302-style register map. VBUSOK (STATUS0 bit 7) only
-    // works with the measure block powered: POWER (0x0B) resets to 0x01
-    // (bandgap only), which reads "no USB" forever. Add the receiver /
-    // current references and the measure block (PWR[1..2]).
-    // Verified on hardware: device ID 0x91; STATUS0 0x01 -> 0x80 on USB.
-    int pw = awRead(0x0B);
-    if (pw >= 0) {
-      Wire.beginTransmission(0x22);
-      Wire.write((uint8_t)0x0B);
-      Wire.write((uint8_t)(pw | 0x07));
-      Wire.endTransmission();
-    }
-  }
+  awInit();
   MESH_DEBUG_PRINTLN("WioTrackerL2Board: init done");
 
   esp_reset_reason_t reason = esp_reset_reason();

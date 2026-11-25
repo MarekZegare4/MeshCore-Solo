@@ -56,7 +56,11 @@ class Companion:
         # device would restart on every connect and miss the question. Both
         # lines stay low there, set before the port opens; elsewhere DTR (and
         # RTS) up as before (TinyUSB's CDC wants DTR to send).
+        # The L2's TinyUSB port reports the same 303A:1001 under its own name
+        # and sends nothing with DTR low: the chip's own port is told by its
+        # product string.
         jtag = any(p.device == port and p.vid == 0x303A and p.pid == 0x1001
+                   and "JTAG" in (p.product or p.description or "")
                    for p in serial.tools.list_ports.comports())
         self.ser = serial.Serial(None, baud, timeout=0.2)
         self.ser.port = port
