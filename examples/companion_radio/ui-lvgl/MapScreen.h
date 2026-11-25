@@ -274,7 +274,7 @@ static bool prefetchOne(double left, double top, int w, int h, int z) {
       if (d < best) { best = d; bx = wx; by = ty; }
     }
   }
-  if (best >= 1e18) return false;
+  if (best >= 1e18 || !s_cache.canTake()) return false;   // complete, or as far as memory goes
   loadTile(z, bx, by);
   return true;
 }
@@ -1032,6 +1032,7 @@ void UITask::layoutMap() {
   int tx0 = (int)floor(left / mapview::TILE_PX), ty0 = (int)floor(top / mapview::TILE_PX);
   int n = 1 << _map_z;
   bool have_provider = mapview::s_available;
+  mapview::s_cache.markView();   // what this layout looks up stays cached ahead of the read-ahead
   int shown = 0, missing = 0, over = 0;
   bool tiled = true;
   _map_pending = false;

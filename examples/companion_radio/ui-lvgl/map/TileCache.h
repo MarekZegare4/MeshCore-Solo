@@ -85,13 +85,7 @@ public:
       Missing& m = _missing[_miss_next++ % MISSING];
       m.z = _job.z; m.x = _job.x; m.y = _job.y;
     } else if (keep) {
-      Slot* s = &_slots[0];
-      for (Slot& c : _slots) if (c.used < s->used) s = &c;
-      if (!s->px && !roomForAnother()) {   // short of PSRAM: one already holding a buffer, its pixels reused
-        Slot* r = nullptr;
-        for (Slot& c : _slots) if (c.px && (!r || c.used < r->used)) r = &c;
-        if (r) s = r;
-      }
+      Slot* s = victim();
       lv_image_cache_drop(&s->dsc);   // same descriptor, new pixels
       uint16_t* old = s->px;
       s->px = _spare;
@@ -161,7 +155,51 @@ public:
     return true;
   }
 
+  // The view about to be laid out: a slot looked up from here on (the tiles
+  // on screen, their coarser stand-ins, the read-ahead ring) is not given up
+  // for another tile while an older one can be.
+  void markView() { _mark = _tick; }
+
+  // Read-ahead may decode one more: there is a slot to put it in without
+  // pushing out a tile the view uses. False: the ring is as full as memory
+  // allows -- decoding on would evict the screen's own tiles, which then come
+  // back and push out the next (the top-left tile flickered, 2026-11-25).
+  bool canTake() const {
+    for (const Slot& c : _slots) {
+      if (!c.px && roomForAnother()) return true;
+      if (c.px && c.used <= _mark) return true;
+    }
+    return false;
+  }
+
 private:
+  // Where a decoded tile goes: an unallocated slot while PSRAM allows another
+  // buffer, else the least recently used one outside the view, else (the view
+  // alone needs more) a new buffer down to FLOOR, and only then a view tile.
+  Slot* victim() {
+    Slot* empty = nullptr;
+    Slot* old = nullptr;
+    Slot* any = nullptr;
+    for (Slot& c : _slots) {
+      if (!c.px) { if (!empty || c.used < empty->used) empty = &c; continue; }
+      if (c.used <= _mark && (!old || c.used < old->used)) old = &c;
+      if (!any || c.used < any->used) any = &c;
+    }
+    if (empty && roomForAnother()) return empty;
+    if (old) return old;
+    if (empty && (!any || aboveFloor())) return empty;
+    return any ? any : &_slots[0];
+  }
+  bool aboveFloor() const {
+#if defined(ESP32)
+    return heap_caps_get_free_size(MALLOC_CAP_SPIRAM) >= FLOOR + TILE_PX * TILE_PX * 2;
+#else
+    return true;
+#endif
+  }
+  static const size_t FLOOR = 256 * 1024;
+  uint32_t _mark = 0;
+
   // Another slot's buffer only while PSRAM keeps RESERVE free after it --
   // what a screenshot, the live view's copy of the panel (150 KB at once),
   // the Gallery and LVGL itself need. Measured on the L2 (2026-11-21): all 24
