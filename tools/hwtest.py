@@ -1474,6 +1474,248 @@ def pair_dm(a, b, out):
                 pass
 
 
+# ── Companion protocol: frames the phone app sends ──────────────────────────
+# One test per group of commands; each reads what is there, changes it, reads
+# it back, and puts the old value back (a key by its own bytes, not by a CLI
+# round trip, where the stored value is a float).
+
+CMD_GET_CONTACTS, CMD_ADD_UPDATE_CONTACT = 4, 9
+CMD_GET_BATT_AND_STORAGE, CMD_SET_TUNING_PARAMS = 20, 21
+CMD_GET_CHANNEL, CMD_SET_CHANNEL = 31, 32
+CMD_GET_TUNING_PARAMS, CMD_GET_STATS = 43, 56
+CMD_SET_OTHER_PARAMS, CMD_SET_PATH_HASH_MODE = 38, 61
+CMD_SET_AUTOADD_CONFIG, CMD_GET_AUTOADD_CONFIG = 58, 59
+RESP_OK, RESP_ERR_CODE = 0, 1
+RESP_CONTACTS_START, RESP_END_OF_CONTACTS = 2, 4
+RESP_BATT_AND_STORAGE, RESP_CHANNEL_INFO = 12, 18
+RESP_TUNING_PARAMS, RESP_STATS, RESP_AUTOADD_CONFIG = 23, 24, 25
+ERR_NOT_FOUND, ERR_ILLEGAL_ARG = 2, 6
+
+
+def ask_err(d, payload):
+    """The error code a request is answered with (it must be an error frame)."""
+    d.dev.send(payload)
+    end = time.time() + d.dev.timeout
+    while time.time() < end:
+        f = d.dev.read_frame(end - time.time())
+        if f is None:
+            break
+        if f[0] == RESP_ERR_CODE and len(f) <= 2:
+            return f[1] if len(f) > 1 else 0
+        if f[0] == RESP_OK:
+            raise Fail(f"{payload[:2].hex()}: answered OK, an error was expected")
+    raise Fail(f"{payload[:2].hex()}: no answer")
+
+
+def app_start(d):
+    """CMD_APP_START parsed: a dict of what the device says about itself."""
+    f = d.dev.ask(bytes([CMD_APP_START]) + bytes(7) + b"hwtest", RESP_SELF_INFO)
+    check(len(f) >= 58, f"self info is {len(f)} bytes")
+    return {"type": f[1], "tx": f[2], "max_tx": f[3], "key": f[4:36],
+            "lat": struct.unpack_from("<i", f, 36)[0], "lon": struct.unpack_from("<i", f, 40)[0],
+            "multi_acks": f[44], "advert_loc": f[45], "telemetry": f[46], "manual_add": f[47],
+            "freq_khz": struct.unpack_from("<I", f, 48)[0], "bw_hz": struct.unpack_from("<I", f, 52)[0],
+            "sf": f[56], "cr": f[57], "name": f[58:].decode(errors="replace")}
+
+
+@test("app-start")
+def t_app_start(d, out):
+    """CMD_APP_START: the self-info frame against the CLI's own answers."""
+    a = app_start(d)
+    check(any(a["key"]), "the public key is all zeros")
+    check(a["tx"] <= a["max_tx"] and a["max_tx"] > 0, f"tx {a['tx']} dBm of {a['max_tx']}")
+    fr, bw, sf, cr = d.cli.get("get radio").split(",")
+    check(abs(a["freq_khz"] - float(fr) * 1000) < 2, f"freq {a['freq_khz']} kHz, the CLI says {fr} MHz")
+    check(abs(a["bw_hz"] - float(bw) * 1000) < 2, f"bandwidth {a['bw_hz']} Hz, the CLI says {bw} kHz")
+    check(a["sf"] == int(sf) and a["cr"] == int(cr), f"sf/cr {a['sf']}/{a['cr']}, the CLI says {sf}/{cr}")
+    name = d.cli.get("get name")
+    check(a["name"] == name, f"name {a['name']!r}, the CLI says {name!r}")
+    again = app_start(d)   # a second start gives the same answer (the contacts iterator is reset, nothing else)
+    check(again["key"] == a["key"] and again["name"] == a["name"], "a second APP_START answered differently")
+    return f"{a['name']}, {a['tx']} dBm, key {a['key'][:4].hex()}"
+
+
+def contact_frame(key, name, ctype=1, flags=0, lat=0, lon=0, adv=0):
+    """The optional lastmod is left out, so the device stamps its own clock."""
+    return (bytes([CMD_ADD_UPDATE_CONTACT]) + key + bytes([ctype, flags, 0xFF]) + bytes(64)
+            + name.encode().ljust(32, b"\0") + struct.pack("<Iii", adv, lat, lon))
+
+
+def parse_contact(f):
+    return {"key": f[1:33], "type": f[33], "flags": f[34], "path_len": f[35],
+            "name": f[100:132].split(b"\0")[0].decode(errors="replace"),
+            "adv": struct.unpack_from("<I", f, 132)[0],
+            "lat": struct.unpack_from("<i", f, 136)[0], "lon": struct.unpack_from("<i", f, 140)[0],
+            "lastmod": struct.unpack_from("<I", f, 144)[0]}
+
+
+def list_contacts(d, since=None):
+    """CMD_GET_CONTACTS: (the count the start frame announces, the contacts sent)."""
+    d.dev.send(bytes([CMD_GET_CONTACTS]) + (struct.pack("<I", since) if since is not None else b""))
+    got, count = [], None
+    end = time.time() + 20
+    while time.time() < end:
+        f = d.dev.read_frame(end - time.time())
+        if f is None:
+            break
+        if f[0] == RESP_CONTACTS_START:
+            count = struct.unpack_from("<I", f, 1)[0]
+        elif f[0] == RESP_CONTACT and count is not None:
+            got.append(parse_contact(f))
+        elif f[0] == RESP_END_OF_CONTACTS:
+            check(count is not None, "the end of the contacts came without a start")
+            return count, got
+    raise Fail("the contact list never ended")
+
+
+@test("contacts")
+def t_contacts(d, out):
+    """A contact added, read, updated, listed (all and since) and removed over the companion protocol."""
+    key = bytes([0xC0, 0x7E]) + bytes((i * 7 + 3) & 0xFF for i in range(30))
+    check(not knows_contact(d, key), "the test contact is already there")
+    n0, _ = list_contacts(d)
+    added = False
+    try:
+        d.dev.ask(contact_frame(key, "hwtest one", lat=50123456, lon=19654321, adv=1700000000), RESP_OK)
+        added = True
+        f = parse_contact(d.dev.ask(bytes([CMD_GET_CONTACT_BY_KEY]) + key, RESP_CONTACT))
+        check(f["name"] == "hwtest one" and f["type"] == 1 and f["path_len"] == 0xFF, f"read back {f}")
+        check(f["lat"] == 50123456 and f["lon"] == 19654321 and f["adv"] == 1700000000, f"position/advert: {f}")
+        check(f["lastmod"] > 1000000000, f"lastmod {f['lastmod']}: not the device's clock")
+        # an update of the same key: the name and the position change, the entry is still one
+        d.dev.ask(contact_frame(key, "hwtest two", flags=1, lat=-1000, lon=2000, adv=1700000001), RESP_OK)
+        f = parse_contact(d.dev.ask(bytes([CMD_GET_CONTACT_BY_KEY]) + key, RESP_CONTACT))
+        check(f["name"] == "hwtest two" and f["flags"] & 1 and f["lat"] == -1000 and f["lon"] == 2000,
+              f"after the update {f}")
+        n1, every = list_contacts(d)
+        check(n1 == n0 + 1, f"{n0} contacts before, {n1} announced with the new one")
+        check(len(every) == n1, f"{n1} announced, {len(every)} sent")
+        check(sum(c["key"] == key for c in every) == 1, "the new contact isn't in the list exactly once")
+        _, since = list_contacts(d, since=f["lastmod"] - 1)
+        check(any(c["key"] == key for c in since), "the list since its own lastmod doesn't have it")
+        _, later = list_contacts(d, since=0xFFFFFFF0)
+        check(not later, f"{len(later)} contacts modified since the far future")
+    finally:
+        if added:
+            d.dev.ask(bytes([CMD_REMOVE_CONTACT]) + key, RESP_OK)
+    check(not knows_contact(d, key), "the contact is still there after the removal")
+    check(ask_err(d, bytes([CMD_REMOVE_CONTACT]) + key) == ERR_NOT_FOUND, "a second removal wasn't 'not found'")
+    n2, _ = list_contacts(d)
+    check(n2 == n0, f"{n0} contacts at the start, {n2} at the end")
+    return f"{n0} contacts, one added, updated and removed"
+
+
+@test("channels")
+def t_channels(d, out):
+    """CMD_GET_CHANNEL / SET_CHANNEL: channel 0 renamed and put back; an index past the end is an error."""
+    f = d.dev.ask(bytes([CMD_GET_CHANNEL, 0]), RESP_CHANNEL_INFO)
+    check(len(f) >= 50 and f[1] == 0, f"channel 0: {len(f)} bytes")
+    name, secret = f[2:34].split(b"\0")[0], f[34:50]
+    check(not any(f[2:34].split(b"\0", 1)[1]), f"the name field carries bytes after its NUL: {f[2:34]!r}")
+    new = (name[:28] + b" hw").ljust(32, b"\0")
+    old = name.ljust(32, b"\0")
+    try:
+        d.dev.ask(bytes([CMD_SET_CHANNEL, 0]) + new + secret, RESP_OK)
+        g = d.dev.ask(bytes([CMD_GET_CHANNEL, 0]), RESP_CHANNEL_INFO)
+        check(g[2:34].split(b"\0")[0] == new.rstrip(b"\0") and g[34:50] == secret, f"renamed: {g[2:34]!r}")
+    finally:
+        d.dev.ask(bytes([CMD_SET_CHANNEL, 0]) + old + secret, RESP_OK)
+    g = d.dev.ask(bytes([CMD_GET_CHANNEL, 0]), RESP_CHANNEL_INFO)
+    check(g[1:50] == f[1:50], "channel 0 didn't come back as it was")
+    check(ask_err(d, bytes([CMD_GET_CHANNEL, 200])) == ERR_NOT_FOUND, "channel 200 isn't 'not found'")
+    check(ask_err(d, bytes([CMD_SET_CHANNEL, 200]) + old + secret) == ERR_NOT_FOUND, "setting channel 200 isn't 'not found'")
+    return f"channel 0 {name.decode(errors='replace')!r} renamed and back"
+
+
+@test("device-stats")
+def t_stats(d, out):
+    """GET_STATS (core, radio, packets) and GET_BATT_AND_STORAGE: the sizes and what's plausible."""
+    f = d.dev.ask(bytes([CMD_GET_STATS, 0]), RESP_STATS)
+    check(len(f) == 11 and f[1] == 0, f"core stats: {len(f)} bytes")
+    batt, up = struct.unpack_from("<HI", f, 2)
+    check(batt == 0 or 2500 <= batt <= 5500, f"battery {batt} mV")
+    mv = mem(d)   # only a test build has it
+    if mv:
+        check(abs(up - mv[1]) < 10, f"uptime {up} s, mem says {mv[1]} s")
+    f = d.dev.ask(bytes([CMD_GET_STATS, 1]), RESP_STATS)
+    check(len(f) == 14 and f[1] == 1, f"radio stats: {len(f)} bytes")
+    nf = struct.unpack_from("<h", f, 2)[0]
+    check(-140 <= nf <= 0, f"noise floor {nf} dBm")
+    f = d.dev.ask(bytes([CMD_GET_STATS, 2]), RESP_STATS)
+    check(len(f) >= 26 and f[1] == 2, f"packet stats: {len(f)} bytes")
+    check(ask_err(d, bytes([CMD_GET_STATS, 9])) == ERR_ILLEGAL_ARG, "stats type 9 isn't an illegal argument")
+    f = d.dev.ask(bytes([CMD_GET_BATT_AND_STORAGE]), RESP_BATT_AND_STORAGE)
+    check(len(f) == 11, f"battery and storage: {len(f)} bytes")
+    bmv, used, total = struct.unpack_from("<HII", f, 1)
+    check(total > 0 and used <= total, f"storage {used} of {total} kB")
+    return f"battery {bmv} mV, storage {used}/{total} kB, noise floor {nf} dBm"
+
+
+@test("tuning")
+def t_tuning(d, out):
+    """GET/SET_TUNING_PARAMS against rxdelay and af, put back through the CLI (a float: no round trip by bytes)."""
+    f = d.dev.ask(bytes([CMD_GET_TUNING_PARAMS]), RESP_TUNING_PARAMS)
+    check(len(f) == 9, f"tuning: {len(f)} bytes")
+    rx, af = struct.unpack_from("<II", f, 1)
+    cli_rx, cli_af = d.cli.get("get rxdelay"), d.cli.get("get af")
+    check(abs(float(cli_rx) * 1000 - rx) <= 1 and abs(float(cli_af) * 1000 - af) <= 1,
+          f"frame {rx}/{af}, CLI {cli_rx}/{cli_af}")
+    try:
+        d.dev.ask(bytes([CMD_SET_TUNING_PARAMS]) + struct.pack("<II", 1500, 2250), RESP_OK)
+        g = d.dev.ask(bytes([CMD_GET_TUNING_PARAMS]), RESP_TUNING_PARAMS)
+        check(struct.unpack_from("<II", g, 1) == (1500, 2250), f"set 1500/2250, reads {struct.unpack_from('<II', g, 1)}")
+        check(abs(float(d.cli.get("get af")) - 2.25) < 0.001, "the CLI doesn't see the new af")
+    finally:
+        d.cli.put(f"set rxdelay {cli_rx}")
+        d.cli.put(f"set af {cli_af}")
+    check(d.cli.get("get rxdelay") == cli_rx and d.cli.get("get af") == cli_af, "rxdelay/af didn't come back")
+    return f"rxdelay {cli_rx}, af {cli_af}"
+
+
+@test("other-params")
+def t_other_params(d, out):
+    """SET_OTHER_PARAMS, SET_AUTOADD_CONFIG and SET_PATH_HASH_MODE, each read back and put back."""
+    a = app_start(d)
+    try:
+        new_multi = 1 if a["multi_acks"] == 0 else 0
+        new_manual = 1 - (a["manual_add"] & 1)
+        d.dev.ask(bytes([CMD_SET_OTHER_PARAMS, new_manual, a["telemetry"], a["advert_loc"], new_multi]), RESP_OK)
+        b = app_start(d)
+        check(b["manual_add"] == new_manual and b["multi_acks"] == new_multi, f"set {new_manual}/{new_multi}, reads {b['manual_add']}/{b['multi_acks']}")
+        check(b["telemetry"] == a["telemetry"] and b["advert_loc"] == a["advert_loc"], "telemetry or advert policy changed on the way")
+        check(d.cli.get("get multi.acks") == str(new_multi), "the CLI doesn't see multi.acks")
+    finally:
+        d.dev.ask(bytes([CMD_SET_OTHER_PARAMS, a["manual_add"], a["telemetry"], a["advert_loc"], a["multi_acks"]]), RESP_OK)
+    b = app_start(d)
+    check((b["manual_add"], b["telemetry"], b["advert_loc"], b["multi_acks"]) ==
+          (a["manual_add"], a["telemetry"], a["advert_loc"], a["multi_acks"]), "the other params didn't come back")
+
+    f = d.dev.ask(bytes([CMD_GET_AUTOADD_CONFIG]), RESP_AUTOADD_CONFIG)
+    check(len(f) == 3, f"autoadd: {len(f)} bytes")
+    cfg, hops = f[1], f[2]
+    try:
+        d.dev.ask(bytes([CMD_SET_AUTOADD_CONFIG, cfg ^ 1, (hops + 3) % 60]), RESP_OK)
+        g = d.dev.ask(bytes([CMD_GET_AUTOADD_CONFIG]), RESP_AUTOADD_CONFIG)
+        check(g[1] == cfg ^ 1 and g[2] == (hops + 3) % 60, f"autoadd set {cfg ^ 1}/{(hops + 3) % 60}, reads {g[1]}/{g[2]}")
+        d.dev.ask(bytes([CMD_SET_AUTOADD_CONFIG, 0, 200]), RESP_OK)
+        check(d.dev.ask(bytes([CMD_GET_AUTOADD_CONFIG]), RESP_AUTOADD_CONFIG)[2] == 64, "max hops 200 isn't cut to 64")
+    finally:
+        d.dev.ask(bytes([CMD_SET_AUTOADD_CONFIG, cfg, hops]), RESP_OK)
+    g = d.dev.ask(bytes([CMD_GET_AUTOADD_CONFIG]), RESP_AUTOADD_CONFIG)
+    check((g[1], g[2]) == (cfg, hops), f"autoadd {g[1]}/{g[2]}, was {cfg}/{hops}")
+
+    mode = d.cli.get("get path.hash.mode")
+    try:
+        want = (int(mode) + 1) % 3
+        d.dev.ask(bytes([CMD_SET_PATH_HASH_MODE, 0, want]), RESP_OK)
+        check(d.cli.get("get path.hash.mode") == str(want), "the CLI doesn't see the new path hash mode")
+        check(ask_err(d, bytes([CMD_SET_PATH_HASH_MODE, 0, 3])) == ERR_ILLEGAL_ARG, "path hash mode 3 isn't an illegal argument")
+    finally:
+        d.dev.ask(bytes([CMD_SET_PATH_HASH_MODE, 0, int(mode)]), RESP_OK)
+    check(d.cli.get("get path.hash.mode") == mode, "the path hash mode didn't come back")
+    return f"manual add, multi acks, autoadd {cfg}/{hops}, path hash {mode}: set and back"
+
+
 # ── Flashing ─────────────────────────────────────────────────────────────────
 
 def pio_env(release):
