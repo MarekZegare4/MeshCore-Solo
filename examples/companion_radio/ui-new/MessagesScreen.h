@@ -425,8 +425,10 @@ class MessagesScreen : public UIScreen {
     int32_t mnla = 0, mxla = 0, mnlo = 0, mxlo = 0;
     for (int i = 0; i < R.points(); i++) {
       const HopRoute::Pt& p = R.point(i);
-      if (i == 0 || p.lat < mnla) mnla = p.lat;  if (i == 0 || p.lat > mxla) mxla = p.lat;
-      if (i == 0 || p.lon < mnlo) mnlo = p.lon;  if (i == 0 || p.lon > mxlo) mxlo = p.lon;
+      if (i == 0 || p.lat < mnla) mnla = p.lat;
+      if (i == 0 || p.lat > mxla) mxla = p.lat;
+      if (i == 0 || p.lon < mnlo) mnlo = p.lon;
+      if (i == 0 || p.lon > mxlo) mxlo = p.lon;
     }
     float kx = cosf(((mnla + mxla) / 2.0e6f) * (float)M_PI / 180.0f);
     if (kx < 0.05f) kx = 0.05f;
@@ -1035,16 +1037,17 @@ public:
 #endif
 
   MessagesScreen(UITask* task, KeyboardWidget* kb)
-    : _task(task), _kb(kb), _phase(MODE_SELECT), _mode_sel(0),
+    : _task(task), _phase(MODE_SELECT), _mode_sel(0),
       _contact_sel(0), _contact_scroll(0), _num_contacts(0), _room_mode(false), _login_mode(false),
       _channel_sel(0), _channel_scroll(0), _num_channels(0),
       _sel_channel_idx(0), _sending_to_channel(false),
       _msg_sel(0), _msg_scroll(0), _active_msg_count(0),
       _hist_sel(0), _hist_scroll(0),
       _unread_at_entry(0),
+      _kb(kb),
+      _ctx_dirty(false), _pin_picker_active(false), _direct_entry(false), _reply_mode(false),
       _history(task->core().history),
       _dm_hist_sel(-1), _dm_hist_scroll(0),
-      _ctx_dirty(false), _pin_picker_active(false), _direct_entry(false), _reply_mode(false),
       _ch_view(task) {
     // The history rings + per-channel unread counters live in UiCore.
   }

@@ -255,7 +255,9 @@ private:
 
   // ── Writing ────────────────────────────────────────────────────────────────
   void flush(bool all) {
-    uint32_t t0 = millis();
+#if MESH_DEBUG && ARDUINO
+    uint32_t t0 = millis();   // for the debug line below
+#endif
     _dirty = false;
     _unsaved = 0;
     bool more = flushCh(all);
@@ -322,7 +324,6 @@ private:
   }
 
   void nextSegment(Log& l) {
-    char p[24];
     l.last++;
     if (!l.first) l.first = l.last;
     l.in_last = 0;

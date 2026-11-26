@@ -218,8 +218,7 @@ void MyMesh::writeContactRespFrame(uint8_t code, const ContactInfo &contact) {
 }
 
 void MyMesh::updateContactFromFrame(ContactInfo &contact, uint32_t& last_mod, const uint8_t *frame, int len) {
-  int i = 0;
-  uint8_t code = frame[i++]; // eg. CMD_ADD_UPDATE_CONTACT
+  int i = 1;   // frame[0] is the command code (CMD_ADD_UPDATE_CONTACT)
   memcpy(contact.id.pub_key, &frame[i], PUB_KEY_SIZE);
   i += PUB_KEY_SIZE;
   contact.type = frame[i++];
@@ -522,7 +521,7 @@ void MyMesh::queueMessage(const ContactInfo &from, uint8_t txt_type, mesh::Packe
   }
   memcpy(&out_frame[i], from.id.pub_key, 6);
   i += 6; // just 6-byte prefix
-  uint8_t path_len = out_frame[i++] = pkt->isRouteFlood() ? pkt->path_len : 0xFF;
+  out_frame[i++] = pkt->isRouteFlood() ? pkt->path_len : 0xFF;
   out_frame[i++] = txt_type;
   memcpy(&out_frame[i], &sender_timestamp, 4);
   i += 4;
@@ -818,7 +817,7 @@ void MyMesh::onChannelMessageRecv(const mesh::GroupChannel &channel, mesh::Packe
   }
   uint8_t channel_idx = (uint8_t)idx;
   out_frame[i++] = channel_idx;
-  uint8_t path_len = out_frame[i++] = pkt->isRouteFlood() ? pkt->path_len : 0xFF;
+  out_frame[i++] = pkt->isRouteFlood() ? pkt->path_len : 0xFF;
 
   out_frame[i++] = TXT_TYPE_PLAIN;
   memcpy(&out_frame[i], &timestamp, 4);
@@ -1412,7 +1411,7 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
     // silently drops every incoming packet — DMs and channels included — until a slot
     // frees up.
     : BaseChatMesh(radio, *new ArduinoMillis(), rng, rtc, *new StaticPoolPacketManager(32), tables),
-      _serial(NULL), telemetry(MAX_PACKET_PAYLOAD - 4), _store(&store), _listener(NULL), _iter(0) {
+      _store(&store), _serial(NULL), _listener(NULL), _iter(0), telemetry(MAX_PACKET_PAYLOAD - 4) {
   _iter_started = false;
   _cli_rescue = false;
   cli_command[0] = 0;
@@ -1729,9 +1728,8 @@ void MyMesh::handleCmdFrame(size_t len) {
   } else if (cmd_frame[0] == CMD_APP_START &&
              len >= 8) { // sent when app establishes connection, respond with node ID
     //  cmd_frame[1..7]  reserved future
-    char *app_name = (char *)&cmd_frame[8];
-    cmd_frame[len] = 0; // make app_name null terminated
-    MESH_DEBUG_PRINTLN("App %s connected", app_name);
+    cmd_frame[len] = 0; // null-terminate the app name (cmd_frame[8..]) for the debug line
+    MESH_DEBUG_PRINTLN("App %s connected", (char *)&cmd_frame[8]);
 
     _iter_started = false; // stop any left-over ContactsIterator
     int i = 0;

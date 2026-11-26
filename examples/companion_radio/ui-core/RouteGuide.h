@@ -100,12 +100,6 @@ public:
     lat = _t_lat; lon = _t_lon;
     return true;
   }
-  // Where you are along the route, as a point on it (for the map).
-  bool onRoutePos(int32_t& lat, int32_t& lon) const {
-    if (!active() || _snap) return false;
-    lat = _p_lat; lon = _p_lon;
-    return true;
-  }
 
   // The route for a map, from RAM: at most OVERVIEW points spread evenly along
   // it (the ends always), so drawing it never reads the flash. A map shows the
@@ -177,7 +171,6 @@ public:
         _joined = true;
         _off_m = near.d;
         _seg = near.seg; _along = _saved_along = near.along;
-        _p_lat = near.lat; _p_lon = near.lon;
         if (there) {
           findTarget(f);
         } else {
@@ -235,7 +228,6 @@ public:
     if (_state == ON_ROUTE) {
       _seg = best.seg;
       _along = best.along;
-      _p_lat = best.lat; _p_lon = best.lon;
       if (fabsf(_along - _saved_along) >= SAVE_M && millis() - _saved_ms >= _save_min_ms) {
         _saved_along = _along;
         _saved_ms = millis();
@@ -437,7 +429,6 @@ private:
   uint32_t _saved_ms = 0;      // and when
   uint32_t _save_min_ms = SAVE_MIN_MS;
   int32_t  _t_lat = 0, _t_lon = 0;
-  int32_t  _p_lat = 0, _p_lon = 0;
   int32_t  _lat0 = 0, _lon0 = 0;
   float    _kx = 0.11132f, _ky = 0.11132f;
   uint32_t _next_poll = 0, _next_full = 0;

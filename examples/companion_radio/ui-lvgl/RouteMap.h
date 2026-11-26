@@ -22,7 +22,6 @@ static float* s_ny = nullptr;
 static double s_ox = 0, s_oy = 0;
 static int s_n = 0;
 static int s_slot = -2;          // what s_nx holds
-static bool s_rev = false;
 static uint16_t s_gen = 0xFFFF;
 static lv_point_precise_t* s_pts = nullptr;
 static int s_pts_n = 0;

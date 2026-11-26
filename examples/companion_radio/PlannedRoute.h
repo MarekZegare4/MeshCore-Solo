@@ -199,8 +199,10 @@ public:
       _cum = 0;
     } else {
       _cum += geo::haversineKm(_last_lat, _last_lon, lat, lon) * 1000.0f;
-      if (lat < _info.min_lat) _info.min_lat = lat;  if (lat > _info.max_lat) _info.max_lat = lat;
-      if (lon < _info.min_lon) _info.min_lon = lon;  if (lon > _info.max_lon) _info.max_lon = lon;
+      if (lat < _info.min_lat) _info.min_lat = lat;
+      if (lat > _info.max_lat) _info.max_lat = lat;
+      if (lon < _info.min_lon) _info.min_lon = lon;
+      if (lon > _info.max_lon) _info.max_lon = lon;
     }
     p.cum_m = (uint32_t)(_cum + 0.5f);
     _last_lat = lat; _last_lon = lon;

@@ -231,7 +231,7 @@ static void optMaxHops(uint8_t v, char* b, int n, const NodePrefs&) {
   else if (h == 1) snprintf(b, n, "Direct");
   else snprintf(b, n, "%ld hop%s", (long)(h - 1), h == 2 ? "" : "s");
 }
-static void optHashSize(uint8_t v, char* b, int n, const NodePrefs&) { snprintf(b, n, "%u byte%s", v + 1, v ? "s" : ""); }
+static void optHashSize(uint8_t v, char* b, int n, const NodePrefs&) { snprintf(b, n, "%d byte%s", v + 1, v ? "s" : ""); }
 static const int32_t INT_THRESH[] = { 0, 8, 10, 12, 14, 16, 20 };
 static void optIntThresh(uint8_t v, char* b, int n, const NodePrefs&) {
   if (INT_THRESH[v] == 0) snprintf(b, n, "Off"); else snprintf(b, n, "%ld dB", (long)INT_THRESH[v]);

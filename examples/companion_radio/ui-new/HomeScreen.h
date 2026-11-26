@@ -568,7 +568,7 @@ class HomeScreen : public UIScreen {
       display.print(buf);
     } else if (mode == battery::VOLTAGE) {
       char buf[8];
-      snprintf(buf, sizeof(buf),"%u.%02uV", batteryMilliVolts / 1000, (batteryMilliVolts % 1000) / 10);
+      snprintf(buf, sizeof(buf),"%d.%02dV", batteryMilliVolts / 1000, (batteryMilliVolts % 1000) / 10);
       battLeftX = display.width() - display.getTextWidth(buf) - 1;
       display.setCursor(battLeftX, text_y);
       display.print(buf);
@@ -736,8 +736,12 @@ public:
     int32_t mnla = 0, mxla = 0, mnlo = 0, mxlo = 0;
     auto fold = [&](int32_t la, int32_t lo) {
       if (!init) { mnla = mxla = la; mnlo = mxlo = lo; init = true; }
-      else { if (la < mnla) mnla = la; if (la > mxla) mxla = la;
-             if (lo < mnlo) mnlo = lo; if (lo > mxlo) mxlo = lo; }
+      else {
+        if (la < mnla) mnla = la;
+        if (la > mxla) mxla = la;
+        if (lo < mnlo) mnlo = lo;
+        if (lo > mxlo) mxlo = lo;
+      }
     };
     // Framed as the Trail map is (its View, ui-core/MapFrame.h); what the
     // view leaves out is drawn only where it falls inside.
@@ -1372,7 +1376,6 @@ public:
     // with the Clock hidden). First: the title bar below goes by the page.
     if (!isPageVisible(_page)) _page = navPage(_page, +1);
 
-    char tmp[80];
     int mq_delay = 0;   // >0 while a selected row's name is marquee-scrolling
     int anim_ms = 0;    // >0 while something animates: a page turn
     display.setTextSize(1);

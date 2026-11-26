@@ -159,20 +159,4 @@ __attribute__((optimize("O2"))) static void polyline(const Target& t, const int3
   }
 }
 
-// A disc of radius `r` round (cx, cy).
-static void disc(const Target& t, float cx, float cy, float r, uint16_t col, uint8_t opa) {
-  int32_t y1 = (int32_t)floorf(cy - r - 1), y2 = (int32_t)ceilf(cy + r + 1);
-  int32_t x1 = (int32_t)floorf(cx - r - 1), x2 = (int32_t)ceilf(cx + r + 1);
-  if (y1 < t.clip.y1) y1 = t.clip.y1;
-  if (y2 > t.clip.y2) y2 = t.clip.y2;
-  if (x1 < t.clip.x1) x1 = t.clip.x1;
-  if (x2 > t.clip.x2) x2 = t.clip.x2;
-  for (int32_t y = y1; y <= y2; y++)
-    for (int32_t x = x1; x <= x2; x++) {
-      const float ddx = x - cx, ddy = y - cy;
-      const float cov = clamp01(r + 0.5f - sqrtf(ddx * ddx + ddy * ddy));
-      if (cov > 0) blend(t, x, y, col, (uint32_t)(cov * opa));
-    }
-}
-
 }  // namespace fastline

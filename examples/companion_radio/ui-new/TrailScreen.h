@@ -795,8 +795,10 @@ private:
     auto fold = [&](int32_t lat, int32_t lon) {
       if (!init) { min_lat = max_lat = lat; min_lon = max_lon = lon; init = true; }
       else {
-        if (lat < min_lat) min_lat = lat;  if (lat > max_lat) max_lat = lat;
-        if (lon < min_lon) min_lon = lon;  if (lon > max_lon) max_lon = lon;
+        if (lat < min_lat) min_lat = lat;
+        if (lat > max_lat) max_lat = lat;
+        if (lon < min_lon) min_lon = lon;
+        if (lon > max_lon) max_lon = lon;
       }
     };
     if (have_trail && f.trail) {
@@ -1062,7 +1064,8 @@ private:
     int   long_px   = h_shorter ? area_w : area_h;
     int   max_short = (int)(short_px / MIN_GRID_PX); if (max_short < 1) max_short = 1;
     int   n_short   = (int)((float)short_px / step_px + 0.5f);
-    if (n_short < 1) n_short = 1;  if (n_short > max_short) n_short = max_short;
+    if (n_short < 1) n_short = 1;
+    if (n_short > max_short) n_short = max_short;
     float cell      = (float)short_px / (float)n_short;          // exact square size
     int   n_long    = (int)((float)long_px / cell);              // whole cells that fit
     if (n_long < 1) n_long = 1;
@@ -1114,25 +1117,6 @@ private:
 
     display.setCursor(area_x, area_y + area_h - lh);
     display.print(lbl);
-  }
-
-  // Place a 1–2 char waypoint label beside its marker, kept inside the map
-  // rect: prefer upper-right, flip to the left if it would clip the right
-  // edge, and clamp vertically so edge/corner waypoints stay on the map.
-  static void drawWaypointLabel(DisplayDriver& d, const char* s, int wx, int wy,
-                                int ax, int ay, int aw, int ah) {
-    if (!s[0]) return;
-    int tw = (int)d.getTextWidth(s);
-    int ch = d.getLineHeight();
-    int lx = wx + 4;
-    if (lx + tw > ax + aw) lx = wx - 4 - tw;     // would clip right → flip left
-    if (lx < ax)           lx = ax;               // clamp to left edge
-    if (lx + tw > ax + aw) lx = ax + aw - tw;     // clamp to right edge
-    int ly = wy - 3;
-    if (ly < ay)           ly = ay;               // clamp to top edge
-    if (ly + ch > ay + ah) ly = ay + ah - ch;     // clamp to bottom edge
-    d.setCursor(lx, ly);
-    d.print(s);
   }
 
   // Map label collision avoidance. Each placed label reserves a rectangle; a new

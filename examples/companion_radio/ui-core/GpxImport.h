@@ -252,18 +252,4 @@ static Result write(Prepared& p, int& slot_out) {
   return OK;
 }
 
-// The whole import at once: `path` into the first free slot. `slot_out` the
-// slot written, `kept` the points kept, `dev_m` as in Prepared.
-static Result importFile(const char* path, const char* fallback_name, int max_points,
-                         int& slot_out, int& kept, float& dev_m) {
-  slot_out = -1; kept = 0; dev_m = 0;
-  if (PlannedRoutes::freeSlot() < 0) return NO_SLOT;
-  Prepared p;
-  Result r = prepare(path, fallback_name, max_points, p);
-  if (r != OK) return r;
-  kept = p.count;
-  dev_m = p.dev_m;
-  return write(p, slot_out);
-}
-
 }  // namespace gpximport

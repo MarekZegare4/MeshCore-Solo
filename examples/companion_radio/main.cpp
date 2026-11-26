@@ -27,16 +27,6 @@ static void pumpRadioDuringDisplayBusyWait(void*) {
 }
 #endif
 
-// Believe it or not, this std C function is busted on some platforms!
-static uint32_t _atoi(const char* sp) {
-  uint32_t n = 0;
-  while (*sp && *sp >= '0' && *sp <= '9') {
-    n *= 10;
-    n += (*sp++ - '0');
-  }
-  return n;
-}
-
 // platform file system
 #if defined(NRF52_PLATFORM) || defined(STM32_PLATFORM)
   #include <InternalFileSystem.h>

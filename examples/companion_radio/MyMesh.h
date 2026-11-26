@@ -618,7 +618,7 @@ public:
     // (0 = disabled, GPS stays continuous) -- see EnvironmentSensorManager::
     // gpsDutyCycleLoop(). Max: 24 hours = 86400 seconds (5 digits + null).
     char interval_str[12];
-    sprintf(interval_str, "%u", _prefs.gps_interval);
+    snprintf(interval_str, sizeof(interval_str), "%lu", (unsigned long)_prefs.gps_interval);
     sensors.setSettingValue("gps_interval", interval_str);
   }
 #endif

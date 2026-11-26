@@ -166,7 +166,9 @@ static const int WIFI_SCAN_MAX = 20;
 
 static lgfx::LGFX_Device* s_gfx = nullptr;
 static bool s_swallow = false;   // ignore the touch that woke the display until it lifts
-static uint32_t s_flush_us = 0;  // UI_PERF_TEST: time spent in flushCb (and waiting for it)
+#ifdef UI_PERF_TEST
+static uint32_t s_flush_us = 0;  // time spent in flushCb (and waiting for it)
+#endif
 static uint32_t s_flush_n = 0, s_flush_px = 0;   // SOLO_TEST_HOOKS `idle`: areas and pixels sent to the panel
 // -D UI_FLUSH_DMA: the panel fed by DMA in the background from buffers in
 // internal RAM, everything drawn in its byte order.

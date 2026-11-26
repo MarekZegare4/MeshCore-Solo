@@ -106,7 +106,7 @@ static void text(uint8_t f, const Inputs& in, const Style& st, char* v, int n) {
   bool fix = in.loc && in.loc->isValid();
   switch (f) {
     case BATT_V:
-      if (in.batt_mv) snprintf(v, n, "%u.%02u%sV", in.batt_mv / 1000, (in.batt_mv % 1000) / 10, sp);
+      if (in.batt_mv) snprintf(v, n, "%d.%02d%sV", in.batt_mv / 1000, (in.batt_mv % 1000) / 10, sp);
       return;
     case BATT_PCT:
       if (in.batt_mv) snprintf(v, n, "%d%%", battery::percent(in.batt_mv, in.low_batt_mv));

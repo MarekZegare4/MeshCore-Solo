@@ -571,7 +571,7 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
 
     if (_pinging && (snr_out != 0 || snr_back != 0 || rtt != 0)) {
       if (rtt > 0 && rtt < 10000) {
-        snprintf(_ping_time_str, sizeof(_ping_time_str), "RTT: %lums", rtt);
+        snprintf(_ping_time_str, sizeof(_ping_time_str), "RTT: %lums", (unsigned long)rtt);
       } else {
         snprintf(_ping_time_str, sizeof(_ping_time_str), "RTT: timeout");
       }
@@ -969,8 +969,10 @@ class NearbyScreen : public UIScreen, protected NearbyModel {
     bool init = false;
     auto fold = [&](int32_t la, int32_t lo) {
       if (!init) { mnla = mxla = la; mnlo = mxlo = lo; init = true; return; }
-      if (la < mnla) mnla = la;  if (la > mxla) mxla = la;
-      if (lo < mnlo) mnlo = lo;  if (lo > mxlo) mxlo = lo;
+      if (la < mnla) mnla = la;
+      if (la > mxla) mxla = la;
+      if (lo < mnlo) mnlo = lo;
+      if (lo > mxlo) mxlo = lo;
     };
     // You: the GPS, else the position set in Privacy -- where the packet
     // flow's lines end too.

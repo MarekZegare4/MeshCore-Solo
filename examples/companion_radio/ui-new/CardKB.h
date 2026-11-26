@@ -12,7 +12,13 @@ struct CardKBBusLock {
   ~CardKBBusLock() { if (g_cardkb_bus_mutex) xSemaphoreGive((SemaphoreHandle_t)g_cardkb_bus_mutex); }
 };
 #else
-struct CardKBBusLock { };
+// The same guard, taking no lock: a scope guard needs a constructor and a
+// destructor of its own for the compiler to treat `CardKBBusLock lock;` as the
+// RAII object it is.
+struct CardKBBusLock {
+  CardKBBusLock() {}
+  ~CardKBBusLock() {}
+};
 #endif
 
 #if defined(CARDKB_I2C)

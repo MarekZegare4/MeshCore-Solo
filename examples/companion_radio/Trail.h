@@ -85,10 +85,6 @@ public:
     UNITS_PACE_MI = 3,
   };
   static const uint8_t UNITS_COUNT = 4;
-  static const char* unitLabel(uint8_t idx) {
-    static const char* L[UNITS_COUNT] = { "km/h", "mph", "min/km", "min/mi" };
-    return L[idx < UNITS_COUNT ? idx : 0];
-  }
   static bool unitIsPace(uint8_t idx) { return idx == UNITS_PACE_KM || idx == UNITS_PACE_MI; }
 
   bool isActive() const { return _active; }
