@@ -52,6 +52,12 @@ import screenshot
 ROOT = Path(__file__).resolve().parent.parent
 PIO = os.path.expanduser("~/.platformio/penv/bin/pio")
 
+# A build's flash or RAM this full or more is warned about (build()).
+SIZE_WARN_PCT = 95
+# Free heap left after the tests below which the memory check fails: a DM's
+# signing takes ~8 KB of it (on the L1 at 5 KB free it failed, ERR 4).
+HEAP_MIN = 8192
+
 # Settings a test doesn't flip even for a moment: they delete messages or
 # contacts, can power the device off, or send an advert.
 SETTINGS_SKIP = {"messages.keep", "messages.expire", "contacts.expiry", "batt.shutdown", "advert.interval"}
@@ -1834,9 +1840,12 @@ def build(env, release):
     if r.returncode:
         print(r.stdout[-3000:], r.stderr[-2000:])
         sys.exit("The build failed.")
-    m = re.findall(r"(RAM|Flash):.*\((used \d+ bytes from \d+ bytes)\)", r.stdout)
-    for kind, used in m:
-        print(f"  {kind}: {used}")
+    for kind, used, total in re.findall(r"(RAM|Flash):.*\(used (\d+) bytes from (\d+) bytes\)", r.stdout):
+        pct = 100.0 * int(used) / int(total)
+        print(f"  {kind}: used {used} bytes from {total} bytes ({pct:.1f}%)")
+        if pct >= SIZE_WARN_PCT:
+            print(f"  WARNING: {kind} {pct:.1f}% full, {int(total) - int(used)} bytes left "
+                  f"(warned from {SIZE_WARN_PCT}%)")
     return bdir / env
 
 
@@ -2014,8 +2023,9 @@ def suite(d, args, want):
         base, last = (marks[0], marks[-1]) if len(marks) > 1 else (m0[0], marks[-1])
         drop = base - last
         r = {"test": "memory", "seconds": 0, "round": args.repeat,
-             "status": "FAIL" if drop > 4096 else "PASS",
-             "note": f"free heap {base} -> {last} bytes ({-drop:+d})" + (", rounds' ends compared" if len(marks) > 1 else "")}
+             "status": "FAIL" if drop > 4096 or last < HEAP_MIN else "PASS",
+             "note": f"free heap {base} -> {last} bytes ({-drop:+d})" + (", rounds' ends compared" if len(marks) > 1 else "")
+                     + (f", under {HEAP_MIN} (signing needs ~8 KB)" if last < HEAP_MIN else "")}
         results.append(r)
         show(r)
     if d.hooks and d.knows("usb"):   # every frame to the host whole (a cut one: the 300 ms limit hit)
