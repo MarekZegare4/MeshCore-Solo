@@ -1600,9 +1600,20 @@ def t_contacts(d, out):
             d.dev.ask(bytes([CMD_REMOVE_CONTACT]) + key, RESP_OK)
     check(not knows_contact(d, key), "the contact is still there after the removal")
     check(ask_err(d, bytes([CMD_REMOVE_CONTACT]) + key) == ERR_NOT_FOUND, "a second removal wasn't 'not found'")
+    # The frame without its optional lat/lon (an older app): the new contact has
+    # no position, not whatever the device's stack held.
+    short_key = bytes([0xC0, 0x7F]) + key[2:]
+    check(not knows_contact(d, short_key), "the short-frame test contact is already there")
+    try:
+        d.dev.ask(contact_frame(short_key, "hwtest short")[:-8], RESP_OK)
+        f = parse_contact(d.dev.ask(bytes([CMD_GET_CONTACT_BY_KEY]) + short_key, RESP_CONTACT))
+        check(f["lat"] == 0 and f["lon"] == 0, f"no position sent, read back {f['lat']}, {f['lon']}")
+    finally:
+        if knows_contact(d, short_key):
+            d.dev.ask(bytes([CMD_REMOVE_CONTACT]) + short_key, RESP_OK)
     n2, _ = list_contacts(d)
     check(n2 == n0, f"{n0} contacts at the start, {n2} at the end")
-    return f"{n0} contacts, one added, updated and removed"
+    return f"{n0} contacts, one added, updated and removed; one without a position"
 
 
 @test("channels")

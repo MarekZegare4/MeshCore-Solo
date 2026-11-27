@@ -3,6 +3,7 @@
 #include "../Features.h"
 #include "../GeoUtils.h"
 #include "../ui-core/MapFrame.h"   // the map's Manual scales
+#include "../ui-core/TextFit.h"   // names cut to a row on a whole character
 #include "NavView.h"
 #include "TabBar.h"
 
@@ -152,7 +153,7 @@ public:
       case PathEditor::TIMEOUT: snprintf(title, sizeof(title), "No reply"); break;
       case PathEditor::PROBED:  snprintf(title, sizeof(title), "Reached %d/%d", r.reached(), n); break;
       case PathEditor::FAILED:  snprintf(title, sizeof(title), "Can't trace"); break;
-      default:                  snprintf(title, sizeof(title), "%s%s", r.edited() ? "*" : "", r.targetName());
+      default:                  textfit::fmt(title, sizeof(title), "%s%s", r.edited() ? "*" : "", r.targetName());
     }
     drawScreenHeader(display, title, -1, 0, true, false);
     Row kind[ROWS_MAX];
@@ -171,7 +172,7 @@ public:
           else if (r.hop(idx).known < 4) snprintf(right, sizeof(right), "?");
           break;
         case R_NODE:
-          snprintf(left, sizeof(left), "> %s", r.targetName());
+          textfit::fmt(left, sizeof(left), "> %s", r.targetName());
           if (!r.toNode()) snprintf(right, sizeof(right), "-");
           else if (r.linkSnrX4(n + 1, o, b)) linkText(right, sizeof(right), o, b);
           else if (stop == n + 1) snprintf(right, sizeof(right), "x");

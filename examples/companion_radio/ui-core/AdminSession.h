@@ -254,8 +254,21 @@ public:
     }
     if (!_field->set_prefix) return false;
     char cmd[sizeof(_cmd)];
-    snprintf(cmd, sizeof(cmd), "%s %s", _field->set_prefix, text);
+    // Never a cut command: the editors stop at textRoom(), so this only
+    // refuses what got past them.
+    if (snprintf(cmd, sizeof(cmd), "%s %s", _field->set_prefix, text) >= (int)sizeof(cmd)) {
+      _outcome = SEND_FAILED;
+      return false;
+    }
     return send(cmd, P_PLAIN);
+  }
+
+  // Bytes the text edited for the field run() opened may take: a whole
+  // command is one mesh text (MAX_TEXT_LEN), less "<set_prefix> " before it.
+  int textRoom() const {
+    const int whole = (int)sizeof(_cmd) - 1;
+    if (!_field || !_field->set_prefix || _field->isCustom()) return whole;
+    return whole - (int)strlen(_field->set_prefix) - 1;
   }
 
   // The edited typed value (value / radio_*) for the field run() fetched.
@@ -400,7 +413,7 @@ private:
   ContactInfo _target;
   const admin::Field* _field = nullptr;
   char     _pw[16] = "";
-  char     _cmd[161] = "";
+  char     _cmd[MAX_TEXT_LEN + 1] = "";   // one mesh text (BaseChatMesh::sendCommandData)
   char     _text[161] = "";
   char     _last_custom[161] = "";
   char     _reply[200] = "";

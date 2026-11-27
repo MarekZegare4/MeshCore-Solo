@@ -3,6 +3,8 @@
 // Shared by both frontends (ui-new's Path screen, ui-lvgl's Route screen and
 // its "pick on the map" mode); the view only draws rows and calls the actions
 // below.
+
+#include "TextFit.h"   // a hop's name cut on a whole character
 //
 //   open(contact)     -- loads the contact's stored route (out_path), if any
 //   addRepeater(key)  -- appends a repeater (a contact of type repeater)
@@ -112,7 +114,7 @@ public:
     Hop& h = _hops[_n++];
     memcpy(h.key, c->id.pub_key, 4);
     h.known = 4;
-    snprintf(h.name, sizeof(h.name), "%s", c->name);
+    textfit::copy(h.name, sizeof(h.name), c->name);
     changed();
     return true;
   }
@@ -538,7 +540,7 @@ private:
       if (c.type == ADV_TYPE_REPEATER && c.id.isHashMatch(hash, size)) {
         memcpy(h.key, c.id.pub_key, 4);
         h.known = 4;
-        snprintf(h.name, sizeof(h.name), "%s", c.name);
+        textfit::copy(h.name, sizeof(h.name), c.name);
         return;
       }
     }

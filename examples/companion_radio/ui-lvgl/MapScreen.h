@@ -18,6 +18,7 @@
 #include "map/TileProvider.h"
 #include "map/VectorPacks.h"
 #include "map/VectorTileProvider.h"
+#include "../ui-core/TextFit.h"   // a name on the map cut on a whole character
 #include "map/VectorLabels.h"
 #include "map/TileCache.h"
 #include "map/LiveCache.h"
@@ -458,7 +459,7 @@ static void drawFlowNodes(lv_layer_t* layer, const lv_area_t& a, uint32_t now) {
     ContactInfo c;
     if (!the_mesh.getContactByIdx(n.idx, c) || !c.name[0]) continue;
     char name[20];
-    snprintf(name, sizeof(name), "%s", c.name);
+    textfit::copy(name, sizeof(name), c.name);
     lv_point_t sz;
     lv_text_get_size(&sz, name, THEME_FONT_SMALL, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
     lv_area_t pa = { n.x + 8, n.y - lh / 2 - 1, n.x + 8 + sz.x + 9, n.y + lh / 2 + 1 };

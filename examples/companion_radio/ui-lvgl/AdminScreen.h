@@ -339,7 +339,7 @@ void UITask::adminTextPopup(const char* text, bool digits) {
   const admin::Field* f = S.currentField();
   TextEntry t = { f ? f->label : "Command", onAdminTextKb };
   t.text = text;
-  t.max_bytes = 150;
+  t.max_bytes = S.textRoom();   // the whole command must fit in one mesh text
   if (digits) { t.accepted = "0123456789."; t.symbols = true; }
   if (f && f->isCustom()) t.hint = "e.g. get advert.interval";
   navTextEntry(t);

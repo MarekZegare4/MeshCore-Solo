@@ -35,6 +35,7 @@
 #include <math.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include "../../ui-core/TextFit.h"
 
 namespace mapview {
 
@@ -580,7 +581,7 @@ private:
     if (FILE* f = fopen(path, "r")) {
       char line[256];
       if (fgets(line, sizeof(line), f)) { trim(line); if (strstr(line, "{z}")) { snprintf(_url_tpl, sizeof(_url_tpl), "%s", line); _src_zmax = -1; } }
-      if (fgets(line, sizeof(line), f)) { trim(line); if (line[0]) snprintf(_attr, sizeof(_attr), "%s", line); }
+      if (fgets(line, sizeof(line), f)) { trim(line); if (line[0]) textfit::copy(_attr, sizeof(_attr), line); }   // "©" and the like: cut on a whole character
       if (fgets(line, sizeof(line), f)) { int z = atoi(line); if (z >= 1 && z <= 22) _src_zmax = z; }
       fclose(f);
     }

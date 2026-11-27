@@ -6,6 +6,7 @@
 #include "icons.h"     // scalable mini-icons (delivery markers)
 #include "ChannelsView.h"  // on-device channel add/edit form (Channels tab)
 #include "../ui-core/BotConfig.h"   // which channel bot a channel pick is for
+#include "../ui-core/TextFit.h"   // names and replies cut on a whole character
 
 class MessagesScreen : public UIScreen {
   UITask* _task;
@@ -803,7 +804,7 @@ class MessagesScreen : public UIScreen {
           }
         }
       }
-      snprintf(_pin_slot_labels[s], sizeof(_pin_slot_labels[s]), "Slot %d: %s", s + 1, nm);
+      textfit::fmt(_pin_slot_labels[s], sizeof(_pin_slot_labels[s]), "Slot %d: %s", s + 1, nm);
     }
   }
 
@@ -2800,7 +2801,7 @@ public:
         if (_reply_mode) {
           char body[MSG_TEXT_BUF];
           expandMsg(tmpl, body, sizeof(body));
-          snprintf(msg, sizeof(msg), "%s%s", _reply_prefix, body);
+          textfit::fmt(msg, sizeof(msg), "%s%s", _reply_prefix, body);   // too long: never half a letter sent
         } else {
           expandMsg(tmpl, msg, sizeof(msg));
         }

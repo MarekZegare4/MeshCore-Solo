@@ -6,8 +6,7 @@
 
 bool MyMesh::addDiscoveredContact(const uint8_t* pub_key, const char* name, uint8_t type) {
   if (lookupContactByPubKey(pub_key, PUB_KEY_SIZE)) return true;  // already a contact
-  ContactInfo c;
-  memset(&c, 0, sizeof(c));
+  ContactInfo c{};   // value-initialised: every field zero, the Identity constructed
   c.id = mesh::Identity(pub_key);
   strncpy(c.name, name ? name : "", sizeof(c.name) - 1);
   c.name[sizeof(c.name) - 1] = '\0';

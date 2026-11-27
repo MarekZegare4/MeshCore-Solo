@@ -2021,7 +2021,9 @@ void MyMesh::handleCmdFrame(size_t len) {
       dirty_contacts_expiry = futureMillis(LAZY_CONTACTS_WRITE_DELAY);
       writeOKFrame();
     } else {
-      ContactInfo contact;
+      // Zeroed first: the frame's lat/lon are optional, and a short frame
+      // would otherwise leave the new contact on whatever the stack held.
+      ContactInfo contact{};
       updateContactFromFrame(contact, last_mod, cmd_frame, len);
       contact.lastmod = last_mod;
       contact.sync_since = 0;
@@ -2300,9 +2302,8 @@ void MyMesh::handleCmdFrame(size_t len) {
   } else if (cmd_frame[0] == CMD_SEND_ANON_REQ && len > 1 + PUB_KEY_SIZE) {
     uint8_t *pub_key = &cmd_frame[1];
     ContactInfo *recipient = lookupContactByPubKey(pub_key, PUB_KEY_SIZE);
-    ContactInfo anon;
+    ContactInfo anon{};
     if (recipient == NULL) { // FIRMWARE_VER_CODE 13+,  allow non-contact requests
-      memset(&anon, 0, sizeof(anon));
       memcpy(anon.id.pub_key, pub_key, PUB_KEY_SIZE);
       anon.out_path_len = 0;   // default to zero-hop direct
       anon.type = ADV_TYPE_NONE;  // unknown

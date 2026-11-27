@@ -174,7 +174,7 @@ static uint64_t treeBytes(const char* root, int depth = 0) {
   while (struct dirent* de = readdir(d)) {
     if (de->d_name[0] == '.') continue;
     char p[160];
-    snprintf(p, sizeof(p), "%s/%s", root, de->d_name);
+    if (snprintf(p, sizeof(p), "%s/%s", root, de->d_name) >= (int)sizeof(p)) continue;   // a cut path could stat another file
     struct stat st;
     if (stat(p, &st) != 0) continue;
     if (S_ISDIR(st.st_mode)) { if (depth < 4) sum += treeBytes(p, depth + 1); }

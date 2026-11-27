@@ -2,6 +2,8 @@
 // Included into UITask.cpp only, where it stands (it uses what is defined above it).
 // A conversation's thread: bubbles, the compose row, message metadata.
 
+#include "../ui-core/TextFit.h"   // a sender's name cut on a whole character
+
 // ── Conversation ──────────────────────────────────────────────────────────────
 
 static void onKeyboard(lv_event_t* e) {
@@ -594,7 +596,7 @@ void UITask::refreshThread() {
       } else if (own) st = "";
       int loc = own ? -1 : noteMsgLocation(i, body, from);
       m = { i, true, own, loc, "" };
-      if (!own) snprintf(m.from, sizeof(m.from), "%s", from);
+      if (!own) textfit::copy(m.from, sizeof(m.from), from);
       row = bubble(_thread_list, own ? NULL : from, body, own, e.timestamp, st, col, loc >= 0, true, nrel, &age);
     } else {
       const DmHistEntry& e = s_th_dm[i];
@@ -619,7 +621,7 @@ void UITask::refreshThread() {
       else if (!e.outgoing) contactName(_thread_key, who, sizeof(who));
       int loc = e.outgoing ? -1 : noteMsgLocation(i, text, who);
       m = { i, false, false, loc, "" };
-      snprintf(m.from, sizeof(m.from), "%s", who);
+      textfit::copy(m.from, sizeof(m.from), who);
       row = bubble(_thread_list, room && !e.outgoing ? who : NULL, text, e.outgoing, e.timestamp, st, col,
                    loc >= 0, !e.outgoing, 0, &age);   // nothing to show for our own DM
     }

@@ -69,7 +69,7 @@ class AdminScreen : public UIScreen {
   // Free-text keyboard pre-filled with `initial`; `cli_autocomplete` wires the
   // {} picker to CLI command-name completion (Custom-command row only).
   void openValueKb(const char* initial, bool cli_autocomplete) {
-    kb().begin(initial, 160);
+    kb().begin(initial, S().textRoom());   // the whole command must fit in one mesh text
     kb().prompt = "Command";
     kb().clearPlaceholders();   // a CLI command/value is literal, not a message
     if (cli_autocomplete) kb().setPlaceholderRefresh(refreshCmdPlaceholders, nullptr, "Commands:");
