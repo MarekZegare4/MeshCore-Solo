@@ -628,6 +628,9 @@ public:
 
   // To check if there is pending work
   bool hasPendingWork() const;
+  // Frames for the app made one a loop() pass -- the contact list, the live
+  // view's bands: a frontend that idles between passes keeps them short.
+  bool appFramesPending() const;
 
   // Number of auto-replies sent since boot (DM + channel + room). Shown on BotScreen.
   uint16_t botReplyCount() const { return _bot_reply_count; }

@@ -475,13 +475,16 @@ void UITask::loop() {
 
 // How long loop() may sleep: nothing is due before then. Not at all while the
 // mesh has packets queued; briefly while a melody plays (its notes are timed
-// here) or frames to or from the app wait (read one a pass, sent spaced out).
-// A frame arriving from the app over BLE wakes the loop (serialFrameArrived).
+// here), frames to or from the app wait (read one a pass, sent spaced out) or
+// the mesh makes them a pass at a time (the contact list: 112 contacts took 6 s
+// with the screen off, a 50 ms sleep between two). A frame arriving from the
+// app over BLE wakes the loop (serialFrameArrived).
 uint32_t UITask::idleMillis(uint32_t lv_next) {
   if (the_mesh.hasPendingWork()) return 0;
 #ifdef PIN_BUZZER
   if (_buzzer.isPlaying()) return 1;
 #endif
+  if (the_mesh.appFramesPending()) return 1;
   if (isClientConnected() && _serial->hasPendingFrames()) return 2;
   if (_asleep) return 50;   // as often as the buttons and tap to wake are polled
   return lv_next < 10 ? lv_next : 10;   // LVGL's next timer: a refresh, an animation, input

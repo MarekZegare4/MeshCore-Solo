@@ -3213,6 +3213,13 @@ bool MyMesh::hasPendingWork() const {
 #include "MyMeshPing.h"
 #include "MyMeshApc.h"
 #include "MyMeshScreenshot.h"
+
+bool MyMesh::appFramesPending() const {
+#if defined(ENABLE_SCREENSHOT) && defined(DISPLAY_CLASS) && defined(UI_SCREENSHOT_RGB565)
+  if (s_tx.pumping) return true;   // MyMeshScreenshot.h: a band a pass
+#endif
+  return _iter_started;            // checkSerialInterface(): a contact a pass
+}
 #include "MyMeshRoutes.h"
 #include "MyMeshBot.h"
 #include "MyMeshCli.h"
