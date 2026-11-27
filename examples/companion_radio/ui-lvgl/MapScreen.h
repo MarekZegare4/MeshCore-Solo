@@ -340,9 +340,9 @@ static void flowLegendRefresh() {
   }
   t[o] = '\0';
   if (!o && s_flow && s_flow->enabled() && s_flow->historyCount() > 0) o = snprintf(t, sizeof(t), LV_SYMBOL_LIST " Recent packets");
-  if (!o) { lv_obj_add_flag(s_flow_legend, LV_OBJ_FLAG_HIDDEN); return; }
+  if (!o) { lv_obj_set_hidden(s_flow_legend, true); return; }
   setText(s_flow_legend, t);
-  lv_obj_remove_flag(s_flow_legend, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(s_flow_legend, false);
 }
 
 static void flowPx(int32_t lat, int32_t lon, int32_t& x, int32_t& y);
@@ -782,7 +782,7 @@ double UITask::mapCenterBias() const {
 // there is one) or the route pick's.
 int UITask::mapBottomH() const {
   if (_route_pick || _route_show) return navmap::BAR_H;
-  return _map_nav && _nav_bar && !lv_obj_has_flag(_nav_bar, LV_OBJ_FLAG_HIDDEN) ? navmap::BAR_H : 0;
+  return _map_nav && _nav_bar && !lv_obj_is_hidden(_nav_bar) ? navmap::BAR_H : 0;
 }
 
 // The controls along the bottom edge, clear of that bar.
@@ -857,7 +857,7 @@ void UITask::buildMap() {
   lv_obj_t* body = newScreen(NULL, false);
   lv_obj_set_layout(body, LV_LAYOUT_NONE);
   lv_obj_set_style_pad_all(body, 0, 0);
-  lv_obj_remove_flag(body, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(body, false);
   lv_obj_set_style_bg_color(body, lv_color_hex(theme::SURFACE), 0);   // unloaded / missing tiles
   lv_obj_set_style_bg_opa(body, LV_OPA_COVER, 0);
   lv_obj_add_event_cb(body, mapview::drawGrid, LV_EVENT_DRAW_MAIN_END, &mapview::s_grid);
@@ -865,7 +865,7 @@ void UITask::buildMap() {
   lv_obj_t* scr = lv_obj_get_screen(body);
   lv_obj_set_style_bg_opa(scr, LV_OPA_TRANSP, 0);
   lv_obj_add_event_cb(scr, mapview::fillAroundMap, LV_EVENT_DRAW_MAIN, body);
-  lv_obj_add_flag(body, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(body, true);
   lv_obj_add_event_cb(body, onMapPress, LV_EVENT_PRESSED, NULL);
   lv_obj_add_event_cb(body, onMapPress, LV_EVENT_PRESSING, NULL);
   lv_obj_add_event_cb(body, onMapLongPress, LV_EVENT_LONG_PRESSED, NULL);
@@ -876,9 +876,9 @@ void UITask::buildMap() {
     lv_obj_t* cell = lv_obj_create(body);
     lv_obj_remove_style_all(cell);
     lv_obj_set_size(cell, mapview::TILE_PX, mapview::TILE_PX);
-    lv_obj_remove_flag(cell, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_remove_flag(cell, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(cell, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_clickable(cell, false);
+    lv_obj_set_scrollable(cell, false);
+    lv_obj_set_hidden(cell, true);
     mapview::s_cells[i] = cell;
     _map_tiles[i] = lv_image_create(cell);
     lv_image_set_pivot(_map_tiles[i], 0, 0);   // magnify from the top-left (overzoom)
@@ -890,31 +890,31 @@ void UITask::buildMap() {
   _map_marks = lv_obj_create(body);
   lv_obj_remove_style_all(_map_marks);
   lv_obj_set_size(_map_marks, LV_PCT(100), LV_PCT(100));
-  lv_obj_remove_flag(_map_marks, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_remove_flag(_map_marks, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_add_flag(_map_marks, LV_OBJ_FLAG_EVENT_BUBBLE);
+  lv_obj_set_clickable(_map_marks, false);
+  lv_obj_set_scrollable(_map_marks, false);
+  lv_obj_set_event_bubble(_map_marks, true);
 
   if (_map_nav) buildNavLayers();   // trail + line to the target, under the markers
 
   _map_me = lv_obj_create(_map_marks);
   lv_obj_remove_style_all(_map_me);
   mapstyle::styleDot(_map_me, 17, theme::ACCENT, 3);   // odd: its middle on the pixel a route line starts from
-  lv_obj_remove_flag(_map_me, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_add_flag(_map_me, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_clickable(_map_me, false);
+  lv_obj_set_hidden(_map_me, true);
 
   mapview::s_mark_layer = lv_obj_create(_map_marks);   // markers over the trail, target and own position
   lv_obj_remove_style_all(mapview::s_mark_layer);
   lv_obj_set_size(mapview::s_mark_layer, LV_PCT(100), LV_PCT(100));
-  lv_obj_remove_flag(mapview::s_mark_layer, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_remove_flag(mapview::s_mark_layer, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_clickable(mapview::s_mark_layer, false);
+  lv_obj_set_scrollable(mapview::s_mark_layer, false);
   lv_obj_add_event_cb(mapview::s_mark_layer, mapview::drawMarks, LV_EVENT_DRAW_MAIN, NULL);
   for (lv_obj_t*& r : mapview::s_sos_rings) {
     r = lv_obj_create(mapview::s_mark_layer);
     lv_obj_remove_style_all(r);
     lv_obj_set_size(r, mapview::MARK_D + 1, mapview::MARK_D + 1);
     lv_obj_set_style_radius(r, LV_RADIUS_CIRCLE, 0);
-    lv_obj_remove_flag(r, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_flag(r, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_clickable(r, false);
+    lv_obj_set_hidden(r, true);
     mapview::sosPulse(r);
   }
   mapview::s_flow = &_core->flow;
@@ -941,8 +941,8 @@ void UITask::buildMap() {
   // live share (NavMap.h), the download. Empty most of the time.
   mapview::s_going = lv_obj_create(body);
   lv_obj_remove_style_all(mapview::s_going);
-  lv_obj_remove_flag(mapview::s_going, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_remove_flag(mapview::s_going, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_clickable(mapview::s_going, false);
+  lv_obj_set_scrollable(mapview::s_going, false);
   lv_obj_set_size(mapview::s_going, 212, LV_SIZE_CONTENT);   // between the button columns
   lv_obj_set_flex_flow(mapview::s_going, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_flex_align(mapview::s_going, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -950,17 +950,17 @@ void UITask::buildMap() {
   lv_obj_align(mapview::s_going, LV_ALIGN_TOP_MID, 0, 15);
   _map_dl_pill = mapPill(mapview::s_going, "");   // tap: the download popup
   lv_obj_set_style_text_color(_map_dl_pill, lv_color_hex(theme::ACCENT), 0);
-  lv_obj_add_flag(_map_dl_pill, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(_map_dl_pill, true);
   lv_obj_set_ext_click_area(_map_dl_pill, 6);
   lv_obj_add_event_cb(_map_dl_pill, onMapDownload, LV_EVENT_CLICKED, NULL);
-  lv_obj_add_flag(_map_dl_pill, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(_map_dl_pill, true);
   mapview::s_flow_legend = mapPill(mapview::s_going, "");   // packet flow: what's been heard
   lv_label_set_recolor(mapview::s_flow_legend, true);
   lv_obj_set_style_max_width(mapview::s_flow_legend, 212, 0);   // a busy minute wraps to a second line
   lv_obj_set_style_text_align(mapview::s_flow_legend, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_style_radius(mapview::s_flow_legend, 8, 0);
-  lv_obj_add_flag(mapview::s_flow_legend, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_add_flag(mapview::s_flow_legend, LV_OBJ_FLAG_CLICKABLE);   // tap: the recent packets
+  lv_obj_set_hidden(mapview::s_flow_legend, true);
+  lv_obj_set_clickable(mapview::s_flow_legend, true);   // tap: the recent packets
   lv_obj_set_ext_click_area(mapview::s_flow_legend, 6);
   lv_obj_add_event_cb(mapview::s_flow_legend, [](lv_event_t*) { s_ui->flowHistoryPopup(); }, LV_EVENT_CLICKED, NULL);
   lv_obj_add_event_cb(mapview::s_flow_legend, [](lv_event_t*) { mapview::s_flow_legend = nullptr; }, LV_EVENT_DELETE, NULL);
@@ -970,7 +970,7 @@ void UITask::buildMap() {
   // Settings > About), a bar one grid step long with its distance, the zoom.
   lv_obj_t* sc = lv_obj_create(body);   // a pill (mapPill's look) holding a row
   lv_obj_remove_style_all(sc);
-  lv_obj_remove_flag(sc, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(sc, false);
   lv_obj_set_style_bg_color(sc, lv_color_hex(theme::BG), 0);
   lv_obj_set_style_bg_opa(sc, LV_OPA_COVER, 0);
   lv_obj_set_style_pad_hor(sc, 8, 0);
@@ -980,13 +980,13 @@ void UITask::buildMap() {
   lv_obj_set_flex_flow(sc, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(sc, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_column(sc, 6, 0);
-  lv_obj_add_flag(sc, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(sc, true);
   lv_obj_set_ext_click_area(sc, 8);
   lv_obj_add_event_cb(sc, onMapCredits, LV_EVENT_CLICKED, NULL);
   label(sc, "\xC2\xA9", THEME_FONT_SMALL, theme::TEXT_MUTED);
   mapview::s_scale_bar = lv_obj_create(sc);
   lv_obj_remove_style_all(mapview::s_scale_bar);
-  lv_obj_remove_flag(mapview::s_scale_bar, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(mapview::s_scale_bar, false);
   lv_obj_set_size(mapview::s_scale_bar, 60, 6);
   lv_obj_set_style_border_color(mapview::s_scale_bar, lv_color_hex(theme::TEXT), 0);
   lv_obj_set_style_border_width(mapview::s_scale_bar, 2, 0);
@@ -995,12 +995,12 @@ void UITask::buildMap() {
   _map_zoom_lbl = label(sc, "", THEME_FONT_SMALL, theme::TEXT_MUTED);
   navmap::s_scale_pill = sc;   // bottom left (mapPlaceBottom)
   _map_hint = mapPill(body, "");
-  lv_label_set_long_mode(_map_hint, LV_LABEL_LONG_WRAP);
+  lv_label_set_long_mode(_map_hint, LV_LABEL_LONG_MODE_WRAP);
   lv_obj_set_width(_map_hint, 200);
   lv_obj_set_style_text_align(_map_hint, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_style_radius(_map_hint, 8, 0);   // may wrap
   lv_obj_align(_map_hint, LV_ALIGN_TOP_MID, 0, 50);   // clear of own position, mid-map
-  lv_obj_add_flag(_map_hint, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(_map_hint, true);
   if (_map_nav) buildNavControls(body);
   _route_bar = _route_lbl = nullptr;
   if (_route_pick || _route_show) buildRouteBar(body);
@@ -1070,11 +1070,11 @@ void UITask::layoutMap() {
         int m = (1 << k) - 1;   // which part of the magnified tile this cell is
         lv_obj_set_pos(img, -(wx & m) * mapview::TILE_PX, -(ty & m) * mapview::TILE_PX);
         lv_obj_set_pos(cell, px, py);
-        lv_obj_remove_flag(cell, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_hidden(cell, false);
         shown++;
         if (k > over && !stand_in) over = k;
       } else {
-        lv_obj_add_flag(cell, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_hidden(cell, true);
         if (on_screen) tiled = false;
       }
     }
@@ -1090,9 +1090,9 @@ void UITask::layoutMap() {
     double x = mapview::lonToTileX(lon / 1e6, _map_z) * mapview::TILE_PX - left;
     double y = mapview::latToTileY(lat / 1e6, _map_z) * mapview::TILE_PX - top;
     lv_obj_set_pos(_map_me, (int)lround(x) - 8, (int)lround(y) - 8);
-    lv_obj_remove_flag(_map_me, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(_map_me, false);
   } else {
-    lv_obj_add_flag(_map_me, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(_map_me, true);
   }
   followShown(_map_center_btn, _map_follow);
   layoutMapMarks(left, top, w, h);
@@ -1112,8 +1112,8 @@ void UITask::layoutMap() {
                    : mapview::s_dl.liveQueued() > 0 ? nullptr   // being fetched
                    : (!_map_pending && shown == 0 && missing > 0)
                        ? "No map here at this zoom -\nzoom out or download the area" : nullptr;
-  if (hint && !areaSelecting()) { setText(_map_hint, hint); lv_obj_remove_flag(_map_hint, LV_OBJ_FLAG_HIDDEN); }
-  else lv_obj_add_flag(_map_hint, LV_OBJ_FLAG_HIDDEN);
+  if (hint && !areaSelecting()) { setText(_map_hint, hint); lv_obj_set_hidden(_map_hint, false); }
+  else lv_obj_set_hidden(_map_hint, true);
   areaLayout();
 }
 
@@ -1371,9 +1371,9 @@ void UITask::layoutMapMarks(double left, double top, int w, int h) {
     const Mark& m = s_marks[k];
     if (!m.vis || !m.sos || !s_sos_rings[rings]) continue;
     lv_obj_set_pos(s_sos_rings[rings], m.x - half, m.y - half);
-    lv_obj_remove_flag(s_sos_rings[rings++], LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(s_sos_rings[rings++], false);
   }
-  for (; rings < SOS_RINGS; rings++) if (s_sos_rings[rings]) lv_obj_add_flag(s_sos_rings[rings], LV_OBJ_FLAG_HIDDEN);
+  for (; rings < SOS_RINGS; rings++) if (s_sos_rings[rings]) lv_obj_set_hidden(s_sos_rings[rings], true);
   s_sig_n = s_mark_count;
 }
 
@@ -1596,7 +1596,7 @@ void UITask::flowHistoryPopup() {
     lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_color(dot, lv_color_hex(flowColour(h.kind)), 0);
     lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
-    lv_obj_remove_flag(dot, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_clickable(dot, false);
     groupText(row, title, sub);
     if (!h.ways) continue;   // nothing of it on the map: nothing to play
     label(row, LV_SYMBOL_PLAY, THEME_FONT_SMALL, theme::TEXT_MUTED);
@@ -1646,7 +1646,7 @@ void UITask::buildRouteBar(lv_obj_t* body) {
   _route_bar = lv_obj_create(body);
   lv_obj_set_size(_route_bar, LV_PCT(100), navmap::BAR_H);
   lv_obj_align(_route_bar, LV_ALIGN_BOTTOM_MID, 0, 0);
-  lv_obj_remove_flag(_route_bar, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(_route_bar, false);
   lv_obj_set_style_radius(_route_bar, 0, 0);
   lv_obj_set_style_bg_color(_route_bar, lv_color_hex(theme::BG), 0);
   lv_obj_set_style_bg_opa(_route_bar, LV_OPA_COVER, 0);
@@ -1655,7 +1655,7 @@ void UITask::buildRouteBar(lv_obj_t* body) {
   lv_obj_set_style_border_width(_route_bar, 2, 0);
   lv_obj_set_style_pad_all(_route_bar, 4, 0);
   _route_lbl = label(_route_bar, "", THEME_FONT_SMALL, theme::TEXT);
-  lv_label_set_long_mode(_route_lbl, LV_LABEL_LONG_WRAP);
+  lv_label_set_long_mode(_route_lbl, LV_LABEL_LONG_MODE_WRAP);
   lv_obj_set_width(_route_lbl, 150);
   lv_obj_align(_route_lbl, LV_ALIGN_LEFT_MID, 2, 0);
   lv_obj_t* done = lv_button_create(_route_bar);
@@ -1668,7 +1668,7 @@ void UITask::buildRouteBar(lv_obj_t* body) {
   stylePrimary(done);
   if (_route_show) {   // only looked at: the label has the room Undo would take
     lv_obj_set_width(_route_lbl, lv_pct(75));
-    lv_label_set_long_mode(_route_lbl, LV_LABEL_LONG_DOT);
+    lv_label_set_long_mode(_route_lbl, LV_LABEL_LONG_MODE_DOTS);
     routeMapRefresh();
     return;
   }
@@ -1801,22 +1801,22 @@ void UITask::mapDownloadPopup() {
   // no box of their own to lay out and draw.
   lv_obj_set_style_pad_top(label(panel, "Map download", THEME_FONT_TITLE, theme::TEXT), 4, 0);
   lv_obj_t* x = headerButton(panel, LV_SYMBOL_CLOSE, onDlClose, 0, NULL);
-  lv_obj_add_flag(x, LV_OBJ_FLAG_FLOATING);
+  lv_obj_set_floating(x, true);
   lv_obj_align(x, LV_ALIGN_TOP_RIGHT, 0, 0);
 
   // Unfinished job (power-off, lost WiFi, Stop): resume or drop it.
   _dl_job_row = lv_obj_create(panel);
   styleSurface(_dl_job_row, theme::SURFACE);
-  lv_obj_remove_flag(_dl_job_row, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(_dl_job_row, false);
   lv_obj_set_size(_dl_job_row, LV_PCT(100), 44);
   lv_obj_set_style_radius(_dl_job_row, theme::RADIUS, 0);
   _dl_job_lbl = label(_dl_job_row, "", THEME_FONT_SMALL, theme::TEXT);
   lv_obj_set_width(_dl_job_lbl, 150);
-  lv_label_set_long_mode(_dl_job_lbl, LV_LABEL_LONG_WRAP);
+  lv_label_set_long_mode(_dl_job_lbl, LV_LABEL_LONG_MODE_WRAP);
   lv_obj_align(_dl_job_lbl, LV_ALIGN_LEFT_MID, theme::PAD, 0);
   stylePrimary(headerButton(_dl_job_row, LV_SYMBOL_PLAY " Resume", onDlResume, 48, NULL));
   headerButton(_dl_job_row, LV_SYMBOL_TRASH, onDlDiscard, 4, NULL);
-  lv_obj_add_flag(_dl_job_row, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(_dl_job_row, true);
 
   _dl_info = noteLabel(panel, "", THEME_FONT_BODY, theme::TEXT);   // what's going on
   _dl_bar = lv_bar_create(panel);
@@ -1854,8 +1854,8 @@ static int dlPercent(const mapview::TileDownloader& dl) {
 
 // A label's text, or the label hidden when there's none.
 static void textOrHide(lv_obj_t* l, const char* text) {
-  if (!text || !text[0]) { lv_obj_add_flag(l, LV_OBJ_FLAG_HIDDEN); return; }
-  lv_obj_remove_flag(l, LV_OBJ_FLAG_HIDDEN);
+  if (!text || !text[0]) { lv_obj_set_hidden(l, true); return; }
+  lv_obj_set_hidden(l, false);
   setText(l, text);
 }
 
@@ -1866,7 +1866,7 @@ void UITask::refreshDownloadPopup() {
   const char* host = shortHost(dl.sourceHost());
   char info[64] = "", sub[96] = "", err[96] = "";
   if (dl.active()) {
-    lv_obj_add_flag(_dl_job_row, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(_dl_job_row, true);
     bool connecting = dl.state() == TileDownloader::CONNECTING;
     if (connecting) {
       snprintf(info, sizeof(info), "Connecting to WiFi...");
@@ -1882,18 +1882,18 @@ void UITask::refreshDownloadPopup() {
     uint32_t total = dl.total();
     lv_bar_set_range(_dl_bar, 0, total > 0 ? (int32_t)total : 1);
     lv_bar_set_value(_dl_bar, (int32_t)dl.processed(), LV_ANIM_OFF);
-    if (connecting) lv_obj_add_flag(_dl_bar, LV_OBJ_FLAG_HIDDEN);
-    else lv_obj_remove_flag(_dl_bar, LV_OBJ_FLAG_HIDDEN);
+    if (connecting) lv_obj_set_hidden(_dl_bar, true);
+    else lv_obj_set_hidden(_dl_bar, false);
     setText(_dl_start_lbl, LV_SYMBOL_STOP " Stop");
   } else {
-    lv_obj_add_flag(_dl_bar, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(_dl_bar, true);
     mapview::TileArea job;
     bool has_job = dl.savedJob(job);
     if (has_job) {
       setTextFmt(_dl_job_lbl, "Unfinished: z%d-%d,\n%lu tiles", job.zmin, job.zmax, (unsigned long)mapview::countTiles(job));
-      lv_obj_remove_flag(_dl_job_row, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_set_hidden(_dl_job_row, false);
     } else {
-      lv_obj_add_flag(_dl_job_row, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_set_hidden(_dl_job_row, true);
     }
     uint8_t st = dl.state();
     if (st == TileDownloader::DONE || st == TileDownloader::FAILED || st == TileDownloader::CANCELLED)
@@ -2041,7 +2041,7 @@ void UITask::mapDownloadTick() {
   if (_map_dl_pill) {
     if (dl.state() == mapview::TileDownloader::CONNECTING) {
       setText(_map_dl_pill, LV_SYMBOL_WIFI " Connecting...");
-      lv_obj_remove_flag(_map_dl_pill, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_set_hidden(_map_dl_pill, false);
     } else if (dl.active()) {
       if (dl.retryRound())   // the count stands still: the tiles still missing instead
         setTextFmt(_map_dl_pill, LV_SYMBOL_REFRESH " %lu missing", (unsigned long)dl.failed());
@@ -2049,18 +2049,18 @@ void UITask::mapDownloadTick() {
         setTextFmt(_map_dl_pill, LV_SYMBOL_DOWNLOAD " %d%%  " LV_SYMBOL_WARNING " %lu", dlPercent(dl), (unsigned long)dl.failed());
       else
         setTextFmt(_map_dl_pill, LV_SYMBOL_DOWNLOAD " %d%%", dlPercent(dl));
-      lv_obj_remove_flag(_map_dl_pill, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_set_hidden(_map_dl_pill, false);
     } else if (dl.liveConnecting()) {
       setText(_map_dl_pill, LV_SYMBOL_WIFI " Connecting...");
-      lv_obj_remove_flag(_map_dl_pill, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_set_hidden(_map_dl_pill, false);
     } else if (dl.liveQueued() > 0) {
       setTextFmt(_map_dl_pill, LV_SYMBOL_DOWNLOAD " live %d", dl.liveQueued());
-      lv_obj_remove_flag(_map_dl_pill, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_set_hidden(_map_dl_pill, false);
     } else if (mapview::s_available && dl.savedJob(s_job_tmp)) {
       setText(_map_dl_pill, LV_SYMBOL_DOWNLOAD " Resume?");
-      lv_obj_remove_flag(_map_dl_pill, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_set_hidden(_map_dl_pill, false);
     } else {
-      lv_obj_add_flag(_map_dl_pill, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_set_hidden(_map_dl_pill, true);
     }
   }
   if (_dl_overlay) refreshDownloadPopup();

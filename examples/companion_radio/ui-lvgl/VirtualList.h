@@ -37,7 +37,7 @@ static List* of(lv_obj_t* obj) {
 
 static void place(lv_obj_t* o, int32_t y) {
   if (lv_obj_get_style_y(o, LV_PART_MAIN) != y) lv_obj_set_y(o, y);
-  if (lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN)) lv_obj_remove_flag(o, LV_OBJ_FLAG_HIDDEN);
+  if (lv_obj_is_hidden(o)) lv_obj_set_hidden(o, false);
 }
 
 // The rows for what's in view: kept where they show the same item, the rest
@@ -83,7 +83,7 @@ static void update(List* l, bool all) {
   }
   for (int s = 0; s < l->nslots; s++) {
     Slot& sl = l->slots[s];
-    if (sl.item < 0 && !lv_obj_has_flag(sl.o, LV_OBJ_FLAG_HIDDEN)) lv_obj_add_flag(sl.o, LV_OBJ_FLAG_HIDDEN);
+    if (sl.item < 0 && !lv_obj_is_hidden(sl.o)) lv_obj_set_hidden(sl.o, true);
   }
 }
 

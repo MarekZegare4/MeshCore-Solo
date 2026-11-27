@@ -99,7 +99,7 @@ void UITask::showScanPopup() {
 
   lv_obj_t* hdr = lv_obj_create(panel);
   styleSurface(hdr, theme::BG);
-  lv_obj_remove_flag(hdr, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(hdr, false);
   lv_obj_set_size(hdr, LV_PCT(100), 28);
   lv_obj_align(label(hdr, "In range now", THEME_FONT_TITLE, theme::TEXT), LV_ALIGN_LEFT_MID, 0, 0);
   headerButton(hdr, LV_SYMBOL_CLOSE, onScanClose, 0, NULL);
@@ -326,7 +326,7 @@ void UITask::buildNode() {
   if (pos) barButton(acts, UI_SYMBOL_COMPASS " Navigate", onNodeAction, NODE_NAV);
   if (!lv_obj_get_child_count(acts)) lv_obj_delete(acts);
   _node_ping = label(info, "", THEME_FONT_BODY, theme::ACCENT);   // under the buttons, once there's a ping
-  lv_obj_add_flag(_node_ping, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(_node_ping, true);
 
   nodeVizBuild(info);
   nodeviz::s_bearing = nodeviz::s_hops = -2;   // nothing drawn yet: the first set fills both
@@ -436,12 +436,12 @@ void UITask::refreshNode() {
     if (!_core->ping.isActive() && (out || back || rtt)) {
       setTextFmt(_node_ping, "Ping %lu ms  -  SNR out %.1f  back %.1f", (unsigned long)rtt,
                             out / 4.0f, back / 4.0f);
-      lv_obj_remove_flag(_node_ping, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_set_hidden(_node_ping, false);
       _pinging = false;
     } else if (millis() - _ping_started_ms > _core->ping.timeoutMs()) {
       _core->ping.clear();
       setText(_node_ping, "Ping: no reply");
-      lv_obj_remove_flag(_node_ping, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_set_hidden(_node_ping, false);
       _pinging = false;
     }
   }
@@ -456,7 +456,7 @@ void UITask::nodeAction(uint8_t action) {
     case NODE_PING: {
       if (_pinging) break;
       PingEngine::StartResult r = _core->ping.start(e.pub_key);
-      lv_obj_remove_flag(_node_ping, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_set_hidden(_node_ping, false);
       if (r == PingEngine::STARTED) {
         _pinging = true;
         _ping_started_ms = millis();
@@ -510,7 +510,7 @@ void UITask::nodeAction(uint8_t action) {
       break;
     case NODE_RESET_PATH:   // the row goes, the chain above turns to flood
       if (contactctl::resetPath(e.pub_key) && _node_path_lbl) {
-        lv_obj_add_flag(lv_obj_get_parent(lv_obj_get_parent(_node_path_lbl)), LV_OBJ_FLAG_HIDDEN);   // label < text box < row
+        lv_obj_set_hidden(lv_obj_get_parent(lv_obj_get_parent(_node_path_lbl)), true);   // label < text box < row
         _node_path_lbl = nullptr;
         refreshNode();
       }

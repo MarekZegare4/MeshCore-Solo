@@ -183,10 +183,10 @@ class SettingsScreen : public UIScreen {
       } else if (cur >= 0 && isSchemaGroup(i)) {
         for (int k = 0; k < settings::COUNT && _sec_count[cur] < MAX_PER_SEC; k++)
           if (schemaIn(i, settings::ALL[k].section)) {
-            if (settings::ALL[k].offset == offsetof(NodePrefs, tz_offset_hours) && _sec_count[cur] < MAX_PER_SEC - 1)
+            if (settings::ALL[k].offset == offsetof(NodePrefsFields, tz_offset_hours) && _sec_count[cur] < MAX_PER_SEC - 1)
               _sec_items[cur][_sec_count[cur]++] = (uint8_t)SET_CLOCK;
             _sec_items[cur][_sec_count[cur]++] = (uint8_t)(SCHEMA_ITEM + k);
-            if (settings::ALL[k].offset == offsetof(NodePrefs, auto_lock) && _sec_count[cur] < MAX_PER_SEC)
+            if (settings::ALL[k].offset == offsetof(NodePrefsFields, auto_lock) && _sec_count[cur] < MAX_PER_SEC)
               _sec_items[cur][_sec_count[cur]++] = (uint8_t)LOCK_PIN;
           }
       } else if (cur >= 0 && _sec_count[cur] < MAX_PER_SEC) {
@@ -225,7 +225,7 @@ class SettingsScreen : public UIScreen {
 
   // Brightness and volume: a row of level boxes, stopping at both ends.
   static bool isBar(const settings::Setting& st) {
-    return st.offset == offsetof(NodePrefs, display_brightness) || st.offset == offsetof(NodePrefs, buzzer_volume);
+    return st.offset == offsetof(NodePrefsFields, display_brightness) || st.offset == offsetof(NodePrefsFields, buzzer_volume);
   }
 
   // A schema setting: its short label, the value flush right (a switch for

@@ -46,8 +46,8 @@ static lv_obj_t* profileChart(lv_obj_t* parent, int h) {
   c.top = lh + 2;   // the caption
   lv_obj_t* box = lv_obj_create(parent);
   styleSurface(box, theme::SURFACE);
-  lv_obj_remove_flag(box, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_remove_flag(box, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_scrollable(box, false);
+  lv_obj_set_clickable(box, false);
   fillWidth(box);
   lv_obj_set_height(box, h);
   lv_obj_set_style_radius(box, theme::RADIUS_SM, 0);

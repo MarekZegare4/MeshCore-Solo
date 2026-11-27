@@ -467,7 +467,7 @@ bool UITask::cliCommand(const char* command, char* reply, int n) {
       "wifi", "settings-page", "clock", "radio", "channel", "admin", "bot", "diag", "compass", "scopes", "repeater",
       "melody", "quick", "admin-pick", "ota", "storage", "gps", "battery", "route", "route-pick", "gallery", "sos" };
     static_assert(sizeof(NAMES) / sizeof(NAMES[0]) == SCR_SOS + 1, "a name for each Screen");
-    const char* toast = _toast && !lv_obj_has_flag(_toast, LV_OBJ_FLAG_HIDDEN) ? lv_label_get_text(lv_obj_get_child(_toast, 0)) : "-";
+    const char* toast = _toast && !lv_obj_is_hidden(_toast) ? lv_label_get_text(lv_obj_get_child(_toast, 0)) : "-";
     snprintf(reply, n, "> %s|%s|%d|%s|%u", _screen < sizeof(NAMES) / sizeof(NAMES[0]) ? NAMES[_screen] : "?", toast,
              locked() ? 1 : 0, _display && _display->isOn() ? "on" : "off", (unsigned)_toast_seq);
     return true;
@@ -765,8 +765,8 @@ void UITask::schemaSection(int i) {
   if (sec == settings::SEC_PRIVACY) schemaRow(card, SETTING(advert_auto_interval_sec));   // all an advert carries, together
   for (int k = i; k < settings::COUNT && settings::ALL[k].section == sec; k++) {
     const settings::Setting& st = settings::ALL[k];
-    if (st.offset == offsetof(NodePrefs, msg_alert)) { msgBannerRow(card); continue; }   // no corner envelope here
-    if (st.offset == offsetof(NodePrefs, autoadd_config) && st.bit > 0x01 && _prefs && !_prefs->manual_add_contacts)
+    if (st.offset == offsetof(NodePrefsFields, msg_alert)) { msgBannerRow(card); continue; }   // no corner envelope here
+    if (st.offset == offsetof(NodePrefsFields, autoadd_config) && st.bit > 0x01 && _prefs && !_prefs->manual_add_contacts)
       continue;   // the node types count only with "By type"
     schemaRow(card, k);
   }
@@ -778,12 +778,12 @@ void UITask::schemaRow(lv_obj_t* card, int i) {
   if (i < 0 || i >= settings::COUNT) return;
   const settings::Setting& st = settings::ALL[i];
   uint8_t v = settings::get(*_prefs, st);
-  if (st.offset == offsetof(NodePrefs, buzzer_volume)) {   // a five-step slider, heard on release
+  if (st.offset == offsetof(NodePrefsFields, buzzer_volume)) {   // a five-step slider, heard on release
     lv_obj_t* sl = rowSlider(settingRow(card, st.label, NULL), 0, 4, v);
     lv_obj_add_event_cb(sl, onVolumeSlider, LV_EVENT_RELEASED, NULL);
     return;
   }
-  if (st.offset == offsetof(NodePrefs, display_brightness)) {   // a slider here instead of five steps
+  if (st.offset == offsetof(NodePrefsFields, display_brightness)) {   // a slider here instead of five steps
     uint8_t pct = _prefs->display_brightness_pct ? _prefs->display_brightness_pct
                                                  : (uint8_t)(_prefs->display_brightness * 25 > 5 ? _prefs->display_brightness * 25 : 5);
     lv_obj_t* sl = rowSlider(settingRow(card, st.label, NULL), 5, 100, pct);
@@ -814,7 +814,7 @@ void UITask::setSchemaValue(int idx, int v) {
   settings::set(*_prefs, st, (uint8_t)v);
   if (st.changed) st.changed(*_core);
   prefsSave();
-  if ((st.offset == offsetof(NodePrefs, units_imperial) || st.offset == offsetof(NodePrefs, manual_add_contacts))
+  if ((st.offset == offsetof(NodePrefsFields, units_imperial) || st.offset == offsetof(NodePrefsFields, manual_add_contacts))
       && _screen == SCR_SETTINGS_NAV)   // other labels depend on it, or rows come and go
     rebuildSoon(&UITask::rebuildSchemaSettings);
 }

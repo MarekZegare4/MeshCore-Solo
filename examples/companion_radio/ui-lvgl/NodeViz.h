@@ -115,8 +115,8 @@ static void nodeVizBuild(lv_obj_t* parent) {
   using namespace nodeviz;
   s_card = lv_obj_create(parent);
   styleSurface(s_card, theme::SURFACE);
-  lv_obj_remove_flag(s_card, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_remove_flag(s_card, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_scrollable(s_card, false);
+  lv_obj_set_clickable(s_card, false);
   fillWidth(s_card);
   lv_obj_set_height(s_card, LV_SIZE_CONTENT);
   lv_obj_set_style_radius(s_card, theme::RADIUS, 0);
@@ -127,13 +127,13 @@ static void nodeVizBuild(lv_obj_t* parent) {
 
   s_rose = lv_obj_create(s_card);
   lv_obj_remove_style_all(s_rose);
-  lv_obj_remove_flag(s_rose, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(s_rose, false);
   lv_obj_set_size(s_rose, ROSE_W, ROSE_H);
   lv_obj_add_event_cb(s_rose, onRoseDraw, LV_EVENT_DRAW_MAIN_END, NULL);
 
   s_path_col = lv_obj_create(s_card);
   lv_obj_remove_style_all(s_path_col);
-  lv_obj_remove_flag(s_path_col, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(s_path_col, false);
   lv_obj_set_width(s_path_col, 1);
   lv_obj_set_flex_grow(s_path_col, 1);
   lv_obj_set_height(s_path_col, LV_SIZE_CONTENT);
@@ -142,7 +142,7 @@ static void nodeVizBuild(lv_obj_t* parent) {
   label(s_path_col, "Path", THEME_FONT_SMALL, theme::TEXT_MUTED);
   s_chain = lv_obj_create(s_path_col);
   lv_obj_remove_style_all(s_chain);
-  lv_obj_remove_flag(s_chain, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(s_chain, false);
   fillWidth(s_chain);
   lv_obj_set_height(s_chain, 16);
   lv_obj_add_event_cb(s_chain, onChainDraw, LV_EVENT_DRAW_MAIN_END, NULL);
@@ -162,9 +162,9 @@ static void nodeVizSet(int bearing, int hops) {
     else if (hops == 0) snprintf(t, sizeof(t), "Direct");
     else snprintf(t, sizeof(t), "%d hop%s", hops, hops == 1 ? "" : "s");
     setText(s_path_txt, t);
-    if (hops == 0xFF) lv_obj_add_flag(s_chain, LV_OBJ_FLAG_HIDDEN); else lv_obj_remove_flag(s_chain, LV_OBJ_FLAG_HIDDEN);
+    if (hops == 0xFF) lv_obj_set_hidden(s_chain, true); else lv_obj_set_hidden(s_chain, false);
   }
-  if (bearing < 0) lv_obj_add_flag(s_rose, LV_OBJ_FLAG_HIDDEN); else lv_obj_remove_flag(s_rose, LV_OBJ_FLAG_HIDDEN);
-  if (hops < 0) lv_obj_add_flag(s_path_col, LV_OBJ_FLAG_HIDDEN); else lv_obj_remove_flag(s_path_col, LV_OBJ_FLAG_HIDDEN);
-  if (bearing < 0 && hops < 0) lv_obj_add_flag(s_card, LV_OBJ_FLAG_HIDDEN); else lv_obj_remove_flag(s_card, LV_OBJ_FLAG_HIDDEN);
+  if (bearing < 0) lv_obj_set_hidden(s_rose, true); else lv_obj_set_hidden(s_rose, false);
+  if (hops < 0) lv_obj_set_hidden(s_path_col, true); else lv_obj_set_hidden(s_path_col, false);
+  if (bearing < 0 && hops < 0) lv_obj_set_hidden(s_card, true); else lv_obj_set_hidden(s_card, false);
 }

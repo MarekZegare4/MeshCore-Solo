@@ -175,9 +175,9 @@ void UITask::buildAdmin() {
   lv_obj_add_event_cb(s_tabs, onAdminTab, LV_EVENT_VALUE_CHANGED, NULL);
 
   s_status = label(body, "", THEME_FONT_SMALL, theme::ACCENT);
-  lv_obj_add_flag(s_status, LV_OBJ_FLAG_CLICKABLE);   // tap: stop waiting
+  lv_obj_set_clickable(s_status, true);   // tap: stop waiting
   lv_obj_add_event_cb(s_status, onAdminCancelWait, LV_EVENT_CLICKED, NULL);
-  lv_obj_add_flag(s_status, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(s_status, true);
 
   s_list = scrollList(body);
   for (int i = 0; i < admin::rowCount(s_tab); i++) {
@@ -199,9 +199,9 @@ void UITask::refreshAdminStatus() {
   if (waiting) {
     lv_label_set_text(s_status, S.fetching() ? LV_SYMBOL_REFRESH "  Reading...  (tap to stop)"
                                              : LV_SYMBOL_REFRESH "  Waiting for reply...  (tap to stop)");
-    lv_obj_remove_flag(s_status, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(s_status, false);
   } else {
-    lv_obj_add_flag(s_status, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(s_status, true);
   }
   if (waiting) lv_obj_add_state(s_list, LV_STATE_DISABLED); else lv_obj_remove_state(s_list, LV_STATE_DISABLED);
 }

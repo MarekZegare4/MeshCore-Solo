@@ -260,7 +260,7 @@ static void onTouch(lv_event_t* e) {
 static lv_obj_t* create(lv_obj_t* parent, Chart& c, int h) {
   lv_obj_t* o = lv_obj_create(parent);
   lv_obj_remove_style_all(o);
-  lv_obj_remove_flag(o, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(o, false);
   lv_obj_set_width(o, LV_PCT(100));
   lv_obj_set_height(o, h);
   c.touch = -1;

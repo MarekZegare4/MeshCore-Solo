@@ -218,7 +218,7 @@ static int perfCollect(lv_obj_t** out, int max) {
   lv_obj_tree_walk(lv_screen_active(), [](lv_obj_t* o, void* u) {
     C* c = (C*)u;
     if (c->n >= c->max) return LV_OBJ_TREE_WALK_END;
-    if (lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN)) return LV_OBJ_TREE_WALK_SKIP_CHILDREN;
+    if (lv_obj_is_hidden(o)) return LV_OBJ_TREE_WALK_SKIP_CHILDREN;
     if (lv_obj_check_type(o, &lv_switch_class) || lv_obj_check_type(o, &lv_slider_class)
         || lv_obj_check_type(o, &lv_buttonmatrix_class) || perfIsChoice(o)) {
       c->out[c->n++] = o;
@@ -234,7 +234,7 @@ static void perfControls(const char* tag, void (*fill_flush)()) {
   int n = perfCollect(ctl, 48);
   for (int k = 0; k < n; k++) {
     lv_obj_t* o = ctl[k];
-    if (!lv_obj_is_valid(o)) continue;
+    if (!lv_obj_is_in_widget_tree(o)) continue;
     char name[28];
     snprintf(name, sizeof(name), "%s", perfCtlName(o));
     lv_obj_scroll_to_view_recursive(o, LV_ANIM_OFF);
@@ -243,7 +243,7 @@ static void perfControls(const char* tag, void (*fill_flush)()) {
     uint32_t cb = 0;
     const char* kind = "";
     bool rb = false;   // the screen was rebuilt: put back on the new one's control
-    auto rebuilt = [&]() { return lv_screen_active() != scr || !lv_obj_is_valid(o); };
+    auto rebuilt = [&]() { return lv_screen_active() != scr || !lv_obj_is_in_widget_tree(o); };
     auto refind = [&]() {   // the controls found again, in the same order
       scr = lv_screen_active();
       fill_flush();
@@ -450,7 +450,7 @@ void UITask::perfWalk() {
             lv_obj_tree_walk(lv_screen_active(), [](lv_obj_t* o, void* u) {
               S* s = (S*)u;
               int v = lv_obj_get_scroll_bottom(o) + lv_obj_get_scroll_y(o);
-              if (lv_obj_has_flag(o, LV_OBJ_FLAG_SCROLLABLE) && v > s->h) { s->h = v; s->o = o; }
+              if (lv_obj_is_scrollable(o) && v > s->h) { s->h = v; s->o = o; }
               return LV_OBJ_TREE_WALK_NEXT;
             }, &s);
             PerfFrames sc;

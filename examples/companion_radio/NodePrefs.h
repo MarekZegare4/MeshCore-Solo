@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <type_traits>
 #include <stdio.h>
 #include <time.h>
 #include <helpers/ConfigSerializer.h>
@@ -841,6 +842,10 @@ struct NodePrefsFields {
     if (pos < size) buf[pos] = '\0';
   }
 };
+// The settings tables (ui-core/SettingsSchema.h, SettingsCli.h) address a field
+// by offsetof(NodePrefsFields, f), defined only for a standard-layout type.
+static_assert(std::is_standard_layout<NodePrefsFields>::value,
+              "NodePrefsFields: plain fields only (no virtuals, no bases, one access level)");
 
 // The settings, saved as /prefs.json (DataStore). What upstream's companion
 // has is under its keys -- "radio", "gps", "repeat", "comp", "custom" -- so

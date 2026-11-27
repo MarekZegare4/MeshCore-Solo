@@ -249,8 +249,8 @@ static void onGalleryViewTouch(lv_event_t* e) {
   const int dx = p.x - s_press.x, dy = p.y - s_press.y;
   if (abs(dx) > SWIPE_PX && abs(dx) > abs(dy)) s_ui->galleryStep(dx < 0 ? 1 : -1);
   else if (abs(dx) < 10 && abs(dy) < 10 && s_view_bar) {
-    if (lv_obj_has_flag(s_view_bar, LV_OBJ_FLAG_HIDDEN)) lv_obj_remove_flag(s_view_bar, LV_OBJ_FLAG_HIDDEN);
-    else lv_obj_add_flag(s_view_bar, LV_OBJ_FLAG_HIDDEN);
+    if (lv_obj_is_hidden(s_view_bar)) lv_obj_set_hidden(s_view_bar, false);
+    else lv_obj_set_hidden(s_view_bar, true);
   }
 }
 
@@ -370,8 +370,8 @@ void UITask::buildGallery() {
   for (int i = 0; i < cells; i++) {
     lv_obj_t* c = lv_obj_create(grid);
     styleSurface(c, theme::SURFACE);
-    lv_obj_remove_flag(c, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(c, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_scrollable(c, false);
+    lv_obj_set_clickable(c, true);
     lv_obj_set_size(c, TW, TH);
     lv_obj_set_style_pad_all(c, 0, 0);
     lv_obj_add_event_cb(c, onGalleryShot, LV_EVENT_CLICKED, (void*)(intptr_t)(first + i));
@@ -408,7 +408,7 @@ void UITask::galleryTick() {
   }
   dscInit(s_tdsc[i], px, TW, TH);
   lv_obj_t* img = lv_image_create(s_cell[i]);
-  lv_obj_remove_flag(img, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(img, false);
   lv_image_set_src(img, &s_tdsc[i]);
   lv_obj_center(img);
 }
@@ -450,24 +450,24 @@ void UITask::galleryOpen(int i) {
     s_changed = false;
     s_view = lv_obj_create(_scr);
     lv_obj_remove_style_all(s_view);
-    lv_obj_add_flag(s_view, LV_OBJ_FLAG_IGNORE_LAYOUT);
+    lv_obj_set_ignore_layout(s_view, true);
     lv_obj_set_pos(s_view, 0, 0);
     lv_obj_set_size(s_view, SW, SH);
     lv_obj_set_style_bg_color(s_view, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(s_view, LV_OPA_COVER, 0);
-    lv_obj_remove_flag(s_view, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(s_view, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_scrollable(s_view, false);
+    lv_obj_set_clickable(s_view, true);
     lv_obj_add_event_cb(s_view, onGalleryViewTouch, LV_EVENT_PRESSED, NULL);
     lv_obj_add_event_cb(s_view, onGalleryViewTouch, LV_EVENT_RELEASED, NULL);
     lv_obj_add_event_cb(s_view, gallery::onViewDeleted, LV_EVENT_DELETE, NULL);
     s_view_img = lv_image_create(s_view);
-    lv_obj_remove_flag(s_view_img, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_clickable(s_view_img, false);
     lv_obj_set_pos(s_view_img, 0, 0);
 
     s_view_bar = lv_obj_create(s_view);
     styleSurface(s_view_bar, theme::SURFACE);
     lv_obj_set_style_bg_opa(s_view_bar, LV_OPA_90, 0);
-    lv_obj_remove_flag(s_view_bar, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(s_view_bar, false);
     lv_obj_set_size(s_view_bar, SW, 40);
     lv_obj_set_pos(s_view_bar, 0, 0);
     lv_obj_set_style_pad_hor(s_view_bar, theme::PAD, 0);
@@ -480,7 +480,7 @@ void UITask::galleryOpen(int i) {
     lv_obj_set_height(del, 32);
     s_del_lbl = lv_obj_get_child(del, 0);
     lv_obj_set_height(pillButton(s_view_bar, LV_SYMBOL_CLOSE, theme::SURFACE_2, onGalleryViewBtn, V_CLOSE), 32);
-    lv_obj_add_flag(s_view_bar, LV_OBJ_FLAG_HIDDEN);   // a tap brings it
+    lv_obj_set_hidden(s_view_bar, true);   // a tap brings it
   }
   lv_image_set_src(s_view_img, &s_fdsc);
   lv_obj_invalidate(s_view_img);

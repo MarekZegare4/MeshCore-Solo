@@ -361,7 +361,7 @@ static void openPopup(lv_obj_t* kbd, const char* base, const char* variants, boo
   s_popup = lv_obj_create(lv_layer_top());
   lv_obj_remove_style_all(s_popup);
   lv_obj_set_size(s_popup, LV_PCT(100), LV_PCT(100));
-  lv_obj_add_flag(s_popup, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(s_popup, true);
   lv_obj_add_event_cb(s_popup, onPopupOutside, LV_EVENT_CLICKED, NULL);
   s_popup_kbd = kbd;
 
@@ -377,8 +377,8 @@ static void openPopup(lv_obj_t* kbd, const char* base, const char* variants, boo
   lv_obj_set_style_border_width(m, 1, 0);
   lv_obj_set_style_radius(m, theme::RADIUS, 0);
   lv_obj_set_style_text_font(m, THEME_FONT_LARGE, LV_PART_ITEMS);
-  lv_obj_set_style_bg_color(m, lv_color_hex(theme::ACCENT), LV_PART_ITEMS | LV_STATE_CHECKED);
-  lv_obj_set_style_text_color(m, lv_color_hex(theme::BG), LV_PART_ITEMS | LV_STATE_CHECKED);
+  lv_obj_set_style_bg_color(m, lv_color_hex(theme::ACCENT), theme::partState(LV_PART_ITEMS, LV_STATE_CHECKED));
+  lv_obj_set_style_text_color(m, lv_color_hex(theme::BG), theme::partState(LV_PART_ITEMS, LV_STATE_CHECKED));
 
   // Above the pressed key, but never above the keyboard's own top edge: the
   // compose field sits right there and must stay readable while picking.
@@ -462,7 +462,7 @@ static void onEvent(lv_event_t* e) {
   // OK and hide put the keyboard (and the field's cursor) away themselves
   const bool closes = strcmp(t, KB_OK) == 0 || strcmp(t, KB_HIDE) == 0;
   lv_obj_t* ta = lv_keyboard_get_textarea(kbd);
-  if (ta && !closes && !lv_obj_has_flag(kbd, LV_OBJ_FLAG_HIDDEN)) keepCursor(ta);
+  if (ta && !closes && !lv_obj_is_hidden(kbd)) keepCursor(ta);
   if (strcmp(t, KB_BS) != 0) releaseShift(kbd);
 }
 
@@ -481,11 +481,11 @@ static lv_obj_t* create(lv_obj_t* parent, NodePrefs* prefs) {
   lv_obj_add_event_cb(kbd, onReleased, LV_EVENT_RELEASED, NULL);
   lv_obj_add_event_cb(kbd, onPressLost, LV_EVENT_PRESS_LOST, NULL);
   lv_obj_add_event_cb(kbd, onDrawTask, LV_EVENT_DRAW_TASK_ADDED, NULL);
-  lv_obj_add_flag(kbd, LV_OBJ_FLAG_SEND_DRAW_TASK_EVENTS);
+  lv_obj_set_send_draw_task_events(kbd, true);
   lv_obj_add_event_cb(kbd, onDelete, LV_EVENT_DELETE, NULL);
   lv_keyboard_set_popovers(kbd, true);
   // A finger rolling on a key is still that key: no scroll or gesture taken up the tree
-  lv_obj_remove_flag(kbd, (lv_obj_flag_t)(LV_OBJ_FLAG_SCROLL_CHAIN | LV_OBJ_FLAG_GESTURE_BUBBLE));
+  lv_obj_set_scroll_chain(kbd, false); lv_obj_set_gesture_bubble(kbd, false);
   apply(kbd, s_script * 2);
   return kbd;
 }

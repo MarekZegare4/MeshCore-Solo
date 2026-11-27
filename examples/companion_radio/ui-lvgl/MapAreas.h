@@ -185,8 +185,8 @@ void UITask::areaBuildLayer(lv_obj_t* body) {
   s_layer = lv_obj_create(body);
   lv_obj_remove_style_all(s_layer);
   lv_obj_set_size(s_layer, LV_PCT(100), LV_PCT(100));
-  lv_obj_remove_flag(s_layer, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_remove_flag(s_layer, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_clickable(s_layer, false);
+  lv_obj_set_scrollable(s_layer, false);
   lv_obj_add_event_cb(s_layer, drawLayer, LV_EVENT_DRAW_MAIN, NULL);
   for (int i = 0; i < 4; i++) {
     lv_obj_t* h = lv_obj_create(body);
@@ -198,11 +198,11 @@ void UITask::areaBuildLayer(lv_obj_t* body) {
     lv_obj_set_style_border_color(h, lv_color_hex(theme::BG), 0);
     lv_obj_set_style_border_width(h, 3, 0);
     lv_obj_set_ext_click_area(h, 10);
-    lv_obj_add_flag(h, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_remove_flag(h, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_remove_flag(h, LV_OBJ_FLAG_GESTURE_BUBBLE);
+    lv_obj_set_clickable(h, true);
+    lv_obj_set_scrollable(h, false);
+    lv_obj_set_gesture_bubble(h, false);
     lv_obj_add_event_cb(h, onHandle, LV_EVENT_PRESSING, (void*)(uintptr_t)i);
-    lv_obj_add_flag(h, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(h, true);
     s_handle[i] = h;
   }
 }
@@ -227,8 +227,8 @@ void UITask::areaSelectBegin() {
 
   s_bar = lv_obj_create(_map_area);
   lv_obj_remove_style_all(s_bar);
-  lv_obj_remove_flag(s_bar, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_add_flag(s_bar, LV_OBJ_FLAG_CLICKABLE);   // presses on it don't pan the map
+  lv_obj_set_scrollable(s_bar, false);
+  lv_obj_set_clickable(s_bar, true);   // presses on it don't pan the map
   lv_obj_set_size(s_bar, LV_PCT(100), BAR_H);
   lv_obj_align(s_bar, LV_ALIGN_BOTTOM_MID, 0, 0);
   lv_obj_set_style_bg_color(s_bar, lv_color_hex(theme::BG), 0);
@@ -237,7 +237,7 @@ void UITask::areaSelectBegin() {
   lv_obj_set_style_pad_row(s_bar, 4, 0);
   lv_obj_set_flex_flow(s_bar, LV_FLEX_FLOW_COLUMN);
   s_info = label(s_bar, "", THEME_FONT_SMALL, theme::TEXT);
-  lv_label_set_long_mode(s_info, LV_LABEL_LONG_DOT);
+  lv_label_set_long_mode(s_info, LV_LABEL_LONG_MODE_DOTS);
   lv_obj_set_width(s_info, LV_PCT(100));
   lv_obj_t* row = lv_obj_create(s_bar);
   lv_obj_remove_style_all(row);
@@ -263,7 +263,7 @@ void UITask::areaSelectEnd() {
   s_sel = false;
   if (s_bar) lvport::deleteLater(s_bar);
   s_bar = s_info = s_zoom = s_trails_btn = nullptr;
-  for (lv_obj_t* h : s_handle) if (h && _map_area) lv_obj_add_flag(h, LV_OBJ_FLAG_HIDDEN);
+  for (lv_obj_t* h : s_handle) if (h && _map_area) lv_obj_set_hidden(h, true);
   if (s_layer) lv_obj_invalidate(s_layer);
 }
 
@@ -300,7 +300,7 @@ void UITask::areaLayout() {
   double ys[2] = { s_fy0 * scale - mapview::s_top, s_fy1 * scale - mapview::s_top };
   for (int i = 0; i < 4; i++) {
     lv_obj_set_pos(s_handle[i], (int)lround(xs[i & 1]) - HANDLE / 2, (int)lround(ys[i >> 1]) - HANDLE / 2);
-    lv_obj_remove_flag(s_handle[i], LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(s_handle[i], false);
     lv_obj_move_foreground(s_handle[i]);
   }
   if (s_bar) lv_obj_move_foreground(s_bar);

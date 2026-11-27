@@ -276,10 +276,10 @@ static void onDialDraw(lv_event_t* e) {
 static void setDial(int deg, bool course) {
   if (!s_dial) return;
   deg = ((deg % 360) + 360) % 360;
-  const bool snap = course != s_dial_course || lv_obj_has_flag(s_dial, LV_OBJ_FLAG_HIDDEN);
+  const bool snap = course != s_dial_course || lv_obj_is_hidden(s_dial);
   s_dial_course = course;
   s_dial_ahead = course && geo::isAhead(geo::turnDeg(deg, 0));
-  lv_obj_remove_flag(s_dial, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(s_dial, false);
   lv_obj_set_style_border_color(s_dial, lv_color_hex(s_dial_ahead ? theme::OK : theme::SURFACE_2), 0);
   lv_anim_delete(s_dial, setDialAng);
   if (snap) { setDialAng(s_dial, deg); return; }
@@ -308,36 +308,36 @@ void UITask::buildNavLayers() {
   lv_obj_t* tr = lv_obj_create(_map_marks);
   lv_obj_remove_style_all(tr);
   lv_obj_set_size(tr, LV_PCT(100), LV_PCT(100));   // clip to the view, whatever the points
-  lv_obj_remove_flag(tr, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(tr, false);
   lv_obj_add_event_cb(tr, navmap::onTrailDraw, LV_EVENT_DRAW_MAIN, nullptr);
   navmap::s_trail = tr;
   navmap::s_pts_n = 0;
   lv_obj_t* pl = lv_obj_create(_map_marks);   // a trail or route looked at from its card: over both
   lv_obj_remove_style_all(pl);
   lv_obj_set_size(pl, LV_PCT(100), LV_PCT(100));
-  lv_obj_remove_flag(pl, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(pl, false);
   lv_obj_add_event_cb(pl, navmap::pv::onDraw, LV_EVENT_DRAW_MAIN, nullptr);
   navmap::pv::s_line = pl;
   navmap::pv::s_pts_n = 0;
   navmap::s_target_line = lv_obj_create(_map_marks);
   lv_obj_remove_style_all(navmap::s_target_line);
   lv_obj_set_size(navmap::s_target_line, LV_PCT(100), LV_PCT(100));
-  lv_obj_remove_flag(navmap::s_target_line, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(navmap::s_target_line, false);
   lv_obj_add_event_cb(navmap::s_target_line, navmap::onTargetLineDraw, LV_EVENT_DRAW_MAIN, nullptr);
   navmap::s_target_col = theme::ACCENT;
-  lv_obj_add_flag(navmap::s_target_line, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(navmap::s_target_line, true);
 
   navmap::s_target_ring = lv_obj_create(_map_marks);
   lv_obj_remove_style_all(navmap::s_target_ring);
   mapstyle::styleRing(navmap::s_target_ring, navmap::RING_D, theme::ACCENT, 3);
-  lv_obj_remove_flag(navmap::s_target_ring, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_add_flag(navmap::s_target_ring, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_clickable(navmap::s_target_ring, false);
+  lv_obj_set_hidden(navmap::s_target_ring, true);
   // Centre dot, for a target no marker stands on (a map point, a message
   // position, a person whose live share went stale: last known place).
   navmap::s_target_dot = lv_obj_create(navmap::s_target_ring);
   lv_obj_remove_style_all(navmap::s_target_dot);
   mapstyle::styleDot(navmap::s_target_dot, 10, theme::ACCENT, 2);
-  lv_obj_remove_flag(navmap::s_target_dot, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(navmap::s_target_dot, false);
   lv_obj_center(navmap::s_target_dot);
   navmap::s_segs = 0;
   navmap::s_sync_gen = 0xFFFFFFFF;   // a new map: the whole trail converted again
@@ -361,18 +361,18 @@ void UITask::buildNavControls(lv_obj_t* body) {
   lv_obj_set_style_pad_hor(_nav_bar, theme::PAD, 0);
   lv_obj_set_style_pad_ver(_nav_bar, 3, 0);
   lv_obj_add_event_cb(_nav_bar, onNavList, LV_EVENT_CLICKED, NULL);
-  lv_obj_add_flag(_nav_bar, LV_OBJ_FLAG_HIDDEN);   // until there is a target (refreshNavBar)
+  lv_obj_set_hidden(_nav_bar, true);   // until there is a target (refreshNavBar)
   _nav_title = label(_nav_bar, "", THEME_FONT_BODY, theme::ACCENT);
-  lv_label_set_long_mode(_nav_title, LV_LABEL_LONG_DOT);
+  lv_label_set_long_mode(_nav_title, LV_LABEL_LONG_MODE_DOTS);
   lv_obj_set_size(_nav_title, 226, 19);   // fixed height: LONG_DOT cuts instead of wrapping
   lv_obj_align(_nav_title, LV_ALIGN_TOP_LEFT, 0, 0);
   _nav_info = label(_nav_bar, "", THEME_FONT_SMALL, theme::TEXT);
-  lv_label_set_long_mode(_nav_info, LV_LABEL_LONG_DOT);
+  lv_label_set_long_mode(_nav_info, LV_LABEL_LONG_MODE_DOTS);
   lv_obj_set_size(_nav_info, 226, 16);
   lv_obj_align(_nav_info, LV_ALIGN_BOTTOM_LEFT, 0, 0);
   navmap::s_dial = lv_obj_create(_nav_bar);   // which way to turn
   lv_obj_remove_style_all(navmap::s_dial);
-  lv_obj_remove_flag(navmap::s_dial, LV_OBJ_FLAG_CLICKABLE);   // a tap on it is the bar's: the target list
+  lv_obj_set_clickable(navmap::s_dial, false);   // a tap on it is the bar's: the target list
   lv_obj_set_size(navmap::s_dial, navmap::DIAL, navmap::DIAL);
   lv_obj_align(navmap::s_dial, LV_ALIGN_RIGHT_MID, -34, 0);
   lv_obj_set_style_radius(navmap::s_dial, LV_RADIUS_CIRCLE, 0);
@@ -381,7 +381,7 @@ void UITask::buildNavControls(lv_obj_t* body) {
   lv_obj_set_style_border_width(navmap::s_dial, 2, 0);
   lv_obj_set_style_border_color(navmap::s_dial, lv_color_hex(theme::SURFACE_2), 0);
   lv_obj_add_event_cb(navmap::s_dial, navmap::onDialDraw, LV_EVENT_DRAW_MAIN_END, NULL);
-  lv_obj_add_flag(navmap::s_dial, LV_OBJ_FLAG_HIDDEN);   // until there is a bearing
+  lv_obj_set_hidden(navmap::s_dial, true);   // until there is a bearing
   _nav_clear = lv_button_create(_nav_bar);
   lv_obj_set_size(_nav_clear, 34, 34);
   lv_obj_align(_nav_clear, LV_ALIGN_RIGHT_MID, 4, 0);
@@ -394,13 +394,13 @@ void UITask::buildNavControls(lv_obj_t* body) {
   lv_obj_set_style_text_color(_nav_avg_pill, lv_color_hex(theme::ACCENT), 0);
   lv_obj_set_style_pad_all(_nav_avg_pill, 8, 0);
   lv_obj_align(_nav_avg_pill, LV_ALIGN_CENTER, 0, -30);
-  lv_obj_add_flag(_nav_avg_pill, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(_nav_avg_pill, true);
   lv_obj_add_event_cb(_nav_avg_pill, onNavAvgCancel, LV_EVENT_CLICKED, NULL);
-  lv_obj_add_flag(_nav_avg_pill, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(_nav_avg_pill, true);
   _nav_rec = mapPill(mapview::s_going, "");   // trail recording / live share running, over the download
   lv_label_set_recolor(_nav_rec, true);
   lv_obj_move_to_index(_nav_rec, 0);
-  lv_obj_add_flag(_nav_rec, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(_nav_rec, true);
   _next_nav_bar_ms = 0;
   navmap::s_eta.reset();
   refreshNavBar();
@@ -559,27 +559,27 @@ void UITask::layoutNav() {
     int tx = (int)lround(navmap::normX(tlon) * scale - mapview::s_left);
     int ty = (int)lround(navmap::normY(tlat) * scale - mapview::s_top);
     lv_obj_set_pos(navmap::s_target_ring, tx - navmap::RING_D / 2, ty - navmap::RING_D / 2);
-    lv_obj_remove_flag(navmap::s_target_ring, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(navmap::s_target_ring, false);
     bool marked = false;   // a waypoint / live marker already sits on the target
     for (int k = 0; k < mapview::s_mark_count && !marked; k++) {
       const mapview::Mark& m = mapview::s_marks[k];
       marked = m.vis && abs(m.x - tx) <= 3 && abs(m.y - ty) <= 3;
     }
-    if (marked) lv_obj_add_flag(navmap::s_target_dot, LV_OBJ_FLAG_HIDDEN);
-    else lv_obj_remove_flag(navmap::s_target_dot, LV_OBJ_FLAG_HIDDEN);
+    if (marked) lv_obj_set_hidden(navmap::s_target_dot, true);
+    else lv_obj_set_hidden(navmap::s_target_dot, false);
     if (_core->course.currentLocation(mlat, mlon)) {
       navmap::s_target_pts[0].x = (lv_value_precise_t)lround(navmap::normX(mlon) * scale - mapview::s_left);
       navmap::s_target_pts[0].y = (lv_value_precise_t)lround(navmap::normY(mlat) * scale - mapview::s_top);
       navmap::s_target_pts[1].x = tx;
       navmap::s_target_pts[1].y = ty;
       lv_obj_invalidate(navmap::s_target_line);
-      lv_obj_remove_flag(navmap::s_target_line, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_set_hidden(navmap::s_target_line, false);
     } else {
-      lv_obj_add_flag(navmap::s_target_line, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_set_hidden(navmap::s_target_line, true);
     }
   } else {
-    lv_obj_add_flag(navmap::s_target_ring, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_add_flag(navmap::s_target_line, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(navmap::s_target_ring, true);
+    lv_obj_set_hidden(navmap::s_target_line, true);
   }
 }
 
@@ -605,7 +605,7 @@ void UITask::refreshNavBar() {
       o += snprintf(t + o, sizeof(t) - o, "%s#%06lX " LV_SYMBOL_GPS "# LIVE %s", o ? "   " : "", (unsigned long)theme::ACCENT, left);
     }
     setText(_nav_rec, t);
-    if (o) lv_obj_remove_flag(_nav_rec, LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(_nav_rec, LV_OBJ_FLAG_HIDDEN);
+    if (o) lv_obj_set_hidden(_nav_rec, false); else lv_obj_set_hidden(_nav_rec, true);
   }
   int32_t tlat, tlon;
   char name[40];
@@ -613,8 +613,8 @@ void UITask::refreshNavBar() {
   bool pos = navCurrentTarget(tlat, tlon, name, sizeof(name), person, set);
   // The bar only while there is a target: the map gets the whole screen
   // otherwise (a target comes from the pin's list or a hold on the map).
-  if (set == lv_obj_has_flag(_nav_bar, LV_OBJ_FLAG_HIDDEN)) {
-    lv_obj_set_flag(_nav_bar, LV_OBJ_FLAG_HIDDEN, !set);
+  if (set == lv_obj_is_hidden(_nav_bar)) {
+    lv_obj_set_hidden(_nav_bar, !set);
     mapPlaceBottom();
     if (navmap::s_ready) layoutMap();   // the names and markers clear of it, or not
   }
@@ -624,13 +624,13 @@ void UITask::refreshNavBar() {
   setTextFmt(_nav_title, "%s %s", back ? LV_SYMBOL_LOOP : route ? LV_SYMBOL_SHUFFLE : person ? UI_SYMBOL_USERS : UI_SYMBOL_FLAG,
                         name);
   if (!pos) {
-    if (navmap::s_dial) lv_obj_add_flag(navmap::s_dial, LV_OBJ_FLAG_HIDDEN);
+    if (navmap::s_dial) lv_obj_set_hidden(navmap::s_dial, true);
     setText(_nav_info, "Position unknown (not shared recently)");
     return;
   }
   int32_t lat, lon;
   if (!_core->course.currentLocation(lat, lon)) {
-    if (navmap::s_dial) lv_obj_add_flag(navmap::s_dial, LV_OBJ_FLAG_HIDDEN);
+    if (navmap::s_dial) lv_obj_set_hidden(navmap::s_dial, true);
     setText(_nav_info, _core->gpsEnabled() || !_core->gpsAvailable()
                                  ? "Waiting for a GPS fix..." : "GPS is off  -  tap the crosshair to turn it on");
     return;
@@ -866,10 +866,10 @@ lv_obj_t* UITask::navPopupPanel(const char* title, bool full, bool bottom) {
 
   lv_obj_t* hdr = lv_obj_create(panel);
   styleSurface(hdr, theme::BG);
-  lv_obj_remove_flag(hdr, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(hdr, false);
   lv_obj_set_size(hdr, LV_PCT(100), 28);
   lv_obj_t* t = label(hdr, title, THEME_FONT_TITLE, theme::TEXT);
-  lv_label_set_long_mode(t, LV_LABEL_LONG_DOT);
+  lv_label_set_long_mode(t, LV_LABEL_LONG_MODE_DOTS);
   lv_obj_set_width(t, 230);
   lv_obj_align(t, LV_ALIGN_LEFT_MID, 0, 0);
   headerButton(hdr, LV_SYMBOL_CLOSE, onNavPopupClose, 0, NULL);
@@ -1031,7 +1031,7 @@ void UITask::navMarkHere() {
 
 void UITask::navAveragingCancel() {
   navmap::s_avg.cancel();
-  if (_nav_avg_pill) lv_obj_add_flag(_nav_avg_pill, LV_OBJ_FLAG_HIDDEN);
+  if (_nav_avg_pill) lv_obj_set_hidden(_nav_avg_pill, true);
   showToast("Mark cancelled");
 }
 
@@ -1045,9 +1045,9 @@ void UITask::navPollAveraging() {
     if (st == GpsAverager::RUNNING) {
       lv_label_set_text_fmt(_nav_avg_pill, UI_SYMBOL_PIN "  Averaging GPS...  %d s  (%lu fixes)  " LV_SYMBOL_CLOSE,
                             navmap::s_avg.remainingSecs(), (unsigned long)navmap::s_avg.samples());
-      lv_obj_remove_flag(_nav_avg_pill, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_set_hidden(_nav_avg_pill, false);
     } else {
-      lv_obj_add_flag(_nav_avg_pill, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_set_hidden(_nav_avg_pill, true);
     }
   }
   if (st == GpsAverager::DONE) navAddWaypoint(mlat, mlon);
@@ -1188,9 +1188,11 @@ static void onMapLayer(lv_event_t* e) {   // the map shows it at once: Map tools
 static void onTrails(lv_event_t* e) {
   s_ui->setTrails(lv_obj_has_state((lv_obj_t*)lv_event_get_target(e), LV_STATE_CHECKED));
 }
+#ifdef MAP_VECTOR   // its row is only there with the vector map (navToolsPopup)
 static void onVectorMap(lv_event_t* e) {
   s_ui->setVectorMap(lv_obj_has_state((lv_obj_t*)lv_event_get_target(e), LV_STATE_CHECKED));
 }
+#endif
 static void onLiveTiles(lv_event_t* e) {
   s_ui->setLiveTiles(lv_obj_has_state((lv_obj_t*)lv_event_get_target(e), LV_STATE_CHECKED));
 }

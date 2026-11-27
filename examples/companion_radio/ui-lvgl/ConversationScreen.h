@@ -244,7 +244,7 @@ static void pathStop(lv_obj_t* parent, const char* name, const char* role, bool 
                      uint32_t col, bool end) {
   lv_obj_t* row = lv_obj_create(parent);
   lv_obj_remove_style_all(row);
-  lv_obj_remove_flag(row, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(row, false);
   lv_obj_set_size(row, LV_PCT(100), 22);
   if (!first || !last) {
     lv_obj_t* line = lv_obj_create(row);
@@ -264,7 +264,7 @@ static void pathStop(lv_obj_t* parent, const char* name, const char* role, bool 
   lv_obj_set_size(dot, end ? 10 : 8, end ? 10 : 8);
   lv_obj_align(dot, LV_ALIGN_LEFT_MID, end ? 2 : 3, 0);
   lv_obj_t* t = label(row, name, end ? THEME_FONT_BODY : THEME_FONT_SMALL, theme::TEXT);
-  lv_label_set_long_mode(t, LV_LABEL_LONG_DOT);
+  lv_label_set_long_mode(t, LV_LABEL_LONG_MODE_DOTS);
   lv_obj_set_width(t, 190);
   lv_obj_align(t, LV_ALIGN_LEFT_MID, 22, 0);
   if (role && role[0]) lv_obj_align(label(row, role, THEME_FONT_SMALL, theme::TEXT_MUTED), LV_ALIGN_RIGHT_MID, 0, 0);
@@ -319,7 +319,7 @@ void UITask::messageMenu(int idx) {
   snprintf(quote, sizeof(quote), "%s", body);
   plainMentions(quote);
   lv_obj_t* q = label(panel, quote, THEME_FONT_SMALL, theme::TEXT);
-  lv_label_set_long_mode(q, LV_LABEL_LONG_DOT);
+  lv_label_set_long_mode(q, LV_LABEL_LONG_MODE_DOTS);
   lv_obj_set_width(q, LV_PCT(100));
   lv_obj_set_style_max_height(q, 34, 0);   // two lines
   lv_obj_set_style_border_side(q, LV_BORDER_SIDE_LEFT, 0);

@@ -77,7 +77,7 @@ static lv_obj_t* pinPad(lv_obj_t* parent, bool setup, int w, int h) {
   lv_obj_set_style_pad_all(m, 0, 0);
   lv_obj_set_style_pad_gap(m, 6, 0);
   lv_obj_set_style_bg_color(m, lv_color_hex(theme::SURFACE), LV_PART_ITEMS);
-  lv_obj_set_style_bg_color(m, lv_color_hex(theme::SURFACE_2), LV_PART_ITEMS | LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(m, lv_color_hex(theme::SURFACE_2), theme::partState(LV_PART_ITEMS, LV_STATE_PRESSED));
   lv_obj_set_style_text_font(m, THEME_FONT_LARGE, LV_PART_ITEMS);
   lv_obj_set_style_text_color(m, lv_color_hex(theme::TEXT), LV_PART_ITEMS);
   lv_obj_set_style_radius(m, theme::RADIUS, LV_PART_ITEMS);
@@ -163,7 +163,7 @@ static lv_obj_t* slideBar(lv_obj_t* parent, const char* text, uint32_t knob) {
   lv_obj_set_style_bg_image_src(s, LV_SYMBOL_RIGHT, LV_PART_KNOB);
   lv_obj_set_style_text_font(s, THEME_FONT_BODY, LV_PART_KNOB);
   lv_obj_set_style_text_color(s, lv_color_hex(0xFFFFFF), LV_PART_KNOB);
-  lv_obj_remove_flag(s, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(s, false);
   lv_obj_center(label(s, text, THEME_FONT_BODY, theme::TEXT_MUTED));   // fades as the knob comes (slidePoll)
   return s;
 }
@@ -223,8 +223,8 @@ void UITask::lockScreen() {
   statusBarSync();
   lv_obj_set_style_bg_color(s_lock, lv_color_hex(theme::BG), 0);
   lv_obj_set_style_bg_opa(s_lock, LV_OPA_COVER, 0);
-  lv_obj_add_flag(s_lock, LV_OBJ_FLAG_CLICKABLE);   // swallows every touch but the slider's
-  lv_obj_remove_flag(s_lock, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_clickable(s_lock, true);   // swallows every touch but the slider's
+  lv_obj_set_scrollable(s_lock, false);
   lv_obj_set_flex_flow(s_lock, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_flex_align(s_lock, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_top(s_lock, 18, 0);
@@ -270,8 +270,8 @@ void UITask::unlockScreen() {
   // screen change (Anim.h), which deletes the overlay at the end.
   lv_obj_t* fading = s_lock;
   for (uint32_t i = 0; i < lv_obj_get_child_count(fading); i++)
-    lv_obj_add_flag(lv_obj_get_child(fading, i), LV_OBJ_FLAG_HIDDEN);
-  lv_obj_remove_flag(fading, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_hidden(lv_obj_get_child(fading, i), true);
+  lv_obj_set_clickable(fading, false);
   if (_asleep) lvport::deleteLater(fading);
   else {
     anim::run(fading, anim::setBgOpa, LV_OPA_COVER, LV_OPA_TRANSP, anim::UNLOCK_MS, anim::coverDone);
@@ -480,7 +480,7 @@ void UITask::favGrid(lv_obj_t* grid) {
     const char* icon = !used ? LV_SYMBOL_PLUS : chan ? "#" : c.type == ADV_TYPE_ROOM ? LV_SYMBOL_HOME : UI_SYMBOL_USERS;
     lv_obj_align(label(b, icon, THEME_FONT_LARGE, used ? theme::ACCENT : theme::TEXT_MUTED), LV_ALIGN_CENTER, 0, -11);
     lv_obj_t* n = label(b, used ? name : "Add", THEME_FONT_SMALL, used ? theme::TEXT : theme::TEXT_MUTED);
-    lv_label_set_long_mode(n, LV_LABEL_LONG_DOT);
+    lv_label_set_long_mode(n, LV_LABEL_LONG_MODE_DOTS);
     lv_obj_set_style_text_align(n, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_width(n, w - 10);
     lv_obj_align(n, LV_ALIGN_CENTER, 0, 14);
@@ -589,7 +589,7 @@ void UITask::pinPopup(bool channel, uint8_t ch_idx, const uint8_t* pub_key) {
   lv_obj_t* panel = navPopupPanel("Pin to favourites", false);
   lv_obj_t* grid = lv_obj_create(panel);
   styleSurface(grid, theme::BG);
-  lv_obj_remove_flag(grid, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(grid, false);
   lv_obj_set_size(grid, LV_PCT(100), LV_SIZE_CONTENT);
   lv_obj_set_flex_flow(grid, LV_FLEX_FLOW_ROW_WRAP);
   lv_obj_set_style_pad_column(grid, theme::GAP, 0);
@@ -607,7 +607,7 @@ void UITask::pinPopup(bool channel, uint8_t ch_idx, const uint8_t* pub_key) {
     lv_obj_set_style_bg_color(b, lv_color_hex(theme::SURFACE), 0);
     lv_obj_add_event_cb(b, onPinSlot, LV_EVENT_CLICKED, (void*)(uintptr_t)s);
     lv_obj_t* l = label(b, t, THEME_FONT_SMALL, used ? theme::TEXT : theme::TEXT_MUTED);
-    lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
+    lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_DOTS);
     lv_obj_set_width(l, 82);
     lv_obj_center(l);
     if (s == here) styleSelected(b, true);

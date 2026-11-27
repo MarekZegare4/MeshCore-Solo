@@ -232,14 +232,14 @@ void UITask::showBattCurve() {
   _screen = SCR_BATT;
   lv_obj_t* body = newScreen("Battery curve", true);
   headerButton(_header, LV_SYMBOL_REFRESH " Reset", onReset, 8, &s_reset);
-  lv_obj_remove_flag(body, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(body, false);
   s_chart = lv_obj_create(body);
   styleSurface(s_chart, theme::BG);
-  lv_obj_remove_flag(s_chart, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(s_chart, false);
   lv_obj_set_width(s_chart, LV_PCT(100));
   lv_obj_set_flex_grow(s_chart, 1);
-  lv_obj_add_flag(s_chart, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_add_flag(s_chart, LV_OBJ_FLAG_PRESS_LOCK);   // still its drag when the finger strays off it
+  lv_obj_set_clickable(s_chart, true);
+  lv_obj_set_press_lock(s_chart, true);   // still its drag when the finger strays off it
   lv_obj_add_event_cb(s_chart, onDraw, LV_EVENT_DRAW_MAIN_END, NULL);
   lv_obj_add_event_cb(s_chart, onTouch, LV_EVENT_ALL, NULL);
   s_now = noteLabel(body, "");

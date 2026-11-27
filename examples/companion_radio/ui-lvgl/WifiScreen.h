@@ -101,7 +101,7 @@ void UITask::buildWifi() {
   sectionTitle(body, n >= lvport::WIFI_SAVED_MAX ? "ADD A NETWORK (REPLACES THE OLDEST)" : "ADD A NETWORK");
   lv_obj_t* row = lv_obj_create(body);
   styleSurface(row, theme::BG);
-  lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(row, false);
   lv_obj_set_size(row, LV_PCT(100), LV_SIZE_CONTENT);
   lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
   lv_obj_set_style_pad_column(row, theme::GAP, 0);
@@ -118,12 +118,12 @@ void UITask::buildWifi() {
 
   _wifi_list = lv_obj_create(body);   // scan results, shown after a scan
   styleSurface(_wifi_list, theme::BG);
-  lv_obj_remove_flag(_wifi_list, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(_wifi_list, false);
   lv_obj_set_size(_wifi_list, LV_PCT(100), LV_SIZE_CONTENT);
   lv_obj_set_flex_flow(_wifi_list, LV_FLEX_FLOW_ROW_WRAP);
   lv_obj_set_style_pad_column(_wifi_list, 4, 0);
   lv_obj_set_style_pad_row(_wifi_list, 4, 0);
-  lv_obj_add_flag(_wifi_list, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(_wifi_list, true);
 
   _wifi_pass = wifiField(body, "Password", true);
 
@@ -137,7 +137,7 @@ void UITask::buildWifi() {
   lv_obj_align(_wifi_kb, LV_ALIGN_BOTTOM_MID, 0, 0);
   lv_obj_add_event_cb(_wifi_kb, onWifiKb, LV_EVENT_READY, NULL);
   lv_obj_add_event_cb(_wifi_kb, onWifiKb, LV_EVENT_CANCEL, NULL);
-  lv_obj_add_flag(_wifi_kb, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(_wifi_kb, true);
 }
 
 // Rebuilt in place (a network saved or forgotten), at the same scroll.
@@ -153,8 +153,8 @@ void UITask::wifiEdit(lv_obj_t* ta) {
   fieldFocus(_wifi_pass, false);
   lv_keyboard_set_textarea(_wifi_kb, ta);
   fieldFocus(ta, true);
-  if (lv_obj_has_flag(_wifi_kb, LV_OBJ_FLAG_HIDDEN)) {
-    lv_obj_remove_flag(_wifi_kb, LV_OBJ_FLAG_HIDDEN);
+  if (lv_obj_is_hidden(_wifi_kb)) {
+    lv_obj_set_hidden(_wifi_kb, false);
     if (_body) lv_obj_set_height(_body, lv_obj_get_height(_body) - lv_obj_get_height(_wifi_kb));
   }
   layoutNow(screen());
@@ -162,8 +162,8 @@ void UITask::wifiEdit(lv_obj_t* ta) {
 }
 
 void UITask::wifiKeyboardHide() {
-  if (!_wifi_kb || lv_obj_has_flag(_wifi_kb, LV_OBJ_FLAG_HIDDEN)) return;
-  lv_obj_add_flag(_wifi_kb, LV_OBJ_FLAG_HIDDEN);
+  if (!_wifi_kb || lv_obj_is_hidden(_wifi_kb)) return;
+  lv_obj_set_hidden(_wifi_kb, true);
   fieldFocus(_wifi_ssid, false);
   fieldFocus(_wifi_pass, false);
   if (_body) lv_obj_set_height(_body, lv_obj_get_height(_body) + lv_obj_get_height(_wifi_kb));
@@ -229,7 +229,7 @@ static void wifiTestPoll(UITask* ui, bool in_use) {
 void UITask::wifiTestShow(const char* msg, const char* ssid, const char* pass) {
   if (!_wifi_status) return;
   lv_label_set_text(_wifi_status, msg);
-  lv_label_set_long_mode(_wifi_status, LV_LABEL_LONG_WRAP);
+  lv_label_set_long_mode(_wifi_status, LV_LABEL_LONG_MODE_WRAP);
   lv_obj_set_width(_wifi_status, LV_PCT(100));
   if (ssid) {   // back in the form, to fix
     lv_textarea_set_text(_wifi_ssid, ssid);
@@ -260,7 +260,7 @@ void UITask::pollWifiScan() {
     snprintf(text, sizeof(text), known ? LV_SYMBOL_OK " %s" : "%s", s_wifi_names[i]);
     lv_obj_center(label(b, text, THEME_FONT_SMALL, known ? theme::ACCENT : theme::TEXT));
   }
-  if (n > 0) lv_obj_remove_flag(_wifi_list, LV_OBJ_FLAG_HIDDEN);
+  if (n > 0) lv_obj_set_hidden(_wifi_list, false);
   setText(_wifi_status, n > 0 ? "Tap a network, then enter its password." : "No networks found.");
   if (!wifiInUse()) lvport::netEnd();   // the scan switched the radio on
 }
@@ -270,7 +270,7 @@ void UITask::wifiPick(int idx) {
   lv_textarea_set_text(_wifi_ssid, s_wifi_names[idx]);
   const lvport::WifiNet* w = lvport::wifiSaved(lvport::wifiFind(s_wifi_names[idx]));
   lv_textarea_set_text(_wifi_pass, w ? w->pass : "");
-  lv_obj_add_flag(_wifi_list, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(_wifi_list, true);
   wifiEdit(_wifi_pass);
 }
 

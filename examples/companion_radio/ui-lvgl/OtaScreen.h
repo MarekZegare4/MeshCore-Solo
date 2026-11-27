@@ -256,8 +256,8 @@ void UITask::refreshOta() {
   lv_label_set_text(_ota_status, st);
   if (s_ota_latest) infoSet(s_ota_latest, s_latest);
   lv_label_set_text(_ota_btn_lbl, btn);
-  if (bar) lv_obj_remove_flag(_ota_bar, LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(_ota_bar, LV_OBJ_FLAG_HIDDEN);
-  if (btn_on) lv_obj_remove_flag(_ota_btn, LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(_ota_btn, LV_OBJ_FLAG_HIDDEN);
+  if (bar) lv_obj_set_hidden(_ota_bar, false); else lv_obj_set_hidden(_ota_bar, true);
+  if (btn_on) lv_obj_set_hidden(_ota_btn, false); else lv_obj_set_hidden(_ota_btn, true);
 }
 
 // The button: check (after bringing the WiFi up), then install what was found.

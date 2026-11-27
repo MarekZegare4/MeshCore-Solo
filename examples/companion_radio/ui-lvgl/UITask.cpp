@@ -545,7 +545,7 @@ void UITask::sleep() {
   if (_toast) {   // same: the toast's timer won't run while asleep
     if (_toast_timer) lv_timer_pause(_toast_timer);
     lv_anim_delete(_toast, NULL);
-    lv_obj_add_flag(_toast, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(_toast, true);
   }
   if (_display) _display->turnOff();
   prefsSaveSoon(0);   // nothing to stall now
@@ -649,9 +649,9 @@ static int16_t     s_banner_ch = -1;
 static uint8_t     s_banner_key[4];
 static const uint32_t BANNER_MS = 4000;
 
-static void bannerHidden(lv_anim_t* a) { lv_obj_add_flag((lv_obj_t*)a->var, LV_OBJ_FLAG_HIDDEN); }
+static void bannerHidden(lv_anim_t* a) { lv_obj_set_hidden((lv_obj_t*)a->var, true); }
 static void bannerHide() {
-  if (!s_banner || lv_obj_has_flag(s_banner, LV_OBJ_FLAG_HIDDEN)) return;
+  if (!s_banner || lv_obj_is_hidden(s_banner)) return;
   if (s_banner_timer) lv_timer_pause(s_banner_timer);
   lv_anim_delete(s_banner, NULL);
   int32_t off = -(lv_obj_get_height(s_banner) + theme::STATUS_H);
@@ -664,7 +664,7 @@ static void bannerDismiss() {
   if (!s_banner) return;
   if (s_banner_timer) lv_timer_pause(s_banner_timer);
   lv_anim_delete(s_banner, NULL);
-  lv_obj_add_flag(s_banner, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(s_banner, true);
 }
 static void onBanner(lv_event_t* e) {
   if (lv_event_get_code(e) == LV_EVENT_GESTURE) {
@@ -679,8 +679,8 @@ static void onBanner(lv_event_t* e) {
 static void bannerBuild() {
   const int32_t w = lv_display_get_horizontal_resolution(NULL);
   s_banner = lv_obj_create(lv_layer_top());
-  lv_obj_remove_flag(s_banner, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_remove_flag(s_banner, LV_OBJ_FLAG_GESTURE_BUBBLE);
+  lv_obj_set_scrollable(s_banner, false);
+  lv_obj_set_gesture_bubble(s_banner, false);
   lv_obj_set_size(s_banner, w - 12, LV_SIZE_CONTENT);
   lv_obj_align(s_banner, LV_ALIGN_TOP_MID, 0, theme::STATUS_H + 2);
   // Raised off the page: lighter than it on the dark theme, white on the light.
@@ -706,13 +706,13 @@ static void bannerBuild() {
   lv_obj_set_flex_grow(col, 1);
   lv_obj_set_style_pad_row(col, 1, 0);
   s_banner_title = label(col, "", THEME_FONT_BODY, theme::TEXT);
-  lv_label_set_long_mode(s_banner_title, LV_LABEL_LONG_DOT);
+  lv_label_set_long_mode(s_banner_title, LV_LABEL_LONG_MODE_DOTS);
   lv_obj_set_width(s_banner_title, LV_PCT(100));
   s_banner_text = label(col, "", THEME_FONT_SMALL, theme::TEXT_MUTED);
-  lv_label_set_long_mode(s_banner_text, LV_LABEL_LONG_DOT);   // (LONG_DOT cuts at the max height)
+  lv_label_set_long_mode(s_banner_text, LV_LABEL_LONG_MODE_DOTS);   // (LONG_DOT cuts at the max height)
   lv_obj_set_width(s_banner_text, LV_PCT(100));
   lv_obj_set_style_max_height(s_banner_text, lv_font_get_line_height(THEME_FONT_SMALL) * 2, 0);   // two lines, then "..."
-  lv_obj_add_flag(s_banner, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(s_banner, true);
 }
 
 static void bannerShow(const char* icon, const char* title, const char* text) {
@@ -720,9 +720,9 @@ static void bannerShow(const char* icon, const char* title, const char* text) {
   lv_label_set_text(s_banner_icon, icon);
   lv_label_set_text(s_banner_title, title);
   lv_label_set_text(s_banner_text, text);
-  bool shown = !lv_obj_has_flag(s_banner, LV_OBJ_FLAG_HIDDEN);
+  bool shown = !lv_obj_is_hidden(s_banner);
   lv_anim_delete(s_banner, NULL);
-  lv_obj_remove_flag(s_banner, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(s_banner, false);
   if (!shown) {   // a new one while it's up just changes the text
     lv_obj_align(s_banner, LV_ALIGN_TOP_MID, 0, belowTopBar() + 2);
     layoutNow(s_banner);
@@ -801,8 +801,8 @@ void UITask::buildStatusBar() {
   // them as they slide in and out from under it.
   bannerBuild();
   _toast = lv_obj_create(lv_layer_top());
-  lv_obj_remove_flag(_toast, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_remove_flag(_toast, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_scrollable(_toast, false);
+  lv_obj_set_clickable(_toast, false);
   lv_obj_set_size(_toast, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
   // On the light theme a dark pill, as a phone's: a light one was lost on the page.
   lv_obj_set_style_bg_color(_toast, lv_color_hex(theme::s_light ? theme::TEXT : theme::SURFACE_2), 0);
@@ -813,16 +813,16 @@ void UITask::buildStatusBar() {
   lv_obj_set_style_pad_ver(_toast, 6, 0);
   lv_obj_align(_toast, LV_ALIGN_TOP_MID, 0, theme::STATUS_H + 4);   // slides down from under the status bar
   lv_obj_t* tl = label(_toast, "", THEME_FONT_BODY, theme::s_light ? theme::SURFACE : theme::TEXT);
-  lv_label_set_long_mode(tl, LV_LABEL_LONG_WRAP);   // long texts wrap instead of running off the screen
+  lv_label_set_long_mode(tl, LV_LABEL_LONG_MODE_WRAP);   // long texts wrap instead of running off the screen
   lv_obj_set_style_max_width(tl, lv_display_get_horizontal_resolution(NULL) - 40, 0);
   lv_obj_set_style_text_align(tl, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_add_flag(_toast, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(_toast, true);
   lv_obj_t* bar = lv_obj_create(lv_layer_top());
   s_status_bar = bar;
   styleOpaque(bar, theme::BG);
-  lv_obj_remove_flag(bar, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_add_flag(bar, LV_OBJ_FLAG_PRESS_LOCK);   // pulled down past it: still its touch (the quick panel)
-  lv_obj_remove_flag(bar, LV_OBJ_FLAG_GESTURE_BUBBLE);
+  lv_obj_set_scrollable(bar, false);
+  lv_obj_set_press_lock(bar, true);   // pulled down past it: still its touch (the quick panel)
+  lv_obj_set_gesture_bubble(bar, false);
   lv_obj_add_event_cb(bar, onStatusBarTouch, LV_EVENT_ALL, NULL);
   lv_obj_set_size(bar, LV_PCT(100), theme::STATUS_H);
   lv_obj_align(bar, LV_ALIGN_TOP_MID, 0, 0);
@@ -833,10 +833,10 @@ void UITask::buildStatusBar() {
   _status_batt = label(bar, "", THEME_FONT_ICONS, theme::TEXT_MUTED);
   lv_obj_align(_status_batt, LV_ALIGN_RIGHT_MID, 0, 0);
   _status_chg = label(bar, LV_SYMBOL_CHARGE, THEME_FONT_ICONS, theme::OK);
-  lv_obj_add_flag(_status_chg, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(_status_chg, true);
   _status_icons = lv_obj_create(bar);
   lv_obj_remove_style_all(_status_icons);
-  lv_obj_remove_flag(_status_icons, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(_status_icons, false);
   lv_obj_set_size(_status_icons, 200, LV_PCT(100));   // fixed: packed to its right edge
   lv_obj_set_flex_flow(_status_icons, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(_status_icons, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -867,7 +867,7 @@ static void collapseLabel(lv_obj_t* l, const lv_font_t* font, bool on) {
   const char* t = lv_label_get_text(l);
   const char* sp = strchr(t, ' ');
   if (!on || !sp) {
-    lv_label_set_long_mode(l, LV_LABEL_LONG_WRAP);
+    lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_WRAP);
     lv_obj_set_width(l, LV_SIZE_CONTENT);
     return;
   }
@@ -877,7 +877,7 @@ static void collapseLabel(lv_obj_t* l, const lv_font_t* font, bool on) {
   icon[n] = '\0';
   lv_point_t sz;
   lv_text_get_size(&sz, icon, font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-  lv_label_set_long_mode(l, LV_LABEL_LONG_CLIP);
+  lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_CLIP);
   lv_obj_set_width(l, sz.x);
 }
 
@@ -919,7 +919,7 @@ static void signalBars(lv_obj_t* parent, int lit, bool stale) {
   static const int8_t H[4] = { 4, 7, 10, 13 };
   lv_obj_t* box = lv_obj_create(parent);
   lv_obj_remove_style_all(box);
-  lv_obj_remove_flag(box, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(box, false);
   lv_obj_set_size(box, 4 * 3 + 3, 14);
   for (int i = 0; i < 4; i++) {
     lv_obj_t* b = lv_obj_create(box);
@@ -967,10 +967,10 @@ void UITask::refreshStatusBar() {
   }
   lv_obj_t* left_of = _status_batt;   // the icons pack up to this
   if (chg) {
-    lv_obj_remove_flag(_status_chg, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(_status_chg, false);
     placeLeftOf(_status_chg, _status_batt, -2);
     left_of = _status_chg;
-  } else lv_obj_add_flag(_status_chg, LV_OBJ_FLAG_HIDDEN);
+  } else lv_obj_set_hidden(_status_chg, true);
 
   // Status icons, as the original's status bar (ui-new): the signal, Bluetooth (accent
   // when the app is connected), WiFi (when switched on, accent connected), GPS (green with a fix), the alarm, mute, then
@@ -1034,9 +1034,9 @@ void UITask::refreshStatusBar() {
 // screen; a title bar carries the time and battery itself.
 void UITask::statusBarSync() {
   if (!s_status_bar) return;
-  const bool titled = _header && !lv_obj_has_flag(_header, LV_OBJ_FLAG_HIDDEN);
+  const bool titled = _header && !lv_obj_is_hidden(_header);
   const bool hide = titled && !s_sb_panel && !s_sb_lock;
-  if (hide != lv_obj_has_flag(s_status_bar, LV_OBJ_FLAG_HIDDEN)) lv_obj_set_flag(s_status_bar, LV_OBJ_FLAG_HIDDEN, hide);
+  if (hide != lv_obj_is_hidden(s_status_bar)) lv_obj_set_hidden(s_status_bar, hide);
 }
 
 void UITask::setGps(bool on) {
@@ -1068,7 +1068,7 @@ bool UITask::ensureGps(GpsAsk what) {
 }
 
 // One persistent timer, paused between toasts: hides the toast when it fires.
-static void toastHidden(lv_anim_t* a) { lv_obj_add_flag((lv_obj_t*)a->var, LV_OBJ_FLAG_HIDDEN); }
+static void toastHidden(lv_anim_t* a) { lv_obj_set_hidden((lv_obj_t*)a->var, true); }
 static void toastTimerCb(lv_timer_t* t) {   // back up under the status bar
   lv_obj_t* o = (lv_obj_t*)lv_timer_get_user_data(t);
   anim::run(o, anim::setTy, 0, -(lv_obj_get_y(o) + lv_obj_get_height(o)), anim::OUT_MS, toastHidden);
@@ -1227,7 +1227,7 @@ void UITask::takeScreenshot() {
     lv_obj_set_pos(edge, r[0], r[1]);
     lv_obj_set_size(edge, r[2], r[3]);
     lv_obj_set_style_bg_color(edge, lv_color_white(), 0);
-    lv_obj_remove_flag(edge, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_clickable(edge, false);
     anim::run(edge, anim::setBgOpa, LV_OPA_COVER, LV_OPA_TRANSP, 400, anim::coverDone);
   }
   char msg[40];
@@ -1239,12 +1239,12 @@ void UITask::showToast(const char* text, uint32_t ms) {
   if (!_toast) return;
   _toast_seq++;
   lv_label_set_text(lv_obj_get_child(_toast, 0), text);
-  bool shown = !lv_obj_has_flag(_toast, LV_OBJ_FLAG_HIDDEN);
+  bool shown = !lv_obj_is_hidden(_toast);
   lv_anim_delete(_toast, NULL);   // on its way out
-  lv_obj_remove_flag(_toast, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(_toast, false);
   // Under the message banner while that's up, else right under the top bar.
   int32_t y = belowTopBar() + 4;
-  if (s_banner && !lv_obj_has_flag(s_banner, LV_OBJ_FLAG_HIDDEN)) y = lv_obj_get_y(s_banner) + lv_obj_get_height(s_banner) + 4;
+  if (s_banner && !lv_obj_is_hidden(s_banner)) y = lv_obj_get_y(s_banner) + lv_obj_get_height(s_banner) + 4;
   lv_obj_align(_toast, LV_ALIGN_TOP_MID, 0, y);
   layoutNow(_toast);
   if (!shown) anim::run(_toast, anim::setTy, -(y + lv_obj_get_height(_toast)), 0, anim::POP_MS);   // a replaced text just changes
@@ -1360,7 +1360,7 @@ lv_obj_t* UITask::newScreen(const char* title, bool with_back) {
   s_fit_pending = true;
   styleBatchBegin(scr);   // style refreshes once for all, at the first layout (Widgets.h)
   styleOpaque(scr, theme::BG);
-  lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(scr, false);
 
   // The title bar, at the very top in place of the status bar: back, the
   // title, the screen's actions (headerButton(), after the title in a row),
@@ -1371,16 +1371,16 @@ lv_obj_t* UITask::newScreen(const char* title, bool with_back) {
   if (title) {
     lv_obj_t* hdr = lv_obj_create(scr);
     styleSurface(hdr, theme::BG);
-    lv_obj_remove_flag(hdr, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(hdr, false);
     lv_obj_set_size(hdr, LV_PCT(100), theme::APPBAR_H);
     lv_obj_set_pos(hdr, 0, 0);
     lv_obj_set_flex_flow(hdr, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(hdr, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_left(hdr, with_back ? 4 : theme::PAD, 0);
     lv_obj_set_style_pad_column(hdr, theme::GAP, 0);
-    lv_obj_add_flag(hdr, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_flag(hdr, LV_OBJ_FLAG_PRESS_LOCK);
-    lv_obj_remove_flag(hdr, LV_OBJ_FLAG_GESTURE_BUBBLE);
+    lv_obj_set_clickable(hdr, true);
+    lv_obj_set_press_lock(hdr, true);
+    lv_obj_set_gesture_bubble(hdr, false);
     lv_obj_add_event_cb(hdr, onStatusBarTouch, LV_EVENT_ALL, (void*)1);   // a drag only: a tap on the title is nothing
     _header = hdr;
     if (with_back) {
@@ -1392,7 +1392,7 @@ lv_obj_t* UITask::newScreen(const char* title, bool with_back) {
       lv_obj_center(label(b, LV_SYMBOL_LEFT, THEME_FONT_BODY, theme::TEXT));
     }
     lv_obj_t* t = label(hdr, title, THEME_FONT_TITLE, theme::TEXT);
-    lv_label_set_long_mode(t, LV_LABEL_LONG_DOT);
+    lv_label_set_long_mode(t, LV_LABEL_LONG_MODE_DOTS);
     lv_obj_set_width(t, 1);
     lv_obj_set_flex_grow(t, 1);   // what the actions leave
     _hdr_title = t;
@@ -1401,10 +1401,10 @@ lv_obj_t* UITask::newScreen(const char* title, bool with_back) {
     // row: the row stops short of it (the bar's right padding, refreshStatusBar()).
     lv_obj_t* c = lv_obj_create(hdr);
     lv_obj_remove_style_all(c);
-    lv_obj_add_flag(c, LV_OBJ_FLAG_IGNORE_LAYOUT);
-    lv_obj_add_flag(c, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_flag(c, LV_OBJ_FLAG_PRESS_LOCK);
-    lv_obj_remove_flag(c, LV_OBJ_FLAG_GESTURE_BUBBLE);
+    lv_obj_set_ignore_layout(c, true);
+    lv_obj_set_clickable(c, true);
+    lv_obj_set_press_lock(c, true);
+    lv_obj_set_gesture_bubble(c, false);
     lv_obj_add_event_cb(c, onStatusBarTouch, LV_EVENT_ALL, NULL);   // a tap opens the panel, as the status bar's
     lv_obj_set_size(c, LV_SIZE_CONTENT, LV_PCT(100));
     lv_obj_set_style_pad_left(c, theme::GAP, 0);
@@ -1415,7 +1415,7 @@ lv_obj_t* UITask::newScreen(const char* title, bool with_back) {
     _hdr_clock = c;
     lv_obj_t* p = lv_obj_create(c);
     lv_obj_remove_style_all(p);
-    lv_obj_remove_flag(p, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_clickable(p, false);
     lv_obj_set_size(p, LV_SIZE_CONTENT, theme::BAR_BTN_H);
     lv_obj_set_flex_flow(p, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(p, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -1450,7 +1450,7 @@ lv_obj_t* UITask::newScreen(const char* title, bool with_back) {
   if (!same) crashlog::note("scr %d %.14s", (int)_screen, title ? title : "");
   if (_fade_next && prev && !_asleep && prev == lv_screen_active()) {
     // A cross-fade: the new screen dissolves in over the old one, deleted after.
-    lv_screen_load_anim(scr, LV_SCR_LOAD_ANIM_FADE_IN, anim::FADE_MS, 0, true);
+    lv_screen_load_anim(scr, LV_SCREEN_LOAD_ANIM_FADE_IN, anim::FADE_MS, 0, true);
   } else {
     lv_screen_load(scr);
     if (prev) lvport::deleteLater(prev);   // this usually runs from one of its own widgets
@@ -1831,9 +1831,9 @@ extern "C" EMSCRIPTEN_KEEPALIVE void sim_open(const char* name) {
 }
 // Scrolls the screen's (or a popup's) main list by dy; returns what was left to scroll.
 static void dbgScrollable(lv_obj_t* o, lv_obj_t*& best, int& h) {
-  if (lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN) || lv_obj_check_type(o, &lv_roller_class) || lv_obj_check_type(o, &lv_dropdownlist_class)) return;
+  if (lv_obj_is_hidden(o) || lv_obj_check_type(o, &lv_roller_class) || lv_obj_check_type(o, &lv_dropdownlist_class)) return;
   int v = lv_obj_get_scroll_bottom(o) + lv_obj_get_scroll_y(o);
-  if (lv_obj_has_flag(o, LV_OBJ_FLAG_SCROLLABLE) && v > h) { h = v; best = o; }
+  if (lv_obj_is_scrollable(o) && v > h) { h = v; best = o; }
   for (uint32_t i = 0; i < lv_obj_get_child_count(o); i++) dbgScrollable(lv_obj_get_child(o, i), best, h);
 }
 extern "C" EMSCRIPTEN_KEEPALIVE int sim_scroll(int dy) {

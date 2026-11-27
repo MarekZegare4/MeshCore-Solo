@@ -222,7 +222,7 @@ static lv_obj_t* dot(uint8_t kind) {
     case P_LIVE:   mapstyle::styleDot(o, 12, theme::OK, 2); break;
     default:       mapstyle::styleDot(o, 12, theme::FAIL, 2); break;      // someone's SOS, pulsing
   }
-  lv_obj_remove_flag(o, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(o, false);
   if (kind == P_SOS) mapview::sosPulse(o);
   return o;
 }
@@ -243,7 +243,7 @@ static lv_obj_t* homeTile(lv_obj_t* parent, const char* icon, const char* text, 
   if (cb) lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, NULL);
   lv_obj_align(label(b, icon, THEME_FONT_LARGE, theme::ACCENT), LV_ALIGN_CENTER, 0, -11);   // icon over name, centred
   lv_obj_t* n = label(b, text, THEME_FONT_SMALL, theme::TEXT);
-  lv_label_set_long_mode(n, LV_LABEL_LONG_DOT);
+  lv_label_set_long_mode(n, LV_LABEL_LONG_MODE_DOTS);
   lv_obj_set_style_text_align(n, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_width(n, w - 10);
   lv_obj_align(n, LV_ALIGN_CENTER, 0, 14);
@@ -367,7 +367,7 @@ static void onEditTile(lv_event_t* e) {
       s_swiped = true;   // this touch is a drag, not a page swipe, to its end
       const App& a = APP_LIST[orderApp(pos)];
       s_ghost = homeTile(lv_layer_top(), a.icon, a.text, nullptr, 0);
-      lv_obj_remove_flag(s_ghost, LV_OBJ_FLAG_CLICKABLE);
+      lv_obj_set_clickable(s_ghost, false);
       lv_obj_set_style_border_width(s_ghost, 2, 0);
       lv_obj_set_style_border_color(s_ghost, lv_color_hex(theme::ACCENT), 0);
       lv_area_t c;
@@ -409,7 +409,7 @@ static void editTile(lv_obj_t* box, int pos) {
   const App& a = APP_LIST[orderApp(pos)];
   bool on = orderShown(pos);
   lv_obj_t* t = homeTile(box, a.icon, a.text, nullptr, 0);
-  lv_obj_add_flag(t, LV_OBJ_FLAG_PRESS_LOCK);   // still its press when the finger leaves it
+  lv_obj_set_press_lock(t, true);   // still its press when the finger leaves it
   lv_obj_add_event_cb(t, onEditTile, LV_EVENT_ALL, (void*)(uintptr_t)pos);
   if (!on) {
     lv_obj_set_style_bg_color(t, lv_color_hex(theme::BG), 0);
@@ -420,7 +420,7 @@ static void editTile(lv_obj_t* box, int pos) {
   if (a.id == ALWAYS) return;
   lv_obj_t* b = lv_obj_create(t);
   lv_obj_remove_style_all(b);
-  lv_obj_remove_flag(b, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(b, false);
   lv_obj_set_size(b, 20, 20);
   lv_obj_set_style_radius(b, LV_RADIUS_CIRCLE, 0);
   lv_obj_set_style_bg_opa(b, LV_OPA_COVER, 0);
@@ -495,17 +495,17 @@ void UITask::goHome() {
 
 void UITask::buildHome() {
   lv_obj_t* body = newScreen(NULL, false);
-  lv_obj_remove_flag(body, LV_OBJ_FLAG_SCROLLABLE);   // a drag is a page swipe, not a scroll
+  lv_obj_set_scrollable(body, false);   // a drag is a page swipe, not a scroll
   lv_obj_set_style_pad_bottom(body, HOME_DOTS_H, 0);  // the dots
   home::s_page_box = lv_obj_create(body);
   styleSurface(home::s_page_box, theme::BG);
-  lv_obj_remove_flag(home::s_page_box, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(home::s_page_box, false);
   lv_obj_set_width(home::s_page_box, LV_PCT(100));
   lv_obj_set_flex_grow(home::s_page_box, 1);
 
   home::s_dots = lv_obj_create(body);
   lv_obj_remove_style_all(home::s_dots);
-  lv_obj_add_flag(home::s_dots, LV_OBJ_FLAG_IGNORE_LAYOUT);
+  lv_obj_set_ignore_layout(home::s_dots, true);
   lv_obj_set_size(home::s_dots, LV_SIZE_CONTENT, 22);
   lv_obj_align(home::s_dots, LV_ALIGN_BOTTOM_MID, 0, 22);
   lv_obj_set_flex_flow(home::s_dots, LV_FLEX_FLOW_ROW);
@@ -520,12 +520,12 @@ void UITask::buildHome() {
     lv_obj_set_style_radius(d, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_opa(d, LV_OPA_COVER, 0);
     lv_obj_set_ext_click_area(d, 8);
-    lv_obj_add_flag(d, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_clickable(d, true);
     lv_obj_add_event_cb(d, home::onDot, LV_EVENT_CLICKED, (void*)(uintptr_t)p);
   }
   if (home::s_edit) {   // Done, right of the dots
     lv_obj_t* b = lv_button_create(body);
-    lv_obj_add_flag(b, LV_OBJ_FLAG_IGNORE_LAYOUT);
+    lv_obj_set_ignore_layout(b, true);
     lv_obj_set_size(b, LV_SIZE_CONTENT, 26);
     lv_obj_set_style_pad_hor(b, 14, 0);
     lv_obj_set_style_radius(b, theme::RADIUS, 0);
@@ -608,7 +608,7 @@ void UITask::buildHomeClock(lv_obj_t* box) {
   lv_obj_set_style_pad_row(box, 0, 0);
   lv_obj_t* clk = flexBox(box, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_flex_align(clk, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-  lv_obj_add_flag(clk, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(clk, true);
   lv_obj_set_style_opa(clk, LV_OPA_70, LV_STATE_PRESSED);
   lv_obj_add_event_cb(clk, onClockTap, LV_EVENT_CLICKED, NULL);
   _home_clock = clockFace(clk, nullptr, THEME_FONT_TITLE);
@@ -628,7 +628,7 @@ void UITask::buildHomeClock(lv_obj_t* box) {
     if (f >= telemetry::COUNT) f = telemetry::NONE;
     lv_obj_t* c = lv_obj_create(row);
     styleSurface(c, f ? theme::SURFACE : theme::BG);
-    lv_obj_remove_flag(c, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(c, false);
     lv_obj_set_height(c, 52);
     lv_obj_set_flex_grow(c, 1);
     lv_obj_set_style_radius(c, theme::RADIUS, 0);
@@ -641,7 +641,7 @@ void UITask::buildHomeClock(lv_obj_t* box) {
     lv_obj_set_flex_align(c, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_row(c, 2, 0);
     s_field_pick[i] = choiceCreate(c, opts, f, "Field on the clock page");
-    lv_obj_add_flag(s_field_pick[i], LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(s_field_pick[i], true);
     lv_obj_add_event_cb(s_field_pick[i], onFieldPicked, LV_EVENT_VALUE_CHANGED, (void*)(uintptr_t)i);
     if (f) {
       lv_obj_add_event_cb(c, onFieldHold, LV_EVENT_LONG_PRESSED, (void*)(uintptr_t)i);
@@ -724,7 +724,7 @@ void UITask::buildHomeMap(lv_obj_t* box) {
   lv_obj_set_size(s_area, LV_PCT(100), LV_PCT(100));
   lv_obj_set_style_radius(s_area, theme::RADIUS, 0);
   lv_obj_set_style_clip_corner(s_area, true, 0);
-  lv_obj_remove_flag(s_area, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(s_area, false);
   lv_obj_set_style_bg_color(s_area, lv_color_hex(theme::SURFACE_2), LV_STATE_PRESSED);
   lv_obj_add_event_cb(s_area, onTap, LV_EVENT_CLICKED, NULL);
   lv_obj_add_event_cb(s_area, mapview::drawGrid, LV_EVENT_DRAW_MAIN_END, &s_grid);
@@ -732,9 +732,9 @@ void UITask::buildHomeMap(lv_obj_t* box) {
     lv_obj_t* cell = lv_obj_create(s_area);
     lv_obj_remove_style_all(cell);
     lv_obj_set_size(cell, mapview::TILE_PX, mapview::TILE_PX);
-    lv_obj_remove_flag(cell, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_remove_flag(cell, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(cell, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_clickable(cell, false);
+    lv_obj_set_scrollable(cell, false);
+    lv_obj_set_hidden(cell, true);
     s_cells[i] = cell;
     s_imgs[i] = lv_image_create(cell);
     lv_image_set_pivot(s_imgs[i], 0, 0);
@@ -742,7 +742,7 @@ void UITask::buildHomeMap(lv_obj_t* box) {
   s_lines = lv_obj_create(s_area);   // over the tiles; the dots come after it
   lv_obj_remove_style_all(s_lines);
   lv_obj_set_size(s_lines, LV_PCT(100), LV_PCT(100));
-  lv_obj_remove_flag(s_lines, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(s_lines, false);
   lv_obj_add_event_cb(s_lines, onLinesDraw, LV_EVENT_DRAW_MAIN, nullptr);
   if (!s_lp) s_lp = psramBuf<lv_point_precise_t>(LP_MAX);
   s_lp_n = s_lp_trail = 0;
@@ -757,7 +757,7 @@ void UITask::buildHomeMap(lv_obj_t* box) {
   lv_obj_set_style_pad_ver(s_hint, 4, 0);
   lv_obj_set_style_text_align(s_hint, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_center(s_hint);
-  lv_obj_add_flag(s_hint, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(s_hint, true);
   s_caption = label(s_area, "", THEME_FONT_SMALL, theme::TEXT);   // who's on it
   lv_obj_set_style_bg_color(s_caption, lv_color_hex(theme::BG), 0);
   lv_obj_set_style_bg_opa(s_caption, LV_OPA_COVER, 0);
@@ -914,7 +914,7 @@ void UITask::homeMapLayout() {
         }
       }
       if (!show) {
-        lv_obj_add_flag(cell, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_hidden(cell, true);
         if (px < w && py < h) tiled = false;
         continue;
       }
@@ -923,7 +923,7 @@ void UITask::homeMapLayout() {
       int m = (1 << k) - 1;
       lv_obj_set_pos(img, -(wx & m) * mapview::TILE_PX, -(ty & m) * mapview::TILE_PX);
       lv_obj_set_pos(cell, px, py);
-      lv_obj_remove_flag(cell, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_set_hidden(cell, false);
       shown++;
     }
   }
@@ -948,8 +948,8 @@ void UITask::homeMapLayout() {
   }
   const char* hint = !mapview::s_available ? "No map on the SD card"
                    : !shown && !s_pending ? "No map tiles for this area" : nullptr;
-  if (hint) { setText(s_hint, hint); lv_obj_remove_flag(s_hint, LV_OBJ_FLAG_HIDDEN); }
-  else lv_obj_add_flag(s_hint, LV_OBJ_FLAG_HIDDEN);
+  if (hint) { setText(s_hint, hint); lv_obj_set_hidden(s_hint, false); }
+  else lv_obj_set_hidden(s_hint, true);
 }
 
 // From loop() while the map page is up: tiles one at a time (decoded on the

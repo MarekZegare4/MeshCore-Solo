@@ -33,7 +33,7 @@ static void freeAll(lv_anim_t* a) {
 static void dismiss() {
   if (s_timer) { lv_timer_delete(s_timer); s_timer = nullptr; }
   if (!s_root) return;
-  lv_obj_remove_flag(s_root, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(s_root, false);
   lv_anim_delete(s_root, NULL);
   anim::run(s_root, anim::setOpa, LV_OPA_COVER, LV_OPA_TRANSP, 300, freeAll);
 }
@@ -94,7 +94,7 @@ static void wave(lv_obj_t* dot, int i) {
   lv_anim_set_exec_cb(&a, dotY);
   lv_anim_set_values(&a, 0, -6);
   lv_anim_set_duration(&a, 260);
-  lv_anim_set_playback_duration(&a, 260);
+  lv_anim_set_reverse_duration(&a, 260);
   lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
   lv_anim_set_repeat_delay(&a, 420);
   lv_anim_set_delay(&a, 140 * i);
@@ -112,7 +112,7 @@ void UITask::showSplash() {
   lv_obj_set_size(s_root, LV_PCT(100), LV_PCT(100));
   lv_obj_set_style_bg_color(s_root, lv_color_hex(theme::BG), 0);
   lv_obj_set_style_bg_opa(s_root, LV_OPA_COVER, 0);
-  lv_obj_add_flag(s_root, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(s_root, true);
   lv_obj_add_event_cb(s_root, onTap, LV_EVENT_CLICKED, NULL);
 
   lv_obj_t* logo = letters(s_root, nullptr, LOGO_SCALE, 0, theme::ACCENT, THEME_FONT_LARGE);

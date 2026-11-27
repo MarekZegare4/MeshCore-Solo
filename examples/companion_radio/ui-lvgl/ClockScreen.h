@@ -239,7 +239,7 @@ static lv_obj_t* wheel(lv_obj_t* parent, uint8_t n, int sel, lv_event_cb_t cb, u
   lv_obj_t* o = lv_obj_create(parent);
   styleSurface(o, theme::SURFACE);
   lv_obj_set_style_radius(o, theme::RADIUS, 0);
-  lv_obj_remove_flag(o, (lv_obj_flag_t)(LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_SCROLL_CHAIN));
+  lv_obj_set_scrollable(o, false); lv_obj_set_scroll_chain(o, false);
   lv_obj_set_size(o, 60, 84);   // three rows; leaves room for the button below
   lv_obj_set_user_data(o, w);
   lv_obj_add_event_cb(o, wheelDraw, LV_EVENT_DRAW_MAIN, NULL);
@@ -291,7 +291,7 @@ void UITask::buildClock() {
   using namespace clockview;
   lv_obj_t* body = newScreen("Clock", true);
   lv_obj_set_style_pad_row(body, 6, 0);
-  lv_obj_remove_flag(body, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(body, false);
   s_big = s_go_lbl = s_alarm_sw = s_cal = nullptr;
 
   // Tabs
@@ -306,7 +306,7 @@ void UITask::buildClock() {
     wheel(r, 60, _prefs->alarm_min % 60, onAlarmWheel, 1);
     lv_obj_t* col = lv_obj_create(r);
     styleSurface(col, theme::BG);
-    lv_obj_remove_flag(col, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(col, false);
     lv_obj_set_size(col, 120, LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(col, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
@@ -349,7 +349,7 @@ void UITask::buildClock() {
     s_cal_marks = calmath::alarmDays(t, _prefs->alarm_on, _prefs->alarm_repeat_mask, _prefs->alarm_hour, _prefs->alarm_min);
     s_cal = lv_obj_create(body);
     lv_obj_remove_style_all(s_cal);
-    lv_obj_remove_flag(s_cal, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_clickable(s_cal, false);
     fillWidth(s_cal);
     lv_obj_set_flex_grow(s_cal, 1);
     lv_obj_add_event_cb(s_cal, onCalendarDraw, LV_EVENT_DRAW_MAIN_END, NULL);
@@ -472,7 +472,7 @@ void UITask::showRing(const char* text) {
     lv_obj_set_size(s_ring, LV_PCT(100), LV_PCT(100));
     lv_obj_set_style_bg_color(s_ring, lv_color_hex(theme::BG), 0);
     lv_obj_set_style_bg_opa(s_ring, LV_OPA_COVER, 0);
-    lv_obj_add_flag(s_ring, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_clickable(s_ring, true);
     lv_obj_set_flex_flow(s_ring, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(s_ring, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_row(s_ring, 14, 0);
@@ -487,7 +487,7 @@ void UITask::showRing(const char* text) {
     stylePrimary(b);
   }
   lv_label_set_text(s_ring_lbl, text);
-  lv_obj_remove_flag(s_ring, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(s_ring, false);
   lv_obj_move_foreground(s_ring);   // over the lock screen too
 }
 
@@ -498,6 +498,6 @@ void UITask::dismissRing() {
 }
 
 void UITask::hideRing() {
-  if (clockview::s_ring) lv_obj_add_flag(clockview::s_ring, LV_OBJ_FLAG_HIDDEN);
+  if (clockview::s_ring) lv_obj_set_hidden(clockview::s_ring, true);
   if (_screen == SCR_CLOCK) buildClock();   // e.g. the timer's Start again
 }

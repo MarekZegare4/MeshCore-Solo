@@ -15,8 +15,8 @@
 namespace settingscli {
 
 struct Key { const char* key; uint16_t offset; uint8_t bit; };
-#define K(name, f)        { name, (uint16_t)offsetof(NodePrefs, f), 0 }
-#define KB(name, f, mask) { name, (uint16_t)offsetof(NodePrefs, f), mask }
+#define K(name, f)        { name, (uint16_t)offsetof(NodePrefsFields, f), 0 }
+#define KB(name, f, mask) { name, (uint16_t)offsetof(NodePrefsFields, f), mask }
 #define KX(name, id)      { name, XKEY, id }   // not a schema row: XKEYS[id]
 static const uint16_t XKEY = 0xFFFF;
 
@@ -67,6 +67,9 @@ enum XId : uint8_t { XKEY_LIST(XKEY_ID) XKEY_N, XF_FIRST = XF_BLUETOOTH, XF_LAST
 static_assert(XH_FAV6 - XH_FAV1 + 1 == NodePrefs::FAVOURITES_COUNT, "a Home favourite key a slot");
 static_assert(XR_PRE4 - XR_PRE1 + 1 == NodePrefs::USER_RADIO_PRESET_MAX, "a preset key a slot");
 static_assert(XF_LAST - XF_FIRST + 1 == UiCoreHost::FK_COUNT && XF_LAST + 1 == XKEY_N, "the front keys last, in FrontKey's order");
+static_assert(XF_SOUND - XF_FIRST == (int)UiCoreHost::FK_SOUND && XF_TAP_WAKE - XF_FIRST == (int)UiCoreHost::FK_TAP_WAKE &&
+              XF_THEME - XF_FIRST == (int)UiCoreHost::FK_THEME && XF_ACCENT - XF_FIRST == (int)UiCoreHost::FK_ACCENT &&
+              XF_WIFI - XF_FIRST == (int)UiCoreHost::FK_WIFI, "each front key where its FrontKey is");
 static bool frontKey(uint8_t id) { return id >= XF_FIRST && id <= XF_LAST; }
 static bool homeFav(uint8_t id) { return id >= XH_FAV1 && id <= XH_FAV6; }
 static bool radioPreset(uint8_t id) { return id >= XR_PRE1 && id <= XR_PRE4; }
@@ -145,10 +148,10 @@ static const Key KEYS[] = {
   K("chats.dm", dm_show_all), K("chats.channels", ch_fav_only), K("chats.rooms", room_fav_only),
   K("radio.powersave", rx_powersave),
   K("gps", gps_enabled), K("share", loc_share_enabled), K("trail.pace", trail_show_pace),
-  KX("bluetooth", XF_FIRST + UiCoreHost::FK_BLUETOOTH), KX("sound", XF_FIRST + UiCoreHost::FK_SOUND),
-  KX("display.tap.wake", XF_FIRST + UiCoreHost::FK_TAP_WAKE), KX("display.theme", XF_FIRST + UiCoreHost::FK_THEME),
-  KX("display.accent", XF_FIRST + UiCoreHost::FK_ACCENT),
-  KX("wifi", XF_FIRST + UiCoreHost::FK_WIFI), KX("wifi.networks", XW_NETS), KX("wifi.add", XW_ADD),
+  KX("bluetooth", XF_BLUETOOTH), KX("sound", XF_SOUND),
+  KX("display.tap.wake", XF_TAP_WAKE), KX("display.theme", XF_THEME),
+  KX("display.accent", XF_ACCENT),
+  KX("wifi", XF_WIFI), KX("wifi.networks", XW_NETS), KX("wifi.add", XW_ADD),
   KX("share.to", XL_TO), KX("share.scope", XL_SCOPE), KX("channels.favourite", XN_FAV),
 #ifdef HIST_FLASH   // the flash log is what a channel is kept out of
   KX("channels.unsaved", XN_UNSAVED),

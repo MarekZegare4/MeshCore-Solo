@@ -206,7 +206,7 @@ void UITask::buildChannelEdit() {
   lv_obj_align(s_kb, LV_ALIGN_BOTTOM_MID, 0, 0);
   lv_obj_add_event_cb(s_kb, onChanKb, LV_EVENT_READY, NULL);
   lv_obj_add_event_cb(s_kb, onChanKb, LV_EVENT_CANCEL, NULL);
-  lv_obj_add_flag(s_kb, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(s_kb, true);
   channelEditType(edit ? uint8_t(T_PRIVATE) : s_type);
 }
 
@@ -218,7 +218,7 @@ void UITask::channelEditType(int type) {
   if (!edit) s_type = (uint8_t)type;
   channelEditKbHide();
   auto show = [](lv_obj_t* o, bool on) {
-    if (on) lv_obj_remove_flag(o, LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
+    if (on) lv_obj_set_hidden(o, false); else lv_obj_set_hidden(o, true);
   };
   show(s_name, type != T_PUBLIC);
   show(s_secret, type == T_PRIVATE);
@@ -256,8 +256,8 @@ void UITask::channelEditField(lv_obj_t* ta) {
   fieldFocus(s_secret, false);
   lv_keyboard_set_textarea(s_kb, ta);
   fieldFocus(ta, true);
-  if (lv_obj_has_flag(s_kb, LV_OBJ_FLAG_HIDDEN)) {
-    lv_obj_remove_flag(s_kb, LV_OBJ_FLAG_HIDDEN);
+  if (lv_obj_is_hidden(s_kb)) {
+    lv_obj_set_hidden(s_kb, false);
     if (_body) lv_obj_set_height(_body, lv_obj_get_height(_body) - lv_obj_get_height(s_kb));
   }
   layoutNow(screen());
@@ -266,8 +266,8 @@ void UITask::channelEditField(lv_obj_t* ta) {
 
 void UITask::channelEditKbHide() {
   using namespace chanview;
-  if (!s_kb || lv_obj_has_flag(s_kb, LV_OBJ_FLAG_HIDDEN)) return;
-  lv_obj_add_flag(s_kb, LV_OBJ_FLAG_HIDDEN);
+  if (!s_kb || lv_obj_is_hidden(s_kb)) return;
+  lv_obj_set_hidden(s_kb, true);
   fieldFocus(s_name, false);
   fieldFocus(s_secret, false);
   if (_body) lv_obj_set_height(_body, lv_obj_get_height(_body) + lv_obj_get_height(s_kb));

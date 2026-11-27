@@ -208,8 +208,8 @@ static lv_obj_t* segmentBar(lv_obj_t* g, lv_obj_t** lbl) {
   lv_obj_set_style_pad_row(row, 6, 0);
   lv_obj_t* bar = lv_obj_create(row);
   lv_obj_remove_style_all(bar);
-  lv_obj_remove_flag(bar, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_remove_flag(bar, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_scrollable(bar, false);
+  lv_obj_set_clickable(bar, false);
   lv_obj_set_size(bar, LV_PCT(100), 10);
   lv_obj_set_style_bg_color(bar, lv_color_hex(theme::BG), 0);
   lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
@@ -219,7 +219,7 @@ static lv_obj_t* segmentBar(lv_obj_t* g, lv_obj_t** lbl) {
   for (int c = 0; c <= C_COUNT; c++) {
     lv_obj_t* sg = lv_obj_create(bar);
     lv_obj_remove_style_all(sg);
-    lv_obj_remove_flag(sg, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_clickable(sg, false);
     lv_obj_set_size(sg, 0, LV_PCT(100));
     lv_obj_set_style_bg_color(sg, lv_color_hex(c < C_COUNT ? CAT_COL[c] : UNCOUNTED_COL), 0);
     lv_obj_set_style_bg_opa(sg, LV_OPA_COVER, 0);

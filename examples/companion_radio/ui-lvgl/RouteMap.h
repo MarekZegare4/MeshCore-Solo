@@ -133,7 +133,7 @@ void UITask::buildRouteLayer() {
   lv_obj_t* o = lv_obj_create(_map_marks);
   lv_obj_remove_style_all(o);
   lv_obj_set_size(o, LV_PCT(100), LV_PCT(100));
-  lv_obj_remove_flag(o, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(o, false);
   lv_obj_add_event_cb(o, routemap::onDraw, LV_EVENT_DRAW_MAIN, nullptr);
   routemap::s_line = o;
   routemap::s_pts_n = 0;

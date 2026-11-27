@@ -23,7 +23,7 @@ static lv_obj_t* chips(lv_obj_t* parent, lv_event_cb_t cb, bool wrap) {
   lv_obj_set_flex_flow(row, wrap ? LV_FLEX_FLOW_ROW_WRAP : LV_FLEX_FLOW_ROW);
   lv_obj_set_style_pad_column(row, 4, 0);
   lv_obj_set_style_pad_row(row, 4, 0);
-  if (wrap) lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+  if (wrap) lv_obj_set_scrollable(row, false);
   else { lv_obj_set_scroll_dir(row, LV_DIR_HOR); lv_obj_set_scrollbar_mode(row, LV_SCROLLBAR_MODE_OFF); }
   for (int i = 0; i < s_ph_n; i++) {
     lv_obj_t* b = lv_button_create(row);
@@ -71,7 +71,7 @@ void UITask::quickPopup() {
   if (!_compose_ta) return;
   collect();
   lv_obj_t* panel = navPopupPanel("Quick", true);
-  lv_obj_add_flag(panel, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(panel, true);
   label(panel, "Insert, filled in when sent:", THEME_FONT_SMALL, theme::TEXT_MUTED);
   chips(panel, onQuickInsert, true);
   label(panel, "Send now:", THEME_FONT_SMALL, theme::TEXT_MUTED);

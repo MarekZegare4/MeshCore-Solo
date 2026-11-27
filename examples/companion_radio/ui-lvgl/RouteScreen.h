@@ -78,7 +78,7 @@ static lv_obj_t* routeRow(lv_obj_t* list, int h, const char* num, const char* na
                           const char* right, uint32_t right_col, int tap) {
   lv_obj_t* r = lv_obj_create(list);
   styleSurface(r, theme::SURFACE);
-  lv_obj_remove_flag(r, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(r, false);
   lv_obj_set_size(r, LV_PCT(100), h);
   lv_obj_set_style_radius(r, theme::RADIUS, 0);
   lv_obj_set_style_pad_hor(r, 8, 0);
@@ -87,14 +87,14 @@ static lv_obj_t* routeRow(lv_obj_t* list, int h, const char* num, const char* na
   lv_obj_set_flex_align(r, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_column(r, 6, 0);
   if (tap >= 0) {
-    lv_obj_add_flag(r, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_clickable(r, true);
     lv_obj_set_style_bg_color(r, lv_color_hex(theme::SURFACE_2), LV_STATE_PRESSED);
     lv_obj_add_event_cb(r, onRouteRow, LV_EVENT_CLICKED, (void*)(uintptr_t)tap);
   }
   lv_obj_t* n = label(r, num, THEME_FONT_BODY, theme::ACCENT);
   lv_obj_set_width(n, 14);
   lv_obj_t* nm = label(r, name, THEME_FONT_BODY, name_col);
-  lv_label_set_long_mode(nm, LV_LABEL_LONG_DOT);
+  lv_label_set_long_mode(nm, LV_LABEL_LONG_MODE_DOTS);
   lv_obj_set_width(nm, 1);
   lv_obj_set_flex_grow(nm, 1);
   if (right && right[0]) label(r, right, THEME_FONT_SMALL, right_col);
@@ -224,8 +224,8 @@ void UITask::routeRebuild() {
   else if (R.links() > 0)
     note = "Out / back dB: how each one heard the one before it (this device first), and the other way.";
   setText(_route_note, note);
-  lv_obj_set_flag(_route_note, LV_OBJ_FLAG_HIDDEN, !note[0]);
-  lv_obj_set_flag(_route_probe_row, LV_OBJ_FLAG_HIDDEN, !R.canProbe());
+  lv_obj_set_hidden(_route_note, !note[0]);
+  lv_obj_set_hidden(_route_probe_row, !R.canProbe());
   routeStatus();
 }
 

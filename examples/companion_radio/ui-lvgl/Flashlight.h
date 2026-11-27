@@ -21,8 +21,8 @@ void UITask::showFlashlight() {
   lv_obj_set_size(s_obj, LV_PCT(100), LV_PCT(100));
   lv_obj_set_style_bg_color(s_obj, lv_color_hex(0xFFFFFF), 0);
   lv_obj_set_style_bg_opa(s_obj, LV_OPA_COVER, 0);
-  lv_obj_add_flag(s_obj, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_remove_flag(s_obj, LV_OBJ_FLAG_GESTURE_BUBBLE);
+  lv_obj_set_clickable(s_obj, true);
+  lv_obj_set_gesture_bubble(s_obj, false);
   lv_obj_add_event_cb(s_obj, onTorchTap, LV_EVENT_CLICKED, NULL);
   lv_obj_move_foreground(s_obj);
   lvport::setBacklightPct(100);

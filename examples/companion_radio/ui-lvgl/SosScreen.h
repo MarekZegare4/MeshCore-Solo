@@ -76,8 +76,8 @@ static lv_obj_t* sosPanel() {
   lv_obj_set_size(v, LV_PCT(100), LV_PCT(100));
   lv_obj_set_style_bg_color(v, lv_color_hex(theme::BG), 0);
   lv_obj_set_style_bg_opa(v, LV_OPA_COVER, 0);
-  lv_obj_add_flag(v, LV_OBJ_FLAG_CLICKABLE);   // swallows every touch but its own
-  lv_obj_remove_flag(v, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_clickable(v, true);   // swallows every touch but its own
+  lv_obj_set_scrollable(v, false);
   lv_obj_set_flex_flow(v, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_flex_align(v, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_top(v, 14, 0);
@@ -88,7 +88,7 @@ static lv_obj_t* sosPanel() {
 }
 static lv_obj_t* sosText(lv_obj_t* v, const char* text, const lv_font_t* font, uint32_t col) {
   lv_obj_t* l = label(v, text, font, col);
-  lv_label_set_long_mode(l, LV_LABEL_LONG_WRAP);
+  lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_WRAP);
   lv_obj_set_width(l, LV_PCT(100));
   lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
   return l;
@@ -149,7 +149,7 @@ void UITask::sosLive() {
   else for (int i = 0; i < 4; i++) {
     // Name and when, then what they said, for the latest two who answered.
     s_line[i] = sosText(s_view, "", THEME_FONT_BODY, i % 2 ? theme::TEXT_MUTED : theme::TEXT);
-    lv_label_set_long_mode(s_line[i], LV_LABEL_LONG_DOT);
+    lv_label_set_long_mode(s_line[i], LV_LABEL_LONG_MODE_DOTS);
     lv_obj_set_height(s_line[i], 18);
   }
   flexFill(s_view);

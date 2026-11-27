@@ -246,7 +246,7 @@ private:
 #endif
     _job.present = _spare && _job.src->renderTile(_job.z, _job.x, _job.y, _spare);
 #ifdef UI_FLUSH_DMA   // in the display's byte order: drawn as a plain copy (LvglPort.h)
-    if (_job.present) lv_draw_sw_rgb565_swap(_spare, TILE_PX * TILE_PX);
+    if (_job.present) lv_draw_rgb565_swap(_spare, TILE_PX * TILE_PX);
 #endif
 #ifdef UI_PERF_TEST
     uint32_t dt = micros() - t0;

@@ -57,7 +57,7 @@ static void place(int32_t ty) {
 }
 static void hidden(lv_anim_t* a) {
   (void)a;
-  lv_obj_add_flag(s_panel, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(s_panel, true);
   lv_obj_set_parent(s_panel, lv_layer_top());   // off the screen (see above)
   if (s_catch) { lv_obj_delete(s_catch); s_catch = nullptr; }
   s_sb_panel = false;   // back under the title bar, if the screen has one
@@ -123,7 +123,7 @@ static lv_obj_t* tile(lv_obj_t* parent, int t, int w) {
   s_icon[t] = label(b, "", THEME_FONT_LARGE, theme::TEXT);
   lv_obj_align(s_icon[t], LV_ALIGN_TOP_MID, 0, 5);
   s_cap[t] = label(b, "", THEME_FONT_SMALL, theme::TEXT);
-  lv_label_set_long_mode(s_cap[t], LV_LABEL_LONG_DOT);
+  lv_label_set_long_mode(s_cap[t], LV_LABEL_LONG_MODE_DOTS);
   lv_obj_set_style_text_align(s_cap[t], LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_style_anim_duration(s_cap[t], 0, 0);
   lv_obj_set_width(s_cap[t], w - 4);
@@ -186,10 +186,10 @@ void UITask::quickPanelBuild() {
   const int32_t w = lv_display_get_horizontal_resolution(NULL);
   s_panel = lv_obj_create(lv_layer_top());
   styleOpaque(s_panel, theme::BG);
-  lv_obj_remove_flag(s_panel, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(s_panel, false);
   lv_obj_set_size(s_panel, w, LV_SIZE_CONTENT);
   // On a screen while it's out: not in its layout, not scrolled with it.
-  lv_obj_add_flag(s_panel, (lv_obj_flag_t)(LV_OBJ_FLAG_IGNORE_LAYOUT | LV_OBJ_FLAG_FLOATING));
+  lv_obj_set_ignore_layout(s_panel, true); lv_obj_set_floating(s_panel, true);
   lv_obj_add_event_cb(s_panel, [](lv_event_t*) {   // a screen deleted with it on (no newScreen()): built again
     qpanel::moverStop();
     qpanel::s_panel = nullptr;
@@ -209,7 +209,7 @@ void UITask::quickPanelBuild() {
   lv_obj_set_style_pad_row(s_panel, theme::GAP, 0);
   lv_obj_set_flex_flow(s_panel, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_flex_align(s_panel, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-  lv_obj_remove_flag(s_panel, LV_OBJ_FLAG_GESTURE_BUBBLE);   // a swipe on it (or a tile) is its own
+  lv_obj_set_gesture_bubble(s_panel, false);   // a swipe on it (or a tile) is its own
   lv_obj_add_event_cb(s_panel, onPanelGesture, LV_EVENT_GESTURE, NULL);
 
   // All the tiles at once, four to a row.
@@ -238,8 +238,8 @@ void UITask::quickPanelBuild() {
   lv_obj_set_ext_click_area(s_slider, 14);
   lv_obj_set_style_anim_duration(s_slider, 0, 0);        // the knob is where the finger is, not on its way
   lv_obj_set_style_shadow_width(s_slider, 0, LV_PART_KNOB);
-  lv_obj_remove_flag(s_slider, LV_OBJ_FLAG_SCROLL_CHAIN);
-  lv_obj_remove_flag(s_slider, LV_OBJ_FLAG_GESTURE_BUBBLE);   // a drag along it isn't a swipe up
+  lv_obj_set_scroll_chain(s_slider, false);
+  lv_obj_set_gesture_bubble(s_slider, false);   // a drag along it isn't a swipe up
   lv_obj_set_style_bg_color(s_slider, lv_color_hex(theme::mix(theme::ACCENT, theme::SURFACE, 20)), LV_PART_MAIN);
   lv_obj_set_style_bg_opa(s_slider, LV_OPA_COVER, LV_PART_MAIN);
   lv_obj_add_event_cb(s_slider, onBrightness, LV_EVENT_VALUE_CHANGED, NULL);
@@ -252,7 +252,7 @@ void UITask::quickPanelBuild() {
   lv_obj_set_style_bg_color(grip, lv_color_hex(theme::SURFACE_2), 0);
   lv_obj_set_style_bg_opa(grip, LV_OPA_COVER, 0);
 
-  lv_obj_add_flag(s_panel, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(s_panel, true);
   lv_obj_move_foreground(_toast);
   lv_obj_move_foreground(s_status_bar);
 }
@@ -272,17 +272,17 @@ bool UITask::quickPanelBegin() {
   if (!s_catch) {
     s_catch = lv_obj_create(scr);
     lv_obj_remove_style_all(s_catch);
-    lv_obj_add_flag(s_catch, (lv_obj_flag_t)(LV_OBJ_FLAG_IGNORE_LAYOUT | LV_OBJ_FLAG_FLOATING | LV_OBJ_FLAG_CLICKABLE));
+    lv_obj_set_ignore_layout(s_catch, true); lv_obj_set_floating(s_catch, true); lv_obj_set_clickable(s_catch, true);
     lv_obj_set_pos(s_catch, 0, 0);
     lv_obj_set_size(s_catch, LV_PCT(100), LV_PCT(100));
-    lv_obj_remove_flag(s_catch, LV_OBJ_FLAG_GESTURE_BUBBLE);
+    lv_obj_set_gesture_bubble(s_catch, false);
     lv_obj_add_event_cb(s_catch, onCatch, LV_EVENT_CLICKED, NULL);
     lv_obj_add_event_cb(s_catch, onPanelGesture, LV_EVENT_GESTURE, NULL);
     lv_obj_add_event_cb(s_catch, [](lv_event_t*) { qpanel::s_catch = nullptr; }, LV_EVENT_DELETE, NULL);
   }
   if (lv_obj_get_parent(s_panel) != scr) lv_obj_set_parent(s_panel, scr);
   lv_obj_move_foreground(s_panel);
-  lv_obj_remove_flag(s_panel, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(s_panel, false);
   s_sb_panel = true;   // the full status bar over it, a title bar or not
   statusBarSync();
   // Measured where it rests: lv_obj_get_y() counts the translation, and the
@@ -297,7 +297,7 @@ bool UITask::quickPanelBegin() {
 
 void UITask::quickPanelClose(bool animate) {
   using namespace qpanel;
-  if (!s_panel || (!s_open && lv_obj_has_flag(s_panel, LV_OBJ_FLAG_HIDDEN))) return;
+  if (!s_panel || (!s_open && lv_obj_is_hidden(s_panel))) return;
   s_open = s_drag = false;
   if (animate) { slide(-s_h, true); return; }
   moverStop();

@@ -100,11 +100,11 @@ void UITask::buildCompass() {
   lv_obj_t* body = newScreen("Compass", true);
   lv_obj_set_flex_flow(body, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(body, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-  lv_obj_remove_flag(body, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(body, false);
 
   s_dial = lv_obj_create(body);
   styleSurface(s_dial, theme::BG);
-  lv_obj_remove_flag(s_dial, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(s_dial, false);
   lv_obj_set_size(s_dial, DIAL, DIAL);
   lv_obj_set_style_radius(s_dial, LV_RADIUS_CIRCLE, 0);
   lv_obj_add_event_cb(s_dial, onCompassDraw, LV_EVENT_DRAW_MAIN_END, NULL);

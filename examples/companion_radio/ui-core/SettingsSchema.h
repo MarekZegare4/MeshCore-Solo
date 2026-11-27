@@ -84,7 +84,7 @@ struct Setting {
   const char* label;
   const char* hint;       // one short line under the label, or nullptr
   uint8_t     section;
-  uint16_t    offset;     // offsetof(NodePrefs, field)
+  uint16_t    offset;     // offsetof(NodePrefsFields, field)
   uint8_t     count;      // number of values
   // Label for value v (nullptr: an on/off switch).
   void (*option)(uint8_t v, char* buf, int n, const NodePrefs& p);
@@ -344,7 +344,7 @@ static void applyGpio4(UiCore& c) { c.host()->setGpioMode(4, c.prefs()->gpio4_mo
 #endif
 static void applyRptNetwork(UiCore& c)   { if (c.prefs()) rptctl::setUseProfile(c.prefs(), c.prefs()->repeater_use_profile); }
 
-#define NP_OFF(f)  (uint16_t)offsetof(NodePrefs, f)
+#define NP_OFF(f)  (uint16_t)offsetof(NodePrefsFields, f)
 #define NP_SIZE(f) (uint8_t)sizeof(((NodePrefs*)0)->f)
 #define COUNT_OF(a) (uint8_t)(sizeof(a) / sizeof(a[0]))
 // Index fields (uint8_t index), switches, and fields holding values[index].
@@ -629,8 +629,11 @@ static int indexOf(uint16_t offset) {
 #undef NP_SIZE
 #undef NP_OFF
 
+// A setting's offset is into the plain fields (NodePrefsFields: standard
+// layout, so offsetof is defined there), not the whole NodePrefs, which has
+// the serializer's vtable as well and puts the fields where its ABI likes.
 static int32_t readRaw(const NodePrefs& p, const Setting& s) {
-  const uint8_t* f = (const uint8_t*)&p + s.offset;
+  const uint8_t* f = (const uint8_t*)static_cast<const NodePrefsFields*>(&p) + s.offset;
   if (s.bit) return (f[0] & s.bit) ? 1 : 0;
   if (s.size == FLOAT_X100) { float v; memcpy(&v, f, 4); return (int32_t)(v * 100 + (v < 0 ? -0.5f : 0.5f)); }
   bool sgn = false;   // a table with negative values is over a signed field
@@ -640,7 +643,7 @@ static int32_t readRaw(const NodePrefs& p, const Setting& s) {
   return sgn ? (int32_t)(int8_t)f[0] : (int32_t)f[0];
 }
 static void writeRaw(NodePrefs& p, const Setting& s, int32_t v) {
-  uint8_t* f = (uint8_t*)&p + s.offset;
+  uint8_t* f = (uint8_t*)static_cast<NodePrefsFields*>(&p) + s.offset;
   if (s.bit) { f[0] = v ? (f[0] | s.bit) : (f[0] & ~s.bit); return; }
   if (s.size == FLOAT_X100) { float w = v / 100.0f; memcpy(f, &w, 4); return; }
   if (s.size == 2) { uint16_t w = (uint16_t)v; memcpy(f, &w, 2); }

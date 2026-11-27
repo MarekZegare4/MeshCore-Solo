@@ -67,7 +67,7 @@ static void botChip(const char* ph, void* parent) {
 // botChip() them onto what this returns.
 static lv_obj_t* placeholderChips(lv_obj_t* panel, lv_obj_t* ta) {
   lv_obj_t* hdr = lv_obj_get_child(panel, 0);
-  lv_obj_add_flag(lv_obj_get_child(hdr, 0), LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(lv_obj_get_child(hdr, 0), true);
   lv_obj_t* chips = lv_obj_create(hdr);
   lv_obj_remove_style_all(chips);
   lv_obj_set_size(chips, 240, 28);
@@ -149,11 +149,11 @@ void UITask::buildBot() {
                e.who[0] ? e.who : "?", WHERE[e.where < 3 ? e.where : 0]);
       label(g, hd, THEME_FONT_SMALL, theme::TEXT_MUTED);
       lv_obj_t* q = label(g, e.req, THEME_FONT_SMALL, theme::TEXT);
-      lv_label_set_long_mode(q, LV_LABEL_LONG_WRAP);
+      lv_label_set_long_mode(q, LV_LABEL_LONG_MODE_WRAP);
       lv_obj_set_width(q, lv_pct(100));
       lv_obj_t* a = label(g, "", THEME_FONT_BODY, theme::ACCENT);
       lv_label_set_text_fmt(a, LV_SYMBOL_RIGHT " %s", e.reply);
-      lv_label_set_long_mode(a, LV_LABEL_LONG_WRAP);
+      lv_label_set_long_mode(a, LV_LABEL_LONG_MODE_WRAP);
       lv_obj_set_width(a, lv_pct(100));
       if (i + 1 < log.count()) lv_obj_set_style_pad_bottom(a, 8, 0);
     }

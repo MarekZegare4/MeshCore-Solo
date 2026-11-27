@@ -304,8 +304,8 @@ static void buildLayer(lv_obj_t* body) {
   s_layer = lv_obj_create(body);
   lv_obj_remove_style_all(s_layer);
   lv_obj_set_size(s_layer, LV_PCT(100), LV_PCT(100));
-  lv_obj_remove_flag(s_layer, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_remove_flag(s_layer, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_clickable(s_layer, false);
+  lv_obj_set_scrollable(s_layer, false);
   lv_obj_add_event_cb(s_layer, draw, LV_EVENT_DRAW_MAIN, NULL);
 }
 

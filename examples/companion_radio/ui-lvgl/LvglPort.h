@@ -68,7 +68,7 @@ static void deleteLater(lv_obj_t* o) {
   if (s_dead_n < (int)(sizeof(s_dead) / sizeof(s_dead[0]))) {
     s_dead[s_dead_n++] = o;
     lv_obj_add_event_cb(o, deadGone, LV_EVENT_DELETE, NULL);
-    lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);   // gone from this frame on, as if deleted
+    lv_obj_set_hidden(o, true);   // gone from this frame on, as if deleted
   } else {
     lv_obj_delete_async(o);   // never this many in one pass
   }
@@ -107,7 +107,7 @@ static void shotCopy(const lv_area_t* a, const uint8_t* px) {
       if (!d) continue;
       memcpy(d, src, w * 2);
 #ifdef UI_FLUSH_DMA   // drawn big-endian for the panel
-      lv_draw_sw_rgb565_swap(d, w);
+      lv_draw_rgb565_swap(d, w);
 #endif
     }
   }

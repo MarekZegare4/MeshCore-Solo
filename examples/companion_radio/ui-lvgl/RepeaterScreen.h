@@ -146,7 +146,7 @@ void UITask::repeaterScopesPopup() {
   const ScopeList& sl = the_mesh.scopeList();
   if (sl.count == 0) { showToast("Set up scopes in Settings > Radio first"); return; }
   lv_obj_t* panel = navPopupPanel("Extra scopes", sl.count > 2);
-  if (sl.count > 2) lv_obj_add_flag(panel, LV_OBJ_FLAG_SCROLLABLE);   // up to 8 rows
+  if (sl.count > 2) lv_obj_set_scrollable(panel, true);   // up to 8 rows
   noteLabel(panel, "Relayed besides the default scope.");
   for (uint8_t i = 0; i < sl.count; i++) {
     lv_obj_t* sw = switchRow(panel, sl.name((uint8_t)(i + 1)), (i + 1) == sl.default_idx ? "Default - always relayed" : nullptr,

@@ -61,13 +61,13 @@ static lv_obj_t* listRow(lv_obj_t* parent, const char* title, const char* sub,
   lv_obj_set_style_pad_all(row, 0, 0);
   lv_obj_add_event_cb(row, cb, LV_EVENT_CLICKED, user);
   lv_obj_t* t = label(row, title, THEME_FONT_BODY, theme::TEXT);
-  lv_label_set_long_mode(t, LV_LABEL_LONG_DOT);
+  lv_label_set_long_mode(t, LV_LABEL_LONG_MODE_DOTS);
   lv_obj_set_width(t, 230);
   lv_obj_align(t, LV_ALIGN_TOP_LEFT, theme::PAD, sub ? 4 : 13);
   lv_obj_set_user_data(row, t);
   if (sub) {
     lv_obj_t* s = label(row, sub, THEME_FONT_SMALL, theme::TEXT_MUTED);
-    lv_label_set_long_mode(s, LV_LABEL_LONG_DOT);
+    lv_label_set_long_mode(s, LV_LABEL_LONG_MODE_DOTS);
     lv_obj_set_size(s, 230, 18);   // fixed height: LONG_DOT cuts instead of wrapping over the title -- the font's whole line (18), or the tails of y and g and emoji are cut
     lv_obj_align(s, LV_ALIGN_BOTTOM_LEFT, theme::PAD, -4);
   }
@@ -89,7 +89,7 @@ static void rowSet(lv_obj_t* row, const char* title, const char* sub, uint32_t t
   int32_t y = sub ? 4 : 13;   // as listRow() puts it
   if (lv_obj_get_style_y(t, LV_PART_MAIN) != y) lv_obj_set_y(t, y);
   if (sub) setText(s, sub);
-  if (!sub != lv_obj_has_flag(s, LV_OBJ_FLAG_HIDDEN)) lv_obj_set_flag(s, LV_OBJ_FLAG_HIDDEN, !sub);
+  if (!sub != lv_obj_is_hidden(s)) lv_obj_set_hidden(s, !sub);
 }
 
 // The same with a value on the right (a distance, a signal), set by rowValue().
@@ -132,9 +132,9 @@ static void chatSection(lv_obj_t* parent, const char* text, int fold, int unread
   bool folded = chatFolded(fold);
   lv_obj_t* row = lv_obj_create(parent);
   styleSurface(row, theme::BG);
-  lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(row, false);
   lv_obj_set_size(row, LV_PCT(100), 30);
-  lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(row, true);
   lv_obj_set_style_opa(row, LV_OPA_60, LV_STATE_PRESSED);
   lv_obj_add_event_cb(row, onChatFold, LV_EVENT_CLICKED, (void*)(uintptr_t)fold);
   lv_obj_t* ch = label(row, folded ? LV_SYMBOL_RIGHT : LV_SYMBOL_DOWN, THEME_FONT_SMALL, theme::TEXT_MUTED);
@@ -154,7 +154,7 @@ static void chatSection(lv_obj_t* parent, const char* text, int fold, int unread
 static void sectionWithFilter(lv_obj_t* parent, const char* text, bool fav_only, uint8_t which) {
   lv_obj_t* row = lv_obj_create(parent);
   styleSurface(row, theme::BG);
-  lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(row, false);
   lv_obj_set_size(row, LV_PCT(100), 30);
   lv_obj_align(label(row, text, THEME_FONT_SMALL, theme::TEXT_MUTED), LV_ALIGN_LEFT_MID, 0, 0);
   chatFilterChoice(row, which, fav_only);

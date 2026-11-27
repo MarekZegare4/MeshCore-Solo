@@ -320,7 +320,7 @@ void UITask::buildGps() {
   }
 
   if (s_tab == TAB_SKY) {   // the plot left, the fix right
-    lv_obj_remove_flag(body, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(body, false);
     lv_obj_t* top = lv_obj_create(body);
     lv_obj_remove_style_all(top);
     lv_obj_set_size(top, LV_PCT(100), LV_SIZE_CONTENT);
@@ -329,8 +329,8 @@ void UITask::buildGps() {
     lv_obj_set_style_pad_column(top, theme::GAP, 0);
     s_sky = lv_obj_create(top);
     styleSurface(s_sky, theme::BG);
-    lv_obj_remove_flag(s_sky, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_remove_flag(s_sky, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_scrollable(s_sky, false);
+    lv_obj_set_clickable(s_sky, false);
     {   // as tall as is left under the tabs
       layoutNow(body);
       int32_t h = lv_obj_get_content_height(body) - theme::TAB_H - lv_obj_get_style_pad_row(body, LV_PART_MAIN);
@@ -363,7 +363,7 @@ void UITask::buildGps() {
     lv_obj_center(label(s_on_btn, LV_SYMBOL_GPS "  Turn on", THEME_FONT_BODY, theme::TEXT));
     stylePrimary(s_on_btn);
     lv_obj_add_event_cb(s_on_btn, onGpsTurnOn, LV_EVENT_CLICKED, NULL);
-    lv_obj_add_flag(s_on_btn, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(s_on_btn, true);
   } else if (s_tab == TAB_SIGNAL) {
     // The scale, then the bars, which scroll sideways when the satellites don't fit.
     lv_obj_t* row = lv_obj_create(body);
@@ -372,7 +372,7 @@ void UITask::buildGps() {
     lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
     lv_obj_t* ax = lv_obj_create(row);
     lv_obj_remove_style_all(ax);
-    lv_obj_remove_flag(ax, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_clickable(ax, false);
     lv_obj_set_size(ax, AXIS_W, BARS_H);
     lv_obj_add_event_cb(ax, onGpsAxisDraw, LV_EVENT_DRAW_MAIN_END, NULL);
     lv_obj_t* sc = lv_obj_create(row);
@@ -383,8 +383,8 @@ void UITask::buildGps() {
     lv_obj_set_scrollbar_mode(sc, LV_SCROLLBAR_MODE_AUTO);
     s_bars = lv_obj_create(sc);
     lv_obj_remove_style_all(s_bars);
-    lv_obj_remove_flag(s_bars, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_flag(s_bars, LV_OBJ_FLAG_EVENT_BUBBLE);
+    lv_obj_set_clickable(s_bars, false);
+    lv_obj_set_event_bubble(s_bars, true);
     lv_obj_set_size(s_bars, BAR_PITCH, BARS_H);
     lv_obj_set_style_min_width(s_bars, LV_PCT(100), 0);   // the scale's lines span the box from the start
     lv_obj_add_event_cb(s_bars, onGpsBarsDraw, LV_EVENT_DRAW_MAIN_END, NULL);
@@ -403,7 +403,7 @@ void UITask::buildGps() {
       lv_obj_set_style_radius(p, LV_RADIUS_CIRCLE, 0);
       lv_obj_set_style_pad_hor(p, 10, 0);
       lv_obj_set_style_pad_ver(p, 3, 0);
-      lv_obj_add_flag(p, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_set_hidden(p, true);
       s_sys_pill[k] = p;
     }
     noteLabel(body, "Solid = used in the fix. 30+ is strong; below 25, a fix is unlikely.");
@@ -468,12 +468,12 @@ static void locator(double lat, double lon, char* out, size_t n) {
 static void hideEmpty(lv_obj_t* card) {
   bool any = false;
   for (uint32_t i = 0; i < lv_obj_get_child_count(card); i++)
-    if (!lv_obj_has_flag(lv_obj_get_child(card, i), LV_OBJ_FLAG_HIDDEN)) { any = true; break; }
+    if (!lv_obj_is_hidden(lv_obj_get_child(card, i))) { any = true; break; }
   const int32_t at = lv_obj_get_index(card);
   lv_obj_t* title = at > 0 ? lv_obj_get_child(lv_obj_get_parent(card), at - 1) : nullptr;
   for (lv_obj_t* o : { card, title }) {
     if (!o) continue;
-    if (any) lv_obj_remove_flag(o, LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
+    if (any) lv_obj_set_hidden(o, false); else lv_obj_set_hidden(o, true);
   }
 }
 
@@ -500,8 +500,8 @@ void UITask::refreshGps() {
   if (off || !data) s_n = 0;
   else snapshot(*g);
   if (s_on_btn) {
-    if (off) lv_obj_remove_flag(s_on_btn, LV_OBJ_FLAG_HIDDEN);
-    else lv_obj_add_flag(s_on_btn, LV_OBJ_FLAG_HIDDEN);
+    if (off) lv_obj_set_hidden(s_on_btn, false);
+    else lv_obj_set_hidden(s_on_btn, true);
   }
 
   const char* status = "Not available";
@@ -575,9 +575,9 @@ void UITask::refreshGps() {
     for (uint8_t k = 0; k < GpsSky::SYS_COUNT; k++) {
       int n = 0, u = 0;
       for (int i = 0; i < s_n; i++) if (s_sats[i].sys == k) { n++; if (s_used_flag[i]) u++; }
-      if (!n) { lv_obj_add_flag(s_sys_pill[k], LV_OBJ_FLAG_HIDDEN); continue; }
+      if (!n) { lv_obj_set_hidden(s_sys_pill[k], true); continue; }
       setTextFmt(s_sys_pill[k], "%c  %s  %d/%d", GpsSky::sysLetter(k), GpsSky::sysName(k), u, n);
-      lv_obj_remove_flag(s_sys_pill[k], LV_OBJ_FLAG_HIDDEN);
+      lv_obj_set_hidden(s_sys_pill[k], false);
     }
     int32_t w = s_n * BAR_PITCH;
     lv_obj_set_width(s_bars, w < BAR_PITCH ? BAR_PITCH : w);

@@ -26,12 +26,12 @@ static lv_obj_t* s_compose_left = nullptr;   // the bytes left, a tag over the f
 static void composeLeftRefresh(lv_obj_t* ta) {
   if (!s_compose_left || !ta) return;
   const int left = s_ui->composeLimit() - s_ui->composeLen(lv_textarea_get_text(ta));
-  if (left > 40) { lv_obj_add_flag(s_compose_left, LV_OBJ_FLAG_HIDDEN); return; }
+  if (left > 40) { lv_obj_set_hidden(s_compose_left, true); return; }
   char t[8];
   snprintf(t, sizeof(t), "%d", left);
   setText(s_compose_left, t);
   setTextColor(s_compose_left, left < 0 ? theme::FAIL : left <= 20 ? theme::ACCENT : theme::TEXT_MUTED);
-  lv_obj_remove_flag(s_compose_left, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(s_compose_left, false);
   lv_obj_update_layout(s_compose_left);
   lv_obj_align_to(s_compose_left, ta, LV_ALIGN_OUT_TOP_RIGHT, -8, lv_obj_get_height(s_compose_left) / 2);
 }
@@ -57,18 +57,18 @@ static void onComposeMore(lv_event_t* e) { (void)e; s_ui->quickPopup(); }
 // while the keyboard is up -- that is what makes LVGL draw its cursor.
 void UITask::setKeyboardVisible(bool show) {
   if (!_keyboard || !_compose_ta) return;
-  if (show == !lv_obj_has_flag(_keyboard, LV_OBJ_FLAG_HIDDEN)) return;
+  if (show == !lv_obj_is_hidden(_keyboard)) return;
   if (show) {
-    lv_obj_remove_flag(_keyboard, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(_keyboard, false);
     fieldFocus(_compose_ta, true);
   } else {
-    lv_obj_add_flag(_keyboard, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(_keyboard, true);
     fieldFocus(_compose_ta, false);
   }
   if (_header && _body) {
     int top = show ? theme::STATUS_H : theme::APPBAR_H;   // typing: the slimmer status bar in its place
-    if (show) lv_obj_add_flag(_header, LV_OBJ_FLAG_HIDDEN);
-    else      lv_obj_remove_flag(_header, LV_OBJ_FLAG_HIDDEN);
+    if (show) lv_obj_set_hidden(_header, true);
+    else      lv_obj_set_hidden(_header, false);
     statusBarSync();
     lv_obj_set_pos(_body, 0, top);
     lv_obj_set_height(_body, lv_display_get_vertical_resolution(NULL) - top);
@@ -155,7 +155,7 @@ void UITask::buildThread() {
   if (can_send) {
     lv_obj_t* bar = lv_obj_create(body);
     styleSurface(bar, theme::BG);
-    lv_obj_remove_flag(bar, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(bar, false);
     lv_obj_set_size(bar, LV_PCT(100), 42);
     lv_obj_set_style_pad_all(bar, 4, 0);
     lv_obj_t* more = lv_button_create(bar);   // quick messages, placeholders
@@ -172,13 +172,13 @@ void UITask::buildThread() {
     lv_obj_add_event_cb(_compose_ta, onComposeChanged, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_set_width(_compose_ta, lv_display_get_horizontal_resolution(NULL) - 8 - 34 - 4);   // beside "+"
     lv_obj_align(_compose_ta, LV_ALIGN_RIGHT_MID, 0, 0);
-    lv_obj_add_flag(bar, LV_OBJ_FLAG_OVERFLOW_VISIBLE);   // the count's tag rises above the bar
+    lv_obj_set_overflow_visible(bar, true);   // the count's tag rises above the bar
     s_compose_left = label(bar, "", THEME_FONT_SMALL, theme::TEXT_MUTED);   // bytes left
     lv_obj_set_style_bg_color(s_compose_left, lv_color_hex(theme::BG), 0);
     lv_obj_set_style_bg_opa(s_compose_left, LV_OPA_COVER, 0);
     lv_obj_set_style_pad_hor(s_compose_left, 4, 0);
     lv_obj_set_style_radius(s_compose_left, theme::RADIUS, 0);
-    lv_obj_add_flag(s_compose_left, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(s_compose_left, true);
     composeLeftRefresh(_compose_ta);
 
     // In the body's flex column below the compose bar: showing it shrinks the
@@ -189,7 +189,7 @@ void UITask::buildThread() {
     fieldFocus(_compose_ta, false);   // until the keyboard is up
     lv_obj_add_event_cb(_keyboard, onKeyboard, LV_EVENT_READY, _keyboard);
     lv_obj_add_event_cb(_keyboard, onKeyboard, LV_EVENT_CANCEL, _keyboard);
-    lv_obj_add_flag(_keyboard, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(_keyboard, true);
     lv_obj_add_event_cb(_compose_ta, onComposeClicked, LV_EVENT_CLICKED, _keyboard);
   }
   refreshThread();
@@ -258,7 +258,7 @@ static lv_obj_t* newDivider(lv_obj_t* list) {
   lv_obj_set_flex_flow(d, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(d, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_column(d, 6, 0);
-  lv_obj_remove_flag(d, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(d, false);
   for (int i = 0; i < 3; i++) {
     if (i == 1) { label(d, "New", THEME_FONT_SMALL, theme::ACCENT); continue; }
     lv_obj_t* l = lv_obj_create(d);
@@ -305,16 +305,15 @@ static lv_obj_t* msgText(lv_obj_t* parent, const char* text, bool own, int max_w
   const uint32_t col = own ? theme::ON_ACCENT : theme::TEXT;
   if (!strstr(text, "@[")) {
     lv_obj_t* t = label(parent, text, THEME_FONT_BODY, col);
-    lv_label_set_long_mode(t, LV_LABEL_LONG_WRAP);
+    lv_label_set_long_mode(t, LV_LABEL_LONG_MODE_WRAP);
     lv_obj_set_style_max_width(t, max_w, 0);
     lv_obj_set_width(t, LV_SIZE_CONTENT);
     return t;
   }
   lv_obj_t* sg = lv_spangroup_create(parent);
-  lv_obj_remove_flag(sg, LV_OBJ_FLAG_CLICKABLE);   // a hold still reaches the bubble (its menu)
+  lv_obj_set_clickable(sg, false);   // a hold still reaches the bubble (its menu)
   lv_obj_set_style_text_font(sg, THEME_FONT_BODY, 0);
   lv_obj_set_style_text_color(sg, lv_color_hex(col), 0);
-  lv_spangroup_set_mode(sg, LV_SPAN_MODE_BREAK);
   const char* me = the_mesh.getNodeName();
   char part[MAX_TEXT_LEN + 1];
   const char* p = text;
@@ -328,7 +327,7 @@ static lv_obj_t* msgText(lv_obj_t* parent, const char* text, bool own, int max_w
       size_t n = end - p < (ptrdiff_t)sizeof(part) ? end - p : sizeof(part) - 1;
       memcpy(part, p, n);
       part[n] = '\0';
-      lv_span_set_text(lv_spangroup_new_span(sg), part);
+      lv_span_set_text(lv_spangroup_add_span(sg), part);
     }
     if (!at || !close) { p = end; continue; }
     size_t n = close - (at + 2);
@@ -336,14 +335,14 @@ static lv_obj_t* msgText(lv_obj_t* parent, const char* text, bool own, int max_w
     memcpy(part + 1, at + 2, n);
     part[n + 1] = '\0';
     bool mine = strlen(me) == n && strncasecmp(me, at + 2, n) == 0;
-    lv_span_t* sp = lv_spangroup_new_span(sg);
+    lv_span_t* sp = lv_spangroup_add_span(sg);
     lv_span_set_text(sp, part);
     lv_style_t* st = lv_span_get_style(sp);
     lv_style_set_text_color(st, lv_color_hex(own ? theme::ON_ACCENT : theme::ACCENT));
     if (mine) { lv_style_set_text_decor(st, LV_TEXT_DECOR_UNDERLINE); *mentions_me = true; }
     p = close + 1;
   }
-  lv_spangroup_refr_mode(sg);
+  lv_spangroup_refresh(sg);
   uint32_t w = lv_spangroup_get_expand_width(sg, 0);
   lv_obj_set_width(sg, w > (uint32_t)max_w ? max_w : (int32_t)w + 1);
   lv_obj_set_height(sg, LV_SIZE_CONTENT);
@@ -361,20 +360,20 @@ static lv_obj_t* bubble(lv_obj_t* list, const char* from, const char* text, bool
   lv_obj_t* row = lv_obj_create(list);
   styleSurface(row, theme::BG);
   lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, 0);
-  lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_remove_flag(row, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_scrollable(row, false);
+  lv_obj_set_clickable(row, false);
   lv_obj_set_size(row, LV_PCT(100), LV_SIZE_CONTENT);
   lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(row, own ? LV_FLEX_ALIGN_END : LV_FLEX_ALIGN_START,
                         LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
 
   lv_obj_t* b = lv_obj_create(row);
-  lv_obj_remove_flag(b, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(b, false);
   if (hold) {   // hold: reply / path / target (ConversationScreen.h)
     lv_obj_add_event_cb(b, onMsgHold, LV_EVENT_LONG_PRESSED, nullptr);
     lv_obj_set_style_bg_color(b, lv_color_hex(own ? theme::mix(theme::ACCENT, theme::BG, 75) : theme::SURFACE_2), LV_STATE_PRESSED);
   } else {
-    lv_obj_remove_flag(b, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_clickable(b, false);
   }
   lv_obj_set_size(b, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
   lv_obj_set_style_max_width(b, 250, 0);
@@ -427,7 +426,7 @@ static lv_obj_t* bubble(lv_obj_t* list, const char* from, const char* text, bool
     if (relays > 0) {   // as L1: the count alone says it got out, no check beside it
       lv_obj_t* c = lv_obj_create(line);
       lv_obj_remove_style_all(c);
-      lv_obj_remove_flag(c, LV_OBJ_FLAG_CLICKABLE);
+      lv_obj_set_clickable(c, false);
       lv_obj_set_size(c, LV_SIZE_CONTENT, 15);
       lv_obj_set_style_min_width(c, 15, 0);
       lv_obj_set_style_pad_hor(c, 4, 0);

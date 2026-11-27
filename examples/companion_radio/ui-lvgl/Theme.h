@@ -21,6 +21,13 @@
 #include <src/themes/lv_theme_private.h>   // lv_theme_t's fields, to layer a theme
 
 namespace theme {
+  // A style selector: a part in one of its states. LVGL's own `LV_PART_ITEMS |
+  // LV_STATE_CHECKED` ors two different enums, which C++20 deprecates; the
+  // selector is a plain number, and here both are made one.
+  constexpr lv_style_selector_t partState(lv_part_t part, lv_state_t state) {
+    return (lv_style_selector_t)part | (lv_style_selector_t)state;
+  }
+
   // Colours (0xRRGGBB), the dark theme's; setLight() sets the light one's.
   static uint32_t BG        = 0x0B0B0D;   // screen background
   static uint32_t SURFACE   = 0x1A1A1F;   // cards, rows, bubbles (incoming)

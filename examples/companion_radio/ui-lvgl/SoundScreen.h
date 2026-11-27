@@ -155,7 +155,7 @@ static lv_obj_t* smallButton(lv_obj_t* parent, const char* text, uint8_t act) {
 static lv_obj_t* flexRow(lv_obj_t* parent) {
   lv_obj_t* r = lv_obj_create(parent);
   styleSurface(r, theme::BG);
-  lv_obj_remove_flag(r, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(r, false);
   lv_obj_set_size(r, LV_PCT(100), LV_SIZE_CONTENT);
   lv_obj_set_flex_flow(r, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(r, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -340,8 +340,8 @@ void UITask::buildMelodies() {
   lv_obj_add_event_cb(s_dur, onMelMatrix, LV_EVENT_VALUE_CHANGED, (void*)(uintptr_t)MS_DUR);
   smallButton(bottom, LV_SYMBOL_TRASH, MA_DELETE);
   for (lv_obj_t* m : { s_pitch, s_oct, s_dur }) {   // greyed out with no note to edit
-    lv_obj_set_style_text_opa(m, LV_OPA_30, LV_PART_ITEMS | LV_STATE_DISABLED);
-    lv_obj_set_style_bg_color(m, lv_color_hex(theme::SURFACE), LV_PART_ITEMS | LV_STATE_DISABLED);
+    lv_obj_set_style_text_opa(m, LV_OPA_30, theme::partState(LV_PART_ITEMS, LV_STATE_DISABLED));
+    lv_obj_set_style_bg_color(m, lv_color_hex(theme::SURFACE), theme::partState(LV_PART_ITEMS, LV_STATE_DISABLED));
   }
 
   rebuildStrip();

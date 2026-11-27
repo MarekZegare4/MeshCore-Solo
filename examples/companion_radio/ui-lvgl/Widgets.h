@@ -61,7 +61,7 @@ static void labelFit(lv_obj_t* l, int32_t w) {
 static bool s_fit_pending;
 static lv_obj_t* s_fit_screen;   // newScreen()'s, maybe still fading in: not lv_screen_active() yet
 static void fitLater(lv_obj_t* row) {
-  lv_obj_add_flag(row, LV_OBJ_FLAG_USER_2);
+  lv_obj_set_user_flag(row, 1, true);
   s_fit_pending = true;
 }
 // The parent's full width, in pixels when that's known now (see innerW()).
@@ -78,7 +78,7 @@ static lv_obj_t* label(lv_obj_t* parent, const char* text, const lv_font_t* font
   lv_obj_set_style_text_color(l, lv_color_hex(color), 0);
   return l;
 }
-// Whether label `l` holds `text`. A LV_LABEL_LONG_DOT one that's cut short
+// Whether label `l` holds `text`. A LV_LABEL_LONG_MODE_DOTS one that's cut short
 // has the "..." written into its own copy of the text, the bytes they cover
 // kept aside (lv_label_set_dots): it's read back past them.
 static bool labelShows(lv_obj_t* l, const char* text) {
@@ -121,7 +121,7 @@ static void setTextFmt(lv_obj_t* l, const char* fmt, ...) {
 static lv_obj_t* noteLabel(lv_obj_t* parent, const char* text, const lv_font_t* font = THEME_FONT_SMALL,
                            uint32_t color = theme::TEXT_MUTED) {
   lv_obj_t* l = label(parent, text, font, color);
-  lv_label_set_long_mode(l, LV_LABEL_LONG_WRAP);
+  lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_WRAP);
   fillWidth(l);
   return l;
 }
@@ -146,8 +146,8 @@ static lv_obj_t* dimOverlay(lv_obj_t* parent) {
   lv_obj_set_size(o, LV_PCT(100), LV_PCT(100));
   lv_obj_set_style_bg_color(o, lv_color_hex(0x000000), 0);
   lv_obj_set_style_bg_opa(o, LV_OPA_60, 0);
-  lv_obj_add_flag(o, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_remove_flag(o, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_clickable(o, true);
+  lv_obj_set_scrollable(o, false);
   return o;
 }
 
@@ -166,12 +166,12 @@ static void coversOwnArea(lv_event_t* e) {
 static lv_obj_t* s_status_bar = nullptr;   // on the top layer, opaque
 // Where the screen shows below the status bar (its top when the bar is hidden).
 static int32_t belowStatusBar() {
-  return s_status_bar && !lv_obj_has_flag(s_status_bar, LV_OBJ_FLAG_HIDDEN) ? lv_obj_get_y2(s_status_bar) + 1 : 0;
+  return s_status_bar && !lv_obj_is_hidden(s_status_bar) ? lv_obj_get_y2(s_status_bar) + 1 : 0;
 }
 // Where what drops in from the top (a toast, the message banner) goes: under
 // the status bar, or under a screen's title bar, which takes its place.
 static int32_t belowTopBar() {
-  return s_status_bar && lv_obj_has_flag(s_status_bar, LV_OBJ_FLAG_HIDDEN) ? theme::APPBAR_H : theme::STATUS_H;
+  return s_status_bar && lv_obj_is_hidden(s_status_bar) ? theme::APPBAR_H : theme::STATUS_H;
 }
 // Home's tiles: `rows` of them fill the page between the status bar and the
 // page dots, less `reserve` px left under them (a hint line).
@@ -245,16 +245,16 @@ namespace freeze {
 #endif
   }
   static lv_draw_buf_t* snap(lv_obj_t* overlay, lv_obj_t* scr, bool top) {
-    if (!top) lv_obj_add_flag(overlay, LV_OBJ_FLAG_HIDDEN);
+    if (!top) lv_obj_set_hidden(overlay, true);
     lv_draw_buf_t* buf = lv_snapshot_take(scr, LV_COLOR_FORMAT_RGB565);
-    if (!top) lv_obj_remove_flag(overlay, LV_OBJ_FLAG_HIDDEN);
+    if (!top) lv_obj_set_hidden(overlay, false);
     return buf;
   }
   static void show(lv_obj_t* overlay, lv_obj_t* scr, bool top, lv_draw_buf_t* buf) {
     s_img = lv_image_create(scr);
     lv_image_set_src(s_img, buf);
-    lv_obj_add_flag(s_img, LV_OBJ_FLAG_IGNORE_LAYOUT);
-    lv_obj_remove_flag(s_img, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_ignore_layout(s_img, true);
+    lv_obj_set_clickable(s_img, false);
     lv_obj_set_pos(s_img, 0, 0);
     lv_obj_add_event_cb(s_img, imgDeleted, LV_EVENT_DELETE, buf);
     lv_obj_add_event_cb(s_img, coversOwnArea, LV_EVENT_COVER_CHECK, NULL);   // no background: its own check says no
@@ -266,8 +266,8 @@ namespace freeze {
     if (top && belowStatusBar()) {   // the status bar, on the top layer too, stays dimmed
       s_strip = lv_obj_create(overlay);
       lv_obj_remove_style_all(s_strip);
-      lv_obj_remove_flag(s_strip, LV_OBJ_FLAG_CLICKABLE);
-      lv_obj_add_flag(s_strip, LV_OBJ_FLAG_IGNORE_LAYOUT);
+      lv_obj_set_clickable(s_strip, false);
+      lv_obj_set_ignore_layout(s_strip, true);
       lv_obj_set_size(s_strip, LV_PCT(100), theme::STATUS_H);
       lv_obj_set_style_bg_color(s_strip, lv_color_hex(0x000000), 0);
       lv_obj_set_style_bg_opa(s_strip, s_dim, 0);
@@ -348,7 +348,7 @@ static lv_obj_t* popupOpen(lv_obj_t* parent, PopFit fit, lv_obj_t*& overlay, int
     lv_obj_align(panel, LV_ALIGN_CENTER, 0, theme::STATUS_H / 2);
     lv_obj_set_scrollbar_mode(panel, LV_SCROLLBAR_MODE_ACTIVE);
   }
-  if (fit != POP_FIT) lv_obj_remove_flag(panel, LV_OBJ_FLAG_SCROLLABLE);
+  if (fit != POP_FIT) lv_obj_set_scrollable(panel, false);
   lv_obj_set_style_bg_color(panel, lv_color_hex(theme::BG), 0);
   lv_obj_set_style_border_color(panel, lv_color_hex(theme::EDGE), 0);
   lv_obj_set_style_border_width(panel, 1, 0);
@@ -379,8 +379,8 @@ static lv_obj_t* popupOpen(lv_obj_t* parent, PopFit fit, lv_obj_t*& overlay, int
 static lv_obj_t* infoCard(lv_obj_t* parent) {
   lv_obj_t* c = lv_obj_create(parent);
   styleSurface(c, theme::SURFACE);
-  lv_obj_remove_flag(c, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_remove_flag(c, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_scrollable(c, false);
+  lv_obj_set_clickable(c, false);
   fillWidth(c);
   lv_obj_set_height(c, LV_SIZE_CONTENT);
   lv_obj_set_style_radius(c, theme::RADIUS, 0);
@@ -413,12 +413,12 @@ static const char* creditText(const char* in) {
 static lv_obj_t* infoLine(lv_obj_t* card) {   // one row's box, the hairline above all but the first
   lv_obj_t* r = lv_obj_create(card);
   lv_obj_remove_style_all(r);
-  lv_obj_remove_flag(r, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_remove_flag(r, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_clickable(r, false);
+  lv_obj_set_scrollable(r, false);
   fillWidth(r);
   lv_obj_set_height(r, LV_SIZE_CONTENT);
   lv_obj_set_style_pad_ver(r, 5, 0);
-  if (lv_obj_has_flag(card, LV_OBJ_FLAG_USER_1)) lv_obj_set_style_pad_hor(r, theme::PAD, 0);   // in a group()
+  if (lv_obj_get_user_flag(card, 0)) lv_obj_set_style_pad_hor(r, theme::PAD, 0);   // in a group()
   if (lv_obj_get_index(r) > 0) {
     lv_obj_set_style_border_side(r, LV_BORDER_SIDE_TOP, 0);
     lv_obj_set_style_border_width(r, 1, 0);
@@ -434,11 +434,11 @@ static lv_obj_t* infoRow(lv_obj_t* card, const char* key, const char* value, uin
   lv_obj_set_flex_align(r, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_column(r, 8, 0);
   lv_obj_t* k = label(r, key, THEME_FONT_SMALL, theme::TEXT_MUTED);
-  lv_label_set_long_mode(k, LV_LABEL_LONG_WRAP);
+  lv_label_set_long_mode(k, LV_LABEL_LONG_MODE_WRAP);
   lv_obj_set_width(k, 1);
   lv_obj_set_flex_grow(k, 1);
   lv_obj_t* v = label(r, value, font, col);
-  lv_label_set_long_mode(v, LV_LABEL_LONG_WRAP);
+  lv_label_set_long_mode(v, LV_LABEL_LONG_MODE_WRAP);
   lv_obj_set_width(v, LV_SIZE_CONTENT);
   lv_obj_set_style_max_width(v, LV_PCT(66), 0);
   lv_obj_set_style_text_align(v, LV_TEXT_ALIGN_RIGHT, 0);
@@ -460,8 +460,8 @@ static lv_obj_t* sectionTitle(lv_obj_t* parent, const char* text);
 
 static void infoSet(lv_obj_t* value, const char* text) {
   lv_obj_t* row = lv_obj_get_parent(value);
-  if (!text || !text[0]) { lv_obj_add_flag(row, LV_OBJ_FLAG_HIDDEN); return; }
-  lv_obj_remove_flag(row, LV_OBJ_FLAG_HIDDEN);
+  if (!text || !text[0]) { lv_obj_set_hidden(row, true); return; }
+  lv_obj_set_hidden(row, false);
   setText(value, text);
 }
 
@@ -469,7 +469,7 @@ static void infoSet(lv_obj_t* value, const char* text) {
 static lv_obj_t* flexBox(lv_obj_t* parent, lv_flex_flow_t flow) {
   lv_obj_t* b = lv_obj_create(parent);
   lv_obj_remove_style_all(b);
-  lv_obj_remove_flag(b, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(b, false);
   lv_obj_set_size(b, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
   lv_obj_set_flex_flow(b, flow);
   return b;
@@ -480,7 +480,7 @@ static lv_obj_t* flexBox(lv_obj_t* parent, lv_flex_flow_t flow) {
 static lv_obj_t* centerRow(lv_obj_t* parent) {
   lv_obj_t* r = lv_obj_create(parent);
   styleSurface(r, theme::BG);
-  lv_obj_remove_flag(r, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(r, false);
   lv_obj_set_size(r, LV_PCT(100), LV_SIZE_CONTENT);
   lv_obj_set_flex_flow(r, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(r, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -511,13 +511,13 @@ static lv_obj_t* pillButton(lv_obj_t* row, const char* text, uint32_t bg, lv_eve
 // actionRow() (does something now) and groupNote() (one line under a card).
 // Rows built outside a group keep the older look: a card of their own.
 
-static inline bool isGroup(lv_obj_t* o) { return o && lv_obj_has_flag(o, LV_OBJ_FLAG_USER_1); }
+static inline bool isGroup(lv_obj_t* o) { return o && lv_obj_get_user_flag(o, 0); }
 
 static lv_obj_t* group(lv_obj_t* parent, const char* title) {
   if (title) sectionTitle(parent, title);
   lv_obj_t* c = infoCard(parent);
   lv_obj_set_style_pad_hor(c, 0, 0);   // rows pad themselves: a pressed row lights edge to edge
-  lv_obj_add_flag(c, LV_OBJ_FLAG_USER_1);
+  lv_obj_set_user_flag(c, 0, true);
   return c;
 }
 
@@ -529,7 +529,7 @@ static void groupPressClip(lv_event_t* e) {
   if (isGroup(card)) lv_obj_set_style_clip_corner(card, lv_event_get_code(e) == LV_EVENT_PRESSED, 0);
 }
 static void rowPressable(lv_obj_t* row) {
-  lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(row, true);
   lv_obj_set_style_bg_color(row, lv_color_hex(theme::SURFACE_2), LV_STATE_PRESSED);
   lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_STATE_PRESSED);
   lv_obj_add_event_cb(row, groupPressClip, LV_EVENT_PRESSED, NULL);
@@ -602,8 +602,9 @@ static lv_obj_t* groupText(lv_obj_t* row, const char* text, const char* hint, ui
 // a frame's layout, rowsFit() gives each new column the width the flex will:
 // its row's minus the controls', worked out from their styles and text. The
 // grow stays, so a control this can't size only costs the old passes.
-static constexpr lv_obj_flag_t NOT_LAID_OUT =
-    (lv_obj_flag_t)(LV_OBJ_FLAG_HIDDEN | LV_OBJ_FLAG_FLOATING | LV_OBJ_FLAG_IGNORE_LAYOUT);
+static inline bool notLaidOut(const lv_obj_t* o) {
+  return lv_obj_is_hidden(o) || lv_obj_is_floating(o) || lv_obj_is_ignore_layout(o);
+}
 
 // `o`'s outer width as the layout will make it; -1 when that's unclear.
 static int32_t layoutW(lv_obj_t* o) {
@@ -621,7 +622,7 @@ static int32_t layoutW(lv_obj_t* o) {
     w = lv_obj_get_style_pad_left(o, LV_PART_MAIN) + lv_obj_get_style_pad_right(o, LV_PART_MAIN);
     for (uint32_t i = 0; i < lv_obj_get_child_count(o); i++) {
       lv_obj_t* c = lv_obj_get_child(o, i);
-      if (lv_obj_has_flag_any(c, NOT_LAID_OUT)) continue;
+      if (notLaidOut(c)) continue;
       int32_t cw = layoutW(c);
       if (cw < 0) return -1;
       w += cw + (n++ ? gap : 0);
@@ -640,7 +641,7 @@ static void rowFit(lv_obj_t* row) {
   lv_obj_t* grow = nullptr;
   for (uint32_t i = 0; i < lv_obj_get_child_count(row); i++) {
     lv_obj_t* c = lv_obj_get_child(row, i);
-    if (lv_obj_has_flag_any(c, NOT_LAID_OUT)) continue;
+    if (notLaidOut(c)) continue;
     if (lv_obj_get_style_flex_grow(c, LV_PART_MAIN)) {
       if (grow) return;   // one grows, or the share isn't worth working out
       grow = c;
@@ -664,8 +665,8 @@ static void rowFit(lv_obj_t* row) {
 // at it (the screen titles, a list row's cut-off name ...).
 static void rowsFit(lv_obj_t* root) {
   lv_obj_tree_walk(root, [](lv_obj_t* o, void*) {
-    if (lv_obj_has_flag(o, LV_OBJ_FLAG_USER_2)) {
-      lv_obj_remove_flag(o, LV_OBJ_FLAG_USER_2);
+    if (lv_obj_get_user_flag(o, 1)) {
+      lv_obj_set_user_flag(o, 1, false);
       rowFit(o);
     } else if (lv_obj_check_type(o, &lv_label_class) && !lv_obj_get_style_flex_grow(o, LV_PART_MAIN)) {
       // (a growing one's px width is a stand-in: the flex's, or its row's rowFit())
@@ -708,7 +709,7 @@ static void styleBatchEnd() {
 #ifdef PERF_PROF
   lvprof_begin("styleBatchEnd");
 #endif
-  if (lv_obj_is_valid(root)) { styleRefreshTree(root); lv_obj_invalidate(root); }
+  if (lv_obj_is_in_widget_tree(root)) { styleRefreshTree(root); lv_obj_invalidate(root); }
   // A style set meanwhile outside it (the status bar, a toast) wasn't
   // invalidated: the overlays are redrawn whole with the new screen anyway.
   lv_obj_invalidate(lv_layer_top());
@@ -758,7 +759,7 @@ static lv_obj_t* settingRow(lv_obj_t* parent, const char* text, const char* hint
   }
   lv_obj_t* row = lv_obj_create(parent);
   styleSurface(row, theme::SURFACE);
-  lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(row, false);
   lv_obj_set_size(row, LV_PCT(100), theme::ROW_H);
   lv_obj_set_style_radius(row, theme::RADIUS, 0);
   lv_obj_t* t = label(row, text, THEME_FONT_BODY, theme::TEXT);
@@ -766,7 +767,7 @@ static lv_obj_t* settingRow(lv_obj_t* parent, const char* text, const char* hint
   lv_obj_set_user_data(row, t);
   if (hint) {
     lv_obj_t* h = label(row, hint, THEME_FONT_SMALL, theme::TEXT_MUTED);
-    lv_label_set_long_mode(h, LV_LABEL_LONG_DOT);
+    lv_label_set_long_mode(h, LV_LABEL_LONG_MODE_DOTS);
     lv_obj_set_size(h, hint_w, 18);   // fixed height: cut, don't wrap onto the label -- the font's whole line, or the tails of y and g are cut
     lv_obj_align(h, LV_ALIGN_BOTTOM_LEFT, theme::PAD, -4);
   }
@@ -883,7 +884,7 @@ static void pickerOpen(lv_obj_t* c) {
     char v[48];
     bool cur = i == ch->sel;
     lv_obj_t* r = label(card, choiceItem(ch, i, v, sizeof(v)), THEME_FONT_BODY, cur ? theme::ACCENT : theme::TEXT);
-    lv_label_set_long_mode(r, LV_LABEL_LONG_CLIP);
+    lv_label_set_long_mode(r, LV_LABEL_LONG_MODE_CLIP);
     lv_obj_set_size(r, w > 0 ? w : LV_PCT(100), H);
     lv_obj_set_style_pad_left(r, theme::PAD, 0);
     lv_obj_set_style_pad_right(r, theme::PAD + 20, 0);   // the tick's room
@@ -896,7 +897,7 @@ static void pickerOpen(lv_obj_t* c) {
     rowPressable(r);
     if (cur) {
       lv_obj_t* tick = label(r, LV_SYMBOL_OK, THEME_FONT_BODY, theme::ACCENT);
-      lv_obj_add_flag(tick, LV_OBJ_FLAG_IGNORE_LAYOUT);
+      lv_obj_set_ignore_layout(tick, true);
       lv_obj_align(tick, LV_ALIGN_RIGHT_MID, 20, 0);   // into the right padding
       sel_row = r;
     }
@@ -910,8 +911,8 @@ static void pickerOpen(lv_obj_t* c) {
 static lv_obj_t* choiceCreate(lv_obj_t* parent, const char* opts, int sel, const char* title) {
   lv_obj_t* c = lv_obj_create(parent);
   lv_obj_remove_style_all(c);
-  lv_obj_add_flag(c, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_remove_flag(c, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_clickable(c, true);
+  lv_obj_set_scrollable(c, false);
   lv_obj_set_size(c, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
   lv_obj_set_flex_flow(c, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(c, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);   // END + SIZE_CONTENT mis-sizes
@@ -956,7 +957,7 @@ static lv_obj_t* toolbarRow(lv_obj_t* parent) {
   lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_column(row, theme::GAP, 0);
   lv_obj_t* t = label(row, "", THEME_FONT_SMALL, theme::TEXT_MUTED);
-  lv_label_set_long_mode(t, LV_LABEL_LONG_DOT);
+  lv_label_set_long_mode(t, LV_LABEL_LONG_MODE_DOTS);
   lv_obj_set_width(t, 1);
   lv_obj_set_flex_grow(t, 1);
   return t;
@@ -996,7 +997,7 @@ static void pickSet(lv_obj_t* v, const char* text) {
 }
 static lv_obj_t* rowPick(lv_obj_t* row, const char* text, int w, lv_event_cb_t cb, void* user = nullptr) {
   lv_obj_t* v = label(row, "", THEME_FONT_BODY, theme::ACCENT);
-  lv_label_set_long_mode(v, LV_LABEL_LONG_DOT);
+  lv_label_set_long_mode(v, LV_LABEL_LONG_MODE_DOTS);
   lv_obj_set_style_max_width(v, w, 0);
   lv_obj_set_style_text_align(v, LV_TEXT_ALIGN_RIGHT, 0);
   pickSet(v, text);
@@ -1012,7 +1013,7 @@ static lv_obj_t* rowValue(lv_obj_t* row, const char* text, lv_event_cb_t cb, voi
   lv_obj_t* c = flexBox(row, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(c, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_column(c, 6, 0);
-  lv_obj_add_flag(c, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(c, true);
   lv_obj_set_ext_click_area(c, 10);
   lv_obj_set_style_opa(c, LV_OPA_60, LV_STATE_PRESSED);
   label(c, text, THEME_FONT_BODY, theme::VALUE);
@@ -1040,7 +1041,7 @@ static lv_obj_t* rowSub(lv_obj_t* row) {
 enum : uint8_t { PG_KEYBOARD = settings::PG_COUNT, PG_ABOUT, PG_DISPLAY, PG_POWER, PG_TIME, PG_COVERAGE, PG_ALL };
 
 // A schema setting by its NodePrefs field; -1 if there's none.
-#define SETTING(field) settings::indexOf(offsetof(NodePrefs, field))
+#define SETTING(field) settings::indexOf(offsetof(NodePrefsFields, field))
 
 // A setting's current value as its choice shows it ("UTC+2", "3.4 V" ...).
 static const char* settingText(const NodePrefs& p, int idx, char* buf, int n) {
@@ -1071,9 +1072,9 @@ static lv_obj_t* segmented(lv_obj_t* parent, const char** map, int sel, int w, i
   lv_obj_set_style_bg_opa(m, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_width(m, 0, 0);
   lv_obj_set_style_bg_color(m, lv_color_hex(item), LV_PART_ITEMS);
-  lv_obj_set_style_bg_color(m, lv_color_hex(theme::SEL_BG), LV_PART_ITEMS | LV_STATE_CHECKED);
+  lv_obj_set_style_bg_color(m, lv_color_hex(theme::SEL_BG), theme::partState(LV_PART_ITEMS, LV_STATE_CHECKED));
   lv_obj_set_style_text_color(m, lv_color_hex(theme::TEXT), LV_PART_ITEMS);
-  lv_obj_set_style_text_color(m, lv_color_hex(theme::SEL_FG), LV_PART_ITEMS | LV_STATE_CHECKED);
+  lv_obj_set_style_text_color(m, lv_color_hex(theme::SEL_FG), theme::partState(LV_PART_ITEMS, LV_STATE_CHECKED));
   lv_obj_set_style_text_font(m, THEME_FONT_SMALL, LV_PART_ITEMS);
   lv_obj_set_style_shadow_width(m, 0, LV_PART_ITEMS);
   lv_obj_set_style_radius(m, theme::RADIUS, LV_PART_ITEMS);
@@ -1093,8 +1094,8 @@ static lv_obj_t* textField(lv_obj_t* parent, const char* placeholder = NULL) {
   lv_obj_set_style_pad_ver(ta, 6, 0);
   lv_obj_set_style_pad_hor(ta, 10, 0);
   lv_obj_set_scrollbar_mode(ta, LV_SCROLLBAR_MODE_OFF);
-  lv_obj_set_style_border_color(ta, lv_color_hex(theme::ACCENT), LV_PART_CURSOR | LV_STATE_FOCUSED);
-  lv_obj_set_style_border_width(ta, 2, LV_PART_CURSOR | LV_STATE_FOCUSED);
+  lv_obj_set_style_border_color(ta, lv_color_hex(theme::ACCENT), theme::partState(LV_PART_CURSOR, LV_STATE_FOCUSED));
+  lv_obj_set_style_border_width(ta, 2, theme::partState(LV_PART_CURSOR, LV_STATE_FOCUSED));
   return ta;
 }
 // A field's cursor shown (FOCUSED, blinking) or not. LVGL starts and stops
@@ -1160,7 +1161,7 @@ static void styleSelected(lv_obj_t* b, bool on) {
 static lv_obj_t* buttonBar(lv_obj_t* parent) {
   lv_obj_t* bar = lv_obj_create(parent);
   styleSurface(bar, theme::BG);
-  lv_obj_remove_flag(bar, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollable(bar, false);
   lv_obj_set_size(bar, LV_PCT(100), LV_SIZE_CONTENT);
   lv_obj_set_flex_flow(bar, LV_FLEX_FLOW_ROW);
   lv_obj_set_style_pad_column(bar, theme::GAP, 0);
@@ -1247,8 +1248,8 @@ static void plainMentions(char* t) {
 static void badge(lv_obj_t* parent, int n, bool overflow) {
   if (n <= 0) return;
   lv_obj_t* b = lv_obj_create(parent);
-  lv_obj_remove_flag(b, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_remove_flag(b, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_scrollable(b, false);
+  lv_obj_set_clickable(b, false);
   lv_obj_set_size(b, LV_SIZE_CONTENT, 20);
   lv_obj_set_style_bg_color(b, lv_color_hex(theme::ACCENT), 0);
   lv_obj_set_style_border_width(b, 0, 0);
@@ -1266,7 +1267,7 @@ static void badge(lv_obj_t* parent, int n, bool overflow) {
 static void rowBadge(lv_obj_t* row, int n, bool overflow) {
   lv_obj_t* b = lv_obj_get_child(row, 2);
   if (!b) { badge(row, n, overflow); return; }
-  lv_obj_set_flag(b, LV_OBJ_FLAG_HIDDEN, n <= 0);
+  lv_obj_set_hidden(b, n <= 0);
   if (n <= 0) return;
   char t[8];
   snprintf(t, sizeof(t), "%d%s", n, overflow ? "+" : "");
@@ -1428,7 +1429,7 @@ static void onDelete(lv_event_t* e) { lv_free(lv_obj_get_user_data((lv_obj_t*)lv
 static lv_obj_t* create(lv_obj_t* parent) {
   lv_obj_t* o = lv_obj_create(parent);
   lv_obj_remove_style_all(o);
-  lv_obj_remove_flag(o, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_clickable(o, false);
   // Graphite on the light theme: that much black, that big, was heavy.
   lv_obj_set_style_text_color(o, lv_color_hex(theme::s_light ? theme::mix(theme::TEXT, theme::BG, 80) : theme::TEXT), 0);
   Text* t = (Text*)lv_malloc(sizeof(Text));
@@ -1463,7 +1464,7 @@ static lv_obj_t* clockFace(lv_obj_t* parent, const lv_font_t* big, const lv_font
   lv_obj_t* ap = label(f, "", small, theme::TEXT_MUTED);
   if (big) lv_obj_set_style_pad_bottom(ap, big->base_line - small->base_line, 0);
   else lv_obj_set_style_translate_y(ap, small->base_line, 0);   // its baseline on the digits' foot
-  lv_obj_add_flag(ap, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_hidden(ap, true);
   return f;
 }
 static void clockFaceSet(lv_obj_t* f, const struct tm* ti, const NodePrefs* p) {
@@ -1484,9 +1485,9 @@ static void clockFaceSet(lv_obj_t* f, const struct tm* ti, const NodePrefs* p) {
   }
   bool h12 = ti && p && p->clock_12h;
   if (h12) setText(ap, ti->tm_hour < 12 ? "AM" : "PM");
-  if (h12 != !lv_obj_has_flag(ap, LV_OBJ_FLAG_HIDDEN)) {
-    if (h12) lv_obj_remove_flag(ap, LV_OBJ_FLAG_HIDDEN);
-    else lv_obj_add_flag(ap, LV_OBJ_FLAG_HIDDEN);
+  if (h12 != !lv_obj_is_hidden(ap)) {
+    if (h12) lv_obj_set_hidden(ap, false);
+    else lv_obj_set_hidden(ap, true);
   }
 }
 // A message's age ("12s" / "5m" / "3h" / "2d"). After a restart the clock runs
