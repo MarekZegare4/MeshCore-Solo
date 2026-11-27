@@ -193,14 +193,14 @@ public:
           const int f = foundIndex(kind, idx);
           char route[40];
           r.foundText(f, false, route, sizeof(route));
-          snprintf(left, sizeof(left), "Use %s", route);
+          textfit::fmt(left, sizeof(left), "Use %s", route);
           snprintf(right, sizeof(right), "%ux", (unsigned)r.found(f).times);
           break;
         }
         case R_FOUND_BACK: {   // the way the reply came, turned round as the list will have it
           char route[40];
           r.foundText(foundIndex(kind, idx), true, route, sizeof(route), true);
-          snprintf(left, sizeof(left), " Back %s", route);
+          textfit::fmt(left, sizeof(left), " Back %s", route);
           break;
         }
       }

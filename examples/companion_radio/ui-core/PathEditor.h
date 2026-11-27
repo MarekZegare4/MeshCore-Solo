@@ -318,7 +318,7 @@ public:
     for (int h = 0; h < kept && o + 4 < n; h++) {
       char nm[NAME_LEN];
       hashName(&p[(rev ? kept - 1 - h : h) * size], size, nm, sizeof(nm));
-      o += snprintf(out + o, n - o, "%s%s", h ? " > " : "", nm);
+      o += textfit::fmt(out + o, n - o, "%s%s", h ? " > " : "", nm);
     }
     if (hops > FOUND_HOPS && o + 4 < n) snprintf(out + o, n - o, " ...");
   }
@@ -443,7 +443,7 @@ private:
     for (int idx = MAX_ANON_CONTACTS; ; idx++) {
       ContactInfo c;
       if (!the_mesh.getContactByIdx(idx, c)) break;
-      if (c.type == ADV_TYPE_REPEATER && c.id.isHashMatch(hash, size)) { snprintf(out, n, "%s", c.name); return; }
+      if (c.type == ADV_TYPE_REPEATER && c.id.isHashMatch(hash, size)) { textfit::copy(out, n, c.name); return; }
     }
     char hex[9] = {0};
     for (uint8_t k = 0; k < size && k < 4; k++) snprintf(hex + k * 2, 3, "%02X", hash[k]);

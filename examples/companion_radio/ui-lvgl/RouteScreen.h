@@ -333,7 +333,7 @@ void UITask::routeDiscRebuild() {
     int o = snprintf(sub, sizeof(sub), "%d hop%s%s, found %u time%s. ", hops, hops == 1 ? "" : "s",
                      hops > PathEditor::MAX_HOPS ? " (too long to use)" : "", (unsigned)f.times, f.times == 1 ? "" : "s");
     if (same) snprintf(sub + o, sizeof(sub) - o, "Back the same way");
-    else      snprintf(sub + o, sizeof(sub) - o, "Back: %s", back);
+    else      textfit::fmt(sub + o, sizeof(sub) - o, "Back: %s", back);
     lv_obj_t* r = groupLine(g, same);
     groupText(r, route, sub);
     if (same) {
