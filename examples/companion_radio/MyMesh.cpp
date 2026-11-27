@@ -748,6 +748,7 @@ void MyMesh::onCLICommandRecv(const ContactInfo &from, mesh::Packet *pkt, uint32
                                const char *text, char* reply) {
   markConnectionActive(from); // in case this is from a server, and we have a connection
   if (from.isRemoteCLIAllowed()) {
+    struct Remote { bool& f; Remote(bool& f) : f(f) { f = true; } ~Remote() { f = false; } } remote(_remote_cli);
     if (!handleCommand(text, sender_timestamp, reply)) {
       strcat(reply, "Unknown command");   // reply may have cmd prefix from 'text'
     }

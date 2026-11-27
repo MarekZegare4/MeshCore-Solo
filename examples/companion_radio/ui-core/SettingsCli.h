@@ -832,6 +832,146 @@ static bool waypoints(UiCore& core, const char* cmd, char* reply, int n) {
   return true;
 }
 
+// The conversations, for the configurator's Messages card -- read from the
+// history the device keeps (never the app's offline queue: what the phone
+// hasn't fetched stays for it). A conversation is "ch <idx>" or "dm <first 4
+// bytes of the key, 8 hex>"; messages are numbered newest first from 0.
+//   "hist list <k>"  the k-th conversation with history, newest first:
+//                    "> ch|<idx>|<name>|<count>|<unread>|<last ts>" or
+//                    "> dm|<hex8>|<name>|<count>|<unread>|<last ts>"; "> end"
+//   "hist <conv> <j> [<off>]"  message j: "> <count>|<ts>|<i|o><ack 0-3>|<bytes>|<text>",
+//                    the text from byte off on, cut where the frame ends (on a
+//                    character); the rest by asking again from where it stopped
+//   "send <conv> <text>"  sent as from the device's keyboard (history, ACK): "OK"
+//   "hist read <conv>"  the conversation's unread count to 0, as opening it on the device: "OK"
+static bool parseHex8(const char* s, uint8_t out[4]) {
+  for (int i = 0; i < 8; i++) {
+    const char c = s[i];
+    const int v = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
+    if (v < 0) return false;
+    if (i & 1) out[i / 2] |= v; else out[i / 2] = v << 4;
+  }
+  return s[8] == 0 || s[8] == ' ';
+}
+// "ch 3 ..." / "dm a1b2c3d4 ...": the conversation, and where the rest begins.
+static const char* parseConv(const char* s, bool& dm, int& ch, uint8_t key[4]) {
+  if (!strncmp(s, "ch ", 3)) {
+    char* e;
+    ch = (int)strtol(s + 3, &e, 10);
+    if (e == s + 3 || ch < 0 || ch >= MAX_GROUP_CHANNELS || (*e && *e != ' ')) return nullptr;
+    dm = false;
+    return *e ? e + 1 : e;
+  }
+  if (!strncmp(s, "dm ", 3) && parseHex8(s + 3, key)) { dm = true; return s[11] ? s + 12 : s + 11; }
+  return nullptr;
+}
+static void textFrom(const char* t, int off, char* out, int room) {   // cut on a character
+  const int len = (int)strlen(t);
+  if (off > len) off = len;
+  int k = len - off;
+  if (k > room - 1) {
+    k = room - 1;
+    while (k > 0 && ((uint8_t)t[off + k] & 0xC0) == 0x80) k--;
+  }
+  memcpy(out, t + off, k);
+  out[k] = 0;
+}
+static bool chatHistory(UiCore& core, const char* cmd, char* reply, int n) {
+  MessageHistory& h = core.history;
+  const bool mine = !strncmp(cmd, "hist ", 5) || !strncmp(cmd, "send ", 5);
+  if (mine && the_mesh.cliIsRemote()) { snprintf(reply, n, "Error, only over USB or Bluetooth"); return true; }
+  if (!strncmp(cmd, "hist list ", 10)) {
+    const int want = atoi(cmd + 10);
+    // Conversations by their newest message: walk the rings newest first, a
+    // conversation counted where it first appears.
+    int seen = 0;
+    bool ch_done[MAX_GROUP_CHANNELS] = {};
+    int ci = 0, di = 0;
+    const int cn = h.chHistCount(), dn = h.dmHistCount();
+    while (ci < cn || di < dn) {
+      const ChHistEntry* c = ci < cn ? &h.chAtPos(h.chHistPosNewest(ci)) : nullptr;
+      const DmHistEntry* d = di < dn ? &h.dmAtPos(h.dmHistPosNewest(di)) : nullptr;
+      const bool take_ch = c && (!d || c->timestamp >= d->timestamp);
+      if (take_ch) {
+        ci++;
+        if (c->ch_idx >= MAX_GROUP_CHANNELS || ch_done[c->ch_idx]) continue;
+        ch_done[c->ch_idx] = true;
+        if (seen++ != want) continue;
+        ChannelDetails cd;
+        const char* name = the_mesh.getChannel(c->ch_idx, cd) ? cd.name : "?";
+        snprintf(reply, n, "> ch|%d|%s|%d|%d|%lu", c->ch_idx, name, h.histCountForChannel(c->ch_idx),
+                 h.chUnread(c->ch_idx), (unsigned long)c->timestamp);
+        return true;
+      }
+      di++;
+      bool dup = false;   // this contact seen at a newer message already?
+      for (int k = 0; k < di - 1 && !dup; k++) dup = !memcmp(h.dmAtPos(h.dmHistPosNewest(k)).prefix, d->prefix, 4);
+      if (dup || seen++ != want) continue;
+      ContactInfo ci_;
+      const bool known = MessageHistory::contactByPrefix(d->prefix, ci_);
+      snprintf(reply, n, "> dm|%02x%02x%02x%02x|%s|%d|%d|%lu", d->prefix[0], d->prefix[1], d->prefix[2], d->prefix[3],
+               known ? ci_.name : "?", h.dmHistCountForContact(d->prefix), known ? core.dmUnread(ci_.id.pub_key) : 0,
+               (unsigned long)d->timestamp);
+      return true;
+    }
+    snprintf(reply, n, "> end");
+    return true;
+  }
+  const bool send = !strncmp(cmd, "send ", 5);
+  if (!send && strncmp(cmd, "hist ", 5)) return false;
+  bool dm = false;
+  int ch = 0;
+  uint8_t key[4] = {};
+  if (!strncmp(cmd, "hist read ", 10)) {
+    if (!parseConv(cmd + 10, dm, ch, key)) { snprintf(reply, n, "Error, hist read ch <idx> | dm <key hex8>"); return true; }
+    if (dm) {
+      ContactInfo c;
+      if (!MessageHistory::contactByPrefix(key, c)) { snprintf(reply, n, "Error, no such contact"); return true; }
+      core.clearDMUnread(c.id.pub_key);
+    } else {
+      h.setChUnread(ch, 0);
+    }
+    snprintf(reply, n, "OK");
+    return true;
+  }
+  const char* rest = parseConv(cmd + 5, dm, ch, key);
+  if (!rest) { snprintf(reply, n, "Error, %s ch <idx> | dm <key hex8> %s", send ? "send" : "hist", send ? "<text>" : "<n> [<from byte>]"); return true; }
+  if (send) {
+    if (!*rest) { snprintf(reply, n, "Error, no text"); return true; }
+    if (dm) {
+      ContactInfo c;
+      if (!MessageHistory::contactByPrefix(key, c)) { snprintf(reply, n, "Error, no such contact"); return true; }
+      if (!core.sendDirectText(c, rest)) { snprintf(reply, n, "Error, not sent"); return true; }
+    } else if (!core.sendChannelText((uint8_t)ch, rest)) {
+      snprintf(reply, n, "Error, not sent");
+      return true;
+    }
+    snprintf(reply, n, "OK");
+    return true;
+  }
+  char* e;
+  const int j = (int)strtol(rest, &e, 10);
+  const int off = *e == ' ' ? atoi(e + 1) : 0;
+  if (e == rest || j < 0) { snprintf(reply, n, "Error, hist <conv> <n> [<from byte>]"); return true; }
+  const int count = dm ? h.dmHistCountForContact(key) : h.histCountForChannel(ch);
+  const int pos = j < count ? (dm ? h.dmHistEntryForContact(key, j) : h.histEntryForChannel(ch, j)) : -1;
+  if (pos < 0) { snprintf(reply, n, "> %d|none", count); return true; }
+  const char* text;
+  uint32_t ts;
+  bool out;
+  int ack;
+  if (dm) {
+    const DmHistEntry& m = h.dmAtPos(pos);
+    text = m.text; ts = m.timestamp; out = m.outgoing; ack = out ? (int)h.dmEffectiveStatus(m) : 0;
+  } else {
+    const ChHistEntry& m = h.chAtPos(pos);
+    text = m.text; ts = m.timestamp; out = !strncmp(m.text, "Me: ", 4); ack = out ? (int)m.relay_status : 0;
+  }
+  const int at = snprintf(reply, n, "> %d|%lu|%c%d|%d|", count, (unsigned long)ts, out ? 'o' : 'i', ack, (int)strlen(text));
+  if (at < n) textFrom(text, off, reply + at, n - at);
+  return true;
+}
+
 // The battery curve (Settings > Battery curve): "get batt.curve" is "> <mV at
 // 0 %>,<10 %>,...,<100 %>" (11 values) or "> builtin"; "set batt.curve" takes
 // the same list -- rising, 2500..4500 mV -- or "builtin". The whole curve in one
@@ -958,6 +1098,7 @@ static bool handle(UiCore& core, const char* cmd, char* reply, int n) {
   if (quickMessages(p, cmd, reply, n)) return true;
   if (melodies(p, cmd, reply, n)) return true;
   if (waypoints(core, cmd, reply, n)) return true;
+  if (chatHistory(core, cmd, reply, n)) return true;
   if (battCurve(p, cmd, reply, n)) return true;
   if (repeaterScopes(p, cmd, reply, n)) return true;
   if (!strcmp(cmd, "keys") || !strncmp(cmd, "keys ", 5)) {   // the key names, a frame's worth a page

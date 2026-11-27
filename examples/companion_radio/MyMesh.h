@@ -480,6 +480,9 @@ public:
   bool handleCliCommand(const char* command, char* reply, int n);
   // "optsall" (MyMeshCli.h): every setting's opts, a frame each, straight out.
   void cliStreamOpts(const char* tag);   // tag: "xx|" before each frame, or null
+  // A command from a contact over the mesh (remote CLI) is being run: what
+  // only the owner may do (read and send messages) is refused for it.
+  bool cliIsRemote() const { return _remote_cli; }
 
   // On-device "remote admin" (Tools > Admin): send a CLI command to a node
   // you're logged into with admin permission (see ClientACL::isAdmin()). The
@@ -736,6 +739,7 @@ private:
   // The CLI batch (savePrefs above): open, inside a CLI command, a save held
   // back, and when it closes by itself should the page go quiet mid-way.
   bool _cli_batch = false, _in_cli = false, _batch_dirty = false;
+  bool _remote_cli = false;
   unsigned long _batch_until = 0;
   static const uint32_t CLI_BATCH_IDLE_MS = 5000;
   void endCliBatch() { _cli_batch = false; if (_batch_dirty) savePrefs(); }
