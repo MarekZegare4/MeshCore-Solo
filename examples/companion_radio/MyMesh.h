@@ -743,6 +743,12 @@ private:
   // back, and when it closes by itself should the page go quiet mid-way.
   bool _cli_batch = false, _in_cli = false, _batch_dirty = false;
   bool _remote_cli = false;
+  // A flag up for as long as a scope runs: inside a CLI command, a remote one.
+  struct FlagScope {
+    bool& flag;
+    explicit FlagScope(bool& f) : flag(f) { flag = true; }
+    ~FlagScope() { flag = false; }
+  };
   unsigned long _batch_until = 0;
   static const uint32_t CLI_BATCH_IDLE_MS = 5000;
   void endCliBatch() { _cli_batch = false; if (_batch_dirty) savePrefs(); }

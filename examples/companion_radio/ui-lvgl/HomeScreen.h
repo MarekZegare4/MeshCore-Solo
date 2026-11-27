@@ -828,13 +828,13 @@ bool UITask::homeMapFit() {
   s_fitted = true;
   bool made = false;
   for (int i = 0; i < np; i++) {   // the same dot where the kind matches
-    lv_obj_t* o = i < s_npts && s_pts[i].kind == pts[i].kind ? s_pts[i].obj : nullptr;
-    if (!o) {
+    lv_obj_t* obj = i < s_npts && s_pts[i].kind == pts[i].kind ? s_pts[i].obj : nullptr;
+    if (!obj) {
       if (i < s_npts && s_pts[i].obj) lv_obj_delete(s_pts[i].obj);
-      o = dot(pts[i].kind);
+      obj = dot(pts[i].kind);
       made = true;
     }
-    pts[i].obj = o;
+    pts[i].obj = obj;
   }
   for (int i = np; i < s_npts; i++) if (s_pts[i].obj) lv_obj_delete(s_pts[i].obj);
   memcpy(s_pts, pts, np * sizeof(Pt));

@@ -510,11 +510,11 @@ private:
         p = c + 1;
       }
       if (k < 13 || fld[12][0] != 'F' || !fld[9][0]) continue;
-      const int n = atoi(fld[10]);
-      if (n < 1 || n > 3 || strlen(fld[9]) != (size_t)n * 2) continue;
+      const int hb = atoi(fld[10]);   // the hop hash's bytes
+      if (hb < 1 || hb > 3 || strlen(fld[9]) != (size_t)hb * 2) continue;
       uint8_t h[3];
-      for (int i = 0; i < n; i++) { char b[3] = { fld[9][i * 2], fld[9][i * 2 + 1], 0 }; h[i] = (uint8_t)strtoul(b, nullptr, 16); }
-      addHop(hops, nh, h, (uint8_t)n);
+      for (int i = 0; i < hb; i++) { char b[3] = { fld[9][i * 2], fld[9][i * 2 + 1], 0 }; h[i] = (uint8_t)strtoul(b, nullptr, 16); }
+      addHop(hops, nh, h, (uint8_t)hb);
     }
     fclose(f);
     return rows;

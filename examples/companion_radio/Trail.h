@@ -356,10 +356,10 @@ public:
   // <trk>. Duck-typed over any store exposing count()/at(i) whose entries have
   // lat_1e6 / lon_1e6 / ts / label, so Trail.h stays decoupled from Waypoint.h.
   template <typename S, typename WP>
-  static size_t gpxWaypoints(S& out, WP& store) {
+  static size_t gpxWaypoints(S& out, WP& wps) {
     size_t n = 0;
-    for (int i = 0; i < store.count(); i++) {
-      const auto& w = store.at(i);
+    for (int i = 0; i < wps.count(); i++) {
+      const auto& w = wps.at(i);
       // XML-escape the user label (&, <, > only).
       char esc[64]; int e = 0;
       for (const char* p = w.label; *p && e < (int)sizeof(esc) - 6; p++) {

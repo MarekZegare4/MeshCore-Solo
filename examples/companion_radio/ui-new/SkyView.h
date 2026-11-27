@@ -115,10 +115,10 @@ namespace skyview {
     y += step;
     if (g.ttff_ms) snprintf(buf, sizeof(buf), "TTFF %lus", (unsigned long)(g.ttff_ms / 1000));
     else if (g.start_ms) {
-      const unsigned long s = (millis() - g.start_ms) / 1000;
-      if (!d.isEink()) snprintf(buf, sizeof(buf), "Wait %lus", s);
-      else if (s < 60) snprintf(buf, sizeof(buf), "Wait <1m");   // in minutes, as the panel refreshes
-      else             snprintf(buf, sizeof(buf), "Wait %lum", s / 60);
+      const unsigned long secs = (millis() - g.start_ms) / 1000;
+      if (!d.isEink())    snprintf(buf, sizeof(buf), "Wait %lus", secs);
+      else if (secs < 60) snprintf(buf, sizeof(buf), "Wait <1m");   // in minutes, as the panel refreshes
+      else                snprintf(buf, sizeof(buf), "Wait %lum", secs / 60);
     }
     else buf[0] = 0;
     d.setCursor(x0, y); d.print(buf);

@@ -402,7 +402,7 @@ public:
   void gotoToolsScreen();
   // A tool's Back: to Home when Home's Tools page opened it, else to the Tools list.
   void leaveTool();
-  void setToolFromHome(bool home) { _tool_from_home = home; }
+  void setToolFromHome(bool from_home) { _tool_from_home = from_home; }
   void gotoRingtoneEditor(int slot = 0);
   void gotoBotScreen();
   void pickAdminTarget();                  // Admin is remote-only: open Nodes to pick a repeater/room

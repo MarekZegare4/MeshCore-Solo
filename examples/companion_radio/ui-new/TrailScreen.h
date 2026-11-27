@@ -1012,7 +1012,6 @@ private:
   void renderGrid(DisplayDriver& display, const MapProjection& proj, bool dots = true) {
     const int area_x = proj.area_x, area_y = proj.area_y;
     const int area_w = proj.area_w, area_h = proj.area_h;
-    static constexpr float M_PER_1E6 = 0.11132f;  // metres per 1e-6 deg lat
     float ppm = proj.scale / M_PER_1E6;            // pixels per metre (isotropic)
     if (ppm <= 0.0f) return;
 

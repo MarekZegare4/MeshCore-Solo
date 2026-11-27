@@ -895,9 +895,9 @@ static void pickerOpen(lv_obj_t* c) {
     }
     rowPressable(r);
     if (cur) {
-      lv_obj_t* t = label(r, LV_SYMBOL_OK, THEME_FONT_BODY, theme::ACCENT);
-      lv_obj_add_flag(t, LV_OBJ_FLAG_IGNORE_LAYOUT);
-      lv_obj_align(t, LV_ALIGN_RIGHT_MID, 20, 0);   // into the right padding
+      lv_obj_t* tick = label(r, LV_SYMBOL_OK, THEME_FONT_BODY, theme::ACCENT);
+      lv_obj_add_flag(tick, LV_OBJ_FLAG_IGNORE_LAYOUT);
+      lv_obj_align(tick, LV_ALIGN_RIGHT_MID, 20, 0);   // into the right padding
       sel_row = r;
     }
     lv_obj_add_event_cb(r, onPickOption, LV_EVENT_CLICKED, (void*)(uintptr_t)i);
@@ -940,9 +940,9 @@ static lv_obj_t* choiceCreate(lv_obj_t* parent, const char* opts, int sel, const
   lv_obj_add_event_cb(c, [](lv_event_t* e) {
     lv_obj_t* o = (lv_obj_t*)lv_event_get_current_target(e);
     if (s_pick_target == o) pickerClose();
-    Choice* ch = choiceOf(o);
-    lv_free(ch->opts);
-    lv_free(ch);
+    Choice* gone = choiceOf(o);
+    lv_free(gone->opts);
+    lv_free(gone);
   }, LV_EVENT_DELETE, NULL);
   return c;
 }

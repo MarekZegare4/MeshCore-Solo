@@ -12,7 +12,7 @@
 static bool cliOnOff(const char* v) { return strncmp(v, "on", 2) == 0 || strcmp(v, "1") == 0; }
 
 bool MyMesh::handleCliCommand(const char* command, char* reply, int n) {
-  struct InCli { bool& f; InCli(bool& f) : f(f) { f = true; } ~InCli() { f = false; } } in_cli(_in_cli);
+  FlagScope in_cli(_in_cli);
   while (*command == ' ') command++;
   if (strlen(command) > 4 && command[2] == '|') {   // optional "xx|" prefix, reflected back
     memcpy(reply, command, 3);

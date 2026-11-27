@@ -779,8 +779,8 @@ public:
     }
 
     // At least ~200 m across (as the Nodes map): you alone, or all in one spot.
-    if (mxla - mnla < 2000) { const int32_t c = (mnla + mxla) / 2; mnla = c - 1000; mxla = c + 1000; }
-    if (mxlo - mnlo < 2000) { const int32_t c = (mnlo + mxlo) / 2; mnlo = c - 1000; mxlo = c + 1000; }
+    if (mxla - mnla < 2000) { const int32_t mid = (mnla + mxla) / 2; mnla = mid - 1000; mxla = mid + 1000; }
+    if (mxlo - mnlo < 2000) { const int32_t mid = (mnlo + mxlo) / 2; mnlo = mid - 1000; mxlo = mid + 1000; }
     float avg_lat_rad = ((mnla + mxla) / 2.0e6f) * (float)M_PI / 180.0f;
     float lon_scale = cosf(avg_lat_rad); if (lon_scale < 0.05f) lon_scale = 0.05f;
     float lat_span = (float)(mxla - mnla);

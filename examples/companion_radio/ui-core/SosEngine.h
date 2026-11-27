@@ -140,8 +140,8 @@ public:
     const bool known = i < _responders;
     // The ACK word, or an MECP acknowledgement (B02) from an app that speaks it.
     const bool mecp_ack = geo::mecpBeacon(text) == mecp::Beacon::Ack;
-    const bool word = mecp_ack || hasWord(text, _prefs->sos_ack);
-    if (!known && !word) return false;
+    const bool said = mecp_ack || hasWord(text, _prefs->sos_ack);
+    if (!known && !said) return false;
     _acked = true;
     if (!known) {
       if (_responders < RESPONDERS_MAX) _responders++;
@@ -151,7 +151,7 @@ public:
     for (; i > 0; i--) _resp[i] = _resp[i - 1];   // to the front
     _resp[0] = r;
     snprintf(_resp[0].name, sizeof(_resp[0].name), "%s", from);
-    const bool bare = word && !mecp_ack && strlen(text) == strlen(_prefs->sos_ack);
+    const bool bare = said && !mecp_ack && strlen(text) == strlen(_prefs->sos_ack);
     if (!bare || !known) {   // the word alone adds nothing to what they said before
       snprintf(_resp[0].text, sizeof(_resp[0].text), "%s", bare ? "" : text);
       _resp[0].text[mesh::validUtf8PrefixLength(_resp[0].text, sizeof(_resp[0].text) - 1)] = '\0';   // cut off mid-character
@@ -161,14 +161,14 @@ public:
   }
 
   // ── Text ──────────────────────────────────────────────────────────────────
-  // `word` on its own in `text`, whatever the case: ACK in "ack, on our way",
+  // `w` on its own in `text`, whatever the case: ACK in "ack, on our way",
   // not in "back". A byte past ASCII counts as a letter (UTF-8).
-  static bool hasWord(const char* text, const char* word) {
-    int n = word ? (int)strlen(word) : 0;
+  static bool hasWord(const char* text, const char* w) {
+    int n = w ? (int)strlen(w) : 0;
     if (!text || n == 0) return false;
     for (const char* p = text; *p; p++) {
       if (p != text && isWordByte(p[-1])) continue;
-      if (strncasecmp(p, word, n) == 0 && !isWordByte(p[n])) return true;
+      if (strncasecmp(p, w, n) == 0 && !isWordByte(p[n])) return true;
     }
     return false;
   }

@@ -1132,8 +1132,8 @@ struct KeyboardWidget {
     }
     d.setCursor(2, y);
     d.print(from);
-    const int cx = 2 + d.getTextWidth(from) + 1;
-    d.fillRect(cx, y, 2, lh);
+    const int cur_x = 2 + d.getTextWidth(from) + 1;
+    d.fillRect(cur_x, y, 2, lh);
     // The strip: the item under the cursor boxed in the middle, its neighbours either side.
     int cnt;
     const StripItem* it = stripItems(isPin(), cnt);

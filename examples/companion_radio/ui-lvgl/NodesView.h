@@ -235,8 +235,8 @@ void UITask::refreshNearbyList() {
   int n = _nearby->count();
 
   int32_t lat, lon;
-  bool gps = _nearby->ownPosition(lat, lon);
-  setTextFmt(_nearby_status, "%d node%s%s", n, n == 1 ? "" : "s", gps ? "" : ", no GPS");
+  bool have_pos = _nearby->ownPosition(lat, lon);
+  setTextFmt(_nearby_status, "%d node%s%s", n, n == 1 ? "" : "s", have_pos ? "" : ", no GPS");
   if (sig == _nearby_sig || vlist::pressed(_nearby_list)) return;   // held: once it's let go
   _nearby_sig = sig;
 
@@ -257,8 +257,8 @@ void UITask::refreshNearbyList() {
       rowValue(row, t.right, t.right_col);
       // By the distance, an arrow towards it
       int b = -1;
-      int32_t lat, lon;
-      if (e.dist_km >= 0.0f && s_ui->_nearby->ownPosition(lat, lon)) b = geo::bearingDeg(lat, lon, e.lat_e6, e.lon_e6);
+      int32_t my_lat, my_lon;
+      if (e.dist_km >= 0.0f && s_ui->_nearby->ownPosition(my_lat, my_lon)) b = geo::bearingDeg(my_lat, my_lon, e.lat_e6, e.lon_e6);
       lv_obj_t* v = lv_obj_get_child(row, 2);
       if ((intptr_t)lv_obj_get_user_data(v) != b + 1) {
         lv_obj_set_user_data(v, (void*)(intptr_t)(b + 1));

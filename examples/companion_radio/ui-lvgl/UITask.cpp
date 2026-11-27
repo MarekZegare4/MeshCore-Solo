@@ -1222,13 +1222,13 @@ void UITask::takeScreenshot() {
   const int32_t T = 6;
   const int32_t strip[4][4] = { { 0, 0, W, T }, { 0, H - T, W, T }, { 0, T, T, H - 2 * T }, { W - T, T, T, H - 2 * T } };
   for (const auto& r : strip) {
-    lv_obj_t* f = lv_obj_create(lv_layer_top());
-    lv_obj_remove_style_all(f);
-    lv_obj_set_pos(f, r[0], r[1]);
-    lv_obj_set_size(f, r[2], r[3]);
-    lv_obj_set_style_bg_color(f, lv_color_white(), 0);
-    lv_obj_remove_flag(f, LV_OBJ_FLAG_CLICKABLE);
-    anim::run(f, anim::setBgOpa, LV_OPA_COVER, LV_OPA_TRANSP, 400, anim::coverDone);
+    lv_obj_t* edge = lv_obj_create(lv_layer_top());
+    lv_obj_remove_style_all(edge);
+    lv_obj_set_pos(edge, r[0], r[1]);
+    lv_obj_set_size(edge, r[2], r[3]);
+    lv_obj_set_style_bg_color(edge, lv_color_white(), 0);
+    lv_obj_remove_flag(edge, LV_OBJ_FLAG_CLICKABLE);
+    anim::run(edge, anim::setBgOpa, LV_OPA_COVER, LV_OPA_TRANSP, 400, anim::coverDone);
   }
   char msg[40];
   snprintf(msg, sizeof(msg), "Saved scr_%04d.bmp", n);

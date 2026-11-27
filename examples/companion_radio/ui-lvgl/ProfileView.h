@@ -36,8 +36,8 @@ static lv_obj_t* profileChart(lv_obj_t* parent, int h) {
   }
   c.min_span = 20;
   c.axis = [](int v, int, char* o, size_t n) { snprintf(o, n, "%d m", v); };
-  c.value = [](const chart::Chart& c, int i, char* o, size_t n) { snprintf(o, n, "%d m", c.v[i]); };
-  c.where = [](const chart::Chart& c, int i, char* o, size_t n) { (void)c; distText(s_prof.dist[i], o, n); };
+  c.value = [](const chart::Chart& ch, int i, char* o, size_t n) { snprintf(o, n, "%d m", ch.v[i]); };
+  c.where = [](const chart::Chart&, int i, char* o, size_t n) { distText(s_prof.dist[i], o, n); };
   distText(0, s_under[0], sizeof(s_under[0]));
   distText(total / 2, s_under[1], sizeof(s_under[1]));
   distText(total, s_under[2], sizeof(s_under[2]));

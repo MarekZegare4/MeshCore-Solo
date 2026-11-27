@@ -734,8 +734,8 @@ void UITask::navFitView() {
   else if (!ts.empty()) fold(ts.last().lat_1e6, ts.last().lon_1e6);
   if (!any) { showToast("Nothing to show yet"); return; }
   // At least ~200 m across: you alone, or all in one spot.
-  if (la1 - la0 < 2000) { const int32_t c = (la0 + la1) / 2; la0 = c - 1000; la1 = c + 1000; }
-  if (lo1 - lo0 < 2000) { const int32_t c = (lo0 + lo1) / 2; lo0 = c - 1000; lo1 = c + 1000; }
+  if (la1 - la0 < 2000) { const int32_t mid = (la0 + la1) / 2; la0 = mid - 1000; la1 = mid + 1000; }
+  if (lo1 - lo0 < 2000) { const int32_t mid = (lo0 + lo1) / 2; lo0 = mid - 1000; lo1 = mid + 1000; }
   mapFit(la0, la1, lo0, lo1);
 }
 
@@ -1743,10 +1743,10 @@ void UITask::navTargetsPopup() {
   lv_obj_t* list = scrollList(panel);
 
   int32_t lat = 0, lon = 0;
-  bool gps = _core->course.currentLocation(lat, lon);
+  bool have_pos = _core->course.currentLocation(lat, lon);
   bool imperial = _prefs && _prefs->units_imperial;
   auto dist = [&](int32_t la, int32_t lo, char* out, size_t n) {
-    if (gps) geo::fmtDist(out, n, geo::haversineKm(lat, lon, la, lo), imperial);
+    if (have_pos) geo::fmtDist(out, n, geo::haversineKm(lat, lon, la, lo), imperial);
     else out[0] = '\0';
   };
 

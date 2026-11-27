@@ -333,7 +333,7 @@ static void plotSweep(lv_obj_t* list, const char* title, const Sweep& sw, float 
   c.mark = (int16_t)lroundf((mesh_f - sw.f0) / sw.step);
   c.min_span = 10;
   c.axis = [](int v, int, char* o, size_t n) { snprintf(o, n, "%d", v); };
-  c.value = [](const chart::Chart& c, int i, char* o, size_t n) { snprintf(o, n, "%d dBm", c.v[i]); };
+  c.value = [](const chart::Chart& ch, int i, char* o, size_t n) { snprintf(o, n, "%d dBm", ch.v[i]); };
   c.where = [](const chart::Chart&, int i, char* o, size_t n) { snprintf(o, n, "%.3f MHz", s_near.f0 + s_near.step * i); };
   snprintf(s_sweep_under[0], sizeof(s_sweep_under[0]), "%.2f", sw.f0);
   snprintf(s_sweep_under[1], sizeof(s_sweep_under[1]), "%.3f", mesh_f);

@@ -82,10 +82,10 @@ class AdminScreen : public UIScreen {
     kbw.clearPlaceholders();
     int word_start = kbw.len;
     while (word_start > 0 && kbw.buf[word_start - 1] != ' ') word_start--;
-    const char* word = kbw.buf + word_start;
+    const char* typed = kbw.buf + word_start;
     int word_len = kbw.len - word_start;
     for (int i = 0; i < admin::CLI_COMMAND_COUNT; i++)
-      if (word_len == 0 || strncmp(admin::CLI_COMMANDS[i], word, word_len) == 0)
+      if (word_len == 0 || strncmp(admin::CLI_COMMANDS[i], typed, word_len) == 0)
         kbw.addPlaceholder(admin::CLI_COMMANDS[i]);
   }
 

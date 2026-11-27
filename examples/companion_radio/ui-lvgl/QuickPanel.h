@@ -313,9 +313,9 @@ void UITask::quickPanelRefresh() {
   tileSet(T_BT, LV_SYMBOL_BLUETOOTH, hasConnection() ? "Connected" : "Bluetooth", isBluetoothEnabled());
   tileSet(T_WIFI, LV_SYMBOL_WIFI, lvport::netRadio() == lvport::NET_UP ? "Online" : "WiFi", lvport::wifiAllowed());
   int32_t lat, lon;
-  const bool gps = _core->gpsEnabled();
-  tileSet(T_GPS, LV_SYMBOL_GPS, !_core->gpsAvailable() ? "No GPS" : gps && _core->course.currentLocation(lat, lon) ? "GPS fix" : "GPS",
-          gps, !_core->gpsAvailable());
+  const bool gps_on = _core->gpsEnabled();
+  tileSet(T_GPS, LV_SYMBOL_GPS, !_core->gpsAvailable() ? "No GPS" : gps_on && _core->course.currentLocation(lat, lon) ? "GPS fix" : "GPS",
+          gps_on, !_core->gpsAvailable());
 #ifdef PIN_BUZZER
   const bool auto_mode = _prefs && soundctl::mode(_prefs) == soundctl::MODE_AUTO;
   tileSet(T_SOUND, _buzzer.isQuiet() ? UI_SYMBOL_MUTE : LV_SYMBOL_VOLUME_MAX,
