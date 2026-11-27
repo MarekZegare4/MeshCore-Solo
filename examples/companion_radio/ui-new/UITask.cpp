@@ -1514,7 +1514,13 @@ void UITask::loop() {
   if (_gps_search && !_core->gpsSearching()) {   // applyGpsState()'s search over
     _gps_search = false;
     if (hasGPS()) applyGpsState(true, true);
+#ifdef BOARD_POWER_SWITCH
+    // A module wedged silent survives restarts and the wake-up pulse; only
+    // cutting its supply brought one back (#72).
+    else showAlert("No GPS found. Power switch off, then on", 4000);
+#else
     else showAlert("No GPS found", 2000);
+#endif
     _next_refresh = 0;
   }
 #if defined(UI_PERF_L1) && defined(NRF52_PLATFORM)
