@@ -722,7 +722,8 @@ void UITask::navFitView() {
     if (!any) { la0 = la1 = la; lo0 = lo1 = lo; any = true; return; }
     la0 = min(la0, la); la1 = max(la1, la); lo0 = min(lo0, lo); lo1 = max(lo1, lo);
   };
-  if (f.trail && !ts.empty()) { int32_t a, b, c, d; ts.boundingBox(a, b, c, d); fold(a, b); fold(c, d); }
+  int32_t a, b, c, d;
+  if (f.trail && ts.boundingBox(a, b, c, d)) { fold(a, b); fold(c, d); }
   for (int i = 0; f.waypoints && i < wp.count(); i++) fold(wp.at(i).lat_1e6, wp.at(i).lon_1e6);
   for (int i = 0; f.people && i < LiveTrackStore::CAPACITY; i++)
     if (lt.isActive(i, now)) fold(lt.slotAt(i).lat_1e6, lt.slotAt(i).lon_1e6);

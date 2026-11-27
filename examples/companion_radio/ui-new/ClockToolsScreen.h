@@ -410,7 +410,7 @@ class ClockToolsScreen : public UIScreen {
 
 public:
   // One button: the alarm's time and the timer's duration are digit editors.
-  uint8_t editMode() override {
+  EditMode editMode() override {
     if (_view == V_ALARM && _alarm_editing) return EDIT_DIGITS;
     if (_view == V_TIMER && !_task->isTimerRunning()) return EDIT_DIGITS;
     return EDIT_NONE;

@@ -65,13 +65,13 @@ namespace Features {
 #if defined(EINK_DISPLAY_MODEL)
   static constexpr bool     IS_EINK              = true;
   static constexpr bool     CLOCK_HIDE_SECONDS_DEFAULT = true;  // pref starting value
-  static constexpr unsigned HOME_REFRESH_MS      = 30000;   // slow display polls less
-  static constexpr unsigned LOCKSCREEN_REFRESH_MS = 30000;
+  static constexpr int      HOME_REFRESH_MS      = 30000;   // slow display polls less
+  static constexpr int      LOCKSCREEN_REFRESH_MS = 30000;
 #else
   static constexpr bool     IS_EINK              = false;
   static constexpr bool     CLOCK_HIDE_SECONDS_DEFAULT = false;
-  static constexpr unsigned HOME_REFRESH_MS      = 1000;
-  static constexpr unsigned LOCKSCREEN_REFRESH_MS = 1000;
+  static constexpr int      HOME_REFRESH_MS      = 1000;
+  static constexpr int      LOCKSCREEN_REFRESH_MS = 1000;
 #endif
 
 } // namespace Features

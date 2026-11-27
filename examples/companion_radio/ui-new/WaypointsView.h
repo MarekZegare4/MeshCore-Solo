@@ -356,7 +356,7 @@ public:
 
   // Returns true if the input was consumed (always, while active()).
   // One button: the coordinate's digit editor (UIScreen::EDIT_DIGITS).
-  uint8_t editMode() const { return _mode == ADD && _add_editor.active && !_kb_active ? UIScreen::EDIT_DIGITS : UIScreen::EDIT_NONE; }
+  UIScreen::EditMode editMode() const { return _mode == ADD && _add_editor.active && !_kb_active ? UIScreen::EDIT_DIGITS : UIScreen::EDIT_NONE; }
 
   bool handleInput(char c) {
     // Label keyboard (mark new / rename / ADD field) takes all input first.

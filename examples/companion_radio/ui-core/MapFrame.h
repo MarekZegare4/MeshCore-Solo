@@ -22,7 +22,7 @@ enum View : uint8_t { ALL, TRAIL, PEOPLE, WAYPOINTS, VIEW_COUNT };
 
 inline const char* viewName(uint8_t v) {
   static const char* N[VIEW_COUNT] = { "All", "Trail", "People", "Waypoints" };
-  return N[v < VIEW_COUNT ? v : ALL];
+  return N[v < VIEW_COUNT ? v : uint8_t(ALL)];
 }
 
 // What goes into the box (your own position always does).

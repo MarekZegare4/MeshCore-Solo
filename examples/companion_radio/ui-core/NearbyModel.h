@@ -79,7 +79,7 @@ public:
   uint8_t      sortMode() const       { return _sort; }
   bool         ownPosition(int32_t& lat, int32_t& lon) const { lat = _own_lat; lon = _own_lon; return _own_gps; }
   void setSource(Source s)            { _source = s; }
-  void setFilter(uint8_t f)           { _filter = f < F_COUNT ? f : F_ALL; }
+  void setFilter(uint8_t f)           { _filter = f < F_COUNT ? f : uint8_t(F_ALL); }
   void setSortMode(uint8_t s)         { _sort = s; }
   // A full list keeps the rows nearest this point instead (the L2's map: the
   // middle of the view, wherever it was moved to); cleared, it's the list's order.

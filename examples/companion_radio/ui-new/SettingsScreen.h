@@ -767,7 +767,7 @@ public:
     }
     return item == TX_POWER || item == CUSTOM_SF || item == CUSTOM_BW || item == CUSTOM_CR;
   }
-  uint8_t editMode() override { return _editor.active() || _clock_ed.active ? EDIT_DIGITS : EDIT_NONE; }
+  EditMode editMode() override { return _editor.active() || _clock_ed.active ? EDIT_DIGITS : EDIT_NONE; }
 
   bool handleInput(char c) override {
     NodePrefs* p = _task->getNodePrefs();

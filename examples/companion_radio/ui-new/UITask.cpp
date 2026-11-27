@@ -2270,7 +2270,7 @@ void UITask::oneButtonGesture(OneButton::Gesture g) {
     return;
   }
   // The keyboard (or the PIN pad on the lock screen) is the strip: as a digit editor.
-  const uint8_t em = _kb.isVisible() || _unlock_kb ? UIScreen::EDIT_DIGITS
+  const UIScreen::EditMode em = _kb.isVisible() || _unlock_kb ? UIScreen::EDIT_DIGITS
                    : curr ? curr->editMode() : UIScreen::EDIT_NONE;
   if (em == UIScreen::EDIT_DIGITS) {
     enqueueKey(checkDisplayOn(g == OneButton::CLICK ? KEY_UP : g == OneButton::DOUBLE ? KEY_DOWN
@@ -2304,7 +2304,7 @@ void UITask::oneButtonGesture(OneButton::Gesture g) {
 // keyboard or PIN pad as on the one-button strip, otherwise the screen's own
 // next step (stepKey()) or its step back (stepBackKey()).
 void UITask::fourButtonStep(bool fwd) {
-  const uint8_t em = _kb.isVisible() || _unlock_kb ? UIScreen::EDIT_DIGITS
+  const UIScreen::EditMode em = _kb.isVisible() || _unlock_kb ? UIScreen::EDIT_DIGITS
                    : curr ? curr->editMode() : UIScreen::EDIT_NONE;
   char k;
   if (em == UIScreen::EDIT_DIGITS)                  k = fwd ? KEY_DOWN : KEY_UP;

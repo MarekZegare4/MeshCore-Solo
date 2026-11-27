@@ -179,7 +179,7 @@ public:
     const int it = _items[_sel];
     return it == IT_RSF || it == IT_RBW || it == IT_RCR || it == IT_HOPS || it == IT_YIELD || it == IT_SNR;
   }
-  uint8_t editMode() override { return _editor.active() ? EDIT_DIGITS : EDIT_NONE; }
+  EditMode editMode() override { return _editor.active() ? EDIT_DIGITS : EDIT_NONE; }
 
   bool handleInput(char c) override {
     NodePrefs* p = _task->getNodePrefs();

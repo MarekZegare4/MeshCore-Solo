@@ -192,7 +192,7 @@ public:
     if (_view == V_LIST)    return _list_scroll > 0 ? KEY_UP : KEY_LEFT;
     return KEY_LEFT;
   }
-  uint8_t editMode() override { return _wp.active() ? _wp.editMode() : EDIT_NONE; }
+  EditMode editMode() override { return _wp.active() ? _wp.editMode() : EDIT_NONE; }
 
   bool handleInput(char c) override {
     // Waypoint management UI consumes all input while active.
@@ -801,10 +801,8 @@ private:
         if (lon > max_lon) max_lon = lon;
       }
     };
-    if (have_trail && f.trail) {
-      int32_t a, b, c, d; _store->boundingBox(a, b, c, d);
-      fold(a, b); fold(c, d);
-    }
+    int32_t a, b, c, d;
+    if (f.trail && _store->boundingBox(a, b, c, d)) { fold(a, b); fold(c, d); }
     if (f.waypoints) {
       WaypointStore& wp = _task->waypoints();
       for (int i = 0; i < wp.count(); i++) fold(wp.at(i).lat_1e6, wp.at(i).lon_1e6);

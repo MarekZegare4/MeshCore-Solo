@@ -164,7 +164,7 @@ private:
         if (!f[g][0]) continue;
         int prn = atoi(f[g]);
         if (prn <= 0) continue;
-        uint8_t sys = tsys == SYS_OTHER ? prnSys(prn) : (tsys == SYS_GPS && prn >= 33 && prn <= 64 ? SYS_SBAS : tsys);
+        uint8_t sys = tsys == SYS_OTHER ? prnSys(prn) : (tsys == SYS_GPS && prn >= 33 && prn <= 64 ? uint8_t(SYS_SBAS) : tsys);
         Sat* s = find(sys, prn);
         if (!s) {
           if (count >= MAX_SATS) { expire(); if (count >= MAX_SATS) continue; }

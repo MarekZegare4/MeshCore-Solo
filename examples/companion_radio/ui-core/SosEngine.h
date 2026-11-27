@@ -118,7 +118,7 @@ public:
     return advertMode() && _state == ACTIVE && _attempts && now - _beacon_at >= beaconMs();
   }
   // NodePrefs::sos_advert: off, zero-hop (whoever is in range) or flood (the mesh).
-  uint8_t advertMode() const { return _prefs ? _prefs->sos_advert : NodePrefs::SOS_ADVERT_ZERO_HOP; }
+  uint8_t advertMode() const { return _prefs ? _prefs->sos_advert : uint8_t(NodePrefs::SOS_ADVERT_ZERO_HOP); }
   void markBeacon(uint32_t now) { _beacon_at = now; }
   void markSent(uint32_t now, bool with_fix, bool ok) {
     _attempts++;

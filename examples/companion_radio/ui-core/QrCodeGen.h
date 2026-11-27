@@ -376,7 +376,7 @@ static int numCharCountBits(enum qrcodegen_Mode mode, int version);
 static const char * ALPHANUMERIC_CHARSET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
 
 // For generating error correction codes.
-static inline const int8_t ECC_CODEWORDS_PER_BLOCK[4][41] = {
+static const int8_t ECC_CODEWORDS_PER_BLOCK[4][41] = {
     // Version: (note that index 0 is for padding, and is set to an illegal value)
     //0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40    Error correction level
     {-1,  7, 10, 15, 20, 26, 18, 20, 24, 30, 18, 20, 24, 26, 30, 22, 24, 28, 30, 28, 28, 28, 28, 30, 30, 26, 28, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30},  // Low
@@ -388,7 +388,7 @@ static inline const int8_t ECC_CODEWORDS_PER_BLOCK[4][41] = {
 #define qrcodegen_REED_SOLOMON_DEGREE_MAX 30  // Based on the table above
 
 // For generating error correction codes.
-static inline const int8_t NUM_ERROR_CORRECTION_BLOCKS[4][41] = {
+static const int8_t NUM_ERROR_CORRECTION_BLOCKS[4][41] = {
     // Version: (note that index 0 is for padding, and is set to an illegal value)
     //0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40    Error correction level
     {-1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 4,  4,  4,  4,  4,  6,  6,  6,  6,  7,  8,  8,  9,  9, 10, 12, 12, 12, 13, 14, 15, 16, 17, 18, 19, 19, 20, 21, 22, 24, 25},  // Low

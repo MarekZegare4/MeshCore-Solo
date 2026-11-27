@@ -231,7 +231,7 @@ public:
     if (!listInFront()) return KEY_UP;
     return _row_sel > 0 ? KEY_UP : KEY_LEFT;
   }
-  uint8_t editMode() override {
+  EditMode editMode() override {
     if (!_value_editing || _kb_active) return EDIT_NONE;
     const admin::Field* f = S().currentField();
     return f && f->kind == admin::K_RADIO_FREQ ? EDIT_DIGITS : EDIT_VALUE;

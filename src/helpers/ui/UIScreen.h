@@ -85,6 +85,6 @@ public:
   //   EDIT_DIGITS  a DigitEditor: click the digit +1, double -1, long on to
   //                the next digit (KEY_NEXT; past the last, done), very long drops.
   enum EditMode : uint8_t { EDIT_NONE, EDIT_VALUE, EDIT_DIGITS };
-  virtual uint8_t editMode() { return EDIT_NONE; }
+  virtual EditMode editMode() { return EDIT_NONE; }
 };
 

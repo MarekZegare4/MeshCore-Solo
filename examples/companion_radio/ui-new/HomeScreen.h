@@ -752,7 +752,8 @@ public:
     WaypointStore& wp = _task->waypoints();
     const NodePrefs* np = _task->getNodePrefs();
     const mapframe::Fit f = mapframe::fit(np ? np->map_view : 0, !tr.empty(), wp.count() > 0, lt.active(now) > 0);
-    if (!tr.empty() && f.trail) { int32_t a, b, c, d; tr.boundingBox(a, b, c, d); fold(a, b); fold(c, d); }
+    int32_t a, b, c, d;
+    if (f.trail && tr.boundingBox(a, b, c, d)) { fold(a, b); fold(c, d); }
     for (int i = 0; f.people && i < LiveTrackStore::CAPACITY; i++)
       if (lt.isActive(i, now)) fold(lt.slotAt(i).lat_1e6, lt.slotAt(i).lon_1e6);
     for (int i = 0; f.waypoints && i < wp.count(); i++) fold(wp.at(i).lat_1e6, wp.at(i).lon_1e6);
@@ -1719,7 +1720,7 @@ public:
     return KEY_LEFT;
   }
 
-  uint8_t editMode() override { return isQuickPage(_page) && _quick_edit ? EDIT_VALUE : EDIT_NONE; }
+  EditMode editMode() override { return isQuickPage(_page) && _quick_edit ? EDIT_VALUE : EDIT_NONE; }
 
   bool handleInput(char c) override {
     // One button: a double click is back a page (Home has nowhere else to go back to).

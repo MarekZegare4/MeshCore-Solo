@@ -112,11 +112,14 @@ public:
   // False with no trail to walk back or no room on the flash.
   bool startTrackBack() {
     const TrailStore& s = trail.store();
-    TrailPoint last;   // the newest sample, still a candidate (TrailStore::addPoint)
-    const bool pend = s.pendingPoint(last);
     const int n = s.count();
-    if (!pend && n > 0) last = s.at(n - 1);
-    const int pts = n - (pend ? 0 : 1);   // the stored points before `last`
+    TrailPoint last;   // the newest sample: the candidate (TrailStore::addPoint), else the newest stored point
+    int pts = n;       // the stored points before `last`
+    if (!s.pendingPoint(last)) {
+      if (n < 2) return false;
+      last = s.at(n - 1);
+      pts = n - 1;
+    }
     if (pts < 1) return false;
     guide.stop();
     const int max = PlannedRoutes::MAX_POINTS;

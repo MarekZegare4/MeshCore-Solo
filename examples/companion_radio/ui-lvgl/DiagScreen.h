@@ -545,7 +545,7 @@ void UITask::diagSection(int sec) {
   lv_obj_t* card = nullptr;
   for (int i = 0; i < n; i++) {
     const Name* nm = nameOf(rows[i].label);
-    if ((nm ? nm->sec : SEC_DEVICE) != sec) continue;
+    if ((nm ? nm->sec : uint8_t(SEC_DEVICE)) != sec) continue;
     if (!card) {
       sectionTitle(s_list, SEC_TITLE[sec]);
       card = infoCard(s_list);

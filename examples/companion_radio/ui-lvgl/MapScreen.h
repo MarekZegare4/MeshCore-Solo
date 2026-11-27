@@ -1587,7 +1587,7 @@ void UITask::flowHistoryPopup() {
     char title[64], sub[64];
     ContactInfo c;
     const bool named = f.n && f.node[0] >= 0 && the_mesh.getContactByIdx(f.node[0], c) && c.name[0];
-    snprintf(title, sizeof(title), "%s%s%s%.24s", FLOW_KINDS[h.kind < PacketFlow::K_COUNT ? h.kind : PacketFlow::K_OTHER],
+    snprintf(title, sizeof(title), "%s%s%s%.24s", FLOW_KINDS[h.kind < PacketFlow::K_COUNT ? h.kind : uint8_t(PacketFlow::K_OTHER)],
              named ? "  " : "", named && h.routed ? "to " : named && !f.origin ? "via " : "", named ? c.name : "");
     const uint32_t t = h.ts + (int32_t)tzHoursAt(_prefs, h.ts) * 3600;
     int o = snprintf(sub, sizeof(sub), "%02u:%02u:%02u  ", (unsigned)(t / 3600 % 24), (unsigned)(t / 60 % 60), (unsigned)(t % 60));

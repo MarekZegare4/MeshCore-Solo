@@ -624,7 +624,7 @@ void UITask::buildHomeClock(lv_obj_t* box) {
   for (int k = 0; k < telemetry::COUNT && o < (int)sizeof(opts) - 24; k++)   // 137 bytes today; the list only grows
     o += snprintf(opts + o, sizeof(opts) - o, "%s%s", k ? "\n" : "", telemetry::NAME[k]);
   for (int i = 0; i < FIELDS; i++) {
-    uint8_t f = _prefs ? _prefs->dashboard_fields[i] : telemetry::NONE;
+    uint8_t f = _prefs ? _prefs->dashboard_fields[i] : uint8_t(telemetry::NONE);
     if (f >= telemetry::COUNT) f = telemetry::NONE;
     lv_obj_t* c = lv_obj_create(row);
     styleSurface(c, f ? theme::SURFACE : theme::BG);

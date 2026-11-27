@@ -42,7 +42,7 @@ public:
       display.print(labels[i]);
       display.setCursor(val_x, y);
       uint8_t f = _prefs->dashboard_fields[i];
-      display.print(telemetry::COMPACT[f < telemetry::COUNT ? f : telemetry::NONE]);
+      display.print(telemetry::COMPACT[f < telemetry::COUNT ? f : uint8_t(telemetry::NONE)]);
       display.setColor(UIColor::primary_txt);
     }
     return 500;

@@ -67,7 +67,7 @@ static const char* sectionTitle(uint8_t s) {
   return s < SEC_COUNT ? T[s] : "";
 }
 static uint8_t sectionPage(uint8_t s) {
-  static const uint8_t P[SEC_COUNT] = { PG_NAV, PG_NAV, PG_NAV, PG_NAV, PG_ADVERT,
+  static const Page P[SEC_COUNT] = { PG_NAV, PG_NAV, PG_NAV, PG_NAV, PG_ADVERT,
                                         PG_DEVICE, PG_DEVICE, PG_DEVICE, PG_DEVICE,
                                         PG_MESSAGES, PG_MESSAGES, PG_MESSAGES,
                                         PG_SOUND, PG_SOUND, PG_SOUND,
@@ -348,10 +348,10 @@ static void applyRptNetwork(UiCore& c)   { if (c.prefs()) rptctl::setUseProfile(
 #define NP_SIZE(f) (uint8_t)sizeof(((NodePrefs*)0)->f)
 #define COUNT_OF(a) (uint8_t)(sizeof(a) / sizeof(a[0]))
 // Index fields (uint8_t index), switches, and fields holding values[index].
-#define IDX(label, hint, sec, f, count, opt, chg) { label, hint, sec, NP_OFF(f), count, opt, chg, nullptr, 1 }
-#define SW(label, hint, sec, f, chg)             { label, hint, sec, NP_OFF(f), 2, nullptr, chg, nullptr, 1 }
-#define MAP(label, hint, sec, f, vals, opt, chg) { label, hint, sec, NP_OFF(f), COUNT_OF(vals), opt, chg, vals, NP_SIZE(f) }
-#define MAPF(label, hint, sec, f, vals, opt)     { label, hint, sec, NP_OFF(f), COUNT_OF(vals), opt, nullptr, vals, FLOAT_X100 }
+#define IDX(label, hint, sec, f, count, opt, chg) { label, hint, sec, NP_OFF(f), count, opt, chg, nullptr, 1, 0 }
+#define SW(label, hint, sec, f, chg)             { label, hint, sec, NP_OFF(f), 2, nullptr, chg, nullptr, 1, 0 }
+#define MAP(label, hint, sec, f, vals, opt, chg) { label, hint, sec, NP_OFF(f), COUNT_OF(vals), opt, chg, vals, NP_SIZE(f), 0 }
+#define MAPF(label, hint, sec, f, vals, opt)     { label, hint, sec, NP_OFF(f), COUNT_OF(vals), opt, nullptr, vals, FLOAT_X100, 0 }
 #define FLAGBIT(label, hint, sec, f, mask)       { label, hint, sec, NP_OFF(f), 2, nullptr, nullptr, nullptr, 1, mask }
 static const Setting ALL[] = {
 #ifndef TRAIL_FIXED_MIN_DELTA_M   // else every sample past a fixed jitter gate is kept

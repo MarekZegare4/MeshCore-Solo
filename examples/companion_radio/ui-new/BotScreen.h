@@ -211,7 +211,7 @@ public:
     if (_kb_row >= 0 || _cmd_off || _stepper_row >= 0) return KEY_UP;
     return _sel > 0 ? KEY_UP : KEY_LEFT;
   }
-  uint8_t editMode() override { return _stepper_row >= 0 && _kb_row < 0 ? EDIT_VALUE : EDIT_NONE; }
+  EditMode editMode() override { return _stepper_row >= 0 && _kb_row < 0 ? EDIT_VALUE : EDIT_NONE; }
 
   bool handleInput(char c) override {
     bool up    = (c == KEY_UP);

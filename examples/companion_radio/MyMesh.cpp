@@ -2261,7 +2261,7 @@ void MyMesh::handleCmdFrame(size_t len) {
     if (mesh::Packet::isValidPathLen(path_len)) {
       uint8_t path[MAX_PATH_SIZE];
       i += mesh::Packet::writePath(path, &cmd_frame[i], path_len);
-      if (i + 4 > len) {  // min payload 4 bytes
+      if ((size_t)i + 4 > len) {  // min payload 4 bytes
         writeErrFrame(ERR_CODE_ILLEGAL_ARG);
       } else {
         auto pkt = createRawData(&cmd_frame[i], len - i);

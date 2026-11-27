@@ -1023,7 +1023,8 @@ static void fetchFreeBuffer() {
   if (s_fstate != F_IDLE) return;
   heap_caps_free(s_fbuf);
   s_fbuf = nullptr;
-  s_fcap = s_flen = 0;
+  s_fcap = 0;
+  s_flen = 0;
 }
 
 #elif defined(SIM_PLATFORM) && defined(__EMSCRIPTEN__)

@@ -77,7 +77,7 @@ static void check(HTTPClient& http, NetworkClientSecure& tls) {
   if (code != 200) {
     if (code == 404) fail("No published release yet");
     else if (code < 0) fail(HTTPClient::errorToString(code).c_str());
-    else snprintf(s_msg, sizeof(s_msg), "GitHub answered %d", code), s_state = FAILED;
+    else { snprintf(s_msg, sizeof(s_msg), "GitHub answered %d", code); s_state = FAILED; }
     http.end();
     return;
   }
@@ -101,7 +101,7 @@ static void install(HTTPClient& http, NetworkClientSecure& tls) {
   int code = http.GET();   // github.com answers with a redirect to its download host
   if (code != 200) {
     if (code < 0) fail(HTTPClient::errorToString(code).c_str());
-    else snprintf(s_msg, sizeof(s_msg), "Download answered %d", code), s_state = FAILED;
+    else { snprintf(s_msg, sizeof(s_msg), "Download answered %d", code); s_state = FAILED; }
     http.end();
     return;
   }

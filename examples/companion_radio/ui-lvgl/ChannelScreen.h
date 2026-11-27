@@ -207,7 +207,7 @@ void UITask::buildChannelEdit() {
   lv_obj_add_event_cb(s_kb, onChanKb, LV_EVENT_READY, NULL);
   lv_obj_add_event_cb(s_kb, onChanKb, LV_EVENT_CANCEL, NULL);
   lv_obj_add_flag(s_kb, LV_OBJ_FLAG_HIDDEN);
-  channelEditType(edit ? T_PRIVATE : s_type);
+  channelEditType(edit ? uint8_t(T_PRIVATE) : s_type);
 }
 
 // Show the fields the channel type needs.

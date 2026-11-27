@@ -244,7 +244,8 @@ bool UITask::coverageUpload(bool asked) {
   if (mapview::s_dl.active() || otaBusy()) { if (asked) showToast("WiFi busy (a download or an update) - try later"); return false; }
   s_msg[0] = '\0';
   s_file_i = 0;
-  s_sent_b = s_size_b = 0;
+  s_sent_b = 0;
+  s_size_b = 0;
   crashlog::note("cov upload %d", s_nfiles);
   if (lvport::netState() == lvport::NET_UP) { s_we_joined = false; coverageStartTask(); }
   else { s_we_joined = true; lvport::netBegin(ssid, pass); s_state = CONNECTING; s_since = millis(); }
