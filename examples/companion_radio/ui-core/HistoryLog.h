@@ -164,7 +164,7 @@ public:
       filePath(*_pg, seg, p, sizeof(p));
       File f = openRead(p);
       if (!f) continue;
-      uint32_t size = f.size(), pos = seg == _hi.seg ? _hi.pos : 0;
+      uint32_t size = logEnd(f), pos = seg == _hi.seg ? _hi.pos : 0;
       uint32_t stop = seg == _ceil.seg && _ceil.pos < size ? _ceil.pos : size;
       while (pos < stop && got < PAGE) {
         uint8_t buf[REC_MAX];
@@ -266,8 +266,10 @@ private:
     if (more) touch();
   }
 
+  // A write that fails (the flash full) is tried again with the next flush:
+  // done stays at what is on the flash (endWrite), and the entries after it wait.
   bool flushCh(bool all) {
-    File f = noFile();
+    Writer w(noFile(), _ch, _ch_done);
     bool more = false;
     uint32_t now = rtc_clock.getCurrentTime();
     for (int j = _history->chHistCount() - 1; j >= 0; j--) {
@@ -276,15 +278,19 @@ private:
       if (!all && e.relay_status == ACK_PENDING && now - e.timestamp < SETTLE_SECS) { more = true; break; }
       ChannelDetails ch;
       if (the_mesh.getChannel(e.ch_idx, ch) && ch.name[0] &&
-          !put(_ch, f, channelKey(ch), e.timestamp, 0, e.relay_status, e.path_len, e.path, e.text)) break;
-      _ch_done = e.arc_id;
+          !put(w, e.arc_id, channelKey(ch), e.timestamp, 0, e.relay_status, e.path_len, e.path, e.text)) {
+        more = true;
+        break;
+      }
+      w.done = e.arc_id;
     }
-    if (f) f.close();
+    if (!endWrite(w)) more = true;
+    _ch_done = w.done;
     return more;
   }
 
   bool flushDm(bool all) {
-    File f = noFile();
+    Writer w(noFile(), _dm, _dm_done);
     bool more = false;
     for (int j = _history->dmHistCount() - 1; j >= 0; j--) {
       const DmHistEntry& e = _history->dmAtPos(_history->dmHistPosNewest(j));
@@ -292,23 +298,50 @@ private:
       if (!all && e.ack_status == ACK_PENDING) { more = true; break; }
       uint32_t key;
       memcpy(&key, e.prefix, 4);
-      if (!put(_dm, f, key, e.timestamp, e.msg_ts, e.ack_status | (e.outgoing ? OUTGOING : 0),
-               e.path_len, e.path, e.text)) break;
-      _dm_done = e.arc_id;
+      if (!put(w, e.arc_id, key, e.timestamp, e.msg_ts, e.ack_status | (e.outgoing ? OUTGOING : 0),
+               e.path_len, e.path, e.text)) {
+        more = true;
+        break;
+      }
+      w.done = e.arc_id;
     }
-    if (f) f.close();
+    if (!endWrite(w)) more = true;
+    _dm_done = w.done;
     return more;
   }
 
-  bool put(Log& l, File& f, uint32_t key, uint32_t ts, uint32_t msg_ts, uint8_t flags, uint8_t path_len,
-           const uint8_t* path, const char* text) {
-    if (!f || !l.last || l.in_last >= segRecords(l)) {
-      if (f) f.close();
+  // One flush's appending to a segment. LittleFS commits a file on close: all
+  // that was written, or -- a write failed -- none of it; SPIFFS may keep a
+  // record cut short. So an entry counts as saved (done) only once its file
+  // is closed and read back holding the whole record (endWrite).
+  static const int WRITE_MAX = MessageHistory::CH_HIST_MAX > MessageHistory::DM_HIST_MAX
+                             ? MessageHistory::CH_HIST_MAX : MessageHistory::DM_HIST_MAX;
+  struct Writer {
+    Writer(File none, Log& log, uint32_t done_mark) : f(none), l(log), done(done_mark) {}
+    File     f;
+    Log&     l;
+    uint32_t done;          // the last entry dealt with (written, or nothing to write)
+    uint32_t done0 = 0;     // done when the file was opened
+    uint32_t start = 0;     // the file's size then
+    uint16_t in_last0 = 0;  // l.in_last then
+    int      n = 0;         // records written since
+    uint32_t arc[WRITE_MAX];   // their entries' arc_id
+  };
+
+  bool put(Writer& w, uint32_t arc_id, uint32_t key, uint32_t ts, uint32_t msg_ts, uint8_t flags,
+           uint8_t path_len, const uint8_t* path, const char* text) {
+    Log& l = w.l;
+    if (w.f && (l.in_last >= segRecords(l) || w.n == WRITE_MAX) && !endWrite(w)) return false;
+    if (!w.f) {
       if (!l.last || l.in_last >= segRecords(l)) nextSegment(l);
       char p[24];
       filePath(l, l.last, p, sizeof(p));
-      f = openAppend(p);
-      if (!f) return false;
+      w.f = openAppend(p);
+      if (!w.f) return false;
+      w.done0 = w.done;
+      w.start = w.f.size();
+      w.in_last0 = l.in_last;
+      w.n = 0;
     }
     uint8_t buf[REC_MAX];
     Rec r = { key, ts, msg_ts, flags, path_len, (uint8_t)strnlen(text, MSG_TEXT_BUF - 1) };
@@ -317,10 +350,35 @@ private:
     memcpy(buf + n, path, pn);                   n += pn;
     memcpy(buf + n, text, r.text_len);           n += r.text_len;
     buf[n] = (uint8_t)(n + 1);                   n++;
-    if ((int)f.write(buf, n) != n) return false;
+    if ((int)w.f.write(buf, n) != n) return false;   // endWrite finds what of it is there
+    w.arc[w.n++] = arc_id;
     l.in_last++;
     if (ts > _newest) _newest = ts;
     return true;
+  }
+
+  // Closes the file and reads back what reached the flash: done and in_last
+  // go back to the records that did. A record cut short ends its segment (the
+  // next write starts another): records after it couldn't be walked back to.
+  // False when not all that was written is there.
+  bool endWrite(Writer& w) {
+    if (!w.f) return true;
+    w.f.close();
+    char p[24];
+    filePath(w.l, w.l.last, p, sizeof(p));
+    w.f = openRead(p);   // the same File: one is ~260 B (its name) on a 4 KB loop stack
+    uint32_t size = 0, end = w.start;
+    int k = 0;
+    if (w.f) {
+      size = w.f.size();
+      end = wholeRecords(w.f, w.start, size, &k);
+      w.f.close();   // closed reads false: the next put opens again
+    }
+    const bool all = k == w.n;
+    if (!all) w.done = k ? w.arc[k - 1] : w.done0;
+    w.l.in_last = end < size ? segRecords(w.l) : (uint16_t)(w.in_last0 + k);
+    w.n = 0;
+    return all;
   }
 
   void nextSegment(Log& l) {
@@ -464,11 +522,13 @@ private:
     if (!f) return 0;
     uint16_t n = 0;
     uint8_t len;
-    for (uint32_t pos = f.size(); pos > 0 && stepBack(f, pos, len); pos -= len) n++;
+    const uint32_t end = logEnd(f);
+    for (uint32_t pos = end; pos > 0 && stepBack(f, pos, len); pos -= len) n++;
+    const bool cut = end < f.size();   // ends in a record cut short: takes no more
     f.close();
     Rec r;
     if (n && lastRec(l, l.last, r) && r.timestamp > _newest) _newest = r.timestamp;
-    return n;
+    return cut ? segRecords(l) : n;
   }
 
   // The last record of a segment.
@@ -477,7 +537,7 @@ private:
     filePath(l, seg, p, sizeof(p));
     File f = openRead(p);
     if (!f) return false;
-    uint32_t pos = f.size();
+    uint32_t pos = logEnd(f);
     uint8_t len;
     bool ok = pos > 0 && stepBack(f, pos, len) && f.seek(pos - len) &&
               f.read((uint8_t*)&r, sizeof(r)) == (int)sizeof(r) && sane(r, len);
@@ -488,6 +548,34 @@ private:
   // The record ending at pos: its length, false when that makes no sense.
   static bool stepBack(File& f, uint32_t pos, uint8_t& len) {
     return f.seek(pos - 1) && f.read(&len, 1) == 1 && len > sizeof(Rec) && len <= pos;
+  }
+
+  // Whole records from pos on, up to size: where they end; count: how many.
+  static uint32_t wholeRecords(File& f, uint32_t pos, uint32_t size, int* count) {
+    int n = 0;
+    while (pos < size) {
+      Rec r;
+      if (!f.seek(pos) || f.read((uint8_t*)&r, sizeof(r)) != (int)sizeof(r) || r.text_len >= MSG_TEXT_BUF) break;
+      const uint32_t len = sizeof(r) + pathBytes(r.path_len) + r.text_len + 1;
+      uint8_t tail;
+      if (pos + len > size || !f.seek(pos + len - 1) || f.read(&tail, 1) != 1 || tail != (uint8_t)len) break;
+      pos += len;
+      n++;
+    }
+    if (count) *count = n;
+    return pos;
+  }
+
+  // Where a segment's records end: its size, or -- a write cut short left a
+  // part of one there (SPIFFS with the flash full; endWrite starts another
+  // segment after it) -- the end of the last whole one.
+  static uint32_t logEnd(File& f) {
+    const uint32_t size = f.size();
+    uint8_t len;
+    Rec r;
+    if (!size || (stepBack(f, size, len) && f.seek(size - len) &&
+                  f.read((uint8_t*)&r, sizeof(r)) == (int)sizeof(r) && sane(r, len))) return size;
+    return wholeRecords(f, 0, size, nullptr);
   }
 
   void restore() {
@@ -516,7 +604,7 @@ private:
       filePath(l, seg, p, sizeof(p));
       File f = openRead(p);
       if (!f) continue;
-      uint32_t pos = f.size();
+      uint32_t pos = logEnd(f);
       uint8_t len;
       while (pos > 0 && got < want && stepBack(f, pos, len)) {
         pos -= len;
@@ -532,7 +620,7 @@ private:
       filePath(l, seg, p, sizeof(p));
       File f = openRead(p);
       if (!f) continue;
-      uint32_t size = f.size();
+      uint32_t size = logEnd(f);
       for (uint32_t pos = seg == seg0 ? off0 : 0; pos < size; ) {
         uint8_t buf[REC_MAX];
         Rec r;
@@ -614,7 +702,7 @@ private:
       filePath(l, seg, p, sizeof(p));
       File f = openRead(p);
       if (!f) continue;
-      uint32_t pos = f.size();
+      uint32_t pos = logEnd(f);
       if (seg == from.seg && from.pos < pos) pos = from.pos;
       uint8_t len;
       while (pos > 0 && stepBack(f, pos, len)) {
