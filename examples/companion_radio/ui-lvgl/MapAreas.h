@@ -43,21 +43,11 @@ static double worldY(double lat) { double r = lat * M_PI / 180.0; return (1.0 - 
 static double lonOf(double wx) { return wx * 360.0 - 180.0; }
 static double latOf(double wy) { return atan(sinh(M_PI * (1.0 - 2.0 * wy))) * 180.0 / M_PI; }
 
-// Deepest zoom at which a box `ww` x `wh` (world units) fits `w` x `h` px.
-static int fitZoom(double ww, double wh, int w, int h) {
-  int z = mapview::MIN_Z;
-  for (int k = mapview::MAX_Z; k >= mapview::MIN_Z; k--) {
-    double s = (double)(1 << k) * mapview::TILE_PX;
-    if (ww * s <= w && wh * s <= h) { z = k; break; }
-  }
-  return z;
-}
-
 static mapview::TileArea frameArea(int w, int h) {
   mapview::TileArea a;
   a.lon0 = lonOf(s_fx0); a.lon1 = lonOf(s_fx1);
   a.lat1 = latOf(s_fy0); a.lat0 = latOf(s_fy1);
-  int zfit = fitZoom(s_fx1 - s_fx0, s_fy1 - s_fy0, w, h);
+  int zfit = mapview::fitZoom(s_fx1 - s_fx0, s_fy1 - s_fy0, w, h);
   a.zmin = zfit - 4 < 5 ? (zfit < 5 ? zfit : 5) : zfit - 4;   // a few overview levels (cheap)
   a.zmax = s_zmax < a.zmin ? a.zmin : s_zmax;
   return a;
@@ -422,13 +412,9 @@ void UITask::mapAreaPopup(int idx) {
   s_preview = true;
   double x0, y0, x1, y1;
   boxWorld(m.box, x0, y0, x1, y1);
-  _map_z = fitZoom(x1 - x0, y1 - y0, w - 24, above - 16);
-  double s = (double)(1 << _map_z);
-  _map_cx = (x0 + x1) / 2 * s;
-  _map_cy = (y0 + y1) / 2 * s + (double)(h - above) / 2 / mapview::TILE_PX;   // centred in the part left showing
-  _map_follow = false;
   s_show = idx;
-  layoutMap();
+  mapShowWorld((x0 + x1) / 2, (y0 + y1) / 2, mapview::fitZoom(x1 - x0, y1 - y0, w - 24, above - 16),
+               (double)(h - above) / 2 / mapview::TILE_PX);   // centred in the part left showing
 }
 
 void UITask::areaPreviewEnd() {

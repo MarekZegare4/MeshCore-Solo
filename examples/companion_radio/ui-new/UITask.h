@@ -280,7 +280,9 @@ private:
 #endif
 #endif
   void pollInput();   // every input into the key queue, once a loop()
+#if (defined(PIN_USER_BTN) && !UI_ONE_BUTTON) || defined(PIN_USER_BTN_ANA)
   void momentaryKeys(int ev);   // a MomentaryButton event -> key
+#endif
   void pollCardKB();
 #if defined(NRF52_PLATFORM) && defined(EINK_DISPLAY_MODEL) && defined(PIN_BUZZER)
   // The buzzer through an e-ink frame: drawing it, sending it byte by byte and

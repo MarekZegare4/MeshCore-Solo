@@ -168,17 +168,7 @@ static void layout(double scale) {
 }
 static void onDraw(lv_event_t* e) {
   if (s_pts_n < 2) return;
-  lv_obj_t* obj = lv_event_get_current_target_obj(e);
-  lv_area_t a;
-  lv_obj_get_coords(obj, &a);
-  if (a.x1 != s_px0 || a.y1 != s_py0) {
-    for (int i = 0; i < s_pts_n; i++) {
-      if (s_pts[i].x == LV_DRAW_LINE_POINT_NONE) continue;
-      s_pts[i].x += a.x1 - s_px0;
-      s_pts[i].y += a.y1 - s_py0;
-    }
-    s_px0 = a.x1; s_py0 = a.y1;
-  }
+  mapstyle::followObj(lv_event_get_current_target_obj(e), s_pts, s_pts_n, s_px0, s_py0);
   mapstyle::dashedPolyline(lv_event_get_layer(e), s_pts, s_pts_n, s_col, mapstyle::ROUTE_W, mapstyle::LIGHT_CASE);
 }
 }  // namespace pv
@@ -188,17 +178,7 @@ static void onDraw(lv_event_t* e) {
 // walks it a segment at a time, clipped to the band being drawn).
 static void onTrailDraw(lv_event_t* e) {
   if (s_pts_n < 2) return;
-  lv_obj_t* obj = lv_event_get_current_target_obj(e);
-  lv_area_t a;
-  lv_obj_get_coords(obj, &a);
-  if (a.x1 != s_pts_x0 || a.y1 != s_pts_y0) {   // moved since the points were made
-    for (int i = 0; i < s_pts_n; i++) {
-      if (s_pts[i].x == LV_DRAW_LINE_POINT_NONE) continue;
-      s_pts[i].x += a.x1 - s_pts_x0;
-      s_pts[i].y += a.y1 - s_pts_y0;
-    }
-    s_pts_x0 = a.x1; s_pts_y0 = a.y1;
-  }
+  mapstyle::followObj(lv_event_get_current_target_obj(e), s_pts, s_pts_n, s_pts_x0, s_pts_y0);
   mapstyle::polyline(lv_event_get_layer(e), s_pts, s_pts_n, mapstyle::TRAIL, mapstyle::TRAIL_W, mapstyle::LIGHT_CASE);
 }
 
@@ -697,15 +677,9 @@ void UITask::navFrameTarget() {
   if (_core->course.currentLocation(lat, lon)) {
     double mx = navmap::normX(lon), my = navmap::normY(lat);
     cx = (tx + mx) / 2; cy = (ty + my) / 2;
-    double dx = fabs(tx - mx) * mapview::TILE_PX, dy = fabs(ty - my) * mapview::TILE_PX;
-    z = mapview::MAX_Z - 1;
-    while (z > mapview::MIN_Z && (dx * (1 << z) > w - 150 || dy * (1 << z) > h - 110)) z--;   // clear of the buttons
+    z = mapview::fitZoom(fabs(tx - mx), fabs(ty - my), w - 150, h - 110, mapview::MAX_Z - 1);   // clear of the buttons
   }
-  _map_z = z;
-  double n = (double)(1 << z);
-  _map_cx = cx * n;
-  _map_cy = cy * n + navmap::BAR_H / 2.0 / mapview::TILE_PX;   // keep it clear of the bar
-  layoutMap();
+  mapShowWorld(cx, cy, z, navmap::BAR_H / 2.0 / mapview::TILE_PX);   // keep it clear of the bar
 }
 
 // The map fitted to what Map tools > View takes in (ui-core/MapFrame.h), as
@@ -751,17 +725,10 @@ void UITask::navFrameTrail() {
     if (y < y0) y0 = y;
     if (y > y1) y1 = y;
   }
-  _map_follow = false;
   int w = _map_area ? lv_obj_get_width(_map_area) : 320;
   int h = (_map_area ? lv_obj_get_height(_map_area) : 218) - mapBottomH();
-  double dx = (x1 - x0) * mapview::TILE_PX, dy = (y1 - y0) * mapview::TILE_PX;
-  int z = mapview::MAX_Z - 1;
-  while (z > mapview::MIN_Z && (dx * (1 << z) > w - 110 || dy * (1 << z) > h - 60)) z--;   // clear of the buttons
-  _map_z = z;
-  double n = (double)(1 << z);
-  _map_cx = (x0 + x1) / 2 * n;
-  _map_cy = (y0 + y1) / 2 * n + mapCenterBias();
-  layoutMap();
+  mapShowWorld((x0 + x1) / 2, (y0 + y1) / 2,
+               mapview::fitZoom(x1 - x0, y1 - y0, w - 110, h - 60, mapview::MAX_Z - 1), mapCenterBias());   // clear of the buttons
 }
 
 // The preview's points (navmap::pv) framed above its card `panel`, the view
@@ -775,15 +742,9 @@ void UITask::mapPreviewShow(lv_obj_t* panel) {
   if (above < 60) above = 60;
   if (!pv::s_on) { pv::s_prev_cx = _map_cx; pv::s_prev_cy = _map_cy; pv::s_prev_z = _map_z; pv::s_prev_follow = _map_follow; }
   pv::s_on = true;
-  const double dx = (pv::s_x1 - pv::s_x0) * mapview::TILE_PX, dy = (pv::s_y1 - pv::s_y0) * mapview::TILE_PX;
-  int z = mapview::MAX_Z - 1;
-  while (z > mapview::MIN_Z && (dx * (1 << z) > w - 40 || dy * (1 << z) > above - 30)) z--;
-  _map_z = z;
-  const double n = (double)(1 << z);
-  _map_cx = (pv::s_x0 + pv::s_x1) / 2 * n;
-  _map_cy = (pv::s_y0 + pv::s_y1) / 2 * n + (double)(h - above) / 2 / mapview::TILE_PX;   // centred in the part left showing
-  _map_follow = false;
-  layoutMap();
+  mapShowWorld((pv::s_x0 + pv::s_x1) / 2, (pv::s_y0 + pv::s_y1) / 2,
+               mapview::fitZoom(pv::s_x1 - pv::s_x0, pv::s_y1 - pv::s_y0, w - 40, above - 30, mapview::MAX_Z - 1),
+               (double)(h - above) / 2 / mapview::TILE_PX);   // centred in the part left showing
 }
 
 // The card closed: the preview gone, the map back where it was.

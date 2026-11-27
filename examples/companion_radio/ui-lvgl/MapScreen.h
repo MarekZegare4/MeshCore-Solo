@@ -63,6 +63,16 @@ static bool pollTiles() {
 }
 
 static const int MIN_Z = 3, MAX_Z = 18;
+
+// The deepest zoom (max_z at most) at which a box ww x wh (world units, 0..1)
+// fits w x h px; MIN_Z when none does.
+static int fitZoom(double ww, double wh, double w, double h, int max_z = MAX_Z) {
+  for (int z = max_z; z > MIN_Z; z--) {
+    const double s = (double)(1 << z) * TILE_PX;
+    if (ww * s <= w && wh * s <= h) return z;
+  }
+  return MIN_Z;
+}
 static const int GRID_COLS = 3, GRID_ROWS = 2;   // covers 320x218 at any offset
 
 // Fallback centre with no GPS fix and no saved position: Poland.
@@ -1770,16 +1780,20 @@ void UITask::mapFit(int32_t la0, int32_t la1, int32_t lo0, int32_t lo1) {
   using namespace mapview;
   if (!_map_area) return;
   int w = lv_obj_get_width(_map_area), h = lv_obj_get_height(_map_area) - mapBottomH();
-  int z = MAX_Z;
-  for (; z > MIN_Z; z--) {
-    double dx = fabs(lonToTileX(lo1 / 1e6, z) - lonToTileX(lo0 / 1e6, z)) * TILE_PX;
-    double dy = fabs(latToTileY(la0 / 1e6, z) - latToTileY(la1 / 1e6, z)) * TILE_PX;
-    if (dx < w * 0.7 && dy < h * 0.6) break;
-  }
+  const double ww = fabs(lonToTileX(lo1 / 1e6, 0) - lonToTileX(lo0 / 1e6, 0));
+  const double wh = fabs(latToTileY(la0 / 1e6, 0) - latToTileY(la1 / 1e6, 0));
+  mapShowWorld(lonToTileX((lo0 + lo1) / 2e6, 0), latToTileY((la0 + la1) / 2e6, 0),
+               fitZoom(ww, wh, w * 0.7, h * 0.6), mapCenterBias());
+}
+
+// The map centred on world point (wx, wy) at zoom z, `bias` tiles down (to
+// keep it clear of a bar or sheet), no longer following you.
+void UITask::mapShowWorld(double wx, double wy, int z, double bias) {
   _map_z = z;
+  const double s = (double)(1 << z);
+  _map_cx = wx * s;
+  _map_cy = wy * s + bias;
   _map_follow = false;
-  _map_cx = lonToTileX((lo0 + lo1) / 2e6, z);
-  _map_cy = latToTileY((la0 + la1) / 2e6, z) + mapCenterBias();
   layoutMap();
 }
 

@@ -101,6 +101,20 @@ static void dashedPolyline(lv_layer_t* layer, const lv_point_precise_t* p, int n
 }
 
 // A marker dot's look: the fill (bg_color) is the caller's.
+// Points laid out for obj at screen origin (x0, y0), moved with it to where
+// it is at its draw (a scroll, a slid page) -- the gaps (POINT_NONE) kept.
+static void followObj(lv_obj_t* obj, lv_point_precise_t* p, int n, int32_t& x0, int32_t& y0) {
+  lv_area_t a;
+  lv_obj_get_coords(obj, &a);
+  if (a.x1 == x0 && a.y1 == y0) return;
+  for (int i = 0; i < n; i++) {
+    if (p[i].x == LV_DRAW_LINE_POINT_NONE) continue;
+    p[i].x += a.x1 - x0;
+    p[i].y += a.y1 - y0;
+  }
+  x0 = a.x1; y0 = a.y1;
+}
+
 static void dotDsc(lv_draw_rect_dsc_t& d, int ring = 2, lv_opa_t opa = LV_OPA_COVER) {
   lv_draw_rect_dsc_init(&d);
   d.radius = LV_RADIUS_CIRCLE;

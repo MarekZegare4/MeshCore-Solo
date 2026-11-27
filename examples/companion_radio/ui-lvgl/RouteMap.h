@@ -72,17 +72,7 @@ static void scanGpx() {
 
 static void onDraw(lv_event_t* e) {
   if (s_pts_n < 2) return;
-  lv_obj_t* obj = lv_event_get_current_target_obj(e);
-  lv_area_t a;
-  lv_obj_get_coords(obj, &a);
-  if (a.x1 != s_pts_x0 || a.y1 != s_pts_y0) {
-    for (int i = 0; i < s_pts_n; i++) {
-      if (s_pts[i].x == LV_DRAW_LINE_POINT_NONE) continue;
-      s_pts[i].x += a.x1 - s_pts_x0;
-      s_pts[i].y += a.y1 - s_pts_y0;
-    }
-    s_pts_x0 = a.x1; s_pts_y0 = a.y1;
-  }
+  mapstyle::followObj(lv_event_get_current_target_obj(e), s_pts, s_pts_n, s_pts_x0, s_pts_y0);
   if (s_dashed) mapstyle::dashedPolyline(lv_event_get_layer(e), s_pts, s_pts_n, mapstyle::ROUTE, mapstyle::TRAIL_W, 0);
   else mapstyle::polyline(lv_event_get_layer(e), s_pts, s_pts_n, mapstyle::ROUTE, mapstyle::ROUTE_W, mapstyle::LIGHT_CASE);
 }
@@ -291,17 +281,10 @@ void UITask::navFrameRoute() {
   const RouteInfo& ri = g.info();
   const double x0 = navmap::normX(ri.min_lon), x1 = navmap::normX(ri.max_lon);
   const double y0 = navmap::normY(ri.max_lat), y1 = navmap::normY(ri.min_lat);
-  _map_follow = false;
   int w = _map_area ? lv_obj_get_width(_map_area) : 320;
   int h = (_map_area ? lv_obj_get_height(_map_area) : 218) - mapBottomH();
-  double dx = (x1 - x0) * mapview::TILE_PX, dy = (y1 - y0) * mapview::TILE_PX;
-  int z = mapview::MAX_Z - 1;
-  while (z > mapview::MIN_Z && (dx * (1 << z) > w - 110 || dy * (1 << z) > h - 60)) z--;
-  _map_z = z;
-  double n = (double)(1 << z);
-  _map_cx = (x0 + x1) / 2 * n;
-  _map_cy = (y0 + y1) / 2 * n + mapCenterBias();
-  layoutMap();
+  mapShowWorld((x0 + x1) / 2, (y0 + y1) / 2,
+               mapview::fitZoom(x1 - x0, y1 - y0, w - 110, h - 60, mapview::MAX_Z - 1), mapCenterBias());
 }
 
 // From loop(), once a second: the map and bar follow the guide's target.

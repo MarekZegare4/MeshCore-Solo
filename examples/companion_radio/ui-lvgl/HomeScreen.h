@@ -168,17 +168,7 @@ static int32_t s_lp_x0 = 0, s_lp_y0 = 0;   // the object's screen origin s_lp wa
 
 static void onLinesDraw(lv_event_t* e) {
   if (s_lp_n < 2) return;
-  lv_obj_t* obj = lv_event_get_current_target_obj(e);
-  lv_area_t a;
-  lv_obj_get_coords(obj, &a);
-  if (a.x1 != s_lp_x0 || a.y1 != s_lp_y0) {   // the page slid (a swipe)
-    for (int i = 0; i < s_lp_n; i++) {
-      if (s_lp[i].x == LV_DRAW_LINE_POINT_NONE) continue;
-      s_lp[i].x += a.x1 - s_lp_x0;
-      s_lp[i].y += a.y1 - s_lp_y0;
-    }
-    s_lp_x0 = a.x1; s_lp_y0 = a.y1;
-  }
+  mapstyle::followObj(lv_event_get_current_target_obj(e), s_lp, s_lp_n, s_lp_x0, s_lp_y0);
   using namespace mapstyle;
   lv_layer_t* layer = lv_event_get_layer(e);
   const int rn = s_lp_n - s_lp_trail;
@@ -869,11 +859,7 @@ bool UITask::homeMapFit() {
   }
   const bool several = s_npts > 1 || guided;
   int w = lv_obj_get_width(s_area) - 2 * MARGIN, h = lv_obj_get_height(s_area) - 2 * MARGIN - 20;
-  s_z = several ? mapview::MIN_Z : SOLO_Z;
-  for (int z = MAX_Z; several && z >= mapview::MIN_Z; z--) {
-    double k = (double)(1 << z) * mapview::TILE_PX;
-    if ((x1 - x0) * k <= w && (y1 - y0) * k <= h) { s_z = z; break; }
-  }
+  s_z = several ? mapview::fitZoom(x1 - x0, y1 - y0, w, h, MAX_Z) : SOLO_Z;
   s_cx = (x0 + x1) / 2 * (1 << s_z);
   s_cy = (y0 + y1) / 2 * (1 << s_z);
   return true;

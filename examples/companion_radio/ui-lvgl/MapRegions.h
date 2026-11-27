@@ -73,12 +73,7 @@ void UITask::mapRegionAction(uint8_t act) {
       double x0 = mapview::lonToTileX(p.box[0] / 1e6, 0), x1 = mapview::lonToTileX(p.box[2] / 1e6, 0);
       double y0 = mapview::latToTileY(p.box[3] / 1e6, 0), y1 = mapview::latToTileY(p.box[1] / 1e6, 0);
       int w = _map_area ? lv_obj_get_width(_map_area) : 320, h = _map_area ? lv_obj_get_height(_map_area) : 218;
-      _map_z = areas::fitZoom(x1 - x0, y1 - y0, w - 40, h - 60);
-      double s = (double)(1 << _map_z);
-      _map_cx = (x0 + x1) / 2 * s;
-      _map_cy = (y0 + y1) / 2 * s;
-      _map_follow = false;
-      layoutMap();
+      mapShowWorld((x0 + x1) / 2, (y0 + y1) / 2, mapview::fitZoom(x1 - x0, y1 - y0, w - 40, h - 60));
       return;
     }
     case A_DELETE: {

@@ -502,6 +502,20 @@ class MessagesScreen : public UIScreen {
 
   // Dispatch the selected fullscreen-options row. `channel` picks which
   // fullscreen view to close when starting a reply.
+  // The message menu open (a DM's or a channel post's): its actions, or the
+  // path detail it shows closed by any key.
+  bool msgMenuInput(char c, bool channel) {
+    auto res = _ctx_menu.handleInput(c);
+    if (_showing_path_detail) {
+      if (res != PopupMenu::NONE) { _ctx_menu.active = false; _showing_path_detail = false; }
+    } else if (res == PopupMenu::SELECTED) {
+      dispatchFsAction(channel);
+    } else if (res != PopupMenu::NONE) {
+      _ctx_menu.active = false;
+    }
+    return true;
+  }
+
   void dispatchFsAction(bool channel) {
     int csel = _ctx_menu.selectedIndex();
     FsAct a = (FsAct)_fs_act[(csel >= 0 && csel < _fs_act_n) ? csel : 0];
@@ -1225,6 +1239,54 @@ public:
 
   // On the first unread (sel), opening: the scroll showing it highest with
   // "New" above it (stack(s) lays out from s, sets div_y when "New" fits).
+  // A history list's boxes stacked upward from just above the compose row
+  // (cby), so item s (the newest shown) sits at the bottom and older ones
+  // higher, as in a messenger; "New" goes over item _new_idx, below the older
+  // ones. ys/hs[i] are item (s + i)'s; boxH(item) its height. Returns how many
+  // fit above `top`.
+  template <class BoxH>
+  int stackBoxes(int s, int count, int cby, int top, int lh, bool expand, int* ys, int* hs, int max,
+                 int& div_y, BoxH boxH) const {
+    const int gap = expand ? 2 : 1;
+    int cur_y = cby - gap;   // the same gap against compose as between boxes
+    int n = 0;
+    div_y = -1;
+    for (int ii = 0; ii < max && (s + ii) < count; ii++) {
+      const int bh = boxH(s + ii);
+      const int box_top = cur_y - bh;
+      if (box_top < top) break;
+      ys[n] = box_top; hs[n] = bh; n++;
+      cur_y = box_top - gap;
+      if (s + ii == _new_idx && _new_idx + 1 < count) {
+        if (cur_y - lh < top) break;
+        div_y = cur_y - lh;
+        cur_y = div_y - gap;
+      }
+    }
+    return n;
+  }
+
+  // Under a history list: the "New" divider, "No messages yet", the scrollbar
+  // and the compose row, then the menu over it all. The scrollbar is inverted:
+  // item 0 (newest) is at the bottom, so its thumb starts there and rises into
+  // older history. The menu's own redraw delay (a marquee in it) is folded
+  // into mq_delay.
+  void drawHistFooter(DisplayDriver& display, const HistScroll& hs, int div_y, int count, int top, int cby,
+                      int lh, bool compose_sel, int& mq_delay) {
+    if (div_y >= 0) drawNewDivider(display, div_y, display.width() - hs.reserve, lh);
+    if (count == 0) {
+      display.setColor(UIColor::primary_txt);
+      display.drawTextCentered(display.width()/2, display.height()/2, "No messages yet");
+    }
+    if (hs.need) {
+      long inv_scroll_px = (hs.total_px - hs.view_px) - hs.scroll_px;
+      if (inv_scroll_px < 0) inv_scroll_px = 0;
+      drawScrollIndicatorPx(display, top + 1, hs.view_px, hs.total_px, hs.view_px, inv_scroll_px);
+    }
+    drawComposeButton(display, cby, lh, compose_sel);
+    if (_ctx_menu.active) { int r = _ctx_menu.render(display); if (mq_delay <= 0 || r < mq_delay) mq_delay = r; }
+  }
+
   template <class Stack> static int anchorScroll(Stack stack, const int& div_y, int sel, int count) {
     int pick = -1;
     for (int s = sel > 8 ? sel - 8 : 0; s <= sel; s++) {
@@ -1747,31 +1809,18 @@ public:
       // messenger, instead of newest-at-top. box_ys[i] still corresponds
       // to item (s + i), same as before; only its y flips.
       auto stack = [&](int s) {
-        const int fixed_bh = 2 * lh + 1;
-        const int box_gap = expand ? 2 : 1;
-        int cur_y = cby - box_gap;   // reserve the same gap against compose as between boxes
-        n_vis = 0; div_y = -1;
-        for (int ii = 0; ii < MAX_VIS_BOXES && (s + ii) < dm_count; ii++) {
-          int bh = compact_dm ? compactH(s + ii, reserve) : fixed_bh;
-          if (expand) {
-            int rp = dmViewPos(s + ii);
-            if (rp >= 0) {
-              char hsb[33];
-              const char* hbody = skipReplyPrefix(dmDisplayParts(_history.dmAtPos(rp), is_room, filtered_name, hsb, sizeof(hsb)));
-              bh = expandedBoxH(display, hbody, display.width() - reserve);
+        return n_vis = stackBoxes(s, dm_count, cby, hist_start_y, lh, expand, box_ys, box_hs, MAX_VIS_BOXES, div_y,
+          [&](int item) {
+            if (expand) {
+              const int rp = dmViewPos(item);
+              if (rp >= 0) {
+                char hsb[33];
+                const char* hbody = skipReplyPrefix(dmDisplayParts(_history.dmAtPos(rp), is_room, filtered_name, hsb, sizeof(hsb)));
+                return expandedBoxH(display, hbody, display.width() - reserve);
+              }
             }
-          }
-          int box_top = cur_y - bh;
-          if (box_top < hist_start_y) break;
-          box_ys[n_vis] = box_top; box_hs[n_vis] = bh; n_vis++;
-          cur_y = box_top - box_gap;
-          if (s + ii == _new_idx && _new_idx + 1 < dm_count) {   // "New" over it, below the older ones
-            if (cur_y - lh < hist_start_y) break;
-            div_y = cur_y - lh;
-            cur_y = div_y - box_gap;
-          }
-        }
-        return n_vis;
+            return compact_dm ? compactH(item, reserve) : 2 * lh + 1;
+          });
       };
       if (_anchor_new) {
         _anchor_new = false;
@@ -1853,32 +1902,7 @@ public:
         drawHeadedBubble(display, y, bh, lh, sel, reserve, e.outgoing, sender, body, age, mark, expand, mq_delay);
       }
 
-      if (div_y >= 0) drawNewDivider(display, div_y, display.width() - reserve, lh);
-
-      if (dm_count == 0) {
-        display.setColor(UIColor::primary_txt);
-        display.drawTextCentered(display.width()/2, display.height()/2, "No messages yet");
-      }
-
-      // Scrollbar: track pinned to the full list area; thumb sized/positioned
-      // from hs's pixel metrics (stable while scrolling the same list).
-      // hs.scroll_px counts index-space distance from item 0 (newest); since
-      // item 0 now renders at the bottom, invert it here so the thumb sits at
-      // the bottom for the newest and rises as you scroll into older history.
-      if (hs.need) {
-        long span = hs.total_px - hs.view_px;
-        long inv_scroll_px = span - hs.scroll_px;
-        if (inv_scroll_px < 0) inv_scroll_px = 0;
-        drawScrollIndicatorPx(display, hist_start_y + 1, hs.view_px,
-                              hs.total_px, hs.view_px, inv_scroll_px);
-      }
-
-      drawComposeButton(display, cby, lh, _dm_hist_sel == -1);
-      // Fold the popup's own suggested redraw delay into mq_delay -- otherwise
-      // a marquee inside it (see PopupMenu::render()) only ever advances at
-      // whatever slower cadence this phase's own return statement below picks,
-      // since that return previously ignored this call's result entirely.
-      if (_ctx_menu.active) { int r = _ctx_menu.render(display); if (mq_delay <= 0 || r < mq_delay) mq_delay = r; }
+      drawHistFooter(display, hs, div_y, dm_count, hist_start_y, cby, lh, _dm_hist_sel == -1, mq_delay);
       { int ret = dm_count > 0 ? 500 : 2000; return (mq_delay > 0 && mq_delay < ret) ? mq_delay : ret; }
 
     } else if (_phase == CHANNEL_HIST) {
@@ -1956,32 +1980,14 @@ public:
       // history block above for why (newest at the bottom, like a typical
       // messenger). box_ys[i] still corresponds to item (s + i).
       auto stack = [&](int s) {
-        const int fixed_bh = 2 * lh + 1;
-        const int box_gap = expand ? 2 : 1;
-        int cur_y = cby - box_gap;   // reserve the same gap against compose as between boxes
-        n_vis = 0; div_y = -1;
-        for (int ii = 0; ii < MAX_VIS_BOXES && (s + ii) < ch_hist_count; ii++) {
-          int bh = fixed_bh;
-          if (expand) {
-            int rp = chViewPos(s + ii);
-            if (rp >= 0) {
-              const char* rtext = _history.chAtPos(rp).text;
-              const char* rsep = strstr(rtext, ": ");
-              const char* rbody = rsep ? rsep + 2 : rtext;
-              bh = expandedBoxH(display, skipReplyPrefix(rbody), display.width() - reserve);
-            }
-          }
-          int box_top = cur_y - bh;
-          if (box_top < hist_start_y) break;
-          box_ys[n_vis] = box_top; box_hs[n_vis] = bh; n_vis++;
-          cur_y = box_top - box_gap;
-          if (s + ii == _new_idx && _new_idx + 1 < ch_hist_count) {   // "New" over it, below the older ones
-            if (cur_y - lh < hist_start_y) break;
-            div_y = cur_y - lh;
-            cur_y = div_y - box_gap;
-          }
-        }
-        return n_vis;
+        return n_vis = stackBoxes(s, ch_hist_count, cby, hist_start_y, lh, expand, box_ys, box_hs, MAX_VIS_BOXES, div_y,
+          [&](int item) {
+            const int rp = expand ? chViewPos(item) : -1;
+            if (rp < 0) return 2 * lh + 1;
+            const char* rtext = _history.chAtPos(rp).text;
+            const char* rsep = strstr(rtext, ": ");
+            return expandedBoxH(display, skipReplyPrefix(rsep ? rsep + 2 : rtext), display.width() - reserve);
+          });
       };
       if (_anchor_new) {
         _anchor_new = false;
@@ -2024,31 +2030,7 @@ public:
         drawHeadedBubble(display, y, bh, lh, sel, reserve, outgoing, sender, body, age, mark, expand, mq_delay);
       }
 
-      if (div_y >= 0) drawNewDivider(display, div_y, display.width() - reserve, lh);
-
-      if (ch_hist_count == 0) {
-        display.setColor(UIColor::primary_txt);
-        display.drawTextCentered(display.width()/2, display.height()/2, "No messages yet");
-      }
-
-      // Scrollbar: track pinned to the full list area; thumb from hs metrics.
-      // Inverted for the same reason as the DM history block above — item 0
-      // (newest) renders at the bottom, so the thumb should start at the
-      // bottom too and rise as you scroll into older history.
-      if (hs.need) {
-        long span = hs.total_px - hs.view_px;
-        long inv_scroll_px = span - hs.scroll_px;
-        if (inv_scroll_px < 0) inv_scroll_px = 0;
-        drawScrollIndicatorPx(display, hist_start_y + 1, hs.view_px,
-                              hs.total_px, hs.view_px, inv_scroll_px);
-      }
-
-      drawComposeButton(display, cby, lh, _hist_sel == -1);
-      // Fold the popup's own suggested redraw delay into mq_delay -- otherwise
-      // a marquee inside it (see PopupMenu::render()) only ever advances at
-      // whatever slower cadence this phase's own return statement below picks,
-      // since that return previously ignored this call's result entirely.
-      if (_ctx_menu.active) { int r = _ctx_menu.render(display); if (mq_delay <= 0 || r < mq_delay) mq_delay = r; }
+      drawHistFooter(display, hs, div_y, ch_hist_count, hist_start_y, cby, lh, _hist_sel == -1, mq_delay);
 
     } else if (_phase == KEYBOARD) {
       return _kb->render(display);
@@ -2514,18 +2496,8 @@ public:
 
     } else if (_phase == DM_HIST) {
       int dm_count = dmViewCount();
+      if (_ctx_menu.active) return msgMenuInput(c, false);   // over the list or the full-screen view
       if (_dm_fs.active) {
-        if (_ctx_menu.active) {
-          auto res = _ctx_menu.handleInput(c);
-          if (_showing_path_detail) {
-            if (res != PopupMenu::NONE) { _ctx_menu.active = false; _showing_path_detail = false; }
-          } else if (res == PopupMenu::SELECTED) {
-            dispatchFsAction(false);
-          } else if (res != PopupMenu::NONE) {
-            _ctx_menu.active = false;
-          }
-          return true;
-        }
         auto res = _dm_fs.handleInput(c);
         if (res == FullscreenMsgView::PREV) {
           if (_dm_hist_sel < dm_count - 1) { _dm_hist_sel++; _dm_fs.scroll = 0; }
@@ -2542,17 +2514,6 @@ public:
             if (reply_ok) buildDmReplyPrefix(_history.dmAtPos(ring_pos));
             buildFsMenu(_history.dmAtPos(ring_pos).text, reply_ok, ring_pos, false);
           }
-        }
-        return true;
-      }
-      if (_ctx_menu.active) {
-        auto res = _ctx_menu.handleInput(c);
-        if (_showing_path_detail) {
-          if (res != PopupMenu::NONE) { _ctx_menu.active = false; _showing_path_detail = false; }
-        } else if (res == PopupMenu::SELECTED) {
-          dispatchFsAction(false);
-        } else if (res != PopupMenu::NONE) {
-          _ctx_menu.active = false;
         }
         return true;
       }
@@ -2625,18 +2586,8 @@ public:
 
     } else if (_phase == CHANNEL_HIST) {
       int ch_hist_count = chViewCount();
+      if (_ctx_menu.active) return msgMenuInput(c, true);   // over the list or the full-screen view
       if (_fs.active) {
-        if (_ctx_menu.active) {
-          auto res = _ctx_menu.handleInput(c);
-          if (_showing_path_detail) {
-            if (res != PopupMenu::NONE) { _ctx_menu.active = false; _showing_path_detail = false; }
-          } else if (res == PopupMenu::SELECTED) {
-            dispatchFsAction(true);
-          } else if (res != PopupMenu::NONE) {
-            _ctx_menu.active = false;
-          }
-          return true;
-        }
         auto res = _fs.handleInput(c);
         if (res == FullscreenMsgView::PREV) {
           if (_hist_sel < ch_hist_count - 1) { _hist_sel++; _fs.scroll = 0; updateChannelUnread(); }
@@ -2650,17 +2601,6 @@ public:
           int ring_pos = chViewPos(_hist_sel);
           if (ring_pos >= 0)
             buildFsMenu(_history.chAtPos(ring_pos).text, buildChannelReplyPrefix(_history.chAtPos(ring_pos).text), ring_pos, true);
-        }
-        return true;
-      }
-      if (_ctx_menu.active) {
-        auto res = _ctx_menu.handleInput(c);
-        if (_showing_path_detail) {
-          if (res != PopupMenu::NONE) { _ctx_menu.active = false; _showing_path_detail = false; }
-        } else if (res == PopupMenu::SELECTED) {
-          dispatchFsAction(true);
-        } else if (res != PopupMenu::NONE) {
-          _ctx_menu.active = false;
         }
         return true;
       }

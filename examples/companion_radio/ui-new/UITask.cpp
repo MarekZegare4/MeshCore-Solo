@@ -1489,6 +1489,7 @@ void UITask::handleSimpsonKeypadKey(uint8_t key) {
 // Every input the board has, into the key queue (enqueueKey): the joystick
 // or buttons, one button's gestures, the sim's terminal, the CardKB, keypads,
 // the hall sensor. loop() then hands the queue to the screen.
+#if (defined(PIN_USER_BTN) && !UI_ONE_BUTTON) || defined(PIN_USER_BTN_ANA)   // its callers in pollInput()
 // A MomentaryButton's events (a button beside other input, an analogue one):
 // click Next, long press Enter, double click Prev, triple click Select (not
 // while locked).
@@ -1498,6 +1499,7 @@ void UITask::momentaryKeys(int ev) {
   else if (ev == BUTTON_EVENT_DOUBLE_CLICK) enqueueKey(handleDoubleClick(KEY_PREV));
   else if (ev == BUTTON_EVENT_TRIPLE_CLICK && !_locked) enqueueKey(handleTripleClick(KEY_SELECT));
 }
+#endif
 
 void UITask::pollInput() {
 #if defined(SIM_PLATFORM) && defined(__EMSCRIPTEN__)
