@@ -2774,7 +2774,31 @@ bool UITask::remoteInput(const char* cmd, char* reply, int n) {
 //       gestures timed by OneButton as for the real one (remoteInput() has
 //       the gestures themselves, and the keys)
 //   screen on|off  the display on, or off as its timeout does
+//   open <screen>  a screen, as its menu entry opens it (its goto); the names
+//       are ui's. Only the ones that change nothing by being opened.
 bool UITask::testCli(const char* cmd, char* reply, int n) {
+  if (!strncmp(cmd, "open ", 5)) {
+    static const struct { const char* name; void (UITask::*go)(); } OPEN[] = {
+      { "home", &UITask::gotoHomeScreen }, { "settings", &UITask::gotoSettingsScreen },
+      { "messages", &UITask::gotoMessagesScreen }, { "tools", &UITask::gotoToolsScreen },
+      { "nearby", &UITask::gotoNearbyScreen }, { "dashboard", &UITask::gotoDashboardConfig },
+      { "auto-advert", &UITask::gotoAutoAdvertScreen }, { "battery", &UITask::gotoBatteryCurve },
+      { "live-share", &UITask::gotoLiveShareScreen }, { "locator", &UITask::gotoLocatorScreen },
+      { "trail", &UITask::gotoTrailScreen }, { "compass", &UITask::gotoCompassScreen },
+      { "repeater", &UITask::gotoRepeaterScreen }, { "clock", &UITask::gotoClockTools },
+      { "flashlight", &UITask::gotoFlashlight }, { "sos", &UITask::gotoSosScreen },
+      { "bot", &UITask::gotoBotScreen },
+    };
+    for (const auto& e : OPEN) {
+      if (strcmp(cmd + 5, e.name)) continue;
+      (this->*e.go)();
+      _next_refresh = 0;
+      snprintf(reply, n, "OK");
+      return true;
+    }
+    snprintf(reply, n, "Error, open <screen>");
+    return true;
+  }
   if (!strcmp(cmd, "screen on") || !strcmp(cmd, "screen off")) {
     if (!_display) { snprintf(reply, n, "Error, no display"); return true; }
     if (cmd[8] == 'n') { checkDisplayOn(0); }

@@ -661,7 +661,11 @@ def has_keys(d):
 
 
 def go_home(d):
-    """Out of wherever the UI is, onto Home."""
+    """Out of wherever the UI is, onto Home. The boot splash takes no keys
+    (3 s, ui-new BOOT_SCREEN_MILLIS): a test run straight after a start waits it out."""
+    end = time.time() + 8
+    while ui_state(d)["screen"] == "splash" and time.time() < end:
+        time.sleep(0.3)
     for _ in range(4):
         d.cli.put("key cancel")
         time.sleep(0.25)
@@ -747,6 +751,46 @@ def t_screens(d, out):
         next_page(d, lambda: key_right(d))
     check(len(seen) >= 3, f"Home's pages: {seen}")
     return f"pages {', '.join(seen)}; opened {', '.join(opened) or 'none'}"
+
+
+TOUR = ["messages", "nearby", "trail", "settings", "tools", "dashboard", "auto-advert", "battery",
+        "live-share", "locator", "compass", "repeater", "clock", "sos", "bot", "flashlight"]
+
+
+@test("screen-tour")
+def t_screen_tour(d, out):
+    """Every screen the keys reach, opened as its menu entry opens it, with a
+    screenshot; Up/Down a few rows there and back (no Enter: nothing changed),
+    then Home. Each must stay up and keep its place. Flashlight leaves on any
+    key, so it only gets opened."""
+    need_hooks(d)
+    if not d.knows("open home"):
+        raise Skip("no 'open' on this frontend")
+    go_home(d)
+    seen = []
+    try:
+        for name in TOUR:
+            check(d.cli.run(f"open {name}") == "OK", f"open {name} refused")
+            time.sleep(0.5)
+            st = ui_state(d)
+            check(st["screen"] == name, f"open {name}: the UI shows {st['screen']}")
+            check(st["display"] == "on", f"{name}: the display is off")
+            shot(d, out, f"tour-{name}.png")
+            if name != "flashlight":
+                for k in ("down", "down", "down", "up", "up", "up"):
+                    d.cli.put(f"key {k}")
+                    time.sleep(0.15)
+                time.sleep(0.4)
+                st = ui_state(d)
+                check(st["screen"] == name, f"{name}: Up/Down left it for {st['screen']}")
+            seen.append(name)
+            check(d.cli.run("open home") == "OK", "open home refused")
+            time.sleep(0.4)
+            check(ui_state(d)["screen"].startswith("home"), f"back from {name}: not on Home")
+    finally:
+        d.cli.run("open home")
+    check(d.cli.run("open nothing-such").startswith("Error"), "an unknown screen isn't an error")
+    return f"{len(seen)} screens"
 
 
 M_LAT = 1 / 111320.0
