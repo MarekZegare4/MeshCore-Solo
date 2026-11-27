@@ -1716,6 +1716,51 @@ def t_other_params(d, out):
     return f"manual add, multi acks, autoadd {cfg}/{hops}, path hash {mode}: set and back"
 
 
+@test("chats")
+def t_chats(d, out):
+    """hist list / hist <conv> <j> / hist read: the conversations the configurator's Chats tab reads (no send: that goes on air)."""
+    if not d.knows("hist list 0"):
+        raise Skip("no chats over USB in this firmware")
+    convs = []
+    for k in range(60):
+        r = d.cli.get(f"hist list {k}")
+        if r == "end":
+            break
+        f = r.split("|")
+        check(len(f) >= 6 and f[0] in ("ch", "dm"), f"hist list {k}: {r!r}")
+        convs.append({"kind": f[0], "id": f[1], "name": "|".join(f[2:-3]),
+                      "count": int(f[-3]), "unread": int(f[-2]), "ts": int(f[-1])})
+    else:
+        raise Fail("hist list never ended")
+    ts = [v["ts"] for v in convs]
+    check(ts == sorted(ts, reverse=True), f"not newest first: {ts}")
+    check(len({(v["kind"], v["id"]) for v in convs}) == len(convs), "a conversation listed twice")
+    check(d.cli.run("hist list 999") == "> end", "past the end isn't '> end'")
+    check(d.cli.run("hist xx 1 0").startswith("Error"), "a bad conversation isn't an error")
+    if not convs:
+        raise Skip("no history on the device")
+    for v in convs[:5]:
+        conv = f"{v['kind']} {v['id']}"
+        r = d.cli.get(f"hist {conv} 0")
+        m = re.match(r"^(\d+)\|(\d+)\|([io])(\d)\|(\d+)\|(.*)$", r, re.S)
+        check(m, f"hist {conv} 0: {r!r}")
+        check(int(m[1]) == v["count"], f"{conv}: {m[1]} messages, the list says {v['count']}")
+        check(int(m[2]) == v["ts"], f"{conv}: the newest at {m[2]}, the list says {v['ts']}")
+        total, got = int(m[5]), m[6].encode()
+        while len(got) < total:   # the rest of a long one, from where the frame cut it
+            r = d.cli.get(f"hist {conv} 0 {len(got)}")
+            part = r.split("|", 4)[4].encode()
+            check(part, f"{conv}: no progress at byte {len(got)} of {total}")
+            got += part
+        check(len(got) == total, f"{conv}: {len(got)} bytes put together, {total} said")
+        check(d.cli.get(f"hist {conv} {v['count']}") == f"{v['count']}|none", f"{conv}: past the last isn't 'none'")
+    calm = next((v for v in convs if v["unread"] == 0), None)   # marking read can't be undone: only where nothing is unread
+    if calm:
+        check(d.cli.run(f"hist read {calm['kind']} {calm['id']}") == "OK", "hist read didn't answer OK")
+    check(d.cli.run("hist read dm 00000000").startswith("Error"), "hist read of an unknown contact isn't an error")
+    return f"{len(convs)} conversations, the newest of {min(5, len(convs))} read whole"
+
+
 # ── Flashing ─────────────────────────────────────────────────────────────────
 
 def pio_env(release):
