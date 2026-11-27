@@ -480,18 +480,18 @@ struct KeyboardWidget {
   // variant) at cursor_pos, applying Shift/caps-lock the same way every cell
   // commit does. Shared by the plain-Latin-cell commit below and the accent
   // popup's Enter commit, so the two paths can't drift apart.
-  void insertGlyph(const char* one, bool use_caps) {
+  // False when it doesn't fit (nothing inserted).
+  bool insertGlyph(const char* one, bool use_caps) {
     char shown[5];
     kbApplyCapsUtf8(one, use_caps, shown, sizeof(shown));
     int n = (int)strlen(shown);
-    int tail_len = len - cursor_pos;
-    if (len + n <= max_len) {
-      memmove(buf + cursor_pos + n, buf + cursor_pos, tail_len);
-      memcpy(buf + cursor_pos, shown, n);
-      len += n;
-      cursor_pos += n;
-      buf[len] = '\0';
-    }
+    if (len + n > max_len) return false;
+    memmove(buf + cursor_pos + n, buf + cursor_pos, len - cursor_pos);
+    memcpy(buf + cursor_pos, shown, n);
+    len += n;
+    cursor_pos += n;
+    buf[len] = '\0';
+    return true;
   }
 
   // Insert one character typed literally on an external keyboard (CardKB or
@@ -1485,15 +1485,7 @@ struct KeyboardWidget {
           }
         } else if (len < max_len) {
           char one[5]; kbUtf8CharAt(group, 0, one);
-          char shown[5]; kbApplyCapsUtf8(one, caps, shown, sizeof(shown));
-          int n = (int)strlen(shown);
-          int tail_len = len - cursor_pos;
-          if (len + n <= max_len) {
-            memmove(buf + cursor_pos + n, buf + cursor_pos, tail_len);
-            memcpy(buf + cursor_pos, shown, n);
-            len += n;
-            cursor_pos += n;
-            buf[len] = '\0';
+          if (insertGlyph(one, caps)) {
             t9_cell = cell;
             t9_cycle = 0;
             t9_caps = caps;   // remember it for every later cycling tap on this cell

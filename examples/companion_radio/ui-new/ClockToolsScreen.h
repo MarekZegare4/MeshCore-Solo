@@ -32,6 +32,7 @@
 #include "../NodePrefs.h"
 #include "../ui-core/CalendarMath.h"   // month names
 #include "icons.h"        // drawList / drawRowSelection
+#include "DigitEditor.h"  // drawCursorText
 
 class ClockToolsScreen : public UIScreen {
   UITask*    _task;
@@ -129,22 +130,7 @@ class ClockToolsScreen : public UIScreen {
     char buf[6];
     fmtClock(buf, sizeof(buf), _prefs->alarm_hour, _prefs->alarm_min);
     if (!editing) { d.setCursor(valx, y); d.print(buf); return; }
-    const int cw = d.getCharWidth();
-    const int char_idx = _alarm_cur + (_alarm_cur / 2);   // skip the colon
-    for (int k = 0; buf[k]; k++) {
-      int cx = valx + k * cw;
-      if (k == char_idx) {
-        d.setColor(UIColor::window_bkg);
-        d.fillSoftRect(cx, y - 1, cw, d.getLineHeight() + 1);
-        d.setColor(UIColor::primary_txt);
-      } else {
-        d.setColor(UIColor::window_bkg);
-      }
-      char one[2] = { buf[k], '\0' };
-      d.setCursor(cx, y);
-      d.print(one);
-    }
-    d.setColor(UIColor::primary_txt);
+    drawCursorText(d, valx, y, buf, _alarm_cur + (_alarm_cur / 2), 1);   // skip the colon
   }
 
   // ── Sub-renders ───────────────────────────────────────────────────────────

@@ -3,6 +3,25 @@
 #include <helpers/ui/UIScreen.h>
 #include <Arduino.h>
 
+// Text at (x, y) inside a selected row (ink DARK on a LIGHT bar) with the
+// characters [from, from + count) -- the field under an edit cursor -- shown
+// inverted (a small DARK box, LIGHT glyph). LIGHT restored after.
+inline void drawCursorText(DisplayDriver& d, int x, int y, const char* buf, int from, int count) {
+  const int cw = d.getCharWidth();
+  for (int k = 0; buf[k]; k++) {
+    const int cx = x + k * cw;
+    d.setColor(UIColor::window_bkg);
+    if (k >= from && k < from + count) {
+      d.fillSoftRect(cx, y - 1, cw, d.getLineHeight() + 1);
+      d.setColor(UIColor::primary_txt);
+    }
+    const char one[2] = { buf[k], '\0' };
+    d.setCursor(cx, y);
+    d.print(one);
+  }
+  d.setColor(UIColor::primary_txt);
+}
+
 // Digit-by-digit numeric editor: LEFT/RIGHT moves a cursor between decimal
 // places (most-significant first), UP/DOWN adds/subtracts that place's value
 // (100, 10, 1, 0.1, ...). Every place is directly addressable regardless of
@@ -77,21 +96,6 @@ struct DigitEditor {
     // every glyph left and misplace the highlight (e.g. "62.500" vs "062.500").
     const int width = (int)int_digits + (dec_digits > 0 ? 1 + (int)dec_digits : 0);
     snprintf(buf, sizeof(buf), "%0*.*f", width, (int)dec_digits, value);
-    const int cw = d.getCharWidth();
-    const int char_idx = cursor < int_digits ? cursor : cursor + 1;  // skip '.'
-    for (int k = 0; buf[k]; k++) {
-      int cx = x + k * cw;
-      if (k == char_idx) {
-        d.setColor(UIColor::window_bkg);
-        d.fillSoftRect(cx, y - 1, cw, d.getLineHeight() + 1);
-        d.setColor(UIColor::primary_txt);
-      } else {
-        d.setColor(UIColor::window_bkg);
-      }
-      char one[2] = { buf[k], '\0' };
-      d.setCursor(cx, y);
-      d.print(one);
-    }
-    d.setColor(UIColor::primary_txt);
+    drawCursorText(d, x, y, buf, cursor < int_digits ? cursor : cursor + 1, 1);  // skip '.'
   }
 };

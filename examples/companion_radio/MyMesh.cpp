@@ -1404,6 +1404,25 @@ void MyMesh::onAckRecv(mesh::Packet* packet, uint32_t ack_crc) {
   if (_listener) _listener->onACKRecv(ack_crc);
 }
 
+// Room servers are viewed through the same history list as chat contacts
+// (keyed by the server's pubkey), so their posts are stored too -- otherwise an
+// incoming room message rings and reaches the app through the offline queue
+// but never shows when the room is opened on the device. A room carries many
+// guests, so each post gets its author in front.
+void MyMesh::Listener::fileIncomingDM(const mesh::Packet* pkt, const ContactInfo& from, uint32_t sender_timestamp,
+                                      const uint8_t* extra, int extra_len, const char* text) {
+  if (from.type == ADV_TYPE_CHAT) {
+    addDMMsg(from.id.pub_key, false, text, sender_timestamp, 0, 0, 0, pkt->path, (uint8_t)pkt->path_len);
+  } else if (from.type == ADV_TYPE_ROOM) {
+    char labeled[MAX_TEXT_LEN + 40];  // "Sender: " + room text (the history store cuts it to fit)
+    const ContactInfo* sc = extra && extra_len >= 4 ? the_mesh.lookupContactByPubKey(extra, extra_len) : nullptr;
+    if (sc && sc->name[0])        snprintf(labeled, sizeof(labeled), "%s: %s", sc->name, text);
+    else if (extra && extra_len >= 4) snprintf(labeled, sizeof(labeled), "%02X%02X: %s", extra[0], extra[1], text);
+    else                          snprintf(labeled, sizeof(labeled), "%s", text);
+    addDMMsg(from.id.pub_key, false, labeled, sender_timestamp, 0, 0, 0, pkt->path, (uint8_t)pkt->path_len);
+  }
+}
+
 MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMeshTables &tables, DataStore& store)
     // Sized to match simple_repeater's pool (32), not the old client-only 16: with the
     // on-device Repeater toggle, queued retransmits (adverts/channel flood from

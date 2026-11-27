@@ -481,6 +481,19 @@ static void backlightFadeIn() { display.fadeIn(); }
 // P14) is switched on in WioTrackerL2Board::begin(). Retried until it works --
 // at most every 5 s, a failed mount takes a while -- so a card inserted later
 // is picked up.
+// The card's 1-bit SDMMC wiring on the L2 (CLK, CMD, D0).
+static const int SD_CLK = 2, SD_CMD = 3, SD_D0 = 1;
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+// The same wiring for the IDF driver itself (formatting, the USB drive).
+static void sdSlot(sdmmc_host_t& host, sdmmc_slot_config_t& slot) {
+  host.flags = SDMMC_HOST_FLAG_1BIT;
+  slot.width = 1;
+  slot.clk = (gpio_num_t)SD_CLK;
+  slot.cmd = (gpio_num_t)SD_CMD;
+  slot.d0 = (gpio_num_t)SD_D0;
+  slot.flags |= SDMMC_SLOT_FLAG_INTERNAL_PULLUP;
+}
+#endif
 static bool s_sd_mounted = false;
 static uint32_t s_sd_last_try = 0;
 // Lent to a computer as a USB drive (usbDriveStart()): its driver owns the
@@ -492,7 +505,7 @@ static bool mountStorage() {
   if (s_sd_mounted) return true;
   if (s_sd_last_try && millis() - s_sd_last_try < 5000) return false;
   s_sd_last_try = (millis() - 1) | 1;   // never 0, never ahead of millis()
-  SD_MMC.setPins(2, 3, 1);
+  SD_MMC.setPins(SD_CLK, SD_CMD, SD_D0);
   s_sd_mounted = SD_MMC.begin("/sdcard", true /* 1-bit */);
   return s_sd_mounted;
 }
@@ -506,13 +519,8 @@ static bool formatCard() {
   SD_MMC.end();
   s_sd_mounted = false;
   sdmmc_host_t host = SDMMC_HOST_DEFAULT();
-  host.flags = SDMMC_HOST_FLAG_1BIT;
   sdmmc_slot_config_t slot = SDMMC_SLOT_CONFIG_DEFAULT();
-  slot.width = 1;
-  slot.clk = GPIO_NUM_2;
-  slot.cmd = GPIO_NUM_3;
-  slot.d0 = GPIO_NUM_1;
-  slot.flags |= SDMMC_SLOT_FLAG_INTERNAL_PULLUP;
+  sdSlot(host, slot);
   esp_vfs_fat_mount_config_t mc = {};
   mc.format_if_mount_failed = true;   // an unreadable card: formatted right here
   mc.max_files = 4;
@@ -577,13 +585,8 @@ static bool usbDriveStart() {
   s_sd_mounted = false;
   s_sd_lent = true;
   sdmmc_host_t host = SDMMC_HOST_DEFAULT();
-  host.flags = SDMMC_HOST_FLAG_1BIT;
   sdmmc_slot_config_t slot = SDMMC_SLOT_CONFIG_DEFAULT();
-  slot.width = 1;
-  slot.clk = GPIO_NUM_2;
-  slot.cmd = GPIO_NUM_3;
-  slot.d0 = GPIO_NUM_1;
-  slot.flags |= SDMMC_SLOT_FLAG_INTERNAL_PULLUP;
+  sdSlot(host, slot);
   bool ok = sdmmc_host_init() == ESP_OK;
   if (ok && (sdmmc_host_init_slot(host.slot, &slot) != ESP_OK || sdmmc_card_init(&host, &s_msc_card) != ESP_OK)) {
     sdmmc_host_deinit();

@@ -174,6 +174,11 @@ public:
       virtual void addDMMsg(const uint8_t* pub_key, bool outgoing, const char* text, uint32_t sender_timestamp = 0,
                             uint32_t ack_tag = 0, uint32_t ack_deadline_ms = 0, uint8_t resends = 0,
                             const uint8_t* path = nullptr, uint8_t path_len = 0) { }
+      // An incoming chat DM or room post into history (addDMMsg): a room post
+      // with its author in front, "Name: text" (by the signed message's pubkey
+      // prefix in `extra`, a short hex when unknown). Other types: nothing.
+      void fileIncomingDM(const mesh::Packet* pkt, const ContactInfo& from, uint32_t sender_timestamp,
+                          const uint8_t* extra, int extra_len, const char* text);
       // Results of on-device-UI-initiated requests (sendRoomLogin/sendAdminCommand).
       virtual void onRoomLoginResult(const uint8_t* pub_key, bool success, uint8_t permissions) { }
       virtual void onAdminReply(const uint8_t* pub_key, const char* text) { }

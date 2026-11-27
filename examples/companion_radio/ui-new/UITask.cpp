@@ -854,32 +854,8 @@ if (soundctl::buzzing(buzzer)) {   // a bot !buzz plays on: this one's overrides
   _last_notif_dm_valid = false;
   _last_notif_ch_idx = -1;
 } else {
-  SoundNotifier sn(buzzer, _node_prefs, _notif_mel_buf, sizeof(_notif_mel_buf));
-  switch(t){
-  case UIEventType::contactMessage:
-    sn.playDM(_last_notif_dm_valid, _last_notif_dm_prefix);
-    _last_notif_dm_valid = false;
-    break;
-  case UIEventType::channelMessage:
-    sn.playCH(_last_notif_ch_idx);
-    _last_notif_ch_idx = -1;
-    break;
-  case UIEventType::roomMessage:
-    // Rooms have many authors and no per-room melody pref, so use the default DM
-    // notification (no per-sender melody/mute lookup — the author varies per post).
-    sn.playDM(false, nullptr);
-    break;
-  case UIEventType::advertReceivedFlood:
-  case UIEventType::advertReceivedZeroHop:
-    sn.playAD(t == UIEventType::advertReceivedFlood);
-    break;
-  case UIEventType::ack:
-    buzzer.play("ack:d=32,o=8,b=120:c");
-    break;
-  case UIEventType::none:
-  default:
-    break;
-  }
+  SoundNotifier(buzzer, _node_prefs, _notif_mel_buf, sizeof(_notif_mel_buf))
+    .play(t, _last_notif_dm_valid, _last_notif_dm_prefix, _last_notif_ch_idx);
 }
 #endif
 
@@ -1513,6 +1489,16 @@ void UITask::handleSimpsonKeypadKey(uint8_t key) {
 // Every input the board has, into the key queue (enqueueKey): the joystick
 // or buttons, one button's gestures, the sim's terminal, the CardKB, keypads,
 // the hall sensor. loop() then hands the queue to the screen.
+// A MomentaryButton's events (a button beside other input, an analogue one):
+// click Next, long press Enter, double click Prev, triple click Select (not
+// while locked).
+void UITask::momentaryKeys(int ev) {
+  if (ev == BUTTON_EVENT_CLICK)             enqueueKey(checkDisplayOn(KEY_NEXT));
+  else if (ev == BUTTON_EVENT_LONG_PRESS)   enqueueKey(handleLongPress(KEY_ENTER));
+  else if (ev == BUTTON_EVENT_DOUBLE_CLICK) enqueueKey(handleDoubleClick(KEY_PREV));
+  else if (ev == BUTTON_EVENT_TRIPLE_CLICK && !_locked) enqueueKey(handleTripleClick(KEY_SELECT));
+}
+
 void UITask::pollInput() {
 #if defined(SIM_PLATFORM) && defined(__EMSCRIPTEN__)
   if (_ob_used) oneButtonGesture(_one_btn.update(_sim_btn_down, millis()));   // the page's one button
@@ -1641,16 +1627,7 @@ void UITask::pollInput() {
 #elif defined(PIN_USER_BTN) && !UI_ONE_BUTTON
   // A board with a button beside other input (the Simpson's keypad): the
   // MomentaryButton's events, as before one-button boards.
-  int ev = user_btn.check();
-  if (ev == BUTTON_EVENT_CLICK) {
-    enqueueKey(checkDisplayOn(KEY_NEXT));
-  } else if (ev == BUTTON_EVENT_LONG_PRESS) {
-    enqueueKey(handleLongPress(KEY_ENTER));
-  } else if (ev == BUTTON_EVENT_DOUBLE_CLICK) {
-    enqueueKey(handleDoubleClick(KEY_PREV));
-  } else if (ev == BUTTON_EVENT_TRIPLE_CLICK) {
-    if (!_locked) enqueueKey(handleTripleClick(KEY_SELECT));
-  }
+  momentaryKeys(user_btn.check());
 #elif defined(PIN_USER_BTN)
   // One button: its gestures timed here from the raw state (OneButton.h), not
   // the MomentaryButton's events.
@@ -1746,16 +1723,7 @@ void UITask::pollInput() {
 #endif
 #if defined(PIN_USER_BTN_ANA)
   if (millis() - _analogue_pin_read_millis > 10) {
-    int ev = analog_btn.check();
-    if (ev == BUTTON_EVENT_CLICK) {
-      enqueueKey(checkDisplayOn(KEY_NEXT));
-    } else if (ev == BUTTON_EVENT_LONG_PRESS) {
-      enqueueKey(handleLongPress(KEY_ENTER));
-    } else if (ev == BUTTON_EVENT_DOUBLE_CLICK) {
-      enqueueKey(handleDoubleClick(KEY_PREV));
-    } else if (ev == BUTTON_EVENT_TRIPLE_CLICK) {
-      if (!_locked) enqueueKey(handleTripleClick(KEY_SELECT));
-    }
+    momentaryKeys(analog_btn.check());
     _analogue_pin_read_millis = millis();
   }
 #endif
@@ -1769,21 +1737,14 @@ void UITask::pollInput() {
     extern char tca8418_keypad_read();   // provided by the active variant
     char k = tca8418_keypad_read();
     if (k) {
-      switch (k) {
-      case KEY_UP:    enqueueKey(checkDisplayOn(KEY_UP));    break;
-      case KEY_ENTER: enqueueKey(checkDisplayOn(KEY_ENTER)); break;
-      case KEY_DOWN:  enqueueKey(checkDisplayOn(KEY_DOWN));  break;
-      case KEY_CANCEL:enqueueKey(checkDisplayOn(KEY_CANCEL));break;
-      case KEY_HOME:
+      if (k == KEY_HOME) {
         checkDisplayOn(k);   // wake/extend same as every other key here, even though Home has no nav action
         #ifdef LILYGO_TECHO_LITE_KEYSHIELD
         extern void techo_keyshield_backlight_toggle();
         techo_keyshield_backlight_toggle();
         #endif
-        break;
-      default:
+      } else {
         enqueueKey(checkDisplayOn(k));
-        break;
       }
     }
   }

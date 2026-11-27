@@ -114,6 +114,9 @@ struct RadioPresetPicker {
     deleting = true;
   }
 
+  // The menu closed with Back: out of the delete list / confirmation.
+  void cancel() { deleting = false; confirm_slot = -1; }
+
   // Third level, reached by picking a name off the delete sub-list: a plain
   // Delete/Cancel confirm, defaulting to Cancel like every other destructive
   // action's popup (see NearbyScreen's contact-delete confirm). Whichever row

@@ -3,6 +3,7 @@
 #include <helpers/ui/UIScreen.h>
 #include <Arduino.h>
 #include "../ui-core/CalendarMath.h"   // a month's length
+#include "DigitEditor.h"              // drawCursorText
 
 // Settings > Clock: a date and time, "2026-11-14 12:30", edited a field at a
 // time. LEFT/RIGHT moves between year, month, day, hour and minute; UP/DOWN
@@ -64,19 +65,6 @@ struct DateTimeEditor {
     static const uint8_t START[FIELDS] = { 0, 5, 8, 11, 14 }, LEN[FIELDS] = { 4, 2, 2, 2, 2 };
     char buf[20];
     format(buf, sizeof(buf));
-    const int cw = d.getCharWidth();
-    for (int k = 0; buf[k]; k++) {
-      int cx = x + k * cw;
-      bool on = k >= START[cursor] && k < START[cursor] + LEN[cursor];
-      d.setColor(UIColor::window_bkg);
-      if (on) {
-        d.fillSoftRect(cx, y - 1, cw, d.getLineHeight() + 1);
-        d.setColor(UIColor::primary_txt);
-      }
-      char one[2] = { buf[k], '\0' };
-      d.setCursor(cx, y);
-      d.print(one);
-    }
-    d.setColor(UIColor::primary_txt);
+    drawCursorText(d, x, y, buf, START[cursor], LEN[cursor]);
   }
 };

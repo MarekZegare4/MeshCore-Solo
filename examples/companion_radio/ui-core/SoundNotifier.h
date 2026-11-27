@@ -7,6 +7,7 @@
 #ifdef PIN_BUZZER
 #include <helpers/ui/buzzer.h>
 #include "../NodePrefs.h"
+#include "../AbstractUITask.h"   // UIEventType
 
 class SoundNotifier {
   genericBuzzer&   _buz;
@@ -94,6 +95,22 @@ public:
     if (_buz.isQuiet()) return;
     int slot = _prefs ? (int)_prefs->notif_melody_ad : 0;
     playSlot(slot, false, "MsgRcv3:d=4,o=6,b=200:32e,32g,32b,16c7");
+  }
+
+  // The sound for event t. The pending override of the DM (dm_valid,
+  // dm_prefix) or channel (ch_idx) it is for is used up here.
+  void play(UIEventType t, bool& dm_valid, const uint8_t* dm_prefix, int& ch_idx) {
+    switch (t) {
+      case UIEventType::contactMessage: playDM(dm_valid, dm_prefix); dm_valid = false; break;
+      case UIEventType::channelMessage: playCH(ch_idx); ch_idx = -1; break;
+      // Rooms have many authors and no per-room melody: the default DM sound
+      // (no per-sender melody/mute lookup -- the author varies per post).
+      case UIEventType::roomMessage:    playDM(false, nullptr); break;
+      case UIEventType::advertReceivedFlood:
+      case UIEventType::advertReceivedZeroHop: playAD(t == UIEventType::advertReceivedFlood); break;
+      case UIEventType::ack:            _buz.play("ack:d=32,o=8,b=120:c"); break;
+      default: break;
+    }
   }
 };
 #endif

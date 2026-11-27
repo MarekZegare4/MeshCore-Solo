@@ -133,9 +133,9 @@ void UITask::newMsg(uint8_t path_len, const char* from_name, const char* text, i
   _msgcount = msgcount;
 
   if (path_len == 0xFF) {
-    sprintf(_origin, "(F) %s", from_name);
+    snprintf(_origin, sizeof(_origin), "(F) %s", from_name);
   } else {
-    sprintf(_origin, "(%d) %s", (uint32_t)(path_len & 63), from_name);  // low 6 bits = hop count; high 2 bits are the path hash-size mode
+    snprintf(_origin, sizeof(_origin), "(%d) %s", (int)(path_len & 63), from_name);  // low 6 bits = hop count; high 2 bits are the path hash-size mode
   }
   StrHelper::strncpy(_msg, text, sizeof(_msg));
 

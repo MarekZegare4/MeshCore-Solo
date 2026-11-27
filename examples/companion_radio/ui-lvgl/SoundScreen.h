@@ -215,29 +215,8 @@ void UITask::notify(UIEventType t) {
     _notif_ch_idx = -1;
     return;
   }
-  SoundNotifier sn(_buzzer, _prefs, _notif_mel_buf, sizeof(_notif_mel_buf));
-  switch (t) {
-    case UIEventType::contactMessage:
-      sn.playDM(_notif_dm_valid, _notif_dm_prefix);
-      _notif_dm_valid = false;
-      break;
-    case UIEventType::channelMessage:
-      sn.playCH(_notif_ch_idx);
-      _notif_ch_idx = -1;
-      break;
-    case UIEventType::roomMessage:   // many authors, no per-room melody: the DM default
-      sn.playDM(false, nullptr);
-      break;
-    case UIEventType::advertReceivedFlood:
-    case UIEventType::advertReceivedZeroHop:
-      sn.playAD(t == UIEventType::advertReceivedFlood);
-      break;
-    case UIEventType::ack:
-      _buzzer.play("ack:d=32,o=8,b=120:c");
-      break;
-    default:
-      break;
-  }
+  SoundNotifier(_buzzer, _prefs, _notif_mel_buf, sizeof(_notif_mel_buf))
+    .play(t, _notif_dm_valid, _notif_dm_prefix, _notif_ch_idx);
 #else
   (void)t;
 #endif

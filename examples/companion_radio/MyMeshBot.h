@@ -157,11 +157,13 @@ void MyMesh::setBotInbound(const mesh::Packet* pkt, const ContactInfo* sender) {
   s_bot_in.routed = pkt && pkt->isRouteDirect();
   if (s_bot_in.routed) { strcpy(s_bot_path, "known route"); return; }
   if (n == 0) { strcpy(s_bot_path, "direct"); return; }
-  char* o = s_bot_path;
+  static const char HEXDIG[] = "0123456789abcdef";
+  char* o = s_bot_path;   // n * w <= MAX_PATH_SIZE: 2 per byte + n - 1 ':' + NUL fit
   for (uint8_t h = 0; h < n; h++) {
     if (h) *o++ = ':';
-    for (uint8_t b = 0; b < w; b++) { sprintf(o, "%02x", pkt->path[h * w + b]); o += 2; }
+    for (uint8_t b = 0; b < w; b++) { const uint8_t v = pkt->path[h * w + b]; *o++ = HEXDIG[v >> 4]; *o++ = HEXDIG[v & 15]; }
   }
+  *o = '\0';
 }
 
 // The contact named `name` (a channel sender: only a name, unverified). From

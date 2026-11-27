@@ -157,29 +157,8 @@ public:
     uint8_t path_len = pkt->isRouteFlood() ? pkt->path_len : 0xFF;
     newMsg(path_len, from.name, text, _queue_len, from.type, from.id.pub_key);
     notify(from.type == ADV_TYPE_ROOM ? UIEventType::roomMessage : UIEventType::contactMessage);
-    // Add to the on-device conversation history. Room servers (ADV_TYPE_ROOM) are
-    // viewed through the same history list as chat contacts (keyed by the server's
-    // pubkey), so their posts must be stored too — otherwise an incoming room
-    // message fires the notification and reaches the app via the offline queue but
-    // never shows when the room is opened directly on the device.
-    if (from.type == ADV_TYPE_CHAT) {
-      addDMMsg(from.id.pub_key, false, text, sender_timestamp, 0, 0, 0, pkt->path, (uint8_t)pkt->path_len);
-    } else if (from.type == ADV_TYPE_ROOM) {
-      // A room carries many guests, so prefix the post with its author so the UI
-      // can attribute each line. The signed message's `extra` holds the sender's
-      // pubkey prefix; resolve it to a contact name, falling back to a short hex.
-      char labeled[MAX_TEXT_LEN + 40];  // room text + "Sender: " (history store truncates)
-      if (extra && extra_len >= 4) {
-        ContactInfo* sc = the_mesh.lookupContactByPubKey(extra, extra_len);
-        if (sc && sc->name[0])
-          snprintf(labeled, sizeof(labeled), "%s: %s", sc->name, text);
-        else
-          snprintf(labeled, sizeof(labeled), "%02X%02X: %s", extra[0], extra[1], text);
-      } else {
-        snprintf(labeled, sizeof(labeled), "%s", text);
-      }
-      addDMMsg(from.id.pub_key, false, labeled, sender_timestamp, 0, 0, 0, pkt->path, (uint8_t)pkt->path_len);
-    }
+    // Into the on-device history, room posts too (see fileIncomingDM).
+    fileIncomingDM(pkt, from, sender_timestamp, extra, extra_len, text);
   }
 
   // Upstream-shaped entry point without the channel slot: MyMesh itself always
