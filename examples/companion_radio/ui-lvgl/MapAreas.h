@@ -71,7 +71,7 @@ static void boxWorld(const mapview::TileArea& b, double& x0, double& y0, double&
 static void fmtDate(char* out, size_t n, uint32_t t, const NodePrefs* p) {
   struct tm tm;
   if (!localTime(p, tm, t)) { out[0] = '\0'; return; }
-  snprintf(out, n, "%d %s %d", tm.tm_mday, MONTHS[tm.tm_mon], tm.tm_year + 1900);
+  snprintf(out, n, "%d %s %d", tm.tm_mday, calmath::monthAbbr(tm.tm_mon), tm.tm_year + 1900);
 }
 
 static void onHandle(lv_event_t* e) {

@@ -85,6 +85,10 @@ public:
   void onSosRunning(bool running) override;
   int battPercent() override;
   bool cliCommand(const char* command, char* reply, int n) override;
+  // A screen opened by its name, for the tools that drive the UI (the sim's
+  // pages and tests, hwtest's "idle"): the plain ones, each the same everywhere.
+  // False for a name it doesn't know (the caller's own: map, gps, a page).
+  bool showScreenNamed(const char* name);
   int frontValue(uint8_t k) override;   // Bluetooth, sound, tap to wake, theme, accent (SettingsCli)
   const char* frontChoice(uint8_t k, int i) override;
   void setFrontValue(uint8_t k, int v) override;

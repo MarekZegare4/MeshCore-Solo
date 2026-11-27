@@ -21,6 +21,7 @@
 #include "Telemetry.h"   // the dashboard's fields
 #include "MapFrame.h"    // Map view
 #include "BattLearn.h"   // BATT_LEARN: Learn battery
+#include "CalendarMath.h"   // the 12-hour clock
 #include <helpers/sensors/LocationProvider.h>   // Time from GPS
 
 namespace settings {
@@ -207,7 +208,7 @@ static void optVolume(uint8_t v, char* b, int n, const NodePrefs&) {
 }
 static void optHour(uint8_t v, char* b, int n, const NodePrefs& p) {   // "22:00", or "10 PM" with the 12-hour clock
   if (!p.clock_12h) snprintf(b, n, "%02u:00", (unsigned)v);
-  else snprintf(b, n, "%u %s", (unsigned)(v % 12 ? v % 12 : 12), v < 12 ? "AM" : "PM");
+  else snprintf(b, n, "%d %s", calmath::hour12(v), v < 12 ? "AM" : "PM");
 }
 static void optSound(uint8_t v, char* b, int n, const NodePrefs&) { snprintf(b, n, "%s", soundctl::soundLabel(v)); }
 static void optAdvertScope(uint8_t v, char* b, int n, const NodePrefs&) {

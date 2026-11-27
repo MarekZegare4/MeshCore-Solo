@@ -25,12 +25,11 @@ inline int height(DisplayDriver& d, const struct tm& t, bool tight = false) {
 // t.tm_mday (off for another month than the current).
 inline void draw(DisplayDriver& d, int x, int y, int w, const struct tm& t, uint32_t marked = 0,
                  bool tight = false, bool today = true) {
-  static const char* const NAMES[] = { "Mo", "Tu", "We", "Th", "Fr", "Sa", "Su" };
   static const char* const INITIALS[] = { "M", "T", "W", "T", "F", "S", "S" };
   const int lh = d.getLineHeight(), step = tight ? lh : lh + 2, cw = w / 7;
   const int x0 = x + (w - 7 * cw) / 2;
   d.setColor(UIColor::primary_txt);
-  for (int c = 0; c < 7; c++) d.drawTextCentered(x0 + c * cw + cw / 2, y, (tight ? INITIALS : NAMES)[c]);
+  for (int c = 0; c < 7; c++) d.drawTextCentered(x0 + c * cw + cw / 2, y, tight ? INITIALS[c] : calmath::colHead(c));
   info::rule(d, x0, y + (tight ? lh - 1 : lh + 1), 7 * cw);
   const int top = y + (tight ? lh + 1 : step + 3), col0 = firstCol(t), n = daysIn(t.tm_year, t.tm_mon);
   char buf[3];

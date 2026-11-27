@@ -4,10 +4,34 @@
 // alarm goes off on. ui-new draws it on e-ink (CalendarView.h), ui-lvgl in
 // Clock > Calendar.
 
+#include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <time.h>
 
 namespace calmath {
+
+// Names, as the rest of the UI (English).
+inline const char* monthAbbr(int mon) {   // 0 = January, as tm_mon
+  static const char* const M[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+  return M[((mon % 12) + 12) % 12];
+}
+inline const char* wdayAbbr(int wday) {   // 0 = Sunday, as tm_wday
+  static const char* const W[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+  return W[((wday % 7) + 7) % 7];
+}
+inline const char* colHead(int col) {     // a calendar's column, 0 = Monday
+  static const char* const C[] = { "Mo", "Tu", "We", "Th", "Fr", "Sa", "Su" };
+  return C[((col % 7) + 7) % 7];
+}
+
+// The hour on a 12-hour clock: 0 and 12 are 12. AM before noon.
+inline int hour12(int h) { h %= 12; return h ? h : 12; }
+// "14:05", or "2:05" on a 12-hour clock (where AM/PM goes is the caller's).
+inline int fmtHM(char* b, size_t n, int hour, int min, bool h12) {
+  return h12 ? snprintf(b, n, "%d:%02d", hour12(hour), min) : snprintf(b, n, "%02d:%02d", hour, min);
+}
 
 inline int daysIn(int year, int mon) {   // mon 0..11, year as in tm (since 1900)
   static const uint8_t D[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };

@@ -3,6 +3,7 @@
 // Home: the clock, favourites, status, Bluetooth ... pages, and the lock screen.
 #include "../ui-core/MapFrame.h"   // the mini map frames what the Trail map does
 #include "../TextFit.h"   // names cut to a row on a whole character
+#include "../ui-core/CalendarMath.h"   // day and month names, the 12-hour clock
 
 // The time on a tall portrait panel (e-ink in portrait -- height > width): HH
 // and MM stacked on two lines in the splash's slanted lettering, as the wide
@@ -52,13 +53,10 @@ struct BigClockText {
   const char* ap = nullptr;
   int sc, gap, dw, w;
   BigClockText(DisplayDriver& d, const struct tm* ti, bool h12, int scale) : sc(scale), gap(scale + 1) {
+    calmath::fmtHM(t, sizeof(t), ti->tm_hour, ti->tm_min, h12);
     if (h12) {
-      int hh = ti->tm_hour % 12; if (hh == 0) hh = 12;
-      snprintf(t, sizeof(t), "%d:%02d", hh, ti->tm_min);
       ap = ti->tm_hour < 12 ? "AM" : "PM";
       gap = sc / 2;
-    } else {
-      snprintf(t, sizeof(t), "%02d:%02d", ti->tm_hour, ti->tm_min);
     }
     dw = lettering::textW(t, 0) * sc + gap * ((int)strlen(t) - 1);
     d.setTextSize(1);
@@ -76,8 +74,6 @@ static void drawBigClock(DisplayDriver& d, int cx, int y, const struct tm* ti, b
   bt.draw(d, cx - bt.w / 2, y);
 }
 
-static const char* const WDAY[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
-static const char* const MON[]  = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
 
 // ── HomeScreen ────────────────────────────────────────────────────────────────
 
@@ -1109,7 +1105,7 @@ public:
       date_y = y + bc.h + bar + 1;
     }
     char buf[24];
-    snprintf(buf, sizeof(buf), "%s %d %s %d", WDAY[ti.tm_wday], ti.tm_mday, MON[ti.tm_mon], 1900 + ti.tm_year);
+    snprintf(buf, sizeof(buf), "%s %d %s %d", calmath::wdayAbbr(ti.tm_wday), ti.tm_mday, calmath::monthAbbr(ti.tm_mon), 1900 + ti.tm_year);
     d.drawTextCentered(W / 2, date_y, buf);
 
     const int cal_top = date_y + lh + lh / 2 + 2;
@@ -1173,9 +1169,9 @@ public:
         BigClockText bt(d, &ti, h12, sc);
         bt.draw(d, x0, top);
         char date[16];
-        snprintf(date, sizeof(date), "%s %d %s", WDAY[ti.tm_wday], ti.tm_mday, MON[ti.tm_mon]);
+        snprintf(date, sizeof(date), "%s %d %s", calmath::wdayAbbr(ti.tm_wday), ti.tm_mday, calmath::monthAbbr(ti.tm_mon));
         if (x0 + bt.w + lh / 2 + (int)d.getTextWidth(date) > W - x0)
-          snprintf(date, sizeof(date), "%d %s", ti.tm_mday, MON[ti.tm_mon]);
+          snprintf(date, sizeof(date), "%d %s", ti.tm_mday, calmath::monthAbbr(ti.tm_mon));
         d.drawTextRightAlign(W - x0, top + (ch - lh + 1) / 2, date);
       }
       uint8_t rows[4];
@@ -1204,7 +1200,7 @@ public:
           date_y = top + bc.h + 3;
         }
         char buf[16];
-        snprintf(buf, sizeof(buf), "%s %d %s", WDAY[ti.tm_wday], ti.tm_mday, MON[ti.tm_mon]);
+        snprintf(buf, sizeof(buf), "%s %d %s", calmath::wdayAbbr(ti.tm_wday), ti.tm_mday, calmath::monthAbbr(ti.tm_mon));
         d.drawTextCentered(W / 2, date_y, buf);
         if (extras) drawLockTallExtras(d, date_y + lh + lh / 2 + 2, hint ? pill_y - 3 : H, ti, unread);
       }
@@ -1410,12 +1406,11 @@ public:
         if (now_ts >= 1000000000UL) {
           struct tm lt;
           localTm(now_ts, tzHoursAt(_node_prefs, now_ts), lt);
-          int hh = lt.tm_hour;
-          if (_node_prefs->clock_12h) { hh %= 12; if (hh == 0) hh = 12; }
-          snprintf(filtered_name, sizeof(filtered_name), "%d:%02d", hh, lt.tm_min);
+          const int hh = _node_prefs->clock_12h ? calmath::hour12(lt.tm_hour) : lt.tm_hour;
+          snprintf(filtered_name, sizeof(filtered_name), "%d:%02d", hh, lt.tm_min);   // no leading 0 here
           if (display.width() >= 40 * display.getCharWidth())   // the 4.2": the date beside it
             snprintf(filtered_name + strlen(filtered_name), sizeof(filtered_name) - strlen(filtered_name),
-                     "  %s %d %s", WDAY[lt.tm_wday], lt.tm_mday, MON[lt.tm_mon]);
+                     "  %s %d %s", calmath::wdayAbbr(lt.tm_wday), lt.tm_mday, calmath::monthAbbr(lt.tm_mon));
         } else {
           display.translateUTF8ToBlocks(filtered_name, _node_prefs->node_name, sizeof(filtered_name));
         }

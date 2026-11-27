@@ -1510,75 +1510,10 @@ void UITask::handleSimpsonKeypadKey(uint8_t key) {
 
 #include "PerfL1.h"
 
-void UITask::loop() {
-  if (_gps_search && !_core->gpsSearching()) {   // applyGpsState()'s search over
-    _gps_search = false;
-    if (hasGPS()) applyGpsState(true, true);
-#ifdef BOARD_POWER_SWITCH
-    // A module wedged silent survives restarts and the wake-up pulse; only
-    // cutting its supply brought one back (#72).
-    else showAlert("No GPS found. Power switch off, then on", 4000);
-#else
-    else showAlert("No GPS found", 2000);
-#endif
-    _next_refresh = 0;
-  }
-#if defined(UI_PERF_L1) && defined(NRF52_PLATFORM)
-  { static uint32_t start = millis();
-    perfl1::disp = _display;
-    { static bool sz = false;
-      if (!sz && millis() - start > 7000) { sz = true;
-        Serial.printf("SIZE UiCore %u Splash %u Home %u Settings %u Messages %u Tools %u Ringtone %u Bot %u Admin %u Nearby %u Dash %u AutoAdv %u LiveSh %u Locator %u Trail %u Compass %u Status %u Repeater %u ClockTools %u Kbd %u UITask %u StaticPool32 %u Packet %u\n",
-          sizeof(UiCore), sizeof(SplashScreen), sizeof(HomeScreen), sizeof(SettingsScreen), sizeof(MessagesScreen), sizeof(ToolsScreen),
-          sizeof(RingtoneEditorScreen), sizeof(BotScreen), sizeof(AdminScreen), sizeof(NearbyScreen), sizeof(DashboardConfigScreen),
-          sizeof(AutoAdvertScreen), sizeof(LiveShareScreen), sizeof(LocatorScreen), sizeof(TrailScreen), sizeof(CompassScreen),
-          sizeof(StatusScreen), sizeof(RepeaterScreen), sizeof(ClockToolsScreen), sizeof(KeyboardWidget), sizeof(UITask),
-          sizeof(StaticPoolPacketManager), sizeof(mesh::Packet));
-        TaskStatus_t st[16]; uint32_t tot = 0;
-        UBaseType_t n = uxTaskGetSystemState(st, 16, NULL);
-        (void)n; (void)tot;
-      } }
-    if (millis() - start > 8000) {
-      char k = perfl1::tick();
-      if (k) enqueueKey(checkDisplayOn(k));
-      if (perfl1::open_now != perfl1::NONE) {
-        checkDisplayOn(0);
-        switch (perfl1::open_now) {
-          case perfl1::HOME: gotoHomeScreen(); break;
-          case perfl1::SETTINGS: gotoSettingsScreen(); break;
-          case perfl1::MESSAGES: gotoMessagesScreen(); break;
-          case perfl1::TOOLS: gotoToolsScreen(); break;
-          case perfl1::NEARBY: gotoNearbyScreen(); break;
-          case perfl1::TRAIL: gotoTrailScreen(); break;
-          case perfl1::MAP: gotoMapScreen(); break;
-          case perfl1::COMPASS: gotoCompassScreen(); break;
-          case perfl1::STATUS: gotoStatusScreen(StatusScreen::TAB_RADIO); break;
-          case perfl1::LIVE: gotoLiveShareScreen(); break;
-          case perfl1::LOCATOR: gotoLocatorScreen(); break;
-          case perfl1::ADVERT: gotoAutoAdvertScreen(); break;
-          case perfl1::REPEATER: gotoRepeaterScreen(); break;
-          case perfl1::BOT: gotoBotScreen(); break;
-          case perfl1::CLOCKTOOLS: gotoClockTools(); break;
-          case perfl1::CHANNEL0: openChannelHistory(0); break;
-          default: break;
-        }
-        perfl1::open_now = perfl1::NONE;
-        _next_refresh = 0;
-      }
-    } }
-#endif
-  pollConnection();   // BLE link state -> hasConnection() (see UITaskBase)
-  drainCoreEvents();  // react to what the Core filed during mesh processing (alerts, wake, sounds)
-  {  // a conversation in view again (display on, unlocked): on to what came in meanwhile.
-     // Only on the display or lock changing -- not on opening the screen, which
-     // positions itself (a second pass would re-anchor on what the first frame
-     // had just marked read, and the list jumped).
-    bool on = _display && _display->isOn() && !_locked;
-    if (on && !_display_was_on && curr == messages_screen) ((MessagesScreen*)messages_screen)->onDisplayOn();
-    _display_was_on = on;
-  }
-  if (status_screen) ((StatusScreen*)status_screen)->sample();   // Status history lines, once a minute
-  _kb.one_button = oneButtonUi();   // the keyboard as the strip (KeyboardWidget::stripKey); not with a CardKB
+// Every input the board has, into the key queue (enqueueKey): the joystick
+// or buttons, one button's gestures, the sim's terminal, the CardKB, keypads,
+// the hall sensor. loop() then hands the queue to the screen.
+void UITask::pollInput() {
 #if defined(SIM_PLATFORM) && defined(__EMSCRIPTEN__)
   if (_ob_used) oneButtonGesture(_one_btn.update(_sim_btn_down, millis()));   // the page's one button
 #endif
@@ -1864,6 +1799,78 @@ void UITask::loop() {
     next_backlight_btn_check = millis() + 300;
   }
 #endif
+}
+
+void UITask::loop() {
+  if (_gps_search && !_core->gpsSearching()) {   // applyGpsState()'s search over
+    _gps_search = false;
+    if (hasGPS()) applyGpsState(true, true);
+#ifdef BOARD_POWER_SWITCH
+    // A module wedged silent survives restarts and the wake-up pulse; only
+    // cutting its supply brought one back (#72).
+    else showAlert("No GPS found. Power switch off, then on", 4000);
+#else
+    else showAlert("No GPS found", 2000);
+#endif
+    _next_refresh = 0;
+  }
+#if defined(UI_PERF_L1) && defined(NRF52_PLATFORM)
+  { static uint32_t start = millis();
+    perfl1::disp = _display;
+    { static bool sz = false;
+      if (!sz && millis() - start > 7000) { sz = true;
+        Serial.printf("SIZE UiCore %u Splash %u Home %u Settings %u Messages %u Tools %u Ringtone %u Bot %u Admin %u Nearby %u Dash %u AutoAdv %u LiveSh %u Locator %u Trail %u Compass %u Status %u Repeater %u ClockTools %u Kbd %u UITask %u StaticPool32 %u Packet %u\n",
+          sizeof(UiCore), sizeof(SplashScreen), sizeof(HomeScreen), sizeof(SettingsScreen), sizeof(MessagesScreen), sizeof(ToolsScreen),
+          sizeof(RingtoneEditorScreen), sizeof(BotScreen), sizeof(AdminScreen), sizeof(NearbyScreen), sizeof(DashboardConfigScreen),
+          sizeof(AutoAdvertScreen), sizeof(LiveShareScreen), sizeof(LocatorScreen), sizeof(TrailScreen), sizeof(CompassScreen),
+          sizeof(StatusScreen), sizeof(RepeaterScreen), sizeof(ClockToolsScreen), sizeof(KeyboardWidget), sizeof(UITask),
+          sizeof(StaticPoolPacketManager), sizeof(mesh::Packet));
+        TaskStatus_t st[16]; uint32_t tot = 0;
+        UBaseType_t n = uxTaskGetSystemState(st, 16, NULL);
+        (void)n; (void)tot;
+      } }
+    if (millis() - start > 8000) {
+      char k = perfl1::tick();
+      if (k) enqueueKey(checkDisplayOn(k));
+      if (perfl1::open_now != perfl1::NONE) {
+        checkDisplayOn(0);
+        switch (perfl1::open_now) {
+          case perfl1::HOME: gotoHomeScreen(); break;
+          case perfl1::SETTINGS: gotoSettingsScreen(); break;
+          case perfl1::MESSAGES: gotoMessagesScreen(); break;
+          case perfl1::TOOLS: gotoToolsScreen(); break;
+          case perfl1::NEARBY: gotoNearbyScreen(); break;
+          case perfl1::TRAIL: gotoTrailScreen(); break;
+          case perfl1::MAP: gotoMapScreen(); break;
+          case perfl1::COMPASS: gotoCompassScreen(); break;
+          case perfl1::STATUS: gotoStatusScreen(StatusScreen::TAB_RADIO); break;
+          case perfl1::LIVE: gotoLiveShareScreen(); break;
+          case perfl1::LOCATOR: gotoLocatorScreen(); break;
+          case perfl1::ADVERT: gotoAutoAdvertScreen(); break;
+          case perfl1::REPEATER: gotoRepeaterScreen(); break;
+          case perfl1::BOT: gotoBotScreen(); break;
+          case perfl1::CLOCKTOOLS: gotoClockTools(); break;
+          case perfl1::CHANNEL0: openChannelHistory(0); break;
+          default: break;
+        }
+        perfl1::open_now = perfl1::NONE;
+        _next_refresh = 0;
+      }
+    } }
+#endif
+  pollConnection();   // BLE link state -> hasConnection() (see UITaskBase)
+  drainCoreEvents();  // react to what the Core filed during mesh processing (alerts, wake, sounds)
+  {  // a conversation in view again (display on, unlocked): on to what came in meanwhile.
+     // Only on the display or lock changing -- not on opening the screen, which
+     // positions itself (a second pass would re-anchor on what the first frame
+     // had just marked read, and the list jumped).
+    bool on = _display && _display->isOn() && !_locked;
+    if (on && !_display_was_on && curr == messages_screen) ((MessagesScreen*)messages_screen)->onDisplayOn();
+    _display_was_on = on;
+  }
+  if (status_screen) ((StatusScreen*)status_screen)->sample();   // Status history lines, once a minute
+  _kb.one_button = oneButtonUi();   // the keyboard as the strip (KeyboardWidget::stripKey); not with a CardKB
+  pollInput();
 
   // A ringing alarm/timer is dismissed by ANY key, even when locked or on another
   // screen — and the queued keys are swallowed so they don't also act on the view.

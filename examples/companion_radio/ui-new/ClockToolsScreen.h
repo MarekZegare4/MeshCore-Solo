@@ -30,6 +30,7 @@
 
 #include "InfoKit.h"
 #include "../NodePrefs.h"
+#include "../ui-core/CalendarMath.h"   // month names
 #include "icons.h"        // drawList / drawRowSelection
 
 class ClockToolsScreen : public UIScreen {
@@ -283,10 +284,8 @@ class ClockToolsScreen : public UIScreen {
       wday1 = ((wday1 - calmath::daysIn(t.tm_year, t.tm_mon)) % 7 + 7) % 7;
     }
     if (!now) { t.tm_mday = 1; t.tm_wday = wday1; }
-    static const char* const MON[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                                       "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
     char title[16];
-    snprintf(title, sizeof(title), "%s %d", MON[t.tm_mon], t.tm_year + 1900);
+    snprintf(title, sizeof(title), "%s %d", calmath::monthAbbr(t.tm_mon), t.tm_year + 1900);
     const int W = d.width(), lh = d.getLineHeight(), cw = d.getCharWidth();
     const int top = d.listStart();
     if (calendar::height(d, t) <= d.height() - top) {
@@ -298,7 +297,7 @@ class ClockToolsScreen : public UIScreen {
       calendar::draw(d, 0, 0, W - side, t, marked, true, now);
       char yr[6];
       snprintf(yr, sizeof(yr), "%d", t.tm_year + 1900);
-      d.drawTextCentered(W - side / 2, d.height() / 2 - lh, MON[t.tm_mon]);
+      d.drawTextCentered(W - side / 2, d.height() / 2 - lh, calmath::monthAbbr(t.tm_mon));
       d.drawTextCentered(W - side / 2, d.height() / 2, yr);
     }
     return 60000;

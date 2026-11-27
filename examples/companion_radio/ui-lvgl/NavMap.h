@@ -1128,7 +1128,7 @@ static lv_obj_t* s_st_del_lbl = nullptr;
 static void trailTitle(const char* name, char* out, size_t n) {
   int y, mo, d, h, mi;
   if (sscanf(name, "trail-%4d%2d%2d-%2d%2d", &y, &mo, &d, &h, &mi) == 5 && mo >= 1 && mo <= 12)
-    snprintf(out, n, "%d %s %d  %02d:%02d", d, MONTHS[mo - 1], y, h, mi);
+    snprintf(out, n, "%d %s %d  %02d:%02d", d, calmath::monthAbbr(mo - 1), y, h, mi);
   else snprintf(out, n, "%s", name);
 }
 

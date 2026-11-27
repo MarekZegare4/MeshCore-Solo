@@ -1622,6 +1622,21 @@ static void onOpenSchemaPage(lv_event_t* e);   // Radio > Advanced
 #include "ThreadView.h"
 
 #include "SdBench.h"        // test builds: sdbench (SettingsPages.h's CLI)
+bool UITask::showScreenNamed(const char* name) {
+  struct { const char* n; void (UITask::*fn)(); } static const SCREENS[] = {
+    { "home", &UITask::showHome }, { "chats", &UITask::showChats }, { "contacts", &UITask::showContacts },
+    { "settings", &UITask::showSettings }, { "nearby", &UITask::showNearby }, { "nodes", &UITask::showNearby },
+    { "wifi", &UITask::showWifi }, { "clock", &UITask::showClock }, { "radio", &UITask::showRadio },
+    { "scopes", &UITask::showScopes }, { "repeater", &UITask::showRepeater }, { "bot", &UITask::showBot },
+    { "storage", &UITask::showStorage }, { "diag", &UITask::showDiag }, { "compass", &UITask::showCompass },
+    { "gallery", &UITask::showGallery }, { "quick", &UITask::showQuickMsgs }, { "quickmsgs", &UITask::showQuickMsgs },
+    { "sos", &UITask::showSos }, { "ota", &UITask::showOta }, { "admin", &UITask::showAdminPick },
+    { "battery", &UITask::showBattCurve }, { "battcurve", &UITask::showBattCurve },
+  };
+  for (const auto& s : SCREENS) if (!strcmp(s.n, name)) { (this->*s.fn)(); return true; }
+  return false;
+}
+
 #include "SettingsPages.h"
 
 #include "ConversationScreen.h"
@@ -1741,20 +1756,11 @@ extern "C" EMSCRIPTEN_KEEPALIVE const char* sim_route_info() {
 // Sim tests: straight to a screen by name.
 extern "C" EMSCRIPTEN_KEEPALIVE void sim_open(const char* name) {
   if (!s_ui) return;
-  struct { const char* n; void (UITask::*fn)(); } const SCREENS[] = {
-    { "home", &UITask::showHome }, { "chats", &UITask::showChats }, { "settings", &UITask::showSettings },
-    { "nodes", &UITask::showNearby }, { "ota", &UITask::showOta }, { "wifi", &UITask::showWifi },
-    { "clock", &UITask::showClock }, { "radio", &UITask::showRadio }, { "scopes", &UITask::showScopes },
-    { "repeater", &UITask::showRepeater }, { "bot", &UITask::showBot }, { "sos", &UITask::showSos }, { "storage", &UITask::showStorage },
-    { "diag", &UITask::showDiag }, { "compass", &UITask::showCompass }, { "gallery", &UITask::showGallery }, { "admin", &UITask::showAdminPick },
-    { "quick", &UITask::showQuickMsgs }, { "contacts", &UITask::showContacts },
-  };
-  for (auto& s : SCREENS) if (!strcmp(s.n, name)) { (s_ui->*s.fn)(); return; }
+  if (s_ui->showScreenNamed(name)) return;
   if (!strncmp(name, "page", 4)) { s_ui->showSchemaSettings(atoi(name + 4)); return; }
   if (!strcmp(name, "map")) { s_ui->openMap(true); return; }
   if (!strcmp(name, "gps")) { s_ui->showGps(false); return; }
   if (!strcmp(name, "nodesmap")) { s_ui->openMap(false); return; }   // as from Nodes
-  if (!strcmp(name, "battcurve")) { s_ui->showBattCurve(); return; }
   if (!strcmp(name, "homeedit")) { s_ui->showHome(); s_ui->homeEdit(true); return; }   // arranging the apps
   if (!strncmp(name, "accent@", 7)) { theme::setAccent(atoi(name + 7)); return; }   // "accent@4": Cyan
   if (!strncmp(name, "map@", 4)) { s_ui->simMapAt(name + 4); return; }   // "map@lat,lon,z"
@@ -1855,26 +1861,13 @@ extern "C" EMSCRIPTEN_KEEPALIVE int sim_scroll(int dy) {
 extern "C" EMSCRIPTEN_KEEPALIVE int sim_ui_show(const char* name) {
   if (!s_ui || !name) return 0;
   UITask& u = *s_ui;
-  if (!strcmp(name, "home")) u.showHome();
-  else if (!strcmp(name, "chats")) u.showChats();
-  else if (!strcmp(name, "contacts")) u.showContacts();
-  else if (!strcmp(name, "settings")) u.showSettings();
+  if (u.showScreenNamed(name)) {}
   else if (!strncmp(name, "settings:", 9)) u.showSchemaSettings(atoi(name + 9));
-  else if (!strcmp(name, "nearby")) u.showNearby();
   else if (!strcmp(name, "map")) u.openMap(false);
   else if (!strcmp(name, "navmap")) u.openMap(true);
   else if (!strcmp(name, "places")) { u.openMap(true); u.navTargetsPopup(); }
   else if (!strncmp(name, "layer:", 6)) u.setMapLayer(atoi(name + 6));   // the map's base layer (MapLayers.h)
-  else if (!strcmp(name, "clock")) u.showClock();
-  else if (!strcmp(name, "radio")) u.showRadio();
   else if (!strcmp(name, "gps")) u.showGps(false);
-  else if (!strcmp(name, "diag")) u.showDiag();
-  else if (!strcmp(name, "compass")) u.showCompass();
-  else if (!strcmp(name, "storage")) u.showStorage();
-  else if (!strcmp(name, "repeater")) u.showRepeater();
-  else if (!strcmp(name, "wifi")) u.showWifi();
-  else if (!strcmp(name, "bot")) u.showBot();
-  else if (!strcmp(name, "quick")) u.showQuickMsgs();
   else if (!strcmp(name, "node")) { u.showNearby(); u.openNode(0); }
   else if (!strcmp(name, "channel")) u.openChannel(0);
   else return 0;

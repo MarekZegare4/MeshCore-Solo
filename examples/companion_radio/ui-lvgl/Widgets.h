@@ -1285,24 +1285,20 @@ static void tileBadge(lv_obj_t* tile, int n) {
 static bool localTime(const NodePrefs* p, struct tm& out, uint32_t utc = rtc_clock.getCurrentTime()) {
   return localTm(utc, tzHoursAt(p, utc), out);
 }
-static const char* const MONTHS[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                                      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+#include "../ui-core/CalendarMath.h"   // day and month names, the 12-hour clock
 // "14:05", or "2:05" (+ " PM" with suffix) with Settings > 12-hour clock;
 // with `seconds`, ":09" follows unless Settings > Time > Clock seconds is off.
 static void fmtClock(char* b, size_t n, const struct tm& ti, const NodePrefs* p, bool suffix, bool seconds = false) {
   char sec[4] = "";
   if (seconds && p && !p->clock_hide_seconds) snprintf(sec, sizeof(sec), ":%02d", ti.tm_sec);
-  if (p && p->clock_12h) {
-    int h = ti.tm_hour % 12;
-    snprintf(b, n, "%d:%02d%s%s", h ? h : 12, ti.tm_min, sec, suffix ? (ti.tm_hour < 12 ? " AM" : " PM") : "");
-  } else {
-    snprintf(b, n, "%02d:%02d%s", ti.tm_hour, ti.tm_min, sec);
-  }
+  const bool h12 = p && p->clock_12h;
+  char hm[8];
+  calmath::fmtHM(hm, sizeof(hm), ti.tm_hour, ti.tm_min, h12);
+  snprintf(b, n, "%s%s%s", hm, sec, h12 && suffix ? (ti.tm_hour < 12 ? " AM" : " PM") : "");
 }
 // "Thu 25 Sep 2026".
 static void fmtDate(char* b, size_t n, const struct tm& ti) {
-  static const char* DOW[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
-  snprintf(b, n, "%s %d %s %d", DOW[ti.tm_wday], ti.tm_mday, MONTHS[ti.tm_mon], ti.tm_year + 1900);
+  snprintf(b, n, "%s %d %s %d", calmath::wdayAbbr(ti.tm_wday), ti.tm_mday, calmath::monthAbbr(ti.tm_mon), ti.tm_year + 1900);
 }
 
 // Settings changed here reach flash once their screen is left (as on the L1:
@@ -1477,8 +1473,7 @@ static void clockFaceSet(lv_obj_t* f, const struct tm* ti, const NodePrefs* p) {
   } else {
     char hm[8] = "--:--", sec[4] = "";
     if (ti) {
-      if (p && p->clock_12h) snprintf(hm, sizeof(hm), "%d:%02d", ti->tm_hour % 12 ? ti->tm_hour % 12 : 12, ti->tm_min);
-      else snprintf(hm, sizeof(hm), "%02d:%02d", ti->tm_hour, ti->tm_min);
+      calmath::fmtHM(hm, sizeof(hm), ti->tm_hour, ti->tm_min, p && p->clock_12h);
       if (!p || !p->clock_hide_seconds) snprintf(sec, sizeof(sec), "%02d", ti->tm_sec);
     }
     bigclock::set(digits, hm, sec);
@@ -1501,7 +1496,7 @@ static void fmtMsgAge(char* b, size_t n, uint32_t now, uint32_t ts, const NodePr
   localTime(p, ti, ts);   // set: clockBehind() says ts is
   char clk[12];
   fmtClock(clk, sizeof(clk), ti, p, true);
-  snprintf(b, n, "%d %s %s", ti.tm_mday, MONTHS[ti.tm_mon], clk);
+  snprintf(b, n, "%d %s %s", ti.tm_mday, calmath::monthAbbr(ti.tm_mon), clk);
 }
 
 static void contactName(const uint8_t* prefix, char* out, size_t n) {

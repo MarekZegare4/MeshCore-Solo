@@ -555,26 +555,10 @@ bool UITask::cliCommand(const char* command, char* reply, int n) {
       return true;
     }
     usbTap(false);
-    if (!strcmp(w, "home")) showHome();
-    else if (!strcmp(w, "chats")) showChats();
-    else if (!strcmp(w, "contacts")) showContacts();
-    else if (!strcmp(w, "settings")) showSettings();
-    else if (!strcmp(w, "nearby")) showNearby();
+    if (showScreenNamed(w)) {}
     else if (!strcmp(w, "map")) showMap(false);
-    else if (!strcmp(w, "wifi")) showWifi();
-    else if (!strcmp(w, "clock")) showClock();
-    else if (!strcmp(w, "radio")) showRadio();
-    else if (!strcmp(w, "scopes")) showScopes();
-    else if (!strcmp(w, "repeater")) showRepeater();
-    else if (!strcmp(w, "bot")) showBot();
-    else if (!strcmp(w, "storage")) showStorage();
     else if (!strcmp(w, "gps")) showGps(true);
-    else if (!strcmp(w, "diag")) showDiag();
-    else if (!strcmp(w, "compass")) showCompass();
-    else if (!strcmp(w, "gallery")) showGallery();
-    else if (!strcmp(w, "battery")) showBattCurve();
-    else if (!strcmp(w, "quickmsgs")) showQuickMsgs();
-    else if (!strcmp(w, "routes")) showRoutePick();
+    else if (!strcmp(w, "routes")) showRoutePick();   // the sim's "routes" is the popup
     else if (!strncmp(w, "page ", 5)) showSchemaSettings(atoi(w + 5));
     else { snprintf(reply, n, "Error: screen?"); return true; }
     snprintf(reply, n, "OK");

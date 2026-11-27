@@ -38,7 +38,6 @@ static void onCalendarDraw(lv_event_t* e) {
   lv_area_t a;
   lv_obj_get_coords(o, &a);
   const struct tm& t = s_cal_tm;
-  static const char* const NAMES[] = { "Mo", "Tu", "We", "Th", "Fr", "Sa", "Su" };
   const int W = a.x2 - a.x1 + 1, cw = W / 7, x0 = a.x1 + (W - 7 * cw) / 2;
   const int head = 16, rows = calmath::weeks(t), ch = (a.y2 - a.y1 + 1 - head) / rows;
   lv_draw_label_dsc_t td;
@@ -47,7 +46,7 @@ static void onCalendarDraw(lv_event_t* e) {
   td.font = THEME_FONT_SMALL;
   for (int c = 0; c < 7; c++) {
     td.color = lv_color_hex(theme::TEXT_MUTED);
-    td.text = NAMES[c];
+    td.text = calmath::colHead(c);
     lv_area_t la = { x0 + c * cw, a.y1, x0 + (c + 1) * cw - 1, a.y1 + head - 1 };
     lv_draw_label(layer, &td, &la);
   }

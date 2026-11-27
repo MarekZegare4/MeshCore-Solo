@@ -2,6 +2,7 @@
 #include <helpers/ui/DisplayDriver.h>
 #include <helpers/ui/UIScreen.h>
 #include <Arduino.h>
+#include "../ui-core/CalendarMath.h"   // a month's length
 
 // Settings > Clock: a date and time, "2026-11-14 12:30", edited a field at a
 // time. LEFT/RIGHT moves between year, month, day, hour and minute; UP/DOWN
@@ -23,10 +24,7 @@ struct DateTimeEditor {
     cursor = 0; active = true;
   }
 
-  static int daysIn(int y, int m) {
-    static const uint8_t D[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
-    return m == 2 && (y % 4 == 0 && (y % 100 != 0 || y % 400 == 0)) ? 29 : D[(m - 1) % 12];
-  }
+  static int daysIn(int y, int m) { return calmath::daysIn(y - 1900, m - 1); }   // y as written, m 1..12
   static int wrap(int v, int lo, int hi) { return v < lo ? hi : (v > hi ? lo : v); }
 
   void step(int dir) {
