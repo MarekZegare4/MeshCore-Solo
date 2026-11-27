@@ -16,6 +16,8 @@
 //   trackback                  Track back: the trail walked backwards, as Trail > Track back
 //   trail on|off|clear         record the trail, stop, empty it (as Trail's own actions)
 //   trail                      "> <recording 0/1>,<points>"
+//   usb [clear]                the USB serial's frames since boot (or the last clear):
+//                              "> <sent>,<cut at the 300 ms limit>,<over 50 ms>,<longest ms>"
 //   mem                        "> <free heap>,<total>,<stack free>,<uptime s>" (0: unknown;
 //                              an ESP32's internal RAM, not its PSRAM)
 //   lastdm                     the newest direct message, "> <in/out>,<prefix hex>,<ack 0-3>,<text>"
@@ -34,6 +36,7 @@
 #ifdef SOLO_TEST_HOOKS
 #include <helpers/sensors/EnvironmentSensorManager.h>
 #include <helpers/DeviceDiag.h>
+#include <helpers/ArduinoSerialInterface.h>   // g_serial_tx
 #ifdef ESP32
   #include <esp_heap_caps.h>
 #endif
@@ -191,6 +194,12 @@ inline bool handle(Core& core, const char* cmd, char* reply, int n) {
     return true;
   }
 #endif
+  if (!strcmp(cmd, "usb") || !strcmp(cmd, "usb clear")) {   // the USB serial frames: "> <sent>,<cut>,<over 50 ms>,<longest ms>"
+    snprintf(reply, n, "> %lu,%lu,%lu,%lu", (unsigned long)g_serial_tx.frames, (unsigned long)g_serial_tx.cut,
+             (unsigned long)g_serial_tx.slow, (unsigned long)g_serial_tx.max_ms);
+    if (cmd[3]) memset(&g_serial_tx, 0, sizeof(g_serial_tx));
+    return true;
+  }
   if (!strcmp(cmd, "mem")) {
     uint32_t fr = 0, total = 0;
 #ifdef ESP32

@@ -3,6 +3,11 @@
 #include "BaseSerialInterface.h"
 #include <Arduino.h>
 
+#ifdef SOLO_TEST_HOOKS
+struct SerialTxStats { uint32_t frames, cut, slow, max_ms; };   // slow: over 50 ms
+extern SerialTxStats g_serial_tx;
+#endif
+
 class ArduinoSerialInterface : public BaseSerialInterface {
   bool _isEnabled;
   uint8_t _state;

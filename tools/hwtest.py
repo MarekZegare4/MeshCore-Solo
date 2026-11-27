@@ -1865,6 +1865,23 @@ def mem(d):
     return int(f[0]), int(f[3])
 
 
+# The L2 joins WiFi once after boot for the clock (ui-lvgl/WifiScreen.h:
+# WIFI_CLOCK_BOOT_MS 15 s, then up to WIFI_CLOCK_JOIN_MS 50 s): the internal
+# heap is ~40 KB down meanwhile, and the WiFi stack's first start keeps ~14 KB
+# for good (the lwIP task, netif, event loop; checked: five more on/off rounds
+# came back to the byte). A heap baseline taken before that is no baseline.
+BOOT_WIFI_JOIN_S = 15 + 50 + 3
+
+
+def settle(d):
+    """Past the device's own start-up work, so the memory check starts from where it stays."""
+    m = mem(d)
+    if not m or m[1] >= BOOT_WIFI_JOIN_S or d.cli.run("get wifi").lower() != "> on":
+        return
+    print(f"  waiting {BOOT_WIFI_JOIN_S - m[1]} s for the boot's WiFi clock join to end")
+    time.sleep(BOOT_WIFI_JOIN_S - m[1])
+
+
 def run_one(name, fn, *a):
     t0 = time.time()
     trace = None
@@ -1897,6 +1914,9 @@ def suite(d, args, want):
     out = out_dir(d)
     print(f"\n{d.board}, {d.firmware} (protocol {d.proto})" + (", test build" if d.hooks else "") + f", {d.port}")
     results, marks = [], []
+    settle(d)
+    if d.hooks and d.knows("usb"):
+        d.cli.get("usb clear")
     m0 = mem(d)
     up = m0[1] if m0 else None
     for rnd in range(args.repeat):
@@ -1941,6 +1961,12 @@ def suite(d, args, want):
         r = {"test": "memory", "seconds": 0, "round": args.repeat,
              "status": "FAIL" if drop > 4096 else "PASS",
              "note": f"free heap {base} -> {last} bytes ({-drop:+d})" + (", rounds' ends compared" if len(marks) > 1 else "")}
+        results.append(r)
+        show(r)
+    if d.hooks and d.knows("usb"):   # every frame to the host whole (a cut one: the 300 ms limit hit)
+        sent, cut, slow, longest = (int(x) for x in d.cli.get("usb").split(","))
+        r = {"test": "usb-frames", "seconds": 0, "round": args.repeat, "status": "FAIL" if cut else "PASS",
+             "note": f"{sent} frames, {cut} cut, {slow} over 50 ms, the longest {longest} ms"}
         results.append(r)
         show(r)
     (out / "report.json").write_text(json.dumps({"board": d.board, "firmware": d.firmware, "port": d.port,

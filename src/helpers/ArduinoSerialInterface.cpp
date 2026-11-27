@@ -37,6 +37,11 @@ bool ArduinoSerialInterface::isWriteBusy() const {
   return false;
 }
 
+#ifdef SOLO_TEST_HOOKS
+// Test builds: how the frames went out (TestHooks.h "usb").
+SerialTxStats g_serial_tx;
+#endif
+
 size_t ArduinoSerialInterface::writeFrame(const uint8_t src[], size_t len) {
   if (len > MAX_FRAME_SIZE) {
     // frame is too big!
@@ -81,6 +86,15 @@ size_t ArduinoSerialInterface::writeFrame(const uint8_t src[], size_t len) {
   } else
 #endif
   sent = streamWriteUntil(*_serial, buf, total, deadline);
+#ifdef SOLO_TEST_HOOKS
+  {
+    const uint32_t ms = millis() - (deadline - SERIAL_WRITE_TIMEOUT_MS);
+    g_serial_tx.frames++;
+    if (sent < total) g_serial_tx.cut++;
+    if (ms > 50) g_serial_tx.slow++;
+    if (ms > g_serial_tx.max_ms) g_serial_tx.max_ms = ms;
+  }
+#endif
   return sent < 3 ? 0 : sent - 3;
 }
 
