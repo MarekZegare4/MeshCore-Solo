@@ -1,4 +1,5 @@
 #pragma once
+#include "../TextFit.h"   // texts kept cut on a whole character
 // Message history store for MessagesScreen: two RAM ring buffers (channel + DM)
 // with their per-entry delivery state (channel "relayed into mesh" echo, DM
 // end-to-end ACK + auto-resend) and the per-channel unread counters. Pure
@@ -188,8 +189,7 @@ public:
     }
     _hist[pos].ch_idx = ch_idx;
     _hist[pos].timestamp = displayTimestamp(timestamp, own_message);
-    strncpy(_hist[pos].text, text, sizeof(_hist[pos].text) - 1);
-    _hist[pos].text[sizeof(_hist[pos].text) - 1] = '\0';
+    textfit::copy(_hist[pos].text, sizeof(_hist[pos].text), text);
     _hist[pos].relay_status = ACK_NONE;
     _hist[pos].relay_seq = 0;
     if (path && path_len_packed) capturePath(_hist[pos].path_len, _hist[pos].path, path, path_len_packed);
@@ -383,8 +383,7 @@ public:
     // Fall back to receipt time when the sender's timestamp is unknown or
     // ahead of our clock, and always use our own clock for outgoing.
     _dm_hist[pos].timestamp = displayTimestamp(msg_ts, outgoing);
-    strncpy(_dm_hist[pos].text, text, sizeof(DmHistEntry::text) - 1);
-    _dm_hist[pos].text[sizeof(DmHistEntry::text) - 1] = '\0';
+    textfit::copy(_dm_hist[pos].text, sizeof(DmHistEntry::text), text);
     _dm_hist[pos].ack_status      = (outgoing && ack_tag) ? ACK_PENDING : ACK_NONE;
     _dm_hist[pos].ack_tag         = ack_tag;
     _dm_hist[pos].ack_deadline_ms = ack_deadline_ms;

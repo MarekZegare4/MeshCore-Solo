@@ -143,7 +143,7 @@ public:
   // the time is ours, as the sender's clock may never have been set.
   void onSos(const uint8_t* pub_key, const char* name, int32_t lat_1e6, int32_t lon_1e6, bool verified) {
     char label[LiveTrackStore::NAME_LEN];
-    snprintf(label, sizeof(label), "SOS %s", name ? name : "");
+    LiveTrackStore::sosName(label, name);
     _track.update(pub_key, label, lat_1e6, lon_1e6, (uint32_t)rtc_clock.getCurrentTime(), verified, true);
   }
 

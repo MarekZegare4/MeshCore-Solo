@@ -16,6 +16,7 @@
 #include <math.h>
 #include <algorithm>
 #include "../PlannedRoute.h"
+#include "../TextFit.h"
 
 namespace gpximport {
 
@@ -88,9 +89,7 @@ static Result readGpx(FILE* f, Pt*& pts, int& n, char* name, size_t name_n) {
         size_t l = lt - (buf + i);
         while (l && (buf[i] == ' ' || buf[i] == '\n' || buf[i] == '\r' || buf[i] == '\t')) { i++; l--; }
         while (l && (buf[i + l - 1] == ' ' || buf[i + l - 1] == '\n' || buf[i + l - 1] == '\r')) l--;
-        if (l >= name_n) l = name_n - 1;
-        memcpy(name, buf + i, l);
-        name[l] = '\0';
+        textfit::copyN(name, name_n, buf + i, l);
         want_name = false;
       }
       char* gt = (char*)memchr(lt, '>', buf + have - lt);

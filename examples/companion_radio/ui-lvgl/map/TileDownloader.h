@@ -35,7 +35,7 @@
 #include <math.h>
 #include <sys/stat.h>
 #include <errno.h>
-#include "../../ui-core/TextFit.h"
+#include "../../TextFit.h"
 
 namespace mapview {
 

@@ -2,7 +2,7 @@
 // Included into UITask.cpp only (see the note on screen fragments there).
 // Home: the clock, favourites, status, Bluetooth ... pages, and the lock screen.
 #include "../ui-core/MapFrame.h"   // the mini map frames what the Trail map does
-#include "../ui-core/TextFit.h"   // names cut to a row on a whole character
+#include "../TextFit.h"   // names cut to a row on a whole character
 
 // The time on a tall portrait panel (e-ink in portrait -- height > width): HH
 // and MM stacked on two lines in the splash's slanted lettering, as the wide

@@ -7,6 +7,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include "TextFit.h"
 #if defined(ESP32) || defined(BOT_LOG_SIM)
   #define BOT_LOG 1
 #endif
@@ -49,10 +50,7 @@ public:
   const BotLogEntry& at(int i) const { return _ring[(_head + SIZE - 1 - i) % SIZE]; }   // 0: the newest
 
 private:
-  static void copy(char* out, size_t n, const char* s) {
-    strncpy(out, s ? s : "", n - 1);
-    out[n - 1] = '\0';
-  }
+  static void copy(char* out, size_t n, const char* s) { textfit::copy(out, n, s); }
   BotLogEntry* _ring = nullptr;
   int _head = 0, _n = 0;
 #else

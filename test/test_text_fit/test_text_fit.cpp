@@ -2,8 +2,8 @@
 
 #include <cstring>
 
-// Text cut to fit on a whole UTF-8 character (ui-core/TextFit.h).
-#include "../../examples/companion_radio/ui-core/TextFit.h"
+// Text cut to fit on a whole UTF-8 character (TextFit.h).
+#include "../../examples/companion_radio/TextFit.h"
 
 TEST(TextFit, FitsWhole) {
   char b[16];
@@ -41,8 +41,10 @@ TEST(TextFit, ThreeAndFourByteCharacters) {
 }
 
 TEST(TextFit, NotUtf8IsKept) {
-  char b[3];   // Latin-1 "é": the last 0xE9 reads as a 3-byte lead missing its tail, the rest stays
-  EXPECT_EQ(textfit::copy(b, sizeof(b), "\xE9\xE9\xE9"), 1);
+  char b[3];   // Latin-1 "ééé": the byte after the cut is no continuation, so both stay
+  EXPECT_EQ(textfit::copy(b, sizeof(b), "\xE9\xE9\xE9"), 2);
+  char d[3];   // fmt sees only what fit: the last 0xE9 reads as a lead missing its tail
+  EXPECT_EQ(textfit::fmt(d, sizeof(d), "%s", "\xE9\xE9\xE9"), 1);
   char c[3];
   EXPECT_EQ(textfit::copy(c, sizeof(c), "\x80\x80\x80"), 2);   // lone continuation bytes: kept
 }
@@ -55,6 +57,30 @@ TEST(TextFit, EdgeCases) {
   char c[8];
   EXPECT_EQ(textfit::copy(c, sizeof(c), nullptr), 0);
   EXPECT_STREQ(c, "");
+}
+
+TEST(TextFit, CopyNPartOfASource) {
+  const char* t = "Łukasz: cześć";      // a name before its separator
+  char b[16];
+  EXPECT_EQ(textfit::copyN(b, sizeof(b), t, 7), 7);
+  EXPECT_STREQ(b, "Łukasz");
+  char c[3];                             // "Ł" whole, "u" doesn't fit
+  EXPECT_EQ(textfit::copyN(c, sizeof(c), t, 7), 2);
+  EXPECT_STREQ(c, "Ł");
+  char d[2];                             // half of "Ł": nothing
+  EXPECT_EQ(textfit::copyN(d, sizeof(d), t, 7), 0);
+  EXPECT_STREQ(d, "");
+  char e[8];                             // a field not NUL-terminated
+  const char f[4] = {'a', 'b', 'c', 'd'};
+  EXPECT_EQ(textfit::copyN(e, sizeof(e), f, 3), 3);
+  EXPECT_STREQ(e, "abc");
+}
+
+TEST(TextFit, CutAt) {
+  EXPECT_EQ(textfit::cutAt("ałb", 4, 9), 4u);   // fits
+  EXPECT_EQ(textfit::cutAt("ałb", 4, 2), 1u);   // inside "ł"
+  EXPECT_EQ(textfit::cutAt("ałb", 4, 3), 3u);   // after it
+  EXPECT_EQ(textfit::cutAt("\x80\x80\x80\x80\x80", 5, 4), 4u);   // no lead near: cut where it is
 }
 
 int main(int argc, char** argv) {

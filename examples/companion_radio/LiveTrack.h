@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include "TextFit.h"
 
 // RAM-only table of positions other nodes have shared via [LOC] messages
 // (see geo::parseLocShare / LOCATION_MSG_TAG). Lets the device show a live
@@ -45,8 +46,7 @@ public:
     Entry& e = _e[slot];
     if (verified && key) memcpy(e.key, key, KEY_LEN);
     else                 memset(e.key, 0, KEY_LEN);
-    if (name) { strncpy(e.name, name, NAME_LEN - 1); e.name[NAME_LEN - 1] = '\0'; }
-    else      { e.name[0] = '\0'; }
+    textfit::copy(e.name, sizeof(e.name), name);
     e.lat_1e6  = lat_1e6;
     e.lon_1e6  = lon_1e6;
     e.ts       = ts;
@@ -55,12 +55,18 @@ public:
     e.used     = true;
   }
 
+  // The name an SOS pin goes by, "SOS <name>": one cut for the pin and for
+  // what finds it again (followSos, endSos match it with strcmp).
+  static void sosName(char (&out)[NAME_LEN], const char* name) {
+    textfit::fmt(out, sizeof(out), "SOS %s", name ? name : "");
+  }
+
   // An advert from someone whose SOS is on the table moves it: their beacon
   // (UiCore::sosBeacon). Matched by key (a DM's SOS), or by "SOS <name>" (a
   // channel's, unverified like the message itself). False when there's none.
   bool followSos(const uint8_t* key, const char* name, int32_t lat_1e6, int32_t lon_1e6, uint32_t ts) {
     char label[NAME_LEN];
-    snprintf(label, sizeof(label), "SOS %s", name ? name : "");
+    sosName(label, name);
     bool moved = false;
     for (int i = 0; i < CAPACITY; i++) {
       Entry& e = _e[i];
@@ -80,7 +86,7 @@ public:
   // when there was none.
   bool endSos(const uint8_t* key, const char* name) {
     char label[NAME_LEN];
-    snprintf(label, sizeof(label), "SOS %s", name ? name : "");
+    sosName(label, name);
     bool gone = false;
     for (int i = 0; i < CAPACITY; i++) {
       Entry& e = _e[i];

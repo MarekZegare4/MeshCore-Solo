@@ -2,7 +2,7 @@
 // Included into UITask.cpp only, where it stands (it uses what is defined above it).
 // A conversation's thread: bubbles, the compose row, message metadata.
 
-#include "../ui-core/TextFit.h"   // a sender's name cut on a whole character
+#include "../TextFit.h"   // a sender's name cut on a whole character
 
 // ── Conversation ──────────────────────────────────────────────────────────────
 

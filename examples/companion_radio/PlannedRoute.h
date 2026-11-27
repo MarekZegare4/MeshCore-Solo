@@ -24,6 +24,7 @@
 #include <string.h>
 #include "DataStore.h"
 #include "GeoUtils.h"
+#include "TextFit.h"
 
 #ifndef ROUTE_SLOTS
 #define ROUTE_SLOTS 8
@@ -176,11 +177,7 @@ public:
     _info.version = VERSION;
     _info.flags = flags & FLAG_ELE;
     _info.count = count;
-    size_t n = name ? strlen(name) : 0;
-    if (n > ROUTE_NAME_LEN - 1) {
-      n = ROUTE_NAME_LEN - 1;
-      while (n > 0 && ((uint8_t)name[n] & 0xC0) == 0x80) n--;   // not mid-letter
-    }
+    const size_t n = name ? textfit::cutAt(name, strlen(name), ROUTE_NAME_LEN - 1) : 0;
     if (n) memcpy(_info.name, name, n);
     _written = 0;
     _open = true;

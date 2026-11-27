@@ -7,6 +7,7 @@
 #include <Arduino.h>
 #include <string.h>
 #include "Persist.h"
+#include "TextFit.h"
 
 static const uint8_t WAYPOINT_LABEL_LEN = 12;   // incl. NUL → 11 visible chars
 
@@ -92,8 +93,7 @@ private:
 
   static void setLabel(Waypoint& w, const char* label) {
     if (label && label[0]) {
-      strncpy(w.label, label, WAYPOINT_LABEL_LEN - 1);
-      w.label[WAYPOINT_LABEL_LEN - 1] = '\0';
+      textfit::copy(w.label, sizeof(w.label), label);
     } else {
       w.label[0] = '\0';
     }

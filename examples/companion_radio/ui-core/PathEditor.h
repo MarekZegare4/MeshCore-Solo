@@ -4,7 +4,7 @@
 // its "pick on the map" mode); the view only draws rows and calls the actions
 // below.
 
-#include "TextFit.h"   // a hop's name cut on a whole character
+#include "../TextFit.h"   // a hop's name cut on a whole character
 //
 //   open(contact)     -- loads the contact's stored route (out_path), if any
 //   addRepeater(key)  -- appends a repeater (a contact of type repeater)

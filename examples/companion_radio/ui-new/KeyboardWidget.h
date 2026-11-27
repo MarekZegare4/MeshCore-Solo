@@ -5,6 +5,7 @@
 #include "PopupMenu.h"
 #include "icons.h"   // mini-icons for the special-key row (⇧ ⌫ ⎵ ✓)
 #include "../NodePrefs.h"
+#include "../TextFit.h"
 #include "../ui-core/KeyboardData.h"   // shared long-press variants + case table
 
 // Layout constants shared by all keyboard users.
@@ -435,8 +436,7 @@ struct KeyboardWidget {
 
   void begin(const char* initial = "", int max = KB_MAX_LEN) {
     max_len = (max > KB_MAX_LEN) ? KB_MAX_LEN : max;
-    strncpy(buf, initial, max_len);
-    buf[max_len] = '\0';
+    textfit::copy(buf, (size_t)max_len + 1, initial);   // a longer initial text cut on a whole letter
     len = strlen(buf);
     cursor_pos = len;
     cursor_mode = false;

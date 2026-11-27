@@ -21,6 +21,7 @@
 
 #if FEAT_ROUTES
 #include "PlannedRoute.h"
+#include "TextFit.h"
 
 #define RESP_CODE_ROUTE  0x7D
 
@@ -74,10 +75,7 @@ void MyMesh::handleRouteCommand(const uint8_t* frame, size_t len) {
     if (slot < 0) { writeErrFrame(ERR_CODE_TABLE_FULL); return; }
     const uint16_t count = get16(&frame[3]);
     char name[ROUTE_NAME_LEN];
-    size_t n = len - 6;
-    if (n > sizeof(name) - 1) n = sizeof(name) - 1;
-    memcpy(name, &frame[6], n);
-    name[n] = '\0';
+    textfit::copyN(name, sizeof(name), (const char*)&frame[6], len - 6);
     if (count < 2 || count > PlannedRoutes::MAX_POINTS || slot >= PlannedRoutes::SLOTS) {
       writeErrFrame(ERR_CODE_ILLEGAL_ARG); return;
     }

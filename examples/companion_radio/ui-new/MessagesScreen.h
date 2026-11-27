@@ -6,7 +6,7 @@
 #include "icons.h"     // scalable mini-icons (delivery markers)
 #include "ChannelsView.h"  // on-device channel add/edit form (Channels tab)
 #include "../ui-core/BotConfig.h"   // which channel bot a channel pick is for
-#include "../ui-core/TextFit.h"   // names and replies cut on a whole character
+#include "../TextFit.h"   // names and replies cut on a whole character
 
 class MessagesScreen : public UIScreen {
   UITask* _task;
@@ -279,33 +279,36 @@ class MessagesScreen : public UIScreen {
                              char* sender_buf, int sender_cap) const {
     const char* body = e.text;
     if (e.outgoing) {
-      strncpy(sender_buf, "Me", sender_cap - 1);
-    } else if (is_room) {
-      const char* sep = strstr(body, ": ");
-      if (sep) {
-        int nl = (int)(sep - body);
-        if (nl > sender_cap - 1) nl = sender_cap - 1;
-        strncpy(sender_buf, body, nl);
-        sender_buf[nl] = '\0';
-        return sep + 2;   // body after "Sender: "
-      }
-      strncpy(sender_buf, contact_name, sender_cap - 1);
-    } else {
-      strncpy(sender_buf, contact_name, sender_cap - 1);
+      textfit::copy(sender_buf, sender_cap, "Me");
+      return body;
     }
-    sender_buf[sender_cap - 1] = '\0';
+    const char* sep = is_room ? strstr(body, ": ") : nullptr;
+    if (sep) {
+      textfit::copyN(sender_buf, sender_cap, body, (size_t)(sep - body));
+      return sep + 2;   // body after "Sender: "
+    }
+    textfit::copy(sender_buf, sender_cap, contact_name);
     return body;
+  }
+
+  // A channel message's "Sender: text": the sender into `sender` (cut on a
+  // whole character, "" when there's no separator), the text after it returned
+  // (all of it when there's none).
+  static const char* chSenderParts(const char* text, char* sender, size_t n) {
+    const char* sep = strstr(text, ": ");
+    if (!sep) { sender[0] = '\0'; return text; }
+    textfit::copyN(sender, n, text, (size_t)(sep - text));
+    return sep + 2;
   }
 
   // Build "@[nick] " prefix from a channel message text ("nick: body") into _reply_prefix.
   // Returns false if sender is "Me" (own message — no reply prefix needed).
   bool buildChannelReplyPrefix(const char* text) {
-    const char* sep = strstr(text, ": ");
-    if (!sep) return false;
-    int slen = (int)(sep - text);
-    if (slen == 2 && strncmp(text, "Me", 2) == 0) return false;
-    if (slen > 31) slen = 31;
-    snprintf(_reply_prefix, sizeof(_reply_prefix), "@[%.*s] ", slen, text);
+    if (!strstr(text, ": ")) return false;
+    char nick[32];
+    chSenderParts(text, nick, sizeof(nick));
+    if (strcmp(nick, "Me") == 0) return false;
+    snprintf(_reply_prefix, sizeof(_reply_prefix), "@[%s] ", nick);
     return true;
   }
 
@@ -401,8 +404,7 @@ class MessagesScreen : public UIScreen {
     char name[32] = "";
     if (_fs_menu_is_channel) {   // "Name: text"
       text = _history.chAtPos(_fs_menu_pos).text;
-      const char* sep = strstr(text, ": ");
-      if (sep && sep - text < (int)sizeof(name)) { memcpy(name, text, sep - text); name[sep - text] = '\0'; }
+      chSenderParts(text, name, sizeof(name));
     } else {
       text = _history.dmAtPos(_fs_menu_pos).text;
       key = _history.dmAtPos(_fs_menu_pos).prefix;
@@ -529,8 +531,7 @@ class MessagesScreen : public UIScreen {
   void saveSharedWaypoint() {
     char label[WAYPOINT_LABEL_LEN];
     if (_nav_label[0]) {
-      strncpy(label, _nav_label, sizeof(label) - 1);
-      label[sizeof(label) - 1] = '\0';
+      textfit::copy(label, sizeof(label), _nav_label);
     } else {
       snprintf(label, sizeof(label), "WP%d", _task->waypoints().count() + 1);
     }
@@ -1338,8 +1339,7 @@ public:
   void startShare(const char* text) {
     reset();
     _share_mode = true;
-    strncpy(_share_text, text, sizeof(_share_text) - 1);
-    _share_text[sizeof(_share_text) - 1] = '\0';
+    textfit::copy(_share_text, sizeof(_share_text), text);
     _phase = MODE_SELECT;
   }
 
@@ -1886,17 +1886,9 @@ public:
         int fs_hist_count = chViewCount();
         int ring_pos = chViewPos(_hist_sel);
         if (ring_pos >= 0) {
-          const char* ftext = _history.chAtPos(ring_pos).text;
-          const char* fsep = strstr(ftext, ": ");
-          char fsender[33], fmsg[MSG_TEXT_BUF];
-          if (fsep) {
-            int nl = fsep - ftext; if (nl > (int)sizeof(fsender) - 1) nl = sizeof(fsender) - 1;
-            strncpy(fsender, ftext, nl); fsender[nl] = '\0';
-            strncpy(fmsg, fsep + 2, sizeof(fmsg) - 1); fmsg[sizeof(fmsg)-1] = '\0';
-          } else {
-            strcpy(fsender, "?");
-            strncpy(fmsg, ftext, sizeof(fmsg) - 1); fmsg[sizeof(fmsg)-1] = '\0';
-          }
+          char fsender[33];
+          const char* fmsg = chSenderParts(_history.chAtPos(ring_pos).text, fsender, sizeof(fsender));
+          if (!fsender[0]) strcpy(fsender, "?");
           int ret = _fs.render(display, fsender, fmsg,
                                _hist_sel < fs_hist_count - 1,
                                _hist_sel > 0);
@@ -2009,19 +2001,9 @@ public:
         int ring_pos = chViewPos(item);
         if (ring_pos < 0) continue;
 
-        const char* text = _history.chAtPos(ring_pos).text;
-        const char* sep = strstr(text, ": ");
-        char sender[33], msg_part[MSG_TEXT_BUF];
-        if (sep) {
-          int nl = sep - text; if (nl > (int)sizeof(sender) - 1) nl = sizeof(sender) - 1;
-          strncpy(sender, text, nl); sender[nl] = '\0';
-          strncpy(msg_part, sep + 2, sizeof(msg_part) - 1);
-          msg_part[sizeof(msg_part) - 1] = '\0';
-        } else {
-          strcpy(sender, "?");
-          strncpy(msg_part, text, sizeof(msg_part) - 1);
-          msg_part[sizeof(msg_part) - 1] = '\0';
-        }
+        char sender[33];
+        const char* msg_part = chSenderParts(_history.chAtPos(ring_pos).text, sender, sizeof(sender));
+        if (!sender[0]) strcpy(sender, "?");
 
         // See the DM history block above: 0 shouldn't happen (addChannelMsg()
         // also falls back to receipt time at write time), but fall back to

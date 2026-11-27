@@ -60,9 +60,7 @@ static void load(int dz, int x, int y) {
     int nl = q[7];
     q += 8;
     if (q + nl > end) break;
-    int len = nl > LABEL_MAX ? LABEL_MAX : nl;
-    memcpy(p.name, q, len);
-    p.name[len] = '\0';
+    textfit::copyN(p.name, sizeof(p.name), (const char*)q, (size_t)nl);
     q += nl;
     t->n++;
   }

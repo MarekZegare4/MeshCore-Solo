@@ -3,7 +3,7 @@
 #include "../Features.h"
 #include "../GeoUtils.h"
 #include "../ui-core/MapFrame.h"   // the map's Manual scales
-#include "../ui-core/TextFit.h"   // names cut to a row on a whole character
+#include "../TextFit.h"   // names cut to a row on a whole character
 #include "NavView.h"
 #include "TabBar.h"
 

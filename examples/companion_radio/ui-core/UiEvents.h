@@ -1,4 +1,5 @@
 #pragma once
+#include "../TextFit.h"   // texts kept cut on a whole character
 // Core → frontend events. Engines never call into the frontend (no drawing, no
 // sound, no display power); they push a tagged event here and the frontend
 // drains the queue from its own loop() and reacts in its own way (ui-new:
@@ -50,12 +51,7 @@ public:
     _q[pos].kind = UIEventType::none;
     _q[pos].idx  = -1;
     memset(_q[pos].key, 0, sizeof(_q[pos].key));
-    if (text) {
-      strncpy(_q[pos].text, text, sizeof(_q[pos].text) - 1);
-      _q[pos].text[sizeof(_q[pos].text) - 1] = '\0';
-    } else {
-      _q[pos].text[0] = '\0';
-    }
+    textfit::copy(_q[pos].text, sizeof(_q[pos].text), text);   // "" for none
     return _q[pos];
   }
 

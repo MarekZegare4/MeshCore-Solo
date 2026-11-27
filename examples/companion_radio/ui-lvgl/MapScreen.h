@@ -18,7 +18,7 @@
 #include "map/TileProvider.h"
 #include "map/VectorPacks.h"
 #include "map/VectorTileProvider.h"
-#include "../ui-core/TextFit.h"   // a name on the map cut on a whole character
+#include "../TextFit.h"   // a name on the map cut on a whole character
 #include "map/VectorLabels.h"
 #include "map/TileCache.h"
 #include "map/LiveCache.h"
@@ -1241,13 +1241,7 @@ void UITask::addMapMark(uint8_t kind, int idx, int32_t lat_e6, int32_t lon_e6, u
   mk.lat_e6 = lat_e6; mk.lon_e6 = lon_e6; mk.idx = idx; mk.kind = kind; mk.col = col; mk.text_hash = h;
   mk.vis = false; mk.lw = 0; mk.order = 0; mk.sos = sos;
   if (same_name) return;
-  size_t n = strlen(text);
-  if (n > (size_t)mapview::MARK_NAME) {   // cut at a character boundary
-    n = mapview::MARK_NAME;
-    while (n > 0 && ((uint8_t)text[n] & 0xC0) == 0x80) n--;
-  }
-  memcpy(mk.name, text, n);
-  mk.name[n] = '\0';
+  textfit::copy(mk.name, sizeof(mk.name), text);   // cut on a whole character
   lv_point_t sz;
   lv_text_get_size(&sz, mk.name, THEME_FONT_SMALL, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
   mk.tw = (int16_t)sz.x;
