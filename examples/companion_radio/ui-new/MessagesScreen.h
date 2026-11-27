@@ -1556,7 +1556,6 @@ public:
   bool chUnreadOverflow(uint8_t channel_idx) const { return _history.chUnreadOverflow(channel_idx); }
 
   int render(DisplayDriver& display) override {
-    int mq_delay = 0;   // >0 while a selected row's text is marquee-scrolling
     display.setTextSize(1);
     display.setColor(UIColor::primary_txt);
 
@@ -1576,501 +1575,16 @@ public:
     if (_nav_active) { renderNav(display); return 1000; }
     if (_task->core().hop_route.active()) { renderRoute(display); return 5000; }
 
-    int lh      = display.getLineHeight();
-    int item_h  = display.lineStep();
-    int start_y = display.listStart();
-
-    if (_phase == MODE_SELECT) {
-      // Say which dial slot is being filled -- entered from the Favourites page,
-      // a bare "Messages" gives no sign that this browse is a pick.
-      char hdr[16];
-      if (_pick_fav_slot >= 0) snprintf(hdr, sizeof(hdr), "Pin slot %d", _pick_fav_slot + 1);
-      else                     snprintf(hdr, sizeof(hdr), "Messages");
-      drawScreenHeader(display, hdr, -1, 0, true, _ctx_menu.active);
-      const char* opts[] = { "Direct message", "Channels", "Room Servers" };
-      int badges[3] = {
-        getDMUnreadTotal(),
-        _task->getChannelUnreadCount(),
-        _task->getRoomUnreadCount()
-      };
-      // Rooms have no local ring to overflow the same way (see UITask::getAnyUnreadOverflow).
-      bool overflow[3] = { _task->getAnyDMUnreadOverflow(), anyChannelUnreadOverflow(), false };
-      for (int i = 0; i < 3; i++) {
-        int y = start_y + i * item_h;
-        bool sel = (i == _mode_sel);
-        display.drawSelectionRow(0, y - 1, display.width(), item_h - 1, sel);
-        display.setCursor(2, y);
-        display.print(opts[i]);
-        if (badges[i] > 0)
-          display.drawUnreadBadge(display.width() - 1, y, badges[i], sel, overflow[i]);
-      }
-      display.setColor(UIColor::primary_txt);
-      // Fold the popup's own suggested redraw delay into mq_delay -- otherwise
-      // a marquee inside it (see PopupMenu::render()) only ever advances at
-      // whatever slower cadence this phase's own return statement below picks,
-      // since that return previously ignored this call's result entirely.
-      if (_ctx_menu.active) { int r = _ctx_menu.render(display); if (mq_delay <= 0 || r < mq_delay) mq_delay = r; }
-
-    } else if (_phase == CONTACT_PICK) {
-      drawScreenHeader(display, _room_mode ? "Rooms" : "Contacts", -1, 0, true, _ctx_menu.active);
-
-      if (_num_contacts == 0) {
-        display.drawTextCentered(display.width()/2, display.height()/2, _room_mode ? "No room servers" : "No favourites");
-        return 5000;
-      }
-
-      drawList(display, _num_contacts, _contact_sel, _contact_scroll, [&](int list_idx, int y, bool sel, int reserve) {
-        int mesh_idx = _sorted[list_idx];
-
-        drawRowSelection(display, y, sel, reserve);
-
-        ContactInfo c;
-        if (the_mesh.getContactByIdx(mesh_idx, c)) {
-          char filtered[sizeof(c.name)];
-          display.translateUTF8ToBlocks(filtered, c.name, sizeof(filtered));
-          uint8_t dm_unread = _task->getDMUnread(c.id.pub_key);
-          bool dm_overflow = dm_unread > 0 && _task->getDMUnreadOverflow(c.id.pub_key);
-          int bw = dm_unread > 0 ? display.unreadBadgeWidth(dm_unread, dm_overflow) + 2 : 0;
-          int sw = contactctl::favourite(c) ? favStarWidth(display) : 0;
-          // See the channel/DM history bodies' identical comment: suppress this
-          // row's own marquee while a context menu covers it, so the two don't
-          // fight over DisplayDriver's single shared marquee slot.
-          bool name_marquee = sel && !_ctx_menu.active;
-          int r = display.drawTextEllipsized(2, y, display.width() - 2 - bw - sw - reserve, filtered, name_marquee);
-          if (name_marquee && r > 0) mq_delay = r;
-          if (sw) drawFavStar(display, display.width() - reserve - bw - sw + 1, y);
-          if (dm_unread > 0)
-            display.drawUnreadBadge(display.width() - reserve, y, dm_unread, sel, dm_overflow);
-        }
-      });
-
-      // Context menu overlay
-      // Fold the popup's own suggested redraw delay into mq_delay -- otherwise
-      // a marquee inside it (see PopupMenu::render()) only ever advances at
-      // whatever slower cadence this phase's own return statement below picks,
-      // since that return previously ignored this call's result entirely.
-      if (_ctx_menu.active) { int r = _ctx_menu.render(display); if (mq_delay <= 0 || r < mq_delay) mq_delay = r; }
-
-    } else if (_phase == CHANNEL_PICK) {
-      drawScreenHeader(display, "Channels", -1, 0, true, _ctx_menu.active);
-
-      // "+ Add channel" is a synthetic trailing row — suppressed while picking
-      // a channel for the bot, so that picker's list stays unchanged.
-      bool show_add = !_pick_bot_channel;
-      int total = _num_channels + (show_add ? 1 : 0);
-
-      if (total == 0) {
-        display.drawTextCentered(display.width()/2, display.height()/2, "No channels");
-        return 5000;
-      }
-
-      drawList(display, total, _channel_sel, _channel_scroll, [&](int list_idx, int y, bool sel, int reserve) {
-        drawRowSelection(display, y, sel, reserve);
-        if (list_idx == _num_channels) {                 // the synthetic "Add" row
-          display.setCursor(2, y);
-          // Settings > Channels = Fav hides all but the favourites; say so when that leaves nothing.
-          const NodePrefs* np = _task->getNodePrefs();
-          display.print(_num_channels == 0 && np && np->ch_fav_only ? "+ Add (Fav only)" : "+ Add channel");
-          display.setColor(UIColor::primary_txt);
-          return;
-        }
-        ChannelDetails ch;
-        if (the_mesh.getChannel(_channel_indices[list_idx], ch)) {
-          uint8_t unread = _history.chUnread(_channel_indices[list_idx]);
-          bool ch_overflow = unread > 0 && _history.chUnreadOverflow(_channel_indices[list_idx]);
-          int bw = unread > 0 ? display.unreadBadgeWidth(unread, ch_overflow) + 2 : 0;
-          int sw = chIsFav(_channel_indices[list_idx]) ? favStarWidth(display) : 0;
-          // See the channel/DM history bodies' identical comment: suppress this
-          // row's own marquee while a context menu covers it, so the two don't
-          // fight over DisplayDriver's single shared marquee slot.
-          bool name_marquee = sel && !_ctx_menu.active;
-          int r = display.drawTextEllipsized(2, y, display.width() - 4 - bw - sw - reserve, ch.name, name_marquee);
-          if (name_marquee && r > 0) mq_delay = r;
-          if (sw) drawFavStar(display, display.width() - reserve - bw - sw + 1, y);
-          if (unread > 0)
-            display.drawUnreadBadge(display.width() - reserve, y, unread, sel, ch_overflow);
-        }
-      });
-
-      // Context menu overlay
-      // Fold the popup's own suggested redraw delay into mq_delay -- otherwise
-      // a marquee inside it (see PopupMenu::render()) only ever advances at
-      // whatever slower cadence this phase's own return statement below picks,
-      // since that return previously ignored this call's result entirely.
-      if (_ctx_menu.active) { int r = _ctx_menu.render(display); if (mq_delay <= 0 || r < mq_delay) mq_delay = r; }
-
-    } else if (_phase == DM_HIST) {
-      display.setTextSize(1);
-      char filtered_name[sizeof(_sel_contact.name)];
-      display.translateUTF8ToBlocks(filtered_name, _sel_contact.name, sizeof(filtered_name));
-
-      if (_dm_fs.active && _dm_hist_sel >= 0) {
-        int ring_pos = dmViewPos(_dm_hist_sel);
-        if (ring_pos >= 0) {
-          const DmHistEntry& e = _history.dmAtPos(ring_pos);
-          char sender_buf[33];
-          // No skipReplyPrefix() here -- _dm_fs.render() parses "@[nick] " itself
-          // (for the "To:" header); stripping it here first would hide it there.
-          const char* body = dmDisplayParts(e, _sel_contact.type == ADV_TYPE_ROOM,
-                                            filtered_name, sender_buf, sizeof(sender_buf));
-          const char* sender = sender_buf;
-          int dm_count = dmViewCount();
-          int ret = _dm_fs.render(display, sender, body,
-                                  _dm_hist_sel < dm_count - 1,
-                                  _dm_hist_sel > 0);
-          if (e.outgoing) {  // delivery marker in the (inverted) header bar
-            display.setColor(UIColor::window_bkg);
-            drawAckGlyph(display, 2 + display.getTextWidth(sender) + 3, 1,
-                         _history.dmEffectiveStatus(e), e.attempt + 1);
-            display.setColor(UIColor::primary_txt);
-          }
-          // Fold the popup's own suggested redraw delay into mq_delay -- otherwise
-      // a marquee inside it (see PopupMenu::render()) only ever advances at
-      // whatever slower cadence this phase's own return statement below picks,
-      // since that return previously ignored this call's result entirely.
-      if (_ctx_menu.active) { int r = _ctx_menu.render(display); if (mq_delay <= 0 || r < mq_delay) mq_delay = r; }
-          return ret;
-        }
-        return 500;
-      }
-
-      int hist_start_y = display.headerH();
-      int cby = display.height() - lh;   // compose button is now exactly lh tall, no added border padding
-
-      char title[24];
-      snprintf(title, sizeof(title), "%.23s", filtered_name);
-      drawScreenHeader(display, title, -1, 0, true, _ctx_menu.active);
-
-      int dm_count = dmViewCount();
-      uint32_t now_ts = rtc_clock.getCurrentTime();
-      bool is_room = (_sel_contact.type == ADV_TYPE_ROOM);
-
-      // On a tall enough screen (expandHistory): boxes as tall as their whole
-      // wrapped text. Otherwise compact 2-line boxes.
-      const bool expand = expandHistory(display);
-      // A DM bubble on a compact screen carries no sender line: one line of
-      // text with the delivery / hop marker and the age at its end, growing to
-      // two lines (marker and age ending the second) when the text is longer.
-      // Rooms keep the author line above the text.
-      const bool compact_dm = !is_room && !expand;
-      const int MAX_VIS_BOXES = 8;
-      int box_ys[MAX_VIS_BOXES], box_hs[MAX_VIS_BOXES], n_vis = 0;
-
-      // The marker + age strip at a compact bubble's end, and its width.
-      struct Tail { int ack_w, age_w, mk_gap, hops, w; char age[6]; };
-      auto tailOf = [&](const DmHistEntry& e) {
-        Tail t;
-        geo::fmtAgeShort(t.age, sizeof(t.age), now_ts, e.timestamp ? e.timestamp : now_ts);
-        t.age_w = t.age[0] ? display.getTextWidth(t.age) + 3 : 0;
-        t.hops = !e.outgoing ? (e.path_len & 63) : 0;
-        t.ack_w = e.outgoing ? (3 + ackGlyphWidth(display, _history.dmEffectiveStatus(e), e.attempt + 1))
-                : (t.hops > 0 ? (3 + miniIconNumberWidth(display, t.hops)) : 0);
-        t.mk_gap = (t.ack_w > 0 && t.age_w > 0) ? 4 : 0;
-        t.w = t.ack_w + t.mk_gap + t.age_w + (t.age_w ? 0 : 3);
-        return t;
-      };
-      auto bodyAt = [&](int idx, char* sb, size_t sbn) -> const char* {
-        int rp = dmViewPos(idx);
-        if (rp < 0) return nullptr;
-        return skipReplyPrefix(dmDisplayParts(_history.dmAtPos(rp), is_room, filtered_name, sb, sbn));
-      };
-      // Height of compact bubble idx at a given scrollbar reserve.
-      auto compactH = [&](int idx, int rsv) {
-        int rp = dmViewPos(idx);
-        if (rp < 0) return lh + 1;
-        char sb[33];
-        const char* body = bodyAt(idx, sb, sizeof(sb));
-        int line_w = bubbleMaxW(display, display.width() - rsv) - 6;
-        return dmSplit(display, body ? body : "", line_w, tailOf(_history.dmAtPos(rp)).w) < 0 ? lh + 1 : 2 * lh + 1;
-      };
-
-      // Fixed-track scrollbar metrics + a stable gutter reserve (decided by a
-      // whole-list fit test, not last frame's visible count) so message boxes
-      // don't reflow their width as messages arrive.
-      auto scrollMetrics = [&]() {
-        return compact_dm
-          ? computeHistScrollH(display, dm_count, _dm_hist_scroll, hist_start_y, cby, 1, compactH)
-          : computeHistScroll(display, expand, dm_count, _dm_hist_scroll,
-          hist_start_y, cby, lh,
-          [&](int idx) -> const char* {
-            // Must match the per-item body extraction below (dmDisplayParts +
-            // skipReplyPrefix) exactly, or this sizing pass and the real render
-            // pass disagree on wrapped line count for room posts.
-            char tmp_sender[33];
-            return bodyAt(idx, tmp_sender, sizeof(tmp_sender));
-          });
-      };
-      HistScroll hs = scrollMetrics();
-      int reserve = hs.reserve;
-      int div_y = -1;   // "New", when shown
-      // Stack boxes upward from just above the compose row, so item 0 (the
-      // newest message) lands at the bottom of the list and older messages
-      // sit progressively higher — same anchor convention as a typical
-      // messenger, instead of newest-at-top. box_ys[i] still corresponds
-      // to item (s + i), same as before; only its y flips.
-      auto stack = [&](int s) {
-        return n_vis = stackBoxes(s, dm_count, cby, hist_start_y, lh, expand, box_ys, box_hs, MAX_VIS_BOXES, div_y,
-          [&](int item) {
-            if (expand) {
-              const int rp = dmViewPos(item);
-              if (rp >= 0) {
-                char hsb[33];
-                const char* hbody = skipReplyPrefix(dmDisplayParts(_history.dmAtPos(rp), is_room, filtered_name, hsb, sizeof(hsb)));
-                return expandedBoxH(display, hbody, display.width() - reserve);
-              }
-            }
-            return compact_dm ? compactH(item, reserve) : 2 * lh + 1;
-          });
-      };
-      if (_anchor_new) {
-        _anchor_new = false;
-        _dm_hist_scroll = anchorScroll(stack, div_y, _dm_hist_sel, dm_count);
-        hs = scrollMetrics();
-      }
-      stack(_dm_hist_scroll);
-      _hist_visible = n_vis;
-      for (int i = 0; i < n_vis && (_dm_hist_scroll + i) < dm_count; i++) {
-        int item = _dm_hist_scroll + i;
-        bool sel = (item == _dm_hist_sel);
-        int y = box_ys[i];
-        int bh = box_hs[i];
-
-        int ring_pos = dmViewPos(item);
-        if (ring_pos < 0) continue;
-
-        const DmHistEntry& e = _history.dmAtPos(ring_pos);
-        char sender_buf[33];
-        const char* body = skipReplyPrefix(dmDisplayParts(e, is_room, filtered_name, sender_buf, sizeof(sender_buf)));
-        // A DM has two people: the header names the contact and the side a
-        // bubble sits on says who wrote it, so bubbles carry only the delivery
-        // or hop marker and the age. Rooms keep each post's author.
-        const char* sender = is_room ? sender_buf : "";
-
-        if (compact_dm) {
-          Tail t = tailOf(e);
-          int full_avail = display.width() - reserve;
-          int max_w = bubbleMaxW(display, full_avail);
-          int line_w = max_w - 6;
-          int split = dmSplit(display, body, line_w, t.w);
-          char l1[MSG_TEXT_BUF];
-          const char* l2 = nullptr;
-          int body_w;
-          if (split < 0) {
-            int raw = display.getTextWidth(body);
-            body_w = (raw > line_w - t.w ? line_w - t.w : raw) + 6 + t.w;
-          } else {
-            int n = split;
-            while (n > 0 && body[n - 1] == ' ') n--;
-            if (n > (int)sizeof(l1) - 1) n = sizeof(l1) - 1;
-            memcpy(l1, body, n); l1[n] = '\0';
-            l2 = body + split;
-            int w1 = display.getTextWidth(l1), w2 = display.getTextWidth(l2);
-            if (w2 > line_w - t.w) w2 = line_w - t.w;
-            body_w = (w1 > w2 + t.w ? w1 : w2 + t.w) + 6;
-          }
-          BubbleBox box = computeBubbleBox(full_avail, max_w, e.outgoing, 0, body_w);
-          drawHistRowFrame(display, box.x, box.w, y, bh, lh, sel);
-          // Marker and age end the last line of text.
-          const int ty = y + 1 + (l2 ? lh : 0);
-          const int mark_x = box.x + box.w - t.w + 3;
-          if (e.outgoing)      drawAckGlyph(display, mark_x, ty, _history.dmEffectiveStatus(e), e.attempt + 1);
-          else if (t.hops > 0) miniIconDrawNumber(display, mark_x, ty, t.hops);
-          if (t.age[0]) { display.setCursor(box.x + box.w - t.age_w, ty); display.print(t.age); }
-          // Only the last line marquees (one shared marquee slot), and not
-          // while the context menu is over it.
-          bool body_marquee = sel && !_ctx_menu.active;
-          int r_body;
-          if (!l2) {
-            r_body = display.drawTextEllipsized(box.x + 3, y + 1, box.w - 6 - t.w, body, body_marquee);
-          } else {
-            display.drawTextEllipsized(box.x + 3, y + 1, box.w - 6, l1, false);
-            r_body = display.drawTextEllipsized(box.x + 3, y + lh + 1, box.w - 6 - t.w, l2, body_marquee);
-          }
-          if (body_marquee && r_body > 0) mq_delay = r_body;
-          continue;
-        }
-
-        // e.timestamp==0 shouldn't happen (storeDMMsg() falls back to receipt
-        // time at write time), but if it ever does, show the receipt time
-        // (now_ts) rather than leave the row with no age at all.
-        char age[6]; geo::fmtAgeShort(age, sizeof(age), now_ts, e.timestamp ? e.timestamp : now_ts);
-        // Outgoing: the delivery marker. Incoming: the hop count the DM
-        // actually took to reach us, as the same tiny digit icon (no ack
-        // glyph exists for incoming -- there's nothing to deliver).
-        const BubbleMark mark = e.outgoing ? BubbleMark::ack(_history.dmEffectiveStatus(e), e.attempt + 1, 0)
-                                           : BubbleMark::hop(e.path_len & 63);
-        drawHeadedBubble(display, y, bh, lh, sel, reserve, e.outgoing, sender, body, age, mark, expand, mq_delay);
-      }
-
-      drawHistFooter(display, hs, div_y, dm_count, hist_start_y, cby, lh, _dm_hist_sel == -1, mq_delay);
-      { int ret = dm_count > 0 ? 500 : 2000; return (mq_delay > 0 && mq_delay < ret) ? mq_delay : ret; }
-
-    } else if (_phase == CHANNEL_HIST) {
-      if (_fs.active && _hist_sel >= 0) {
-        int fs_hist_count = chViewCount();
-        int ring_pos = chViewPos(_hist_sel);
-        if (ring_pos >= 0) {
-          char fsender[33];
-          const char* fmsg = chSenderParts(_history.chAtPos(ring_pos).text, fsender, sizeof(fsender));
-          if (!fsender[0]) strcpy(fsender, "?");
-          int ret = _fs.render(display, fsender, fmsg,
-                               _hist_sel < fs_hist_count - 1,
-                               _hist_sel > 0);
-          // Channels: ✓ only once a repeater echo confirms relay (see list view),
-          // plus the distinct-echoing-repeater count as tiny digits (path_len's
-          // hop_count -- see markChannelRelayed/showPathDetail's "Relayed by").
-          if (strcmp(fsender, "Me") == 0 && _history.chAtPos(ring_pos).relay_status == ACK_OK) {
-            display.setColor(UIColor::window_bkg);
-            int relay_count = _history.chAtPos(ring_pos).path_len & 63;
-            drawAckGlyph(display, 2 + display.getTextWidth(fsender) + 3, 1, ACK_OK, 1, relay_count);
-            display.setColor(UIColor::primary_txt);
-          }
-          // Fold the popup's own suggested redraw delay into mq_delay -- otherwise
-      // a marquee inside it (see PopupMenu::render()) only ever advances at
-      // whatever slower cadence this phase's own return statement below picks,
-      // since that return previously ignored this call's result entirely.
-      if (_ctx_menu.active) { int r = _ctx_menu.render(display); if (mq_delay <= 0 || r < mq_delay) mq_delay = r; }
-          return ret;
-        }
-        return 2000;
-      }
-
-      int hist_start_y = display.headerH();
-      int cby = display.height() - lh;   // compose button is now exactly lh tall, no added border padding
-
-      ChannelDetails ch;
-      the_mesh.getChannel(_sel_channel_idx, ch);
-      char title[32];
-      NodePrefs* p_hdr = _task->getNodePrefs();
-      uint8_t hdr_sc_idx = p_hdr ? the_mesh.channelScope(_sel_channel_idx) : 0;
-      if (hdr_sc_idx != 0) {
-        // Non-wildcard scope set on this channel -- surface it in the title,
-        // same as the app's own per-channel scope tag, so it's obvious at a
-        // glance the channel isn't sending unscoped.
-        snprintf(title, sizeof(title), "%.16s [%.8s]", ch.name, the_mesh.scopeList().name(hdr_sc_idx));
-      } else {
-        snprintf(title, sizeof(title), "%.23s", ch.name);
-      }
-      drawScreenHeader(display, title, -1, 0, true, _ctx_menu.active);
-
-      int ch_hist_count = chViewCount();
-      uint32_t now_ts = rtc_clock.getCurrentTime();
-
-      // On a tall enough screen (expandHistory): boxes as tall as their whole
-      // wrapped text. Otherwise compact 2-line boxes.
-      const bool expand = expandHistory(display);
-      const int MAX_VIS_BOXES = 8;
-      int box_ys[MAX_VIS_BOXES], box_hs[MAX_VIS_BOXES], n_vis = 0;
-      // Fixed-track scrollbar metrics + stable gutter reserve (see DM history above).
-      auto scrollMetrics = [&]() {
-        return computeHistScroll(display, expand, ch_hist_count, _hist_scroll,
-          hist_start_y, cby, lh,
-          [&](int idx) -> const char* {
-            int rp = chViewPos(idx);
-            if (rp < 0) return nullptr;
-            const char* t = _history.chAtPos(rp).text;
-            const char* s = strstr(t, ": ");
-            return skipReplyPrefix(s ? s + 2 : t);
-          });
-      };
-      HistScroll hs = scrollMetrics();
-      int reserve = hs.reserve;
-      int div_y = -1;   // "New", when shown
-      // Stack boxes upward from just above the compose row — see the DM
-      // history block above for why (newest at the bottom, like a typical
-      // messenger). box_ys[i] still corresponds to item (s + i).
-      auto stack = [&](int s) {
-        return n_vis = stackBoxes(s, ch_hist_count, cby, hist_start_y, lh, expand, box_ys, box_hs, MAX_VIS_BOXES, div_y,
-          [&](int item) {
-            const int rp = expand ? chViewPos(item) : -1;
-            if (rp < 0) return 2 * lh + 1;
-            const char* rtext = _history.chAtPos(rp).text;
-            const char* rsep = strstr(rtext, ": ");
-            return expandedBoxH(display, skipReplyPrefix(rsep ? rsep + 2 : rtext), display.width() - reserve);
-          });
-      };
-      if (_anchor_new) {
-        _anchor_new = false;
-        _hist_scroll = anchorScroll(stack, div_y, _hist_sel, ch_hist_count);
-        hs = scrollMetrics();
-      }
-      stack(_hist_scroll);
-      _hist_visible = n_vis;
-      updateChannelUnread();  // mark everything in the just-computed visible window as seen
-
-      for (int i = 0; i < n_vis && (_hist_scroll + i) < ch_hist_count; i++) {
-        int item = _hist_scroll + i;
-        bool sel = (item == _hist_sel);
-        int y = box_ys[i];
-        int bh = box_hs[i];
-
-        int ring_pos = chViewPos(item);
-        if (ring_pos < 0) continue;
-
-        char sender[33];
-        const char* msg_part = chSenderParts(_history.chAtPos(ring_pos).text, sender, sizeof(sender));
-        if (!sender[0]) strcpy(sender, "?");
-
-        // See the DM history block above: 0 shouldn't happen (addChannelMsg()
-        // also falls back to receipt time at write time), but fall back to
-        // now_ts here too rather than leave the row with no age at all.
-        uint32_t ch_ts = _history.chAtPos(ring_pos).timestamp;
-        char age[6]; geo::fmtAgeShort(age, sizeof(age), now_ts, ch_ts ? ch_ts : now_ts);
-        const char* body = skipReplyPrefix(msg_part);
-
-        // Channels have no recipient ACK -- only show the glyph once a
-        // repeater echo confirms the send was relayed into the mesh; otherwise
-        // no marker (absence is normal). Incoming: the hop count this post
-        // actually took to reach us.
-        const bool outgoing = strcmp(sender, "Me") == 0;
-        const ChHistEntry& cm = _history.chAtPos(ring_pos);
-        const BubbleMark mark = !outgoing ? BubbleMark::hop(cm.path_len & 63)
-                              : cm.relay_status == ACK_OK ? BubbleMark::ack(ACK_OK, 1, cm.path_len & 63)
-                              : BubbleMark();
-        drawHeadedBubble(display, y, bh, lh, sel, reserve, outgoing, sender, body, age, mark, expand, mq_delay);
-      }
-
-      drawHistFooter(display, hs, div_y, ch_hist_count, hist_start_y, cby, lh, _hist_sel == -1, mq_delay);
-
-    } else if (_phase == KEYBOARD) {
-      return _kb->render(display);
-
-    } else { // MSG_PICK
-      char title[24];
-      if (_reply_mode) {
-        int rlen = (int)strlen(_reply_prefix) - 4; // exclude "@[" and "] "
-        if (rlen < 0) rlen = 0;
-        if (rlen > 20) rlen = 20;
-        char nick_raw[32], nick_trans[32];
-        snprintf(nick_raw, sizeof(nick_raw), "%.*s", rlen, _reply_prefix + 2);
-        display.translateUTF8ToBlocks(nick_trans, nick_raw, sizeof(nick_trans));
-        snprintf(title, sizeof(title), "Re: %s", nick_trans);
-      } else if (_sending_to_channel) {
-        ChannelDetails ch;
-        the_mesh.getChannel(_sel_channel_idx, ch);
-        snprintf(title, sizeof(title), "%.23s", ch.name);
-      } else {
-        snprintf(title, sizeof(title), "To: %.14s", _sel_contact.name);
-      }
-      drawScreenHeader(display, title);
-
-      int total_msg_items = 1 + _active_msg_count;
-      drawList(display, total_msg_items, _msg_sel, _msg_scroll, [&](int idx, int y, bool sel, int reserve) {
-        drawRowSelection(display, y, sel, reserve);
-
-        if (idx == 0) {
-          display.setCursor(2, y);
-          display.print("Custom message...");
-        } else {
-          NodePrefs* p = _task->getNodePrefs();
-          int slot = _active_msgs[idx - 1];
-          const char* tmpl = p ? p->custom_msgs[slot] : "";
-          int r = display.drawTextEllipsized(2, y, display.width() - 4 - reserve, tmpl, sel);
-          if (sel && r > 0) mq_delay = r;
-        }
-      });
+    switch (_phase) {
+      case MODE_SELECT: return renderModeSelect(display);
+      case CONTACT_PICK: return renderContactPick(display);
+      case CHANNEL_PICK: return renderChannelPick(display);
+      case DM_HIST: return renderDmHist(display);
+      case CHANNEL_HIST: return renderChannelHist(display);
+      case KEYBOARD: return _kb->render(display);
+      case MSG_PICK: return renderMsgPick(display);
     }
-    return (mq_delay > 0 && mq_delay < 2000) ? mq_delay : 2000;
+    return 2000;
   }
 
   // One button: a message opened full screen is scrolled, then the next one.
@@ -2101,640 +1615,153 @@ public:
       if (c == KEY_CANCEL) _task->core().hop_route.close();
       return true;
     }
-    if (_phase == MODE_SELECT) {
-      // Context menu (Mark-all-read) takes precedence while active.
-      if (_ctx_menu.active) {
-        auto res = _ctx_menu.handleInput(c);
-        if (res == PopupMenu::SELECTED) {
-          int cleared = 0;
-          if (_mode_sel == 0) {
-            cleared = getDMUnreadTotal();
-            _task->clearAllDMUnread();
-          } else if (_mode_sel == 1) {
-            cleared = _task->getChannelUnreadCount();
-            clearAllChannelUnread();
-          } else {
-            cleared = _task->getRoomUnreadCount();
-            _task->clearRoomUnread();
-          }
-          markReadAlert(cleared);
-        }
-        return true;
-      }
-      if (c == KEY_CANCEL) { _task->gotoHomeScreen(); return true; }
-      if (c == KEY_UP)   { _mode_sel = (_mode_sel > 0) ? _mode_sel - 1 : 2; return true; }
-      if (c == KEY_DOWN) { _mode_sel = (_mode_sel < 2) ? _mode_sel + 1 : 0; return true; }
-      if (c == KEY_CONTEXT_MENU) {
-        // PopupMenu stores the title pointer verbatim — use static strings.
-        static const char* MODE_TITLES[] = { "DM options", "Channel options", "Room options" };
-        _ctx_menu.begin(MODE_TITLES[_mode_sel < 3 ? _mode_sel : 0], 1);
-        _ctx_menu.addItem("Mark all read");
-        return true;
-      }
-      if (c == KEY_ENTER) {
-        if (_mode_sel == 1) {
-          enterChannelList(_channel_sel < _num_channels ? _channel_indices[_channel_sel] : -1);
-        } else {
-          _room_mode = (_mode_sel == 2);
-          if (_room_mode) _task->clearRoomUnread();
-          buildContactList();
-          _contact_sel = _contact_scroll = 0;
-          _phase = CONTACT_PICK;
-        }
-        return true;
-      }
-
-    } else if (_phase == CONTACT_PICK) {
-      // Context menu consumes all input while open
-      if (_ctx_menu.active) {
-        if (_pin_picker_active) {
-          // Slot picker sub-menu: index 0..FAVOURITES_COUNT-1 maps directly to slot.
-          auto res = _ctx_menu.handleInput(c);
-          if (res == PopupMenu::SELECTED && _num_contacts > 0) {
-            ContactInfo ci;
-            if (the_mesh.getContactByIdx(_sorted[_contact_sel], ci))
-              pinContactToSlot(ci, _ctx_menu.selectedIndex());
-          }
-          if (res != PopupMenu::NONE) {
-            _pin_picker_active = false;
-            _task->savePrefsIfDirty(_ctx_dirty);   // Notif/Melody edits made before Pin was picked
-          }
-          return true;
-        }
-        if (_room_mode) {
-          // LEFT/RIGHT -- and Enter, via VALUE_NEXT -- toggle Fav in place; the
-          // menu stays open and only Back closes it.
-          if (keyIsPrev(c) || keyIsNext(c)) {
-            cycleRoomCtxValue(_ctx_menu.selectedIndex());
-            return true;
-          }
-          auto res = _ctx_menu.handleInput(c);
-          if (res == PopupMenu::VALUE_NEXT) {
-            cycleRoomCtxValue(_ctx_menu.selectedIndex());
-            return true;   // still open -- the list rebuild below waits for close
-          }
-          if (res == PopupMenu::SELECTED && _num_contacts > 0) {
-            if (the_mesh.getContactByIdx(_sorted[_contact_sel], _sel_contact)) {
-              int sel = _ctx_menu.selectedIndex();
-              if (sel == 0) {
-                _login_mode = true;
-                _kb->begin("", 15); // room/repeater password: max 15 chars
-                _kb->prompt = "Password";
-                _kb->clearPlaceholders();   // {loc}/{time} are for messages, not a password
-                _phase = KEYBOARD;
-              } else if (sel == _ctx_pin_idx) {
-                pinContactAction(_sel_contact);
-                if (_pin_picker_active) return true;   // rebuild below would close the submenu
-              } else if (sel != _ctx_fav_idx) {
-                // Logout: only reachable when isRoomLoggedIn() added this item.
-                _task->core().rooms.logout(_sel_contact.id.pub_key);
-              }
-              // Fav is a value row -- Enter never selects it (see cycleRoomCtxValue).
-            }
-          }
-          if (res != PopupMenu::NONE && _phase == CONTACT_PICK) {
-            // A room un-favourited under a fav-only filter drops off the list.
-            buildContactList();
-            if (_contact_sel >= _num_contacts) _contact_sel = _num_contacts > 0 ? _num_contacts - 1 : 0;
-          }
-          return true;
-        }
-        // LEFT/RIGHT -- and Enter, via VALUE_NEXT -- cycle Notif/Melody/Fav in
-        // place; the menu stays open and only Back closes it.
-        if (keyIsPrev(c) || keyIsNext(c)) {
-          cycleContactCtxValue(_ctx_menu.selectedIndex(), keyIsNext(c) ? 1 : -1);
-          return true;
-        }
-        auto res = _ctx_menu.handleInput(c);
-        if (res == PopupMenu::VALUE_NEXT) {
-          cycleContactCtxValue(_ctx_menu.selectedIndex(), 1);
-          return true;   // still open -- the save/rebuild below waits for close
-        }
-        if (res == PopupMenu::SELECTED && _num_contacts > 0) {
-          ContactInfo ci;
-          if (the_mesh.getContactByIdx(_sorted[_contact_sel], ci)) {
-            int sel = _ctx_menu.selectedIndex();
-            if (sel == 0) {
-              int cleared = (int)_task->getDMUnread(ci.id.pub_key);
-              _task->clearDMUnread(ci.id.pub_key);
-              markReadAlert(cleared);
-            } else if (sel == 4) {
-              pinContactAction(ci);
-            }
-            // sel 1 (Notif), 2 (Melody), 3 (Fav) are value rows -- Enter never
-            // selects them (see cycleContactCtxValue).
-          }
-        }
-        if (res != PopupMenu::NONE) {
-          _task->savePrefsIfDirty(_ctx_dirty);
-          if (!_pin_picker_active) {
-            // A contact un-favourited under a fav-only filter drops off the list.
-            buildContactList();
-            if (_contact_sel >= _num_contacts) _contact_sel = _num_contacts > 0 ? _num_contacts - 1 : 0;
-          }
-        }
-        return true;
-      }
-      if (c == KEY_CANCEL) {
-        if (_pick_bot_room) { _pick_bot_room = false; _room_mode = false; _task->gotoBotScreen(); return true; }
-        if (_pick_sos_slot >= 0) { _pick_sos_slot = -1; _task->gotoSosScreen(); return true; }
-        _room_mode = false;
-        _phase = MODE_SELECT;
-        return true;
-      }
-      // drawList() reclamps _contact_scroll from _contact_sel every render.
-      if (c == KEY_UP   && _num_contacts > 0) { _contact_sel = (_contact_sel > 0) ? _contact_sel - 1 : _num_contacts - 1; return true; }
-      if (c == KEY_DOWN && _num_contacts > 0) { _contact_sel = (_contact_sel < _num_contacts - 1) ? _contact_sel + 1 : 0; return true; }
-      if (c == KEY_ENTER && _num_contacts > 0) {
-        if (the_mesh.getContactByIdx(_sorted[_contact_sel], _sel_contact)) {
-          if (_pick_target) { commitPickTargetDM(_sel_contact); return true; }
-          if (_pick_fav_slot >= 0) { commitPickFavContact(_sel_contact); return true; }
-          if (_pick_sos_slot >= 0) { commitPickSos(_sel_contact); return true; }
-          if (_pick_bot_room) {
-            if (!isRoomLoggedIn(_sel_contact.id.pub_key)) {
-              // Known password, just not re-established this boot: the Core
-              // retries silently in the background; the bot target is set
-              // below regardless of this attempt's outcome (self-heals like
-              // any other saved room password would on the next real open).
-              RoomSessions::Open o = _task->core().rooms.open(_sel_contact);
-              if (o == RoomSessions::LOGGING_IN || o == RoomSessions::SEND_FAILED) {
-                loginAlert(o == RoomSessions::LOGGING_IN);
-              } else if (o == RoomSessions::NEED_PASSWORD) {
-                // Never logged in — the bot could never post here without a
-                // password, so prompt for one now instead of picking an
-                // unusable target. Commits once submitted (see the KEYBOARD/
-                // _login_mode handler), whether or not login itself succeeds.
-                _login_mode = true;
-                _kb->begin("", 15); // room/repeater password: max 15 chars
-                _kb->prompt = "Password";
-                _kb->clearPlaceholders();
-                _phase = KEYBOARD;
-                return true;
-              }
-            }
-            commitPickBotRoom(_sel_contact);
-            return true;
-          }
-          if (_room_mode && !isRoomLoggedIn(_sel_contact.id.pub_key)) {
-            requireRoomLogin();
-            return true;
-          }
-          openDmHistory();
-          if (_share_mode) beginShareCompose(false);
-        }
-        return true;
-      }
-      if (c == KEY_CONTEXT_MENU && _num_contacts > 0 && _room_mode) {
-        ContactInfo ci;
-        bool have = the_mesh.getContactByIdx(_sorted[_contact_sel], ci);
-        bool logged_in = have && isRoomLoggedIn(ci.id.pub_key);
-        snprintf(_ctx_fav_item, sizeof(_ctx_fav_item),
-                 (have && contactctl::favourite(ci)) ? "Fav: ON" : "Fav: OFF");
-        { int pinned_slot = have ? _task->findFavouriteSlot(ci.id.pub_key) : -1;
-          if (pinned_slot >= 0) snprintf(_ctx_pin_item, sizeof(_ctx_pin_item), "Unpin (slot %d)", pinned_slot + 1);
-          else                  snprintf(_ctx_pin_item, sizeof(_ctx_pin_item), "Pin to dial"); }
-        _ctx_menu.begin("Room options", logged_in ? 2 : 1);
-        _ctx_menu.addItem("Login...");
-        if (logged_in) _ctx_menu.addItem("Logout");
-        _ctx_fav_idx = logged_in ? 2 : 1;
-        _ctx_menu.addValueItem(_ctx_fav_item);
-        _ctx_pin_idx = _ctx_fav_idx + 1;
-        _ctx_menu.addItem(_ctx_pin_item);
-        return true;
-      }
-      if (c == KEY_CONTEXT_MENU && _num_contacts > 0 && !_room_mode) {
-        ContactInfo ci;
-        the_mesh.getContactByIdx(_sorted[_contact_sel], ci);
-        snprintf(_ctx_notif_item, sizeof(_ctx_notif_item), "Notif: %s",
-                 NOTIF_LABELS[dmNotifState(ci.id.pub_key)]);
-        snprintf(_ctx_melody_item, sizeof(_ctx_melody_item), "Melody: %s",
-                 MELODY_LABELS[dmMelodySlot(ci.id.pub_key)]);
-        int pinned_slot = _task->findFavouriteSlot(ci.id.pub_key);
-        if (pinned_slot >= 0) snprintf(_ctx_pin_item, sizeof(_ctx_pin_item), "Unpin (slot %d)", pinned_slot + 1);
-        else                  snprintf(_ctx_pin_item, sizeof(_ctx_pin_item), "Pin to dial");
-        snprintf(_ctx_fav_item, sizeof(_ctx_fav_item),
-                 contactctl::favourite(ci) ? "Fav: ON" : "Fav: OFF");
-        _ctx_menu.begin("Contact options", 3);
-        _ctx_menu.addItem("Mark as read");
-        _ctx_menu.addValueItem(_ctx_notif_item);
-        _ctx_menu.addValueItem(_ctx_melody_item);
-        _ctx_fav_idx = 3;
-        _ctx_menu.addValueItem(_ctx_fav_item);
-        _ctx_menu.addItem(_ctx_pin_item);
-        _ctx_dirty = false;
-        return true;
-      }
-
-    } else if (_phase == CHANNEL_PICK) {
-      // Context menu consumes all input while open
-      if (_ctx_menu.active) {
-        // LEFT/RIGHT -- and Enter, via VALUE_NEXT below -- cycle Notif/Melody/Fav
-        // in place; the menu stays open and only Back closes it.
-        if (!_pin_picker_active && !_ch_delete_confirm_active && !_scope_pick_active && (keyIsPrev(c) || keyIsNext(c))) {
-          cycleChannelCtxValue(_ctx_menu.selectedIndex(), keyIsNext(c) ? 1 : -1);
-          return true;
-        }
-        auto res = _ctx_menu.handleInput(c);
-        if (_scope_pick_active) {
-          // Scope sub-menu: Default first, then the list ("*" first).
-          if (res == PopupMenu::SELECTED) {
-            the_mesh.setChannelScope(_ctx_ch_idx, chanctl::scopeFromRow(_ctx_menu.selectedIndex()));
-            the_mesh.savePrefs();
-          }
-          if (res != PopupMenu::NONE) _scope_pick_active = false;
-          return true;
-        }
-        if (_pin_picker_active) {
-          // Slot picker sub-menu: index 0..FAVOURITES_COUNT-1 maps directly to slot.
-          if (res == PopupMenu::SELECTED && _pin_slot_ch_idx >= 0) {
-            pinChannelToSlot((uint8_t)_pin_slot_ch_idx, _ctx_menu.selectedIndex());
-          }
-          if (res != PopupMenu::NONE) {
-            _pin_picker_active = false;
-            _pin_slot_ch_idx = -1;
-            _task->savePrefsIfDirty(_ctx_dirty);   // Notif/Melody/Fav edits made before Pin was picked
-          }
-          return true;
-        }
-        if (_ch_delete_confirm_active) {
-          // Delete/Cancel sub-menu, defaults to Cancel (see where it's opened).
-          if (res == PopupMenu::SELECTED && _ctx_menu.selectedIndex() == 0) {   // "Delete"
-            chanctl::remove(_ctx_ch_idx);
-          }
-          if (res != PopupMenu::NONE) {
-            _ch_delete_confirm_active = false;
-            _task->savePrefsIfDirty(_ctx_dirty);
-            buildChannelList();
-            if (_channel_sel >= _num_channels) _channel_sel = _num_channels > 0 ? _num_channels - 1 : 0;
-          }
-          return true;
-        }
-        if (res == PopupMenu::VALUE_NEXT) {
-          cycleChannelCtxValue(_ctx_menu.selectedIndex(), 1);
-          return true;   // still open -- the save/rebuild below waits for close
-        }
-        if (res == PopupMenu::SELECTED && _num_channels > 0) {
-          uint8_t ch_idx = _ctx_ch_idx;   // frozen at menu open — see declaration
-          int sel = _ctx_menu.selectedIndex();
-          if (_ctx_save_idx >= 0 && sel > _ctx_save_idx) sel--;   // the rows below count without it
-          if (sel == 0) {
-            int cleared = (int)_history.chUnread(ch_idx);
-            _history.setChUnread(ch_idx, 0);
-            markReadAlert(cleared);
-          } else if (sel == 4) {              // Scope
-            const ScopeList& sl = the_mesh.scopeList();
-            snprintf(_ctx_scope_def, sizeof(_ctx_scope_def), "Default (%s)", sl.name(sl.default_idx));
-            _ctx_menu.begin("Scope", 4);
-            _ctx_menu.addItem(_ctx_scope_def);
-            for (uint8_t i = 0; i <= sl.count; i++) _ctx_menu.addItem(sl.name(i));
-            _ctx_menu.setSelected(chanctl::scope(_task->getNodePrefs(), ch_idx));
-            _scope_pick_active = true;
-            return true;   // list rebuild below would close the submenu
-          } else if (sel == 5) {              // Pin / Unpin
-            int pinned_slot = _task->findFavouriteChannelSlot(ch_idx);
-            if (pinned_slot >= 0) {
-              _task->clearFavouriteSlot(pinned_slot);
-              the_mesh.savePrefs();
-              char alert[24];
-              snprintf(alert, sizeof(alert), "Unpinned (slot %d)", pinned_slot + 1);
-              _task->showAlert(alert, 800);
-            } else {
-              buildSlotLabels();
-              _ctx_menu.begin("Pick slot", 3);
-              for (int s = 0; s < NodePrefs::FAVOURITES_COUNT; s++) _ctx_menu.addItem(_pin_slot_labels[s]);
-              _pin_slot_ch_idx = ch_idx;
-              _pin_picker_active = true;
-              return true;   // list rebuild below would close the submenu
-            }
-          } else if (sel == 6) {              // Edit
-            ChannelDetails ch;
-            if (the_mesh.getChannel(ch_idx, ch)) _ch_view.openEdit(ch_idx, ch.name);
-          } else if (sel == 7) {              // Delete -- confirm first (destructive)
-            _ctx_menu.beginConfirm("Delete channel?", "Delete");
-            _ch_delete_confirm_active = true;
-            return true;   // list rebuild below would close the submenu
-          }
-          // sel 1/2/3 are value rows -- Enter never selects them
-          // (see cycleChannelCtxValue).
-        }
-        if (res != PopupMenu::NONE) {
-          _task->savePrefsIfDirty(_ctx_dirty);
-          // Apply any Fav/Edit/Delete change to the visible list now that the menu is done.
-          buildChannelList();
-          if (_channel_sel >= _num_channels) _channel_sel = _num_channels > 0 ? _num_channels - 1 : 0;
-        }
-        return true;
-      }
-      if (c == KEY_CANCEL) {
-        if (_pick_bot_channel) { _pick_bot_channel = false; _task->gotoBotScreen(); return true; }
-        _phase = MODE_SELECT;
-        return true;
-      }
-      // drawList() reclamps _channel_scroll from _channel_sel every render.
-      { int total = channelPickTotal();
-        if (c == KEY_UP   && total > 0) { _channel_sel = (_channel_sel > 0) ? _channel_sel - 1 : total - 1; return true; }
-        if (c == KEY_DOWN && total > 0) { _channel_sel = (_channel_sel < total - 1) ? _channel_sel + 1 : 0; return true; }
-      }
-      if (c == KEY_ENTER && _channel_sel == _num_channels && !_pick_bot_channel) {
-        int idx = findFreeChannelSlot();
-        if (idx < 0) _task->showAlert("Channels full", 1200);
-        else         _ch_view.openAdd(idx);
-        return true;
-      }
-      if (c == KEY_ENTER && _num_channels > 0 && _channel_sel < _num_channels) {
-        _sel_channel_idx = _channel_indices[_channel_sel];
-        if (_pick_target) { commitPickTargetChannel(_sel_channel_idx); return true; }
-        if (_pick_fav_slot >= 0) { commitPickFavChannel(_sel_channel_idx); return true; }
-        if (_pick_bot_channel) { commitPickBotChannel(_sel_channel_idx); return true; }
-        beginChannelView(_sel_channel_idx);
-        _phase = CHANNEL_HIST;
-        // Not updateChannelUnread() here: _hist_visible is still whatever this
-        // channel's first render() hasn't computed yet (stale, shared with
-        // DM_HIST) — calling it now could mark more seen than is about to be
-        // shown. render() calls it once that's fresh.
-        if (_share_mode) beginShareCompose(true);
-        return true;
-      }
-      if (c == KEY_CONTEXT_MENU && _num_channels > 0 && _channel_sel < _num_channels) {
-        uint8_t ch_idx = _channel_indices[_channel_sel];
-        _ctx_ch_idx = ch_idx;   // freeze the menu's target channel
-        snprintf(_ctx_notif_item, sizeof(_ctx_notif_item), "Notif: %s",
-                 NOTIF_LABELS[chNotifState(ch_idx)]);
-        snprintf(_ctx_melody_item, sizeof(_ctx_melody_item), "Melody: %s",
-                 MELODY_LABELS[chNotifMelody(ch_idx)]);
-        { NodePrefs* p2 = _task->getNodePrefs();
-          bool is_fav = p2 && (p2->ch_fav_bitmask & (1ULL << ch_idx));
-          snprintf(_ctx_fav_item, sizeof(_ctx_fav_item), is_fav ? "Fav: ON" : "Fav: OFF"); }
-        { int pinned_slot = _task->findFavouriteChannelSlot(ch_idx);
-          if (pinned_slot >= 0) snprintf(_ctx_pin_item, sizeof(_ctx_pin_item), "Unpin (slot %d)", pinned_slot + 1);
-          else                  snprintf(_ctx_pin_item, sizeof(_ctx_pin_item), "Pin to dial"); }
-        { const uint8_t row = chanctl::scope(_task->getNodePrefs(), ch_idx);
-          snprintf(_ctx_scope_item, sizeof(_ctx_scope_item), "Scope: %s",
-                   row ? the_mesh.scopeList().name(row - 1) : "Default"); }
-        _ctx_menu.begin("Channel options", 6);
-        _ctx_menu.addItem("Mark all read");
-        _ctx_menu.addValueItem(_ctx_notif_item);
-        _ctx_menu.addValueItem(_ctx_melody_item);
-        _ctx_fav_idx = 3;
-        _ctx_menu.addValueItem(_ctx_fav_item);
-        _ctx_save_idx = -1;
-#ifdef HIST_FLASH
-        if (_task->getNodePrefs() && _task->getNodePrefs()->msg_keep) {   // only with the log on
-          snprintf(_ctx_save_item, sizeof(_ctx_save_item),
-                   chanctl::saved(_task->getNodePrefs(), ch_idx) ? "Save: ON" : "Save: OFF");
-          _ctx_save_idx = 4;
-          _ctx_menu.addValueItem(_ctx_save_item);
-        }
-#endif
-        _ctx_menu.addItem(_ctx_scope_item);
-        _ctx_menu.addItem(_ctx_pin_item);
-        _ctx_menu.addItem("Edit");
-        _ctx_menu.addItem("Delete");
-        _ctx_dirty = false;
-        return true;
-      }
-
-    } else if (_phase == DM_HIST) {
-      int dm_count = dmViewCount();
-      if (_ctx_menu.active) return msgMenuInput(c, false);   // over the list or the full-screen view
-      if (_dm_fs.active) {
-        auto res = _dm_fs.handleInput(c);
-        if (res == FullscreenMsgView::PREV) {
-          if (_dm_hist_sel < dm_count - 1) { _dm_hist_sel++; _dm_fs.scroll = 0; }
-          else if (turnOlder(false)) _dm_fs.scroll = 0;
-        } else if (res == FullscreenMsgView::NEXT) {
-          if (_dm_hist_sel > 0) { _dm_hist_sel--; _dm_fs.scroll = 0; }
-          else if (turnNewer(false)) _dm_fs.scroll = 0;
-        } else if (res == FullscreenMsgView::CLOSE) {
-          _dm_fs.active = false;
-        } else if (res == FullscreenMsgView::REPLY) {
-          int ring_pos = dmViewPos(_dm_hist_sel);
-          if (ring_pos >= 0) {
-            bool reply_ok = !_history.dmAtPos(ring_pos).outgoing;
-            if (reply_ok) buildDmReplyPrefix(_history.dmAtPos(ring_pos));
-            buildFsMenu(_history.dmAtPos(ring_pos).text, reply_ok, ring_pos, false);
-          }
-        }
-        return true;
-      }
-      if (c == KEY_CANCEL && _older) { leaveOlder(false); return true; }
-      if (c == KEY_CANCEL) {
-        if (_direct_entry) {
-          _direct_entry = false;
-          _task->gotoHomeScreen();
-        } else {
-          _phase = CONTACT_PICK;
-        }
-        return true;
-      }
-      // Newest (index 0) now renders at the bottom, oldest at the top (see the
-      // render block above), so UP/DOWN swap which direction walks the index:
-      // UP now climbs toward older (higher index, physically upward); DOWN
-      // now walks toward newer (lower index, physically downward) and off the
-      // bottom (index 0) reaches the compose row, which sits right below it.
-      if (c == KEY_UP) {
-        if (dm_count == 0 && turnOlder(false)) return true;   // the ring has lost this conversation
-        if (_dm_hist_sel == -1 && dm_count > 0) { _dm_hist_sel = 0; _dm_hist_scroll = 0; }
-        else if (_dm_hist_sel >= 0 && _dm_hist_sel < dm_count - 1) {
-          _dm_hist_sel++;
-          if (_dm_hist_sel >= _dm_hist_scroll + _hist_visible)
-            _dm_hist_scroll = _dm_hist_sel - _hist_visible + 1;
-        } else if (_dm_hist_sel == dm_count - 1) {
-          if (turnOlder(false)) return true;
-          // Oldest (top of the list) -> wrap straight to the newest (bottom
-          // of the list), same ring-wrap every other list in the UI does at
-          // its ends -- the compose row sits below the list itself and is
-          // not part of this wrap.
-          _dm_hist_sel = 0;
-          _dm_hist_scroll = 0;
-        }
-        return true;
-      }
-      if (c == KEY_DOWN) {
-        if (_dm_hist_sel > 0) {
-          _dm_hist_sel--;
-          if (_dm_hist_sel < _dm_hist_scroll) _dm_hist_scroll = _dm_hist_sel;
-        } else if (_dm_hist_sel == 0) {
-          if (turnNewer(false)) return true;
-          _dm_hist_sel = -1;
-        } else if (_dm_hist_sel == -1 && dm_count > 0) {
-          // Compose row -> wrap to the oldest message (top of the list).
-          _dm_hist_sel = dm_count - 1;
-          _dm_hist_scroll = (dm_count > _hist_visible) ? dm_count - _hist_visible : 0;
-        }
-        return true;
-      }
-      if (c == KEY_ENTER) {
-        if (_dm_hist_sel >= 0) {
-          _dm_fs.begin();
-        } else {
-          _sending_to_channel = false;
-          setupMsgPick();
-          _phase = MSG_PICK;
-        }
-        return true;
-      }
-      if (c == KEY_CONTEXT_MENU && _dm_hist_sel >= 0) {
-        int ring_pos = dmViewPos(_dm_hist_sel);
-        if (ring_pos >= 0) {
-          bool reply_ok = !_history.dmAtPos(ring_pos).outgoing;
-          if (reply_ok) buildDmReplyPrefix(_history.dmAtPos(ring_pos));
-          buildFsMenu(_history.dmAtPos(ring_pos).text, reply_ok, ring_pos, false);
-        }
-        return true;
-      }
-
-    } else if (_phase == CHANNEL_HIST) {
-      int ch_hist_count = chViewCount();
-      if (_ctx_menu.active) return msgMenuInput(c, true);   // over the list or the full-screen view
-      if (_fs.active) {
-        auto res = _fs.handleInput(c);
-        if (res == FullscreenMsgView::PREV) {
-          if (_hist_sel < ch_hist_count - 1) { _hist_sel++; _fs.scroll = 0; updateChannelUnread(); }
-          else if (turnOlder(true)) _fs.scroll = 0;
-        } else if (res == FullscreenMsgView::NEXT) {
-          if (_hist_sel > 0) { _hist_sel--; _fs.scroll = 0; updateChannelUnread(); }
-          else if (turnNewer(true)) _fs.scroll = 0;
-        } else if (res == FullscreenMsgView::CLOSE) {
-          _fs.active = false;
-        } else if (res == FullscreenMsgView::REPLY) {
-          int ring_pos = chViewPos(_hist_sel);
-          if (ring_pos >= 0)
-            buildFsMenu(_history.chAtPos(ring_pos).text, buildChannelReplyPrefix(_history.chAtPos(ring_pos).text), ring_pos, true);
-        }
-        return true;
-      }
-      if (c == KEY_CANCEL && _older) { leaveOlder(true); return true; }
-      if (c == KEY_CANCEL) {
-        if (_direct_entry) { _direct_entry = false; _task->gotoHomeScreen(); }
-        else               { enterChannelList(_sel_channel_idx); }
-        return true;
-      }
-      // Newest (index 0) now renders at the bottom, oldest at the top (see the
-      // render block above) — UP/DOWN swap direction accordingly, same as the
-      // DM history handler above.
-      if (c == KEY_UP) {
-        if (ch_hist_count == 0 && turnOlder(true)) return true;   // the ring has lost this channel
-        if (_hist_sel == -1 && ch_hist_count > 0) { _hist_sel = 0; _hist_scroll = 0; }
-        else if (_hist_sel >= 0 && _hist_sel < ch_hist_count - 1) {
-          _hist_sel++;
-          if (_hist_sel >= _hist_scroll + _hist_visible) _hist_scroll = _hist_sel - _hist_visible + 1;
-        } else if (_hist_sel == ch_hist_count - 1) {
-          if (turnOlder(true)) return true;
-          // Oldest -> wrap straight to the newest, same as the DM history handler.
-          _hist_sel = 0;
-          _hist_scroll = 0;
-        }
-        updateChannelUnread();
-        return true;
-      }
-      if (c == KEY_DOWN) {
-        if (_hist_sel > 0) { _hist_sel--; if (_hist_sel < _hist_scroll) _hist_scroll = _hist_sel; }
-        else if (_hist_sel == 0) { if (turnNewer(true)) return true; _hist_sel = -1; }
-        else if (_hist_sel == -1 && ch_hist_count > 0) {
-          // Compose row -> wrap to the oldest message.
-          _hist_sel = ch_hist_count - 1;
-          _hist_scroll = (ch_hist_count > _hist_visible) ? ch_hist_count - _hist_visible : 0;
-        }
-        updateChannelUnread();
-        return true;
-      }
-      if (c == KEY_ENTER) {
-        if (_hist_sel >= 0) {
-          _fs.begin();
-          updateChannelUnread();
-        } else {
-          _sending_to_channel = true;
-          setupMsgPick();
-          _phase = MSG_PICK;
-        }
-        return true;
-      }
-      if (c == KEY_CONTEXT_MENU && _hist_sel >= 0) {
-        int ring_pos = chViewPos(_hist_sel);
-        if (ring_pos >= 0)
-          buildFsMenu(_history.chAtPos(ring_pos).text, buildChannelReplyPrefix(_history.chAtPos(ring_pos).text), ring_pos, true);
-        return true;
-      }
-
-    } else if (_phase == KEYBOARD) {
-      auto res = _kb->handleInput(c);
-      if (_login_mode) {
-        if (res == KeyboardWidget::CANCELLED) {
-          _login_mode = false;
-          _phase = CONTACT_PICK;
-        } else if (res == KeyboardWidget::DONE) {
-          // Blank password is valid (guest/no-password rooms) — unlike normal
-          // message text, an empty submit here is a deliberate "log in with no
-          // password" attempt, so it isn't suppressed like an empty message is.
-          _login_mode = false;
-          startRoomLogin(_kb->buf);
-          if (_pick_bot_room) { commitPickBotRoom(_sel_contact); return true; }
-          _phase = CONTACT_PICK;
-        }
-        return true;
-      }
-      if (res == KeyboardWidget::CANCELLED) {
-        if (_share_mode) { _share_mode = false; _task->gotoHomeScreen(); }
-        else             { _phase = MSG_PICK; }
-      } else if (res == KeyboardWidget::DONE) {
-        int prefix_len = _reply_mode ? (int)strlen(_reply_prefix) : 0;
-        if (_kb->len > prefix_len) {
-          // Expand only the body — prefix "@[nick] " is preserved verbatim, so a nick
-          // that happens to contain a placeholder token isn't substituted.
-          char expanded[2 * KB_MAX_LEN + 1];
-          if (prefix_len > 0) {
-            memcpy(expanded, _kb->buf, prefix_len);
-            expandMsg(_kb->buf + prefix_len, expanded + prefix_len, sizeof(expanded) - prefix_len);
-          } else {
-            expandMsg(_kb->buf, expanded, sizeof(expanded));
-          }
-          // Too long for what it adds (the keyboard's "N over" says by how much): it
-          // would be cut short, or refused, so it stays on the keyboard.
-          if ((int)strlen(expanded) > msgtext::limit(_sending_to_channel, _task->getNodePrefs())) return true;
-          bool ok = sendText(expanded);
-          afterSend(ok);
-        }
-      }
-      return true;
-
-    } else { // MSG_PICK
-      int total_msg_items = 1 + _active_msg_count;
-      if (c == KEY_CANCEL) {
-        _reply_mode = false;
-        _phase = _sending_to_channel ? CHANNEL_HIST : DM_HIST;
-        return true;
-      }
-      // drawList() reclamps _msg_scroll from _msg_sel every render.
-      if (c == KEY_UP)   { _msg_sel = (_msg_sel > 0) ? _msg_sel - 1 : total_msg_items - 1; return true; }
-      if (c == KEY_DOWN) { _msg_sel = (_msg_sel < total_msg_items - 1) ? _msg_sel + 1 : 0; return true; }
-      if (c == KEY_ENTER) {
-        if (_msg_sel == 0) {
-          _kb->begin(_reply_mode ? _reply_prefix : "");
-          setComposePrompt();
-          kbAddSensorPlaceholders(*_kb, &sensors);
-          _phase = KEYBOARD;
-          return true;
-        }
-        NodePrefs* p = _task->getNodePrefs();
-        int slot = _active_msgs[_msg_sel - 1];
-        const char* tmpl = p ? p->custom_msgs[slot] : "OK";
-        char msg[MSG_TEXT_BUF];
-        if (_reply_mode) {
-          char body[MSG_TEXT_BUF];
-          expandMsg(tmpl, body, sizeof(body));
-          textfit::fmt(msg, sizeof(msg), "%s%s", _reply_prefix, body);   // too long: never half a letter sent
-        } else {
-          expandMsg(tmpl, msg, sizeof(msg));
-        }
-        bool ok = sendText(msg);
-        afterSend(ok);
-        return true;
-      }
+    switch (_phase) {
+      case MODE_SELECT: return inputModeSelect(c);
+      case CONTACT_PICK: return inputContactPick(c);
+      case CHANNEL_PICK: return inputChannelPick(c);
+      case DM_HIST: return inputDmHist(c);
+      case CHANNEL_HIST: return inputChannelHist(c);
+      case KEYBOARD: return inputKeyboard(c);
+      case MSG_PICK: return inputMsgPick(c);
     }
     return false;
   }
+
+  // ── One method per phase: render, then input ──
+
+  // A row's marquee asks for its next frame sooner than the screen's own cadence.
+  static int marqueeDelay(int mq_delay, int cadence) { return (mq_delay > 0 && mq_delay < cadence) ? mq_delay : cadence; }
+
+  int renderModeSelect(DisplayDriver& display);    // MessagesPick.h
+  int renderContactPick(DisplayDriver& display);
+  int renderChannelPick(DisplayDriver& display);
+  int renderDmHist(DisplayDriver& display);        // MessagesThread.h
+  int renderChannelHist(DisplayDriver& display);
+  int renderMsgPick(DisplayDriver& display) {
+    int mq_delay = 0;   // >0 while a selected row's text is marquee-scrolling
+    char title[24];
+    if (_reply_mode) {
+      int rlen = (int)strlen(_reply_prefix) - 4; // exclude "@[" and "] "
+      if (rlen < 0) rlen = 0;
+      if (rlen > 20) rlen = 20;
+      char nick_raw[32], nick_trans[32];
+      snprintf(nick_raw, sizeof(nick_raw), "%.*s", rlen, _reply_prefix + 2);
+      display.translateUTF8ToBlocks(nick_trans, nick_raw, sizeof(nick_trans));
+      snprintf(title, sizeof(title), "Re: %s", nick_trans);
+    } else if (_sending_to_channel) {
+      ChannelDetails ch;
+      the_mesh.getChannel(_sel_channel_idx, ch);
+      snprintf(title, sizeof(title), "%.23s", ch.name);
+    } else {
+      snprintf(title, sizeof(title), "To: %.14s", _sel_contact.name);
+    }
+    drawScreenHeader(display, title);
+
+    int total_msg_items = 1 + _active_msg_count;
+    drawList(display, total_msg_items, _msg_sel, _msg_scroll, [&](int idx, int y, bool sel, int reserve) {
+      drawRowSelection(display, y, sel, reserve);
+
+      if (idx == 0) {
+        display.setCursor(2, y);
+        display.print("Custom message...");
+      } else {
+        NodePrefs* p = _task->getNodePrefs();
+        int slot = _active_msgs[idx - 1];
+        const char* tmpl = p ? p->custom_msgs[slot] : "";
+        int r = display.drawTextEllipsized(2, y, display.width() - 4 - reserve, tmpl, sel);
+        if (sel && r > 0) mq_delay = r;
+      }
+    });
+    return marqueeDelay(mq_delay, 2000);
+  }
+
+  bool inputModeSelect(char c);     // MessagesPick.h
+  bool inputContactPick(char c);
+  bool inputChannelPick(char c);
+  bool inputDmHist(char c);         // MessagesThread.h
+  bool inputChannelHist(char c);
+  bool inputKeyboard(char c) {
+    auto res = _kb->handleInput(c);
+    if (_login_mode) {
+      if (res == KeyboardWidget::CANCELLED) {
+        _login_mode = false;
+        _phase = CONTACT_PICK;
+      } else if (res == KeyboardWidget::DONE) {
+        // Blank password is valid (guest/no-password rooms) — unlike normal
+        // message text, an empty submit here is a deliberate "log in with no
+        // password" attempt, so it isn't suppressed like an empty message is.
+        _login_mode = false;
+        startRoomLogin(_kb->buf);
+        if (_pick_bot_room) { commitPickBotRoom(_sel_contact); return true; }
+        _phase = CONTACT_PICK;
+      }
+      return true;
+    }
+    if (res == KeyboardWidget::CANCELLED) {
+      if (_share_mode) { _share_mode = false; _task->gotoHomeScreen(); }
+      else             { _phase = MSG_PICK; }
+    } else if (res == KeyboardWidget::DONE) {
+      int prefix_len = _reply_mode ? (int)strlen(_reply_prefix) : 0;
+      if (_kb->len > prefix_len) {
+        // Expand only the body — prefix "@[nick] " is preserved verbatim, so a nick
+        // that happens to contain a placeholder token isn't substituted.
+        char expanded[2 * KB_MAX_LEN + 1];
+        if (prefix_len > 0) {
+          memcpy(expanded, _kb->buf, prefix_len);
+          expandMsg(_kb->buf + prefix_len, expanded + prefix_len, sizeof(expanded) - prefix_len);
+        } else {
+          expandMsg(_kb->buf, expanded, sizeof(expanded));
+        }
+        // Too long for what it adds (the keyboard's "N over" says by how much): it
+        // would be cut short, or refused, so it stays on the keyboard.
+        if ((int)strlen(expanded) > msgtext::limit(_sending_to_channel, _task->getNodePrefs())) return true;
+        bool ok = sendText(expanded);
+        afterSend(ok);
+      }
+    }
+    return true;
+  }
+
+  bool inputMsgPick(char c) {
+    int total_msg_items = 1 + _active_msg_count;
+    if (c == KEY_CANCEL) {
+      _reply_mode = false;
+      _phase = _sending_to_channel ? CHANNEL_HIST : DM_HIST;
+      return true;
+    }
+    // drawList() reclamps _msg_scroll from _msg_sel every render.
+    if (c == KEY_UP)   { _msg_sel = (_msg_sel > 0) ? _msg_sel - 1 : total_msg_items - 1; return true; }
+    if (c == KEY_DOWN) { _msg_sel = (_msg_sel < total_msg_items - 1) ? _msg_sel + 1 : 0; return true; }
+    if (c == KEY_ENTER) {
+      if (_msg_sel == 0) {
+        _kb->begin(_reply_mode ? _reply_prefix : "");
+        setComposePrompt();
+        kbAddSensorPlaceholders(*_kb, &sensors);
+        _phase = KEYBOARD;
+        return true;
+      }
+      NodePrefs* p = _task->getNodePrefs();
+      int slot = _active_msgs[_msg_sel - 1];
+      const char* tmpl = p ? p->custom_msgs[slot] : "OK";
+      char msg[MSG_TEXT_BUF];
+      if (_reply_mode) {
+        char body[MSG_TEXT_BUF];
+        expandMsg(tmpl, body, sizeof(body));
+        textfit::fmt(msg, sizeof(msg), "%s%s", _reply_prefix, body);   // too long: never half a letter sent
+      } else {
+        expandMsg(tmpl, msg, sizeof(msg));
+      }
+      bool ok = sendText(msg);
+      afterSend(ok);
+      return true;
+    }
+    return false;
+  }
+
 };
 
 const char* const MessagesScreen::NOTIF_LABELS[3]  = { "Default", "Off", "On" };   // three states: text, not a switch
 const char* const MessagesScreen::MELODY_LABELS[3] = { "Global", "M1", "M2" };
+
+#include "MessagesPick.h"
+#include "MessagesThread.h"
