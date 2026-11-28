@@ -9,6 +9,7 @@
 class RTC_RX8130CE : RTC_I2C {
     private:
         const uint8_t _addr = 0x32;
+        static const uint8_t RAM_SIZE = 4;   // user RAM, registers 0x20-0x23
 
         bool stop(bool stop);
 

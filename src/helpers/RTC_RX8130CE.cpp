@@ -117,18 +117,21 @@ void RTC_RX8130CE::adjust(DateTime dt) {
    this->setTime(atv);
 }
 
+// The clock holds UTC (adjust() writes gmtime()), so the fields convert straight
+// to a DateTime -- no mktime(), which reads them as local time and pulls in the
+// libc time-zone code. Fields that cannot be a date (the clock lost power and
+// holds garbage) give DateTime(), the "no time set" 2000-01-01.
 DateTime RTC_RX8130CE::now() {
    struct tm atv;
    this->getTime(&atv);
 
-   return DateTime((uint32_t)mktime(&atv));
+   DateTime dt(atv.tm_year + 1900, atv.tm_mon + 1, atv.tm_mday,
+               atv.tm_hour, atv.tm_min, atv.tm_sec);
+   return dt.isValid() ? dt : DateTime();
 }
 
 uint32_t RTC_RX8130CE::unixtime() {
-   struct tm atv;
-   this->getTime(&atv);
-
-   return (uint32_t)mktime(&atv);
+   return this->now().unixtime();
 }
 
 bool RTC_RX8130CE::getTime(struct tm *t) {
@@ -153,21 +156,21 @@ bool RTC_RX8130CE::writeRAM(uint8_t address, uint8_t value) {
     return this->writeRAM(address, &value, 1);
 }
 
+// The user RAM is 4 bytes, registers 0x20-0x23: an address past it is refused
+// and a length running off its end is cut to what fits.
 size_t RTC_RX8130CE::writeRAM(uint8_t address, uint8_t *value, size_t len) {
-    uint8_t buf[len + 1];
-    
-    if (address > 3) {
+    if (address >= RAM_SIZE) {
         return 0;
     }
 
-    if ((address + len) > 3) {
-        len = 3 - address;
+    if (len > (size_t)(RAM_SIZE - address)) {
+        len = RAM_SIZE - address;
     }
 
+    uint8_t buf[1 + RAM_SIZE];
     buf[0] = 0x20 + address;
-
-    for (int i = 1; i <= len + 1; i++) {
-       buf[i] = value[i - 1];
+    for (size_t i = 0; i < len; i++) {
+       buf[1 + i] = value[i];
     }
 
     i2c_dev->write(buf, len + 1);
@@ -178,12 +181,12 @@ size_t RTC_RX8130CE::writeRAM(uint8_t address, uint8_t *value, size_t len) {
 bool RTC_RX8130CE::readRAM(uint8_t address, uint8_t *value, size_t len) {
     uint8_t real_address = 0x20 + address;
 
-    if (address > 3) { // Oversize of 64-bytes RAM
+    if (address >= RAM_SIZE) {
         return false;
     }
 
-    if ((address + len) > 3) { // Data size over RAM size
-        len = 3 - address;
+    if (len > (size_t)(RAM_SIZE - address)) {
+        len = RAM_SIZE - address;
     }
 
     i2c_dev->write_then_read(&real_address, 1, value, len);
