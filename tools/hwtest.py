@@ -1862,8 +1862,39 @@ def uf2_volumes():
     return {v for v in glob.glob("/Volumes/*") if os.path.exists(os.path.join(v, "INFO_UF2.TXT"))}
 
 
-def flash(env, port, release):
+# The env hwtest last flashed on each device, by its public key. One board can
+# take several envs that all answer as the same board (the L1 as OLED or each
+# e-ink panel), and the wrong one still boots: an e-ink build on the OLED L1
+# waits out GxEPD2's 10 s BUSY timeout three times at start and once per
+# refresh, which looked like a firmware fault (2026-11-28).
+FLASHED = ROOT / ".pio" / "hwtest" / "flashed.json"
+
+
+def device_key(port):
+    d = Dut(port)
+    try:
+        return pubkey(d).hex()
+    finally:
+        d.close()
+
+
+def flashed_envs():
+    try:
+        return json.loads(FLASHED.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def flash(env, port, release, switch=False):
     board = probe(port)[0]
+    key = device_key(port)
+    known = flashed_envs()
+    was = known.get(key)
+    if was and was != env and not switch:
+        sys.exit(f"This {board} last ran {was} (flashed by hwtest), not {env}: another display or\n"
+                 f"panel answers as the same board. --switch to put {env} on it.")
+    if not was:
+        print(f"  first hwtest flash of this device ({key[:8]}): noting it as {env}")
     out = build(env, release)
     uf2 = out / "firmware.uf2"
     if uf2.exists():
@@ -1906,6 +1937,9 @@ def flash(env, port, release):
     if not p:
         sys.exit("The device didn't come back after flashing.")
     time.sleep(1)
+    known[key] = env
+    FLASHED.parent.mkdir(parents=True, exist_ok=True)
+    FLASHED.write_text(json.dumps(known, indent=1, sort_keys=True) + "\n")
     return p
 
 
@@ -2056,6 +2090,7 @@ def main():
     ap.add_argument("--port")
     ap.add_argument("--flash", metavar="ENV", help="build this PlatformIO env (a test build) and flash it first")
     ap.add_argument("--release", action="store_true", help="with --flash: the plain firmware, without the test hooks")
+    ap.add_argument("--switch", action="store_true", help="with --flash: another env than the one hwtest last put on this device")
     ap.add_argument("--only", help="comma-separated test names")
     ap.add_argument("--reboot", action="store_true", help="also the tests that restart the device")
     ap.add_argument("--all", action="store_true", help="every device plugged in, one after another")
@@ -2090,7 +2125,7 @@ def main():
         board, fw = probe(port)
         print(f"{port}: {board}, {fw}")
         if args.flash:
-            port = flash(args.flash, port, args.release)
+            port = flash(args.flash, port, args.release, args.switch)
         ports = [port]
 
     duts = [Dut(p) for p in ports]

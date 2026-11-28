@@ -195,7 +195,14 @@ uv run tools/hwtest.py --all                                      # every device
 uv run tools/hwtest.py --pair                                     # two devices: also messages over the air
 uv run tools/hwtest.py --repeat 5                                 # a soak: five rounds, the heap compared
 uv run tools/hwtest.py --flash <env> --release                    # the plain firmware back, without test hooks
+uv run tools/hwtest.py --flash <env> --switch                     # another env than hwtest last put on this device
 ```
+
+hwtest notes the env it flashed on each device (by its public key, in
+`.pio/hwtest/flashed.json`) and won't flash another one there without
+`--switch`: the L1's OLED and e-ink builds answer as the same board, and the
+wrong one still boots -- an e-ink build on the OLED L1 waits out a 10 s panel
+timeout three times at start and on every refresh.
 
 Each test puts back what it changed: a setting flipped is set back, a waypoint
 or route it added is deleted, a trail it recorded cleared (it won't start on a
