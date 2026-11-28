@@ -83,7 +83,7 @@ existing `solo/<board>/platformio.ini` for what's already claimed).
 
 | Flag | Meaning |
 | --- | --- |
-| `OLED_MISC_FIXED_FONT=1` | Pulls in a full Latin/Greek/Cyrillic 6×9 fixed font (~14 KB flash) so typed text in those alphabets renders as itself instead of block placeholders. Worth it on any board with a keyboard; skip it on space-constrained builds without one. |
+| `OLED_MISC_FIXED_FONT=1` | Pulls in a full Latin/Greek/Cyrillic 6×9 fixed font (~5 KB flash) so typed text in those alphabets renders as itself instead of block placeholders. Worth it on any board with a keyboard; skip it on space-constrained builds without one. |
 | `DISPLAY_ROTATION=<0-3>` | Rotates the panel in 90° steps, for a board mounted sideways or upside down. |
 | `EINK_LARGE_FONT=1` | E-ink: writes in the 8×13 font at the panel's own resolution, with the larger icon set. The landscape e-ink build sets it; the narrow portrait screen keeps the 6×9. |
 | `JOYSTICK_UPRIGHT_ROTATION=<0-3>` | The display rotation at which the joystick reads upright; the joystick then turns with the screen. Set by the e-ink builds. |

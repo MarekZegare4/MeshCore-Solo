@@ -338,7 +338,7 @@ public:
     }, x, y, w, h, bits, (_color != UIColor::window_bkg) ? "L" : "D");
   }
 
-  // Measured off the real MiscFixed glyph table, per CODEPOINT -- not
+  // Measured with the real MiscFixed font, per CODEPOINT -- not
   // strlen() * 6, which counts UTF-8 BYTES. Since translateUTF8ToBlocks()
   // above stopped transliterating accents away, strings reaching here really
   // do carry multi-byte sequences, and a byte count made every accented

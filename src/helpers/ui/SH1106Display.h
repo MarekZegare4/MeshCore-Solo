@@ -81,8 +81,8 @@ public:
   int getCharWidth() const override { return 6 * _text_sz; }   // misc-fixed 6x9 is 6px wide
   int getLineHeight() const override { return (_single_font ? 9 : 8) * _text_sz; }  // misc-fixed 6x9 box height
   // Only the built-in classic font pads every measured string by one trailing
-  // advance column (see DisplayDriver::textWidthTrailingGap()); the lemon
-  // font's width comes from its own glyph table (ink-tight, no padding).
+  // advance column (see DisplayDriver::textWidthTrailingGap()); a
+  // misc-fixed string ends at its last cell (no padding).
   int textWidthTrailingGap() const override { return _single_font ? 0 : 1; }
   void setSingleFont(bool) override { }   // single-font: ignore toggles, stay misc-fixed 6x9
   bool isSingleFont() const override { return _single_font; }

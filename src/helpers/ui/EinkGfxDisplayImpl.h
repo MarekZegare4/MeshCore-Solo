@@ -16,10 +16,10 @@
 #include "MiscFixedRenderer.h"
 #if EINK_LARGE_FONT == 2
   #include "MiscFixed9x15Font.h"
-  #define EINK_LARGE_GFXFONT MiscFixed9x15
+  #define EINK_LARGE_MONOFONT MiscFixed9x15
 #else
   #include "MiscFixed8x13Font.h"
-  #define EINK_LARGE_GFXFONT MiscFixed8x13
+  #define EINK_LARGE_MONOFONT MiscFixed8x13
 #endif
 
 EinkGfxDisplay::EinkGfxDisplay(int w, int h, Adafruit_GFX& gfx)
@@ -29,11 +29,11 @@ EinkGfxDisplay::EinkGfxDisplay(int w, int h, Adafruit_GFX& gfx)
 
 void EinkGfxDisplay::updateLayout() {
   const bool landscape = width() >= height();
-  _font = (EINK_LARGE_FONT && landscape) ? &EINK_LARGE_GFXFONT : &MiscFixed;
+  _font = (EINK_LARGE_FONT && landscape) ? &EINK_LARGE_MONOFONT : &MiscFixed;
   _px = landscape ? EINK_FONT_PX : 1;
   if (_px_override && landscape) _px = _px_override;   // portrait screens are laid out for 1x
   _cell_w = miscFixedCellW(*_font);
-  _cell_h = _font->yAdvance;
+  _cell_h = _font->h;
   _vw_dirty = true;
   _force = true;
 }

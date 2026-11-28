@@ -46,13 +46,13 @@ ColorVal UIColor::corp_blue = OLEDDISPLAY_COLOR::WHITE;
 
 #ifdef OLED_MISC_FIXED_FONT
 // MiscFixedFont.h/LemonIcons.h store each glyph's rows bit-packed
-// *continuously* (Adafruit_GFX's native GFXfont convention -- no per-row byte
+// *continuously* (Adafruit_GFX's GFXfont convention, MonoFont's too -- no per-row byte
 // padding), but drawXbm() below expects classic XBM packing (each row padded
 // to a whole byte). Re-pack into a small stack buffer so the glyph can be
 // blitted through drawXbm() -- which already implements the correct
 // logical->physical scaling for this panel's non-integer SCALE_X/Y (via
 // per-pixel boundary differences), instead of duplicating that math here.
-static bool repackGlyphToXbm(const uint8_t* bitmapProgmem, uint16_t byteOffset, uint8_t w, uint8_t h, uint8_t* out, uint8_t outCap) {
+static bool repackGlyphToXbm(const uint8_t* glyph, uint8_t w, uint8_t h, uint8_t* out, uint8_t outCap) {
   uint8_t widthInBytes = (w + 7) / 8;
   uint16_t needed = (uint16_t)widthInBytes * h;
   if (needed == 0 || needed > outCap) return false;
@@ -60,9 +60,8 @@ static bool repackGlyphToXbm(const uint8_t* bitmapProgmem, uint16_t byteOffset, 
   uint16_t srcBit = 0;
   for (uint8_t row = 0; row < h; row++) {
     for (uint8_t col = 0; col < w; col++) {
-      uint16_t byteIdx = byteOffset + (srcBit >> 3);
       uint8_t  bitMask  = 0x80 >> (srcBit & 7);
-      if (pgm_read_byte(bitmapProgmem + byteIdx) & bitMask) {
+      if (pgm_read_byte(glyph + (srcBit >> 3)) & bitMask) {
         out[row * widthInBytes + (col >> 3)] |= (0x80 >> (col & 7));
       }
       srcBit++;
@@ -74,8 +73,7 @@ static bool repackGlyphToXbm(const uint8_t* bitmapProgmem, uint16_t byteOffset, 
 uint8_t ST7789Display::glyphXAdvance(uint32_t cp) {
   for (uint8_t i = 0; i < lemonIconCount; i++)
     if (pgm_read_dword(&lemonIconCPs[i]) == cp) return pgm_read_byte(&lemonIconGlyphs[i].xAdvance);
-  if (cp < MiscFixed.first || cp > MiscFixed.last) return 6;
-  return pgm_read_byte(&MiscFixedGlyphs[cp - MiscFixed.first].xAdvance);
+  return MiscFixed.w;
 }
 #endif
 
@@ -184,7 +182,7 @@ void ST7789Display::print(const char* str) {
   const uint8_t* p = (const uint8_t*)str;
   while (*p) {
     uint32_t cp = DisplayDriver::decodeCodepoint(p);
-    if (cp == '\n') { ly += MiscFixed.yAdvance; lx = _lx; continue; }
+    if (cp == '\n') { ly += MiscFixed.h; lx = _lx; continue; }
 
     bool drawn = false;
     for (uint8_t i = 0; i < lemonIconCount; i++) {
@@ -193,7 +191,7 @@ void ST7789Display::print(const char* str) {
       uint8_t gw = pgm_read_byte(&g->width), gh = pgm_read_byte(&g->height);
       int8_t  xo = (int8_t)pgm_read_byte(&g->xOffset), yo = (int8_t)pgm_read_byte(&g->yOffset);
       uint16_t bo = pgm_read_word(&g->bitmapOffset);
-      if (repackGlyphToXbm(lemonIconBitmaps, bo, gw, gh, glyphBuf, sizeof(glyphBuf)))
+      if (repackGlyphToXbm(lemonIconBitmaps + bo, gw, gh, glyphBuf, sizeof(glyphBuf)))
         drawXbm(lx + xo, ly + 6 + yo, glyphBuf, gw, gh);
       lx += pgm_read_byte(&g->xAdvance);
       drawn = true;
@@ -201,19 +199,16 @@ void ST7789Display::print(const char* str) {
     }
     if (drawn) continue;
 
-    if (cp < MiscFixed.first || cp > MiscFixed.last) {
-      if (cp >= 0x20) fillRect(lx + 1, ly, 4, 6);
-      lx += 6;
+    if (!MiscFixed.covers(cp)) {
+      if (cp >= 0x20) fillRect(lx + 1, ly, MiscFixed.w - 2, MiscFixed.ascent - 1);
+      lx += MiscFixed.w;
       continue;
     }
 
-    const GFXglyph* g = &MiscFixedGlyphs[cp - MiscFixed.first];
-    uint8_t gw = pgm_read_byte(&g->width), gh = pgm_read_byte(&g->height);
-    int8_t  xo = (int8_t)pgm_read_byte(&g->xOffset), yo = (int8_t)pgm_read_byte(&g->yOffset);
-    uint16_t bo = pgm_read_word(&g->bitmapOffset);
-    if (repackGlyphToXbm(MiscFixedBitmaps, bo, gw, gh, glyphBuf, sizeof(glyphBuf)))
-      drawXbm(lx + xo, ly + 7 + yo, glyphBuf, gw, gh);
-    lx += pgm_read_byte(&g->xAdvance);
+    const uint8_t* bm = MiscFixed.glyph(cp);   // nullptr: not in the font, a blank cell
+    if (bm && repackGlyphToXbm(bm, MiscFixed.w, MiscFixed.h, glyphBuf, sizeof(glyphBuf)))
+      drawXbm(lx, ly, glyphBuf, MiscFixed.w, MiscFixed.h);
+    lx += MiscFixed.w;
   }
 #else
   display.drawString(_x, _y, str);

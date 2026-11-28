@@ -12,7 +12,7 @@ Helper scripts that run on your computer, not on the device.
 | `hwtest.py` | tests on a device plugged in: builds and flashes a firmware, then drives it over USB and checks what it does |
 | `companion.py` | the companion-protocol framing `console.py`, `route.py` and `config.py` share |
 | `gpx-downloader/index.html` | the same GPX capture in a browser, via Web Serial |
-| `bdf2gfx.py` | convert a BDF bitmap font to an Adafruit-GFX header |
+| `bdf2mono.py` | convert a fixed-cell BDF font to a MonoFont header |
 
 Python dependencies are managed with [uv](https://docs.astral.sh/uv/) — run the
 scripts with `uv run tools/<script>.py` from the repository root.
@@ -288,11 +288,14 @@ only a test build has them: never give one to a device people carry
 ## Font conversion
 
 ```sh
-uv run tools/bdf2gfx.py <font.bdf> <first_hex> <last_hex> <VarPrefix> > out.h
+uv run tools/bdf2mono.py <font.bdf> <first_hex> <last_hex> <VarPrefix> > out.h
 ```
 
-Emits a contiguous glyph table over the given codepoint range, with empty
-placeholders for codepoints the BDF does not define, so the renderer can index
-by `cp - first`. This is how [`src/helpers/ui/MiscFixedFont.h`](../src/helpers/ui/MiscFixedFont.h)
-— the unified 6×9 Latin/Greek/Cyrillic display font — was generated from
-`6x9.bdf`.
+Writes the font as [`MonoFont`](../src/helpers/ui/MonoFont.h): each glyph a
+whole cell, one bit per codepoint in the range for whether the font draws it
+(the rest are blank), and a rank table that finds a glyph's cell from that
+bit -- about 230 bytes for U+0020-04FF where a GFX glyph table took ~10 KB.
+The misc-fixed fonts in `src/helpers/ui/` -- [`MiscFixedFont.h`](../src/helpers/ui/MiscFixedFont.h)
+(the unified 6×9 Latin/Greek/Cyrillic display font), `MiscFixed8x13Font.h`
+and `MiscFixed9x15Font.h` -- come from `6x9.bdf`, `8x13.bdf` and `9x15.bdf`
+over U+0020-04FF.

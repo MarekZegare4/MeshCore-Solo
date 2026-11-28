@@ -1,9 +1,9 @@
 #pragma once
 
-#include <gfxfont.h>
 #include "DisplayDriver.h"
 
 class Adafruit_GFX;
+struct MonoFont;
 
 // Everything an e-ink panel draws, on top of any Adafruit_GFX: text in the
 // misc-fixed font, rects, bitmaps, and a hash of each frame so an unchanged
@@ -26,7 +26,7 @@ class Adafruit_GFX;
 class EinkGfxDisplay : public DisplayDriver {
   Adafruit_GFX& _gfx;
   ColorVal _curr;
-  const GFXfont* _font;
+  const MonoFont* _font;
   int _cell_w = 6, _cell_h = 9;  // the font's cell, before _px and the text size
   int _px = 1;                   // pixel multiplier (landscape: EINK_FONT_PX, or Text size)
   uint8_t _px_override = 0;      // Settings > Display > Text size (0 = build default)

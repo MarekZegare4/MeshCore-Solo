@@ -88,22 +88,31 @@ def candidate_ports():
     return out
 
 
+# A port that vanishes while it is opened or flushed (a board restarting after
+# a flash) raises termios.error from pyserial's tcflush, which is no OSError.
+try:
+    import termios
+    PORT_GONE = (serial.SerialException, OSError, termios.error)
+except ImportError:
+    PORT_GONE = (serial.SerialException, OSError)
+
+
 def probe(port):
     """(board, firmware) when a Solo companion answers on `port`, else None."""
     try:
         dev = Companion(port, timeout=2.0)
-    except (serial.SerialException, OSError, SystemExit):
+    except PORT_GONE + (SystemExit,):
         return None
     try:
         info = dev.ask(bytes([config.CMD_DEVICE_QUERY, config.CLI_MIN_VER]), config.RESP_DEVICE_INFO)
         s = lambda a, n: info[a:a + n].split(b"\0")[0].decode(errors="replace")
         return s(20, 40), s(60, 20)
-    except (DeviceError, serial.SerialException, OSError):
-        return None   # not a companion, or gone mid-way (an ESP32 restarting)
+    except PORT_GONE + (DeviceError,):
+        return None   # not a companion, or gone mid-way (a board restarting)
     finally:
         try:
             dev.close()
-        except (serial.SerialException, OSError):
+        except PORT_GONE:
             pass
 
 

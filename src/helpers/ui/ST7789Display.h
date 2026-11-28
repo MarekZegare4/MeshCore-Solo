@@ -37,10 +37,10 @@ public:
   // Same misc-fixed 6x9 font the SH1106 and e-ink drivers use: full
   // Latin/Greek/Cyrillic instead of the built-in ArialMT font's Latin-only
   // coverage, so the keyboard's alphabets render as themselves. Opt-in per
-  // variant (the font costs ~14 KB of flash) — see the boards that set
+  // variant (the font costs ~5 KB of flash) — see the boards that set
   // OLED_MISC_FIXED_FONT in their platformio.ini.
   int getLineHeight() const override { return 9; }   // 6x9 box height, logical units
-  // The font's own glyph table is ink-tight, unlike ArialMT (below).
+  // A misc-fixed string ends at its last cell, unlike ArialMT (below).
   int textWidthTrailingGap() const override { return 0; }
   bool isSingleFont() const override { return true; }
   void setSingleFont(bool) override { }   // single-font: ignore toggles
